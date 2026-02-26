@@ -1,0 +1,77 @@
+{
+    "site": {
+        "name": "4m Padel",
+        "tagline": "For the Players",
+        "titleTemplate": "%s | 4m Padel",
+        "defaultTitle": "4m Padel | For the Players",
+        "siteUrl": "http://localhost:5173",
+        "defaultImage": "/og-default.jpg",
+        "imageSeo": {
+            "autoAlt": true,
+            "autoTitle": true,
+            "altFormat": "%filename%",
+            "titleFormat": "%filename%",
+            "changeCase": "titleCase",
+            "lazyLoad": true
+        },
+        "twitterHandle": "@giftscorp",
+        "locale": "en_US",
+        "themeColor": "#4F46E5"
+    },
+    "organization": {
+        "name": "4m Padel",
+        "url": "http://localhost:5173",
+        "logo": "/logo.svg",
+        "email": "[EMAIL_ADDRESS]",
+        "phone": "",
+        "address": {
+            "streetAddress": "",
+            "addressLocality": "",
+            "addressRegion": "",
+            "postalCode": "",
+            "addressCountry": ""
+        },
+        "sameAs": []
+    },
+    "pages": {
+        "/": {
+            "title": "Home",
+            "description": "The Official Platform for SAPA events, calendar & rankings in South Africa.",
+            "focusKeyword": "4m Padel",
+            "keywords": [
+                "corporate gifts",
+                "business gifts",
+                "luxury gifting",
+                "custom corporate gifts"
+            ],
+            "schema": "WebPage"
+        },
+        "/reports": {
+            "title": "SEO Reports",
+            "description": "View detailed SEO analytics and performance reports for Gifts Corporate.",
+            "focusKeyword": "seo reports",
+            "keywords": [
+                "analytics",
+                "seo analysis",
+                "performance tracking"
+            ],
+            "schema": "WebPage",
+            "robots": "noindex, nofollow"
+        },
+        "/contact": {
+            "title": "Contact Us",
+            "description": "Get in touch with Gifts Corporate for all your corporate gifting needs.",
+            "focusKeyword": "contact Gifts Corporate",
+            "keywords": [
+                "contact",
+                "support",
+                "inquiry"
+            ],
+            "schema": "ContactPage"
+        }
+    },
+    "defaults": {
+        "robots": "index, follow",
+        "schema": "WebPage"
+    }
+}

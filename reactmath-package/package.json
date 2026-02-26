@@ -1,0 +1,32 @@
+{
+    "name": "@burkcorp/reactmath",
+    "version": "1.0.0",
+    "description": "React SEO Plugin with Admin Panel - Drop-in SEO management for React apps",
+    "main": "src/index.jsx",
+    "module": "src/index.jsx",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/burkcorp/reactmath.git"
+    },
+    "keywords": [
+        "react",
+        "seo",
+        "meta-tags",
+        "admin-panel",
+        "schema-org",
+        "opengraph"
+    ],
+    "author": "Digi Hive",
+    "license": "MIT",
+    "peerDependencies": {
+        "react": "^18.0.0 || ^19.0.0",
+        "react-dom": "^18.0.0 || ^19.0.0",
+        "react-router-dom": "^6.0.0 || ^7.0.0",
+        "react-helmet-async": "^2.0.0",
+        "framer-motion": "^10.0.0 || ^11.0.0 || ^12.0.0"
+    },
+    "dependencies": {
+        "lucide-react": "^0.400.0",
+        "@supabase/supabase-js": "^2.0.0"
+    }
+}

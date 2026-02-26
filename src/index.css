@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #0F172A; /* Deep Navy/Black */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* SA Flag Colors */
+  --sa-green: #007749;
+  --sa-yellow: #FFB81C;
+  --sa-blue: #002395;
+  --sa-red: #DE3831;
+}
+
+/* Premium Color Palette Utilities (Custom) */
+.text-padel-green {
+  color: #CCFF00; /* Electric Green/Yellow */
+}
+
+.bg-padel-green {
+  background-color: #CCFF00;
+}
+
+.text-premium-white {
+  color: #F8FAFC;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+a {
+  font-weight: 500;
+  color: #CCFF00;
+  text-decoration: inherit;
+  transition: color 0.3s ease;
+}
+a:hover {
+  color: #ffffff;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', 'Inter', sans-serif; /* Cleaner, more geometric for headers */
+  letter-spacing: -0.02em;
+}
+
+/* Smooth Scrolling */
+html {
+  scroll-behavior: smooth;
+}

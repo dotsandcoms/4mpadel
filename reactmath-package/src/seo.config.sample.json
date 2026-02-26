@@ -1,0 +1,44 @@
+{
+    "site": {
+        "name": "Site Name",
+        "tagline": "Your Tagline",
+        "titleTemplate": "%s | Site Name",
+        "defaultTitle": "Site Name | Tagline",
+        "siteUrl": "https://example.com",
+        "defaultImage": "/og-default.jpg",
+        "twitterHandle": "@handle",
+        "locale": "en_US",
+        "themeColor": "#000000"
+    },
+    "organization": {
+        "name": "Organization Name",
+        "url": "https://example.com",
+        "logo": "https://example.com/logo.svg",
+        "email": "hello@example.com",
+        "phone": "",
+        "address": {
+            "streetAddress": "",
+            "addressLocality": "",
+            "addressRegion": "",
+            "postalCode": "",
+            "addressCountry": ""
+        },
+        "sameAs": []
+    },
+    "pages": {
+        "/": {
+            "title": "Home",
+            "description": "Welcome to our website.",
+            "focusKeyword": "main keyword",
+            "keywords": [
+                "keyword1",
+                "keyword2"
+            ],
+            "schema": "WebPage"
+        }
+    },
+    "defaults": {
+        "robots": "index, follow",
+        "schema": "WebPage"
+    }
+}
