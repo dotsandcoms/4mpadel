@@ -40,7 +40,7 @@ jobs:
             libgtk-3-0
 
       - name: Install Node dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Install Puppeteer browser
         run: npx puppeteer browsers install chrome
