@@ -35,7 +35,7 @@ const Partners = () => {
                             whileInView={{ opacity: 1 }}
                             viewport={{ once: true }}
                             transition={{ delay: index * 0.1 }}
-                            className="shrink-0 w-24 h-16 md:w-32 md:h-20 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
+                            className="shrink-0 w-32 h-24 md:w-44 md:h-28 px-4 flex items-center justify-center opacity-60 hover:opacity-100 transition-opacity"
                         >
                             <img
                                 src={logo.img}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import logo from '../assets/logo_4m.png';
+import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
 import AuthModal from './AuthModal';
 
@@ -79,7 +80,7 @@ const Navbar = () => {
           {/* Logo */}
           <div className="flex items-center gap-4">
             <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" />
-            <span className="text-xl font-bold tracking-tighter text-white">South Africa</span>
+            <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
           </div>
 
           {/* Desktop Links */}

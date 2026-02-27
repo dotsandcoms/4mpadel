@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 const formatEventDates = (start, end) => {
@@ -281,9 +281,10 @@ const CalendarManager = () => {
             <div className="bg-[#1E293B] rounded-2xl border border-white/10 overflow-hidden">
                 <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-gray-400 font-bold text-sm uppercase">
                     <div className="col-span-3">Dates</div>
-                    <div className="col-span-4">Event Name</div>
+                    <div className="col-span-3">Event Name</div>
                     <div className="col-span-2">City/Venue</div>
                     <div className="col-span-2">Status</div>
+                    <div className="col-span-1 text-center">Featured</div>
                     <div className="col-span-1 text-right">Actions</div>
                 </div>
 
@@ -299,19 +300,30 @@ const CalendarManager = () => {
                                     {event.event_dates}
                                     {event.start_date && <span className="block text-[10px] text-gray-500 font-normal">({event.start_date})</span>}
                                 </div>
-                                <div className="col-span-4 font-medium text-white">{event.event_name}</div>
+                                <div className="col-span-3 font-medium text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
                                 <div className="col-span-2 text-sm text-gray-400">
-                                    <div className="font-bold text-white">{event.city}</div>
-                                    <div className="text-xs">{event.venue}</div>
+                                    <div className="font-bold text-white truncate">{event.city}</div>
+                                    <div className="text-[10px] uppercase tracking-wider truncate">{event.venue}</div>
                                 </div>
-                                <div className="col-span-2">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-bold uppercase
-                                        ${event.sapa_status === 'Major' ? 'bg-purple-500/20 text-purple-300' :
-                                            event.sapa_status === 'Gold' ? 'bg-yellow-500/20 text-yellow-300' :
-                                                event.sapa_status === 'Silver' ? 'bg-gray-500/20 text-gray-300' :
-                                                    'bg-blue-500/20 text-blue-300'}`}>
-                                        {event.sapa_status}
+                                <div className="col-span-2 flex items-center">
+                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border
+                                        ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                            event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
+                                                    'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
+                                        {event.sapa_status || 'Event'}
                                     </span>
+                                </div>
+                                <div className="col-span-1 flex justify-center">
+                                    {event.featured_event ? (
+                                        <div className="bg-yellow-500/20 p-1.5 rounded-full" title="Featured Event">
+                                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+                                        </div>
+                                    ) : (
+                                        <div className="bg-white/5 p-1.5 rounded-full" title="Not Featured">
+                                            <Star className="w-4 h-4 text-gray-600" />
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="col-span-1 flex justify-end gap-2">
                                     <button

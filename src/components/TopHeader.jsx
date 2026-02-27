@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
 import AuthModal from './AuthModal';
 import { useNavigate } from 'react-router-dom';
+import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 
 const TopHeader = () => {
     const [session, setSession] = useState(null);
@@ -58,8 +59,9 @@ const TopHeader = () => {
                 className="w-full py-6 px-6 md:px-10 flex flex-col lg:flex-row items-center justify-between bg-black text-white gap-4 lg:gap-0 relative z-50"
             >
                 <div className="flex items-center gap-4">
-                    <a href="/" className="text-2xl font-black tracking-tighter text-white">
-                        4M <span className="text-padel-green">PADEL</span>
+                    <a href="/" className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white">
+                        <span>4M <span className="text-padel-green">PADEL</span></span>
+                        <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
                     </a>
                 </div>
 

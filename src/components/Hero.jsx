@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/hero_bg.png';
+import AuthModal from './AuthModal';
 
 const Hero = () => {
     const { scrollY } = useScroll();
     const yBackend = useTransform(scrollY, [0, 500], [0, 150]);
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
+    const navigate = useNavigate();
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-6 bg-black">
@@ -61,9 +65,10 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-300 text-lg md:text-xl max-w-xl mb-8 leading-relaxed"
+                        className="text-gray-300 text-lg md:text-xl max-w-xl mb-8 leading-relaxed flex items-center gap-2 flex-wrap"
                     >
-                        The Official Platform for SAPA events, calendar & rankings in South Africa
+                        The Official Platform for events, calendar & rankings in
+                        <img src="/src/assets/sapa_logo.png" alt="SAPA" className="h-6 inline-block opacity-80" />
                     </motion.p>
 
                     <motion.div
@@ -72,21 +77,28 @@ const Hero = () => {
                         transition={{ delay: 1, duration: 0.8 }}
                         className="flex flex-col sm:flex-row gap-4"
                     >
-                        <button className="group relative px-8 py-4 bg-padel-green rounded-full font-bold text-black overflow-hidden hover:scale-105 transition-transform duration-300">
+                        <button
+                            onClick={() => navigate('/calendar')}
+                            className="group relative px-8 py-4 bg-padel-green rounded-full font-bold text-black overflow-hidden hover:scale-105 transition-transform duration-300"
+                        >
                             <span className="relative z-10 flex items-center gap-2">
-                                View Services
+                                View Tournaments
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
                                     <path d="M1 11L11 1M11 1H1M11 1V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </span>
                         </button>
 
-                        <button className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors">
-                            What is Padel? ↗
+                        <button
+                            onClick={() => setIsAuthModalOpen(true)}
+                            className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors"
+                        >
+                            Register
                         </button>
                     </motion.div>
                 </motion.div>
             </div >
+            <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
         </div >
     );
 };

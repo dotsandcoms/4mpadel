@@ -12,6 +12,8 @@ const PlayerProfiles = () => {
     const [mixedRankings, setMixedRankings] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const [imageErrors, setImageErrors] = useState({});
+
     useEffect(() => {
         const fetchAllRankings = async () => {
             try {
@@ -34,6 +36,15 @@ const PlayerProfiles = () => {
 
         fetchAllRankings();
     }, [getOrganisationRankings]);
+
+    const getInitials = (name) => {
+        if (!name) return "";
+        const parts = name.split(" ");
+        if (parts.length >= 2) {
+            return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+        }
+        return name.substring(0, 2).toUpperCase();
+    };
 
     const formatRankings = (data) => {
         if (!data) return [];
@@ -80,17 +91,21 @@ const PlayerProfiles = () => {
                             transition={{ delay: Math.min(index * 0.1, 0.5) }}
                             className="min-w-[280px] md:min-w-[320px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40"
                         >
-                            <div className="h-[380px] w-full relative bg-gradient-to-br from-gray-800 to-gray-900">
-                                <img
-                                    src={player.image}
-                                    alt={player.name}
-                                    className="w-full h-full object-cover filter grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500 scale-100 group-hover:scale-105"
-                                    onError={(e) => {
-                                        // Fallback to default images if Rankedin CDN returns 404
-                                        e.target.onerror = null;
-                                        e.target.src = index % 2 === 0 ? player1 : dynamicsPlayer;
-                                    }}
-                                />
+                            <div className="h-[380px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
+                                {!imageErrors[player.id] ? (
+                                    <img
+                                        src={player.image}
+                                        alt={player.name}
+                                        className="w-full h-full object-cover filter grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500 scale-100 group-hover:scale-105"
+                                        onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full flex flex-col items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-[#253247] to-[#141d2e]">
+                                        <div className="w-48 h-48 rounded-full bg-[#E2E4EB] flex items-center justify-center shadow-2xl mb-12 transform scale-100 group-hover:scale-105 transition-transform duration-500">
+                                            <span className="text-6xl font-black text-[#2B3B60] tracking-tighter">{getInitials(player.name)}</span>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
                             </div>
 

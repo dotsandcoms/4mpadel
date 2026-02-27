@@ -7,7 +7,6 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
-        { id: 'tournaments', label: 'Tournaments', icon: Trophy },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
         { id: 'finance', label: 'Finance', icon: DollarSign },

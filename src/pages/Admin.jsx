@@ -3,7 +3,6 @@ import { supabase } from '../supabaseClient';
 import AdminSidebar from '../components/admin/AdminSidebar';
 import DashboardHome from '../components/admin/DashboardHome';
 import PlayerManager from '../components/admin/PlayerManager';
-import TournamentManager from '../components/admin/TournamentManager';
 import BlogManager from '../components/admin/BlogManager';
 import CalendarManager from '../components/admin/CalendarManager';
 import FinanceManager from '../components/admin/FinanceManager';
@@ -118,7 +117,6 @@ const Admin = () => {
                         >
                             {activeTab === 'dashboard' && <DashboardHome />}
                             {activeTab === 'players' && <PlayerManager />}
-                            {activeTab === 'tournaments' && <TournamentManager />}
                             {activeTab === 'blog' && <BlogManager />}
                             {activeTab === 'calendar' && <CalendarManager />}
                             {activeTab === 'finance' && <FinanceManager />}
