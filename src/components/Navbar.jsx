@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown } from 'lucide-react';
-import logo from '../assets/logo_4m.png';
+import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
 import AuthModal from './AuthModal';
