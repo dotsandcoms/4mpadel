@@ -116,7 +116,7 @@ const TopHeader = () => {
                             onClick={() => setIsAuthModalOpen(true)}
                             className="bg-padel-green text-black px-8 py-3 rounded-full text-sm font-black uppercase tracking-widest hover:bg-white hover:scale-105 transition-all flex items-center gap-2 shadow-lg shadow-padel-green/20"
                         >
-                            Register
+                            Login / Register
                             <span className="bg-black/10 rounded-full p-1 leading-none text-xs">↗</span>
                         </button>
                     )}

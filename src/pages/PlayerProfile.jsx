@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as ImageIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as ImageIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import heroBg from '../assets/hero_bg.png';

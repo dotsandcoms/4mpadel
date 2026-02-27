@@ -28,6 +28,7 @@ const Navbar = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    window.location.href = '/';
   };
 
 
@@ -126,7 +127,7 @@ const Navbar = () => {
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 className="bg-padel-green text-black px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:bg-white hover:scale-105 transition-all duration-300">
-                Register ↗
+                Login / Register ↗
               </button>
             )}
           </div>
@@ -214,7 +215,7 @@ const Navbar = () => {
                 onClick={() => { setIsMobileMenuOpen(false); setIsAuthModalOpen(true); }}
                 className="bg-padel-green text-black px-8 py-4 rounded-full text-xl font-bold mt-4"
               >
-                Register
+                Login / Register
               </motion.button>
             )}
           </motion.div>

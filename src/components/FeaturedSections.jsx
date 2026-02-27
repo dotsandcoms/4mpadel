@@ -37,7 +37,7 @@ const featuredDataTemplate = [
         description: 'Experience the thrill in real-time. Tune in to our live broadcasts and witness Padel history unfold as the best compete on center court.',
         cardLabel: 'Live Now',
         cardTitle: 'SAPA Regional Qualifiers',
-        image: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?q=80&w=1453&auto=format&fit=crop',
+        image: 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop', // Reusing a padel image
         align: 'left',
         linkPath: '/calendar',
         icon: PlayCircle

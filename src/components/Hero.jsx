@@ -67,8 +67,7 @@ const Hero = () => {
                         transition={{ delay: 0.8, duration: 0.8 }}
                         className="text-gray-300 text-lg md:text-xl max-w-xl mb-8 leading-relaxed flex items-center gap-2 flex-wrap"
                     >
-                        The Official Platform for events, calendar & rankings in
-                        <img src="/src/assets/sapa_logo.png" alt="SAPA" className="h-6 inline-block opacity-80" />
+                        The Official Platform for events, calendar & rankings in Southern Africa.
                     </motion.p>
 
                     <motion.div
