@@ -55,7 +55,7 @@ const FallbackImage = ({ src, alt, className, title }) => {
         const initials = title ? title.substring(0, 2).toUpperCase() : '4M';
         return (
             <div className={`flex items-center justify-center bg-gradient-to-br from-[#0B1121] to-black absolute inset-0 w-full h-full`}>
-                <div className="absolute inset-0 opacity-[0.03] bg-[url('/noise.png')] mix-blend-overlay"></div>
+                <div className="absolute inset-0 opacity-[0.03] mix-blend-overlay"></div>
                 <span className="text-4xl font-black text-white/5 font-display tracking-widest">{initials}</span>
                 <Trophy className="absolute inset-0 m-auto w-24 h-24 text-white/[0.02]" />
             </div>
