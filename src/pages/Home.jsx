@@ -9,7 +9,7 @@ import Calendar from '../components/Calendar';
 import PlayerProfiles from '../components/PlayerProfiles';
 import FAQ from '../components/FAQ';
 import Partners from '../components/Partners';
-import dynamicsPlayer from '../assets/dynamics_player.png';
+import dynamicsPlayer from '../assets/dynamicsPlayerAction.png';
 // import Link from 'react-router-dom';
 import { motion } from 'framer-motion';
 
