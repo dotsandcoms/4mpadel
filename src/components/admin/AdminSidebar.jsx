@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign } from 'lucide-react';
-import logo from '../../assets/logo_4m.png';
+import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
     const menuItems = [

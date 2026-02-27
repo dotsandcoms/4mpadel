@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRankedin } from '../hooks/useRankedin';
 import player1 from '../assets/player_1.png';
-import dynamicsPlayer from '../assets/dynamics_player.png';
+import dynamicsPlayer from '../assets/dynamicsPlayerAction.png';
 import { Users, Trophy } from 'lucide-react';
 
 const PlayerProfiles = () => {
