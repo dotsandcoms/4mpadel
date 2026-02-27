@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 import seoConfigData from '../seo.config.json';
 import { saveConfigToGitHub, saveRedirectsToGitHub, testConnection } from '../utils/github';
-import { supabase } from '../utils/supabase';
+import { supabase as defaultSupabase } from '../utils/supabase';
 
 const SEOContext = createContext(null);
 
@@ -9,8 +9,10 @@ const SEOContext = createContext(null);
  * SEOProvider
  * Provides global SEO state and configuration to the app.
  * Automatically synchronizes with LocalStorage, GitHub, and Supabase.
+ * Pass supabase prop to use your app's client (connects on any domain).
  */
-export const SEOProvider = ({ children }) => {
+export const SEOProvider = ({ children, supabase: supabaseProp }) => {
+    const supabase = supabaseProp ?? defaultSupabase;
     // 1. Domain Logic FIRST (needed for keys)
     const [linkedDomain, setLinkedDomainState] = useState(() => {
         if (typeof window !== 'undefined') {
@@ -21,15 +23,21 @@ export const SEOProvider = ({ children }) => {
 
     const currentDomain = useMemo(() => {
         if (linkedDomain) return linkedDomain;
+        // Use VITE_SEO_DOMAIN for preview/staging (e.g. 4mpadel.vercel.app) to share SEO data with production
+        const envDomain = import.meta.env.VITE_SEO_DOMAIN;
         if (typeof window !== 'undefined') {
             const hostname = window.location.hostname;
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
                 const projectName = import.meta.env.VITE_PROJECT_NAME;
                 return projectName ? `${projectName}.local` : 'localhost';
             }
+            // If on Vercel preview / staging and VITE_SEO_DOMAIN is set, use it for Supabase lookup
+            if (envDomain && (hostname.includes('vercel.app') || hostname.includes('netlify.app') || hostname.includes('preview'))) {
+                return envDomain;
+            }
             return hostname;
         }
-        return 'localhost';
+        return envDomain || 'localhost';
     }, [linkedDomain]);
 
     // 2. Storage Keys SECOND

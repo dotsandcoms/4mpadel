@@ -1,8 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-// TODO: Replace these with your actual Supabase project details
-// You can find these in your Supabase Dashboard -> Project Settings -> API
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-url.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key'
+// Connects to Supabase on any domain - set in Vercel: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_KEY
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '')
