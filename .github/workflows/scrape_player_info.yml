@@ -40,7 +40,7 @@ jobs:
             libgtk-3-0
 
       - name: Install Node dependencies
-        run: npm install --legacy-peer-deps
+        run: npm install puppeteer @supabase/supabase-js dotenv --no-save
 
       - name: Install Puppeteer browser
         run: npx puppeteer browsers install chrome
