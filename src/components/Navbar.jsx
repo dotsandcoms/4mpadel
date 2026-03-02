@@ -11,6 +11,7 @@ const Navbar = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [session, setSession] = useState(null);
+  const [player, setPlayer] = useState(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -25,6 +26,19 @@ const Navbar = () => {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session?.user?.email) {
+      setPlayer(null);
+      return;
+    }
+    supabase
+      .from('players')
+      .select('name, rankedin_id')
+      .eq('email', session.user.email)
+      .maybeSingle()
+      .then(({ data }) => setPlayer(data));
+  }, [session?.user?.email]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -79,10 +93,17 @@ const Navbar = () => {
       >
         <div className="container mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
-          {/* Logo */}
           <div className="flex items-center gap-4">
-            <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" />
+            <img src={logo} alt="4M Padel Logo" className="h-12 w-auto drop-shadow-none" style={{ filter: 'none' }} />
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
+            {session && player && (
+              <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
+                <span className="truncate max-w-[100px]">{player.name}</span>
+                {player.rankedin_id && (
+                  <span className="text-white/60 font-mono text-[10px] shrink-0">{player.rankedin_id}</span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Desktop Links */}

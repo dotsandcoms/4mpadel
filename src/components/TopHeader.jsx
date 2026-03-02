@@ -8,6 +8,7 @@ import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 
 const TopHeader = () => {
     const [session, setSession] = useState(null);
+    const [player, setPlayer] = useState(null);
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const navigate = useNavigate();
 
@@ -24,6 +25,19 @@ const TopHeader = () => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    useEffect(() => {
+        if (!session?.user?.email) {
+            setPlayer(null);
+            return;
+        }
+        supabase
+            .from('players')
+            .select('name, rankedin_id')
+            .eq('email', session.user.email)
+            .maybeSingle()
+            .then(({ data }) => setPlayer(data));
+    }, [session?.user?.email]);
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
@@ -59,9 +73,17 @@ const TopHeader = () => {
                 className="w-full py-6 px-6 md:px-10 flex flex-col lg:flex-row items-center justify-between bg-black text-white gap-4 lg:gap-0 relative z-50"
             >
                 <div className="flex items-center gap-4">
-                    <a href="/" className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white">
+                    <a href="/" className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white drop-shadow-none" style={{ textShadow: 'none' }}>
                         <span>4M <span className="text-padel-green">PADEL</span></span>
                         <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
+                        {session && player && (
+                            <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
+                                <span className="truncate max-w-[100px]">{player.name}</span>
+                                {player.rankedin_id && (
+                                    <span className="text-white/60 font-mono text-[10px] shrink-0">{player.rankedin_id}</span>
+                                )}
+                            </div>
+                        )}
                     </a>
                 </div>
 
