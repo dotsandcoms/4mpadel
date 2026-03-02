@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 
@@ -131,8 +131,9 @@ const AuthModal = ({ isOpen, onClose }) => {
     };
 
     const handlePayLaterRegistration = async () => {
-        if (!isSupabaseConfigured()) {
-            showMessage('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file (see .env.example) and restart the dev server.', 'error');
+        const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+        if (!hasSupabase) {
+            showMessage('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.', 'error');
             setLoading(false);
             return;
         }
