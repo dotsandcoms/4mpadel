@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as ImageIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as ImageIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
+import LicensePaymentModal from '../components/LicensePaymentModal';
 import heroBg from '../assets/hero_bg.png';
 
 const PlayerProfile = () => {
@@ -12,6 +13,7 @@ const PlayerProfile = () => {
     const [uploadingImage, setUploadingImage] = useState(false);
     const [message, setMessage] = useState(null);
     const [player, setPlayer] = useState(null);
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
     const navigate = useNavigate();
 
     const [formData, setFormData] = useState({
@@ -85,6 +87,13 @@ const PlayerProfile = () => {
         checkUserAndFetchProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
+
+    const refetchPlayer = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.email) return;
+        const { data } = await supabase.from('players').select('*').eq('email', session.user.email).maybeSingle();
+        if (data) setPlayer(data);
+    };
 
     const handleSave = async (e) => {
         e.preventDefault();
@@ -281,6 +290,39 @@ const PlayerProfile = () => {
 
             {/* Main Content Area */}
             <div className="container mx-auto px-6 -mt-10 pb-24 relative z-20">
+                {/* Payment Required Banner - shown when profile is not visible */}
+                {player && !player.paid_registration && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-8 p-6 rounded-2xl bg-padel-green/10 border border-padel-green/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                    >
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-xl bg-padel-green/20 flex items-center justify-center">
+                                <CreditCard className="text-padel-green" size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-white font-bold text-lg">License Required</h3>
+                                <p className="text-gray-400 text-sm">Your profile is hidden from the Players page. Pay for a license to go live.</p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3 w-full sm:w-auto">
+                            <button
+                                onClick={() => setShowPaymentModal(true)}
+                                className="flex-1 sm:flex-none bg-padel-green text-black font-black uppercase tracking-widest py-3 px-6 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20"
+                            >
+                                Pay Now - Full License
+                            </button>
+                            <button
+                                onClick={() => setShowPaymentModal(true)}
+                                className="flex-1 sm:flex-none bg-white/10 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 border border-white/10 transition-all"
+                            >
+                                Buy Temporary License
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                     {/* Left Panel: Statistics & Quick Updates */}
@@ -555,6 +597,13 @@ const PlayerProfile = () => {
                     </div>
                 </div>
             </div>
+
+            <LicensePaymentModal
+                isOpen={showPaymentModal}
+                onClose={() => setShowPaymentModal(false)}
+                userEmail={player?.email}
+                onPaymentSuccess={refetchPlayer}
+            />
         </div>
     );
 };

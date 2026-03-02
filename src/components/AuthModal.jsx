@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../supabaseClient';
+import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 
@@ -25,6 +25,10 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [bio, setBio] = useState('');
     const [homeClub, setHomeClub] = useState('');
     const [sponsors, setSponsors] = useState('');
+    const [instagramLink, setInstagramLink] = useState('');
+    const [acceptTerms, setAcceptTerms] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
+    const [paymentOption, setPaymentOption] = useState('pay_now'); // 'pay_now' | 'pay_later'
     const [showPassword, setShowPassword] = useState(false);
 
     const resetForm = () => {
@@ -41,6 +45,9 @@ const AuthModal = ({ isOpen, onClose }) => {
         setBio('');
         setHomeClub('');
         setSponsors('');
+        setInstagramLink('');
+        setAcceptTerms(false);
+        setPaymentOption('pay_now');
         setMessage(null);
     };
 
@@ -106,11 +113,71 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
                 return;
             }
+            if (!acceptTerms) {
+                setMessage({ type: 'error', text: 'You must accept the Terms & Conditions to register.' });
+                return;
+            }
 
             setLoading(true);
+
+            if (paymentOption === 'pay_later') {
+                handlePayLaterRegistration();
+                return;
+            }
+
             console.log('Initializing Paystack for R100 Registration...');
             handlePaystackPayment({ onSuccess, onClose: onClosePayment });
         }
+    };
+
+    const handlePayLaterRegistration = async () => {
+        if (!isSupabaseConfigured()) {
+            showMessage('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file (see .env.example) and restart the dev server.', 'error');
+            setLoading(false);
+            return;
+        }
+        const { error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+        });
+
+        if (authError) {
+            showMessage(authError.message, 'error');
+            setLoading(false);
+            return;
+        }
+
+        const baseParams = {
+            p_email: email,
+            p_name: name,
+            p_contact: contactNumber,
+            p_category: category || 'Unranked',
+            p_gender: gender,
+            p_nationality: nationality,
+            p_id_number: idNumber,
+            p_bio: bio,
+            p_home_club: homeClub,
+            p_sponsors: sponsors,
+        };
+
+        let insertError = (await supabase.rpc('create_player_profile_pay_later', {
+            ...baseParams,
+            p_instagram_link: instagramLink || null,
+        })).error;
+
+        if (insertError) {
+            const fallback = await supabase.rpc('create_player_profile_pay_later', baseParams);
+            insertError = fallback.error;
+        }
+
+        if (insertError) {
+            showMessage('Account created, but failed to setup profile: ' + (insertError.message || insertError.code || 'Unknown error'), 'error');
+            setLoading(false);
+            return;
+        }
+
+        showMessage('Registration successful! Your profile is created. Pay for a license to make it visible on the Players page.', 'success');
+        setLoading(false);
     };
 
     const paystackConfig = {
@@ -147,7 +214,9 @@ const AuthModal = ({ isOpen, onClose }) => {
             p_id_number: idNumber,
             p_bio: bio,
             p_home_club: homeClub,
-            p_sponsors: sponsors
+            p_sponsors: sponsors,
+            p_instagram_link: instagramLink || null,
+            p_paid_registration: true,
         });
 
         if (insertError) {
@@ -182,7 +251,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-md bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                    className="relative w-full max-w-md max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
                 >
                     <button
                         onClick={onClose}
@@ -217,7 +286,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         </button>
                     </div>
 
-                    <div className="p-8">
+                    <div className="p-8 overflow-y-auto flex-1 min-h-0">
                         {message && (
                             <div className={`flex items-center gap-3 p-4 rounded-xl mb-6 text-sm font-medium ${message.type === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-padel-green/10 text-padel-green border border-padel-green/20'}`}>
                                 {message.type === 'error' ? <AlertCircle size={18} /> : <CheckCircle size={18} />}
@@ -336,20 +405,39 @@ const AuthModal = ({ isOpen, onClose }) => {
                                             </div>
 
                                             <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Method</label>
-                                                <div className="flex items-center justify-between bg-black/40 border border-padel-green/30 rounded-xl p-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
-                                                            <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
+                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Option</label>
+                                                <div className="space-y-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentOption('pay_now')}
+                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_now' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
+                                                                <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-white font-bold text-sm">Pay Now</p>
+                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: R100.00 • Profile visible immediately</p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <p className="text-white font-bold text-sm">Paystack</p>
-                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: R100.00</p>
+                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_now' ? 'border-padel-green' : 'border-white/30'}`}>
+                                                            {paymentOption === 'pay_now' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
                                                         </div>
-                                                    </div>
-                                                    <div className="w-5 h-5 rounded-full border-2 border-padel-green flex items-center justify-center">
-                                                        <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>
-                                                    </div>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentOption('pay_later')}
+                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_later' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
+                                                    >
+                                                        <div className="text-left">
+                                                            <p className="text-white font-bold text-sm">Pay Later</p>
+                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Create profile now • Pay for license later to appear on Players page</p>
+                                                        </div>
+                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_later' ? 'border-padel-green' : 'border-white/30'}`}>
+                                                            {paymentOption === 'pay_later' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
+                                                        </div>
+                                                    </button>
                                                 </div>
                                             </div>
 
@@ -387,12 +475,39 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 required
                                             />
                                             <input
+                                                type="url"
+                                                placeholder="Instagram Link (Optional)"
+                                                value={instagramLink}
+                                                onChange={(e) => setInstagramLink(e.target.value)}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
+                                            />
+                                            <input
                                                 type="text"
                                                 placeholder="Sponsors (Optional)"
                                                 value={sponsors}
                                                 onChange={(e) => setSponsors(e.target.value)}
                                                 className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
                                             />
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id="acceptTerms"
+                                                    checked={acceptTerms}
+                                                    onChange={(e) => setAcceptTerms(e.target.checked)}
+                                                    className="w-4 h-4 rounded border-white/20 bg-black/50 text-padel-green focus:ring-padel-green focus:ring-offset-0 cursor-pointer"
+                                                />
+                                                <label htmlFor="acceptTerms" className="text-sm text-gray-300 cursor-pointer select-none">
+                                                    Accept &quot;Terms &amp; Conditions&quot;
+                                                </label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowTermsModal(true)}
+                                                    className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-white/10 hover:bg-white/20 text-gray-400 hover:text-padel-green transition-colors"
+                                                    title="View Terms & Conditions"
+                                                >
+                                                    <Info size={14} />
+                                                </button>
+                                            </div>
                                             <div className="flex gap-3 pt-2">
                                                 <button
                                                     type="button"
@@ -403,10 +518,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    disabled={loading || !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}
+                                                    disabled={loading || (paymentOption === 'pay_now' && !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY)}
                                                     className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                                 >
-                                                    {loading ? 'Processing...' : !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? 'Paystack Key Missing' : 'Pay & Register'}
+                                                    {loading ? 'Processing...' : paymentOption === 'pay_later' ? 'Register' : !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? 'Paystack Key Missing' : 'Pay & Register'}
                                                 </button>
                                             </div>
                                         </div>
@@ -455,6 +570,64 @@ const AuthModal = ({ isOpen, onClose }) => {
                         </form>
                     </div>
                 </motion.div>
+
+                {/* Terms & Conditions Modal */}
+                <AnimatePresence>
+                    {showTermsModal && (
+                        <>
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-black/90 backdrop-blur-sm z-[101]"
+                                onClick={() => setShowTermsModal(false)}
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="absolute z-[102] w-full max-w-lg max-h-[85vh] bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                            >
+                                <div className="flex items-center justify-between p-4 border-b border-white/10 bg-white/5">
+                                    <h3 className="text-lg font-bold text-white">Terms & Conditions</h3>
+                                    <button
+                                        onClick={() => setShowTermsModal(false)}
+                                        className="text-gray-400 hover:text-white transition-colors p-1"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                                <div className="overflow-y-auto p-6 space-y-6 text-sm text-gray-300">
+                                    <section>
+                                        <h4 className="text-padel-green font-bold mb-2 uppercase tracking-wider text-xs">General Terms & Conditions</h4>
+                                        <p className="mb-2">By registering for 4M Padel, you agree to the following:</p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-400">
+                                            <li>You must provide accurate and complete information during registration.</li>
+                                            <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
+                                            <li>Registration fees are non-refundable unless otherwise stated.</li>
+                                            <li>You agree to participate in good faith and respect other players and organisers.</li>
+                                            <li>You consent to your profile information being displayed on the platform for ranking and tournament purposes.</li>
+                                            <li>We reserve the right to suspend or remove accounts that violate these terms.</li>
+                                        </ul>
+                                    </section>
+                                    <section>
+                                        <h4 className="text-padel-green font-bold mb-2 uppercase tracking-wider text-xs">POPI Act (Protection of Personal Information)</h4>
+                                        <p className="mb-2">In compliance with the Protection of Personal Information Act (Act 4 of 2013), we:</p>
+                                        <ul className="list-disc list-inside space-y-1 text-gray-400">
+                                            <li>Process your personal information only for lawful purposes related to padel registration and tournament management.</li>
+                                            <li>Collect only the information necessary for your player profile and participation.</li>
+                                            <li>Implement appropriate security measures to protect your data.</li>
+                                            <li>Will not share your personal information with third parties without your consent, except as required by law.</li>
+                                            <li>Will notify you of any data breaches affecting your information.</li>
+                                            <li>Allow you to access, correct, or request deletion of your personal information.</li>
+                                        </ul>
+                                        <p className="mt-2 text-gray-500 text-xs">By registering, you consent to the processing of your personal information as described above.</p>
+                                    </section>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
             </div>
         </AnimatePresence>
     );

@@ -36,6 +36,7 @@ const Players = () => {
         .from('players')
         .select('*')
         .eq('approved', true)
+        .eq('paid_registration', true)
         .order('points', { ascending: false });
 
       if (!error && data) {
