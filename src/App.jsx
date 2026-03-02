@@ -20,6 +20,9 @@ import TournamentResults from './pages/TournamentResults';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
 import ApprovedCoaches from './pages/ApprovedCoaches';
 import CoachingVideos from './pages/CoachingVideos';
+import CoachRegistration from './pages/CoachRegistration';
+import Gallery from './pages/Gallery';
+import AlbumDetails from './pages/AlbumDetails';
 import SiteFooter from './components/SiteFooter';
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation } from 'react-router-dom';
@@ -48,10 +51,13 @@ function AppContent() {
           <Route path="/tournaments/all" element={<AllTournaments />} />
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
+          <Route path="/gallery" element={<Gallery />} />
+          <Route path="/gallery/:id" element={<AlbumDetails />} />
           <Route path="/results/:id" element={<TournamentResults />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />
           <Route path="/academy/videos" element={<CoachingVideos />} />
+          <Route path="/academy/register" element={<CoachRegistration />} />
         </Routes>
       </div>
       {!isAdminRoute && <SiteFooter />}

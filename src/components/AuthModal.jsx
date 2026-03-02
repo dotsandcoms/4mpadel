@@ -117,7 +117,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         reference: (new Date()).getTime().toString(),
         email: email,
         amount: 10000,
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
         currency: 'ZAR',
     };
 
@@ -334,6 +334,25 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 2: Padel Profile</span>
                                                 <span className="text-gray-500 text-[10px] font-bold">2 / 2</span>
                                             </div>
+
+                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Method</label>
+                                                <div className="flex items-center justify-between bg-black/40 border border-padel-green/30 rounded-xl p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
+                                                            <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-white font-bold text-sm">Paystack</p>
+                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: R100.00</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="w-5 h-5 rounded-full border-2 border-padel-green flex items-center justify-center">
+                                                        <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
                                             <select
                                                 value={category}
                                                 onChange={(e) => setCategory(e.target.value)}
@@ -384,10 +403,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    disabled={loading}
+                                                    disabled={loading || !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}
                                                     className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                                 >
-                                                    {loading ? 'Processing...' : 'Pay & Register'}
+                                                    {loading ? 'Processing...' : !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? 'Paystack Key Missing' : 'Pay & Register'}
                                                 </button>
                                             </div>
                                         </div>

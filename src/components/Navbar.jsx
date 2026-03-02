@@ -51,6 +51,7 @@ const Navbar = () => {
       dropdown: [
         { name: 'Approved Coaches', href: '/academy/coaches' },
         { name: 'Coaching Videos', href: '/academy/videos' },
+        { name: 'Register', href: '/academy/register' },
       ]
     },
     {

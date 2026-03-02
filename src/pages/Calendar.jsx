@@ -42,7 +42,7 @@ const Calendar = () => {
             if (error) throw error;
             setEvents(data || []);
         } catch (err) {
-            console.error('Error fetching calendar:', err);
+            console.error('Error fetching calendar:', err?.message || err, err);
             setError('Failed to load events. Please try again later.');
         } finally {
             setLoading(false);

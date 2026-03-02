@@ -1,98 +1,113 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Award, Mail, Phone, MapPin, Star, ShieldCheck } from 'lucide-react';
+import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2 } from 'lucide-react';
+import { supabase } from '../supabaseClient';
+import { Link } from 'react-router-dom';
 
-const coaches = [
-    {
-        name: 'Carlos Mendez',
-        level: '4M Head Coach',
-        cert: 'International Padel Federation (FIP) Level 3',
-        bio: 'With over 15 years of experience in Spain and South Africa, Carlos specializes in advanced tactical play and professional athlete development.',
-        image: '/Users/bradein/.gemini/antigravity/brain/ea660605-3d9d-41ec-922b-e2b6d1a0c0cc/coach_1_1772098869822.png',
-        specialties: ['Technical Analysis', 'Tactical Positioning', 'Pro Development'],
-        stats: { students: '500+', rank: 'Top 10 Player' }
-    },
-    {
-        name: 'Sarah Jenkins',
-        level: 'Senior Academy Coach',
-        cert: '4M Certified Elite Coach',
-        bio: 'Sarah focuses on junior development and intermediate ladies clinics. Her coaching philosophy centers on building a strong technical foundation.',
-        image: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=800', // Fallback for now
-        specialties: ['Junior Foundations', 'Ladies Clinics', 'Mental Game'],
-        stats: { students: '320+', experience: '8 Years' }
-    },
-    {
-        name: 'Marco Rossi',
-        level: 'Academy Instructor',
-        cert: '4M Level 2 Instructor',
-        bio: 'Marco brings high energy to the court. He is known for his intensive cardio padel sessions and group clinics for beginners.',
-        image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800', // Fallback for now
-        specialties: ['Cardio Padel', 'Beginner Basics', 'Drill Sessions'],
-        stats: { students: '200+', energy: 'Infinite' }
-    }
-];
+const CoachCard = ({ coach, index }) => {
+    // We create a dummy "specialties" array from bio or location to simulate tags for now
+    const specialties = [coach.coaching_location];
 
-const CoachCard = ({ coach, index }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay: index * 0.1 }}
-        className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden hover:bg-white/10 transition-all duration-500"
-    >
-        {/* Image Container */}
-        <div className="relative h-80 overflow-hidden">
-            <img
-                src={coach.image}
-                alt={coach.name}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-transparent opacity-60" />
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ delay: index * 0.1 }}
+            className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden hover:bg-white/10 transition-all duration-500 flex flex-col h-full"
+        >
+            {/* Image Container */}
+            <div className="relative h-80 overflow-hidden shrink-0">
+                {coach.profile_pic_url ? (
+                    <img
+                        src={coach.profile_pic_url}
+                        alt={coach.full_name}
+                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center bg-black/50 text-gray-500">
+                        <UserX size={48} className="mb-2" />
+                        <span className="text-sm font-bold uppercase">No Image</span>
+                    </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-transparent opacity-60" />
 
-            {/* Level Badge */}
-            <div className="absolute top-6 left-6 px-4 py-2 bg-padel-green text-black text-xs font-black uppercase tracking-widest rounded-full shadow-lg">
-                {coach.level}
-            </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-8">
-            <div className="flex justify-between items-start mb-4">
-                <div>
-                    <h3 className="text-2xl font-black text-white mb-1 uppercase tracking-tight">{coach.name}</h3>
-                    <p className="text-padel-green text-sm font-bold flex items-center gap-1">
-                        <ShieldCheck className="w-4 h-4" /> {coach.cert}
-                    </p>
+                {/* Level Badge (Mocked for now) */}
+                <div className="absolute top-6 left-6 px-4 py-2 bg-padel-green text-black text-xs font-black uppercase tracking-widest rounded-full shadow-lg">
+                    4M Approved
                 </div>
             </div>
 
-            <p className="text-gray-400 text-sm leading-relaxed mb-6 line-clamp-3">
-                {coach.bio}
-            </p>
+            {/* Content */}
+            <div className="p-8 flex flex-col flex-grow">
+                <div className="mb-4">
+                    <h3 className="text-2xl font-black text-white mb-1 uppercase tracking-tight">{coach.full_name}</h3>
+                    <p className="text-padel-green text-sm font-bold flex items-center gap-1">
+                        <ShieldCheck className="w-4 h-4" /> Certified Instructor
+                    </p>
+                    <p className="text-gray-400 text-sm mt-1 flex items-center gap-1">
+                        <MapPin className="w-4 h-4" /> {coach.coaching_location}
+                    </p>
+                </div>
 
-            {/* Specialties */}
-            <div className="flex flex-wrap gap-2 mb-8">
-                {coach.specialties.map((spec, i) => (
-                    <span key={i} className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-300 uppercase tracking-wider">
-                        {spec}
-                    </span>
-                ))}
-            </div>
+                <p className="text-gray-400 text-sm leading-relaxed mb-6 line-clamp-3">
+                    {coach.bio}
+                </p>
 
-            {/* Buttons */}
-            <div className="grid grid-cols-2 gap-4">
-                <button className="flex items-center justify-center gap-2 py-3 bg-padel-green text-black rounded-2xl text-sm font-bold hover:bg-white transition-colors">
-                    <Mail className="w-4 h-4" /> Book
-                </button>
-                <button className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-white rounded-2xl text-sm font-bold hover:bg-white/10 transition-colors">
-                    <Star className="w-4 h-4 text-padel-green" /> Profile
-                </button>
+                <div className="mt-auto">
+                    {/* Social Links as tags */}
+                    <div className="flex flex-wrap gap-2 mb-8">
+                        {coach.instagram_link && (
+                            <a href={coach.instagram_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-300 uppercase tracking-wider hover:bg-white/10 transition-colors">
+                                <Instagram size={12} className="text-pink-500" /> Instagram
+                            </a>
+                        )}
+                        {coach.youtube_link && (
+                            <a href={coach.youtube_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-300 uppercase tracking-wider hover:bg-white/10 transition-colors">
+                                <Youtube size={12} className="text-red-500" /> YouTube
+                            </a>
+                        )}
+                    </div>
+
+                    {/* Buttons */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <a href={`mailto:${coach.email}`} className="flex items-center justify-center gap-2 py-3 bg-padel-green font-bold hover:bg-white transition-colors !text-black rounded-2xl text-sm">
+                            <Mail className="w-4 h-4" color="black" /> <span className="!text-black">Contact</span>
+                        </a>
+                        <a href={`tel:${coach.contact_number}`} className="flex items-center justify-center gap-2 py-3 bg-white/5 border border-white/10 text-white rounded-2xl text-sm font-bold hover:bg-white/10 transition-colors">
+                            <Phone className="w-4 h-4 text-padel-green" /> Call
+                        </a>
+                    </div>
+                </div>
             </div>
-        </div>
-    </motion.div>
-);
+        </motion.div>
+    )
+};
 
 const ApprovedCoaches = () => {
+    const [coaches, setCoaches] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchCoaches = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('coach_applications')
+                    .select('*')
+                    .eq('status', 'approved');
+
+                if (error) throw error;
+                setCoaches(data || []);
+            } catch (error) {
+                console.error('Error fetching coaches:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchCoaches();
+    }, []);
+
     return (
         <div className="bg-[#0F172A] min-h-screen pt-32 pb-24 font-sans">
             {/* Background elements */}
@@ -132,11 +147,23 @@ const ApprovedCoaches = () => {
                 </div>
 
                 {/* Coaches Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {coaches.map((coach, index) => (
-                        <CoachCard key={index} coach={coach} index={index} />
-                    ))}
-                </div>
+                {loading ? (
+                    <div className="flex justify-center items-center py-20">
+                        <Loader2 className="w-12 h-12 text-padel-green animate-spin" />
+                    </div>
+                ) : coaches.length === 0 ? (
+                    <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
+                        <UserX className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                        <h3 className="text-2xl font-bold text-white mb-2">No Coaches Found</h3>
+                        <p className="text-gray-400">There are currently no approved coaches to display.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {coaches.map((coach, index) => (
+                            <CoachCard key={coach.id} coach={coach} index={index} />
+                        ))}
+                    </div>
+                )}
 
                 {/* Call to Action */}
                 <motion.div
@@ -150,9 +177,9 @@ const ApprovedCoaches = () => {
                     <p className="text-black/80 text-lg font-bold mb-10 max-w-2xl mx-auto relative z-10">
                         Join our network of elite instructors and get certified by the 4M Padel Association.
                     </p>
-                    <button className="px-10 py-5 bg-black text-white rounded-2xl text-lg font-black hover:scale-105 transition-transform shadow-2xl relative z-10 uppercase tracking-widest">
+                    <Link to="/academy/register" className="inline-block px-10 py-5 bg-black text-white rounded-2xl text-lg font-black hover:scale-105 transition-transform shadow-2xl relative z-10 uppercase tracking-widest">
                         Apply Now
-                    </button>
+                    </Link>
                 </motion.div>
             </div>
         </div>

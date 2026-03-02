@@ -21,7 +21,7 @@ const Calendar = () => {
             .limit(3);
 
         if (error) {
-            console.error('Error fetching events:', error);
+            console.error('Error fetching events:', error?.message || error, 'Code:', error?.code, 'Details:', error?.details);
         } else {
             const formattedEvents = data.map(event => {
                 const dateObj = new Date(event.start_date);

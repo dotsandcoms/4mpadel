@@ -5,9 +5,12 @@ import DashboardHome from '../components/admin/DashboardHome';
 import PlayerManager from '../components/admin/PlayerManager';
 import BlogManager from '../components/admin/BlogManager';
 import CalendarManager from '../components/admin/CalendarManager';
+import GalleryManager from '../components/admin/GalleryManager';
 import FinanceManager from '../components/admin/FinanceManager';
+import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -120,8 +123,15 @@ const Admin = () => {
                             {activeTab === 'players' && <PlayerManager />}
                             {activeTab === 'blog' && <BlogManager />}
                             {activeTab === 'calendar' && <CalendarManager />}
-                            {activeTab === 'finance' && <FinanceManager />}
-                            {activeTab === 'settings' && <SettingsManager />}
+                            {activeTab === 'gallery' && (
+                                <GalleryManager />
+                            )}
+                            {activeTab === 'coaches' && (
+                                <CoachManager />
+                            )}
+                            {activeTab === 'finance' && (
+                                <FinanceManager />
+                            )}    {activeTab === 'settings' && <SettingsManager />}
                         </motion.div>
                     </AnimatePresence>
                 </div>

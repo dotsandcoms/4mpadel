@@ -50,6 +50,7 @@ const SiteFooter = () => {
                         <a href="/calendar" className="hover:text-padel-green transition-colors">Calendar</a>
                         <a href="/players" className="hover:text-padel-green transition-colors">Players</a>
                         <a href="/rankings" className="hover:text-padel-green transition-colors">Rankings</a>
+                        <a href="/gallery" className="hover:text-padel-green transition-colors">Gallery</a>
                     </div>
 
                     <div className="flex gap-6 text-gray-400">

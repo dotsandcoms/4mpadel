@@ -1,14 +1,16 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
+        { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
+        { id: 'gallery', label: 'Gallery', icon: ImageIcon },
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'settings', label: 'Settings', icon: Settings },
     ];

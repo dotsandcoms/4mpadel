@@ -5,8 +5,11 @@ import { HelmetProvider } from 'react-helmet-async'
 import { SEOProvider } from '@burkcorp/reactmath'
 import ErrorBoundary from './components/ErrorBoundary'
 import { supabase } from './supabaseClient'
+import { runSupabaseDiagnostics } from './utils/supabaseDiagnostics'
 import './index.css'
 import App from './App.jsx'
+
+runSupabaseDiagnostics(supabase)
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
