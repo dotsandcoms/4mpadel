@@ -45,7 +45,13 @@ jobs:
       - name: Install Puppeteer browser
         run: npx puppeteer browsers install chrome
 
-      - name: Run Scraper
+      - name: Run Rankings Sync (Phase 1)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/syncRankedinRankings.js
+
+      - name: Run Profile Detail Scraper (Phase 2)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
