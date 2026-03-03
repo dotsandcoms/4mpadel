@@ -251,7 +251,11 @@ const PlayerManager = () => {
 
     const handleTestLogin = (player) => {
         sessionStorage.setItem('admin_test_login_email', player.email);
-        showToast('Now testing as ' + player.name + '. Go to Calendar to see personalized view.');
+        showToast('Now testing as ' + player.name + '.');
+        // Small delay to allow toast to be seen before reload
+        setTimeout(() => {
+            window.location.reload();
+        }, 1000);
     };
 
     const handleSubmit = async (e) => {

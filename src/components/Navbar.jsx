@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Menu, X, ChevronDown } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
@@ -12,6 +13,7 @@ const Navbar = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [player, setPlayer] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -31,9 +33,9 @@ const Navbar = () => {
     const fetchPlayerData = async () => {
       // Check for admin impersonation
       const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
-      const isAdmin = session?.user?.email?.includes('admin') || session?.user?.email?.includes('bradein');
 
-      const targetEmail = (impersonationEmail && isAdmin) ? impersonationEmail : session?.user?.email;
+      // Use impersonation email if it exists, otherwise use session email
+      const targetEmail = impersonationEmail || session?.user?.email;
 
       if (!targetEmail) {
         setPlayer(null);
@@ -42,7 +44,7 @@ const Navbar = () => {
 
       const { data } = await supabase
         .from('players')
-        .select('name, rankedin_id, rank_label')
+        .select('name, rankedin_id, rank_label, points')
         .eq('email', targetEmail)
         .maybeSingle();
 
@@ -50,7 +52,7 @@ const Navbar = () => {
     };
 
     fetchPlayerData();
-  }, [session?.user?.email]);
+  }, [session?.user?.email, location.pathname]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
