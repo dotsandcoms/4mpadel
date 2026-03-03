@@ -147,6 +147,62 @@ export const useRankedin = () => {
         }
     }, []);
 
+    /**
+     * Fetches events for a specific player by their Rankedin ID.
+     * @param {string} playerId Rankedin Player ID (e.g. R000328907)
+     * @returns {Promise<Array>} Array of player events
+     */
+    const getPlayerEventsAsync = useCallback(async (playerId) => {
+        if (!playerId) return [];
+        setLoading(true);
+        setError(null);
+        try {
+            // Step 1: Get internal PlayerId from string ID (e.g. R000328907)
+            const profileRes = await fetch(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`);
+            if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
+            const profileData = await profileRes.json();
+            const internalId = profileData.Header?.PlayerId;
+
+            if (!internalId) throw new Error("Could not extract internal PlayerId");
+
+            // Step 2: Fetch events using internal ID
+            const eventsRes = await fetch(
+                `${API_BASE}/player/ParticipatedEventsAsync?playerId=${internalId}&language=en&skip=0&take=100`
+            );
+
+            if (!eventsRes.ok) throw new Error(`Rankedin Events API Error: ${eventsRes.status}`);
+
+            const data = await eventsRes.json();
+            const rawEvents = data.Payload || data.payload || [];
+
+            return rawEvents.map(e => {
+                const n = (e.Name || '').toLowerCase();
+                let status = 'Silver';
+                if (n.includes('fip')) status = 'FIP event';
+                else if (n.includes('super gold') || n.includes('s gold') || n.includes('sgold')) status = 'S Gold';
+                else if (n.includes('major')) status = 'Major';
+                else if (n.includes('gold')) status = 'Gold';
+                else if (n.includes('key')) status = 'Key Event';
+
+                return {
+                    id: e.Id,
+                    event_name: e.Name,
+                    sapa_status: status,
+                    start_date: e.StartDate,
+                    end_date: e.EndDate || e.StartDate,
+                    slug: e.Link ? e.Link.split('/').pop() : null,
+                    eventId: e.Id // For EventCard external link logic
+                };
+            });
+        } catch (err) {
+            console.error('Error fetching player events:', err);
+            setError(err.message);
+            return [];
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     return {
         loading,
         error,
@@ -154,6 +210,7 @@ export const useRankedin = () => {
         getTournamentClasses,
         getDrawsForClass,
         getTournamentDetails,
-        getOrganisationRankings
+        getOrganisationRankings,
+        getPlayerEventsAsync
     };
 };

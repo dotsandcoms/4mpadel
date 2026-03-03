@@ -4,6 +4,7 @@ import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
+import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
 const AuthModal = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState('login'); // 'login' or 'register'
@@ -107,7 +108,7 @@ const AuthModal = ({ isOpen, onClose }) => {
             return;
         }
 
-        // Validation for Step 2
+        // Validation for Step 2: Padel Profile
         if (step === 2) {
             if (!category || !homeClub || !bio) {
                 setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
@@ -117,7 +118,12 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'error', text: 'You must accept the Terms & Conditions to register.' });
                 return;
             }
+            setStep(3);
+            return;
+        }
 
+        // Validation for Step 3: Payment Options
+        if (step === 3) {
             setLoading(true);
 
             if (paymentOption === 'pay_later') {
@@ -125,7 +131,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 return;
             }
 
-            console.log('Initializing Paystack for R100 Registration...');
+            console.log(`Initializing Paystack for ${formatCurrency(FEES.FULL_LICENSE)} Registration...`);
             handlePaystackPayment({ onSuccess, onClose: onClosePayment });
         }
     };
@@ -184,7 +190,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     const paystackConfig = {
         reference: (new Date()).getTime().toString(),
         email: email,
-        amount: 10000,
+        amount: toPaystackAmount(FEES.FULL_LICENSE),
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
         currency: 'ZAR',
     };
@@ -302,7 +308,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 1: Personal</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">1 / 2</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">1 / 3</span>
                                             </div>
                                             <div className="relative">
                                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
@@ -398,48 +404,11 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 Next Step
                                             </button>
                                         </div>
-                                    ) : (
+                                    ) : step === 2 ? (
                                         <div className="space-y-4">
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 2: Padel Profile</span>
-                                                <span className="text-gray-500 text-[10px] font-bold">2 / 2</span>
-                                            </div>
-
-                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
-                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Option</label>
-                                                <div className="space-y-3">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPaymentOption('pay_now')}
-                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_now' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
-                                                    >
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
-                                                                <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
-                                                            </div>
-                                                            <div className="text-left">
-                                                                <p className="text-white font-bold text-sm">Pay Now</p>
-                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: R100.00 • Profile visible immediately</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_now' ? 'border-padel-green' : 'border-white/30'}`}>
-                                                            {paymentOption === 'pay_now' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
-                                                        </div>
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setPaymentOption('pay_later')}
-                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_later' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
-                                                    >
-                                                        <div className="text-left">
-                                                            <p className="text-white font-bold text-sm">Pay Later</p>
-                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Create profile now • Pay for license later to appear on Players page</p>
-                                                        </div>
-                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_later' ? 'border-padel-green' : 'border-white/30'}`}>
-                                                            {paymentOption === 'pay_later' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
-                                                        </div>
-                                                    </button>
-                                                </div>
+                                                <span className="text-gray-500 text-[10px] font-bold">2 / 3</span>
                                             </div>
 
                                             <select
@@ -513,6 +482,66 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setStep(1)}
+                                                    className="w-1/3 bg-white/5 text-white font-bold py-4 rounded-xl hover:bg-white/10 transition-all border border-white/10"
+                                                >
+                                                    Back
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20"
+                                                >
+                                                    Next Step
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 3: Payment Options</span>
+                                                <span className="text-gray-500 text-[10px] font-bold">3 / 3</span>
+                                            </div>
+
+                                            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-4">
+                                                <label className="block text-[10px] font-black text-padel-green uppercase tracking-widest mb-3">Payment Option</label>
+                                                <div className="space-y-3">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentOption('pay_now')}
+                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_now' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
+                                                                <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
+                                                            </div>
+                                                            <div className="text-left">
+                                                                <p className="text-white font-bold text-sm">Pay Now</p>
+                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: {formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_now' ? 'border-padel-green' : 'border-white/30'}`}>
+                                                            {paymentOption === 'pay_now' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
+                                                        </div>
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPaymentOption('pay_later')}
+                                                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${paymentOption === 'pay_later' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}
+                                                    >
+                                                        <div className="text-left">
+                                                            <p className="text-white font-bold text-sm">Pay Later</p>
+                                                            <p className="text-gray-500 text-[10px] uppercase font-bold">Create profile now • Pay for license later to appear on Players page</p>
+                                                        </div>
+                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_later' ? 'border-padel-green' : 'border-white/30'}`}>
+                                                            {paymentOption === 'pay_later' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
+                                                        </div>
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex gap-3 pt-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setStep(2)}
                                                     className="w-1/3 bg-white/5 text-white font-bold py-4 rounded-xl hover:bg-white/10 transition-all border border-white/10"
                                                 >
                                                     Back

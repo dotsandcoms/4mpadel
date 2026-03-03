@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { usePaystackPayment } from 'react-paystack';
 import { supabase } from '../supabaseClient';
+import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
 const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal) => {
     const { error: rpcError } = await supabase.rpc('mark_player_paid');
@@ -19,16 +20,16 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const getConfig = (amount) => ({
-        reference: `${(new Date()).getTime()}-${amount}`,
+    const getConfig = (amountInRands) => ({
+        reference: `${(new Date()).getTime()}-${amountInRands}`,
         email: userEmail || '',
-        amount,
+        amount: toPaystackAmount(amountInRands),
         publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
         currency: 'ZAR',
     });
 
-    const handleFullLicensePay = usePaystackPayment(getConfig(10000)); // R100
-    const handleTemporaryLicensePay = usePaystackPayment(getConfig(12000)); // R120
+    const handleFullLicensePay = usePaystackPayment(getConfig(FEES.FULL_LICENSE));
+    const handleTemporaryLicensePay = usePaystackPayment(getConfig(FEES.TEMPORARY_LICENSE));
 
     const runPayment = (paymentFn) => {
         setError(null);
@@ -91,7 +92,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                             >
                                 <div className="text-left">
                                     <p className="text-white font-bold">Pay Now - Full License</p>
-                                    <p className="text-gray-400 text-xs">R100.00 • Profile visible immediately</p>
+                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
                                 </div>
                                 <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
                                     {loading ? 'Processing...' : 'Pay'}
@@ -105,7 +106,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                             >
                                 <div className="text-left">
                                     <p className="text-white font-bold">Buy Temporary License</p>
-                                    <p className="text-gray-400 text-xs">R120.00 • Profile visible immediately</p>
+                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)} • Profile visible immediately</p>
                                 </div>
                                 <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
                                     {loading ? 'Processing...' : 'Pay'}

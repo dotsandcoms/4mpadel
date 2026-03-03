@@ -12,6 +12,8 @@ const PlayerProfile = () => {
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [message, setMessage] = useState(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
     const [player, setPlayer] = useState(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const navigate = useNavigate();
@@ -31,7 +33,26 @@ const PlayerProfile = () => {
 
     const showMessage = (text, type = 'success') => {
         setMessage({ text, type });
-        setTimeout(() => setMessage(null), 3000);
+        setTimeout(() => setMessage(null), 5000);
+    };
+
+    const handleUpdatePassword = async (e) => {
+        e.preventDefault();
+        if (newPassword.length < 6) {
+            showMessage('Password must be at least 6 characters', 'error');
+            return;
+        }
+        setIsUpdatingPassword(true);
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) {
+            showMessage(error.message, 'error');
+        } else {
+            showMessage('Password set successfully! You can now login with this password.', 'success');
+            setNewPassword('');
+            // Clear the URL param
+            navigate('/profile', { replace: true });
+        }
+        setIsUpdatingPassword(false);
     };
 
     useEffect(() => {
@@ -55,6 +76,12 @@ const PlayerProfile = () => {
                 showMessage(error.message, 'error');
             } else if (playerData) {
                 setPlayer(playerData);
+
+                // Update last_login timestamp
+                await supabase
+                    .from('players')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('id', playerData.id);
 
                 // Format sponsors back to a comma-separated string for editing
                 let sponsorsString = '';
@@ -195,6 +222,37 @@ const PlayerProfile = () => {
     return (
         <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
             <Navbar />
+
+            {/* Password Setup Prompt (for new invites) */}
+            {window.location.search.includes('new_invite=true') && (
+                <div className="container mx-auto px-6 pt-32 -mb-20 relative z-20">
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-padel-green/10 border border-padel-green/20 p-8 rounded-[2.5rem] backdrop-blur-xl"
+                    >
+                        <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Secure Your Account</h3>
+                        <p className="text-gray-400 mb-6 font-medium">Please set a permanent password to complete your profile setup.</p>
+                        <form onSubmit={handleUpdatePassword} className="flex flex-col md:flex-row gap-4">
+                            <input
+                                type="password"
+                                value={newPassword}
+                                onChange={(e) => setNewPassword(e.target.value)}
+                                placeholder="Enter at least 6 characters"
+                                className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none transition-all"
+                                required
+                            />
+                            <button
+                                type="submit"
+                                disabled={isUpdatingPassword}
+                                className="bg-padel-green text-black px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50"
+                            >
+                                {isUpdatingPassword ? 'Saving...' : 'Set Password'}
+                            </button>
+                        </form>
+                    </motion.div>
+                </div>
+            )}
 
             {/* Hero Section */}
             <div className="relative h-[40vh] min-h-[400px] overflow-hidden">

@@ -158,7 +158,7 @@ const Players = () => {
         {selectedPlayer && (
           <>
             <meta property="og:title" content={`${selectedPlayer.name} - Player Profile`} />
-            <meta property="og:description" content={`Division: ${selectedPlayer.category} | LVR: ${selectedPlayer.level}`} />
+            <meta property="og:description" content={`Division: ${selectedPlayer.category} | Skill: ${selectedPlayer.skill_rating || '-'}`} />
             {selectedPlayer.image_url && <meta property="og:image" content={selectedPlayer.image_url} />}
             <meta property="og:type" content="profile" />
           </>
@@ -300,9 +300,9 @@ const Players = () => {
                       {player.category}
                     </motion.div>
 
-                    {/* Level Badge */}
+                    {/* Skill Rating Badge */}
                     <motion.div layoutId={`level - ${player.id} `} className="absolute top-4 left-4 bg-black/60 backdrop-blur border border-white/10 text-white font-bold w-12 h-12 rounded-full flex items-center justify-center text-sm z-10">
-                      {player.level}
+                      {player.skill_rating || '-'}
                     </motion.div>
 
                     {/* View Profile Button Overlay */}
@@ -401,8 +401,8 @@ const Players = () => {
 
                     {/* Big Stats Overlays on Image */}
                     <motion.div layoutId={`level - ${selectedPlayer.id} `} className="absolute top-6 left-6 bg-padel-green text-black font-black w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-black shadow-xl">
-                      <span className="text-xs uppercase font-bold opacity-60">LVR</span>
-                      <span className="text-2xl leading-none">{selectedPlayer.level}</span>
+                      <span className="text-xs uppercase font-bold opacity-60">SKILL</span>
+                      <span className="text-2xl leading-none">{selectedPlayer.skill_rating ? Number(selectedPlayer.skill_rating).toFixed(1) : selectedPlayer.skill_rating || '-'}</span>
                     </motion.div>
 
                     <motion.div layoutId={`category - ${selectedPlayer.id} `} className="absolute top-6 left-24 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl">
@@ -586,8 +586,8 @@ const Players = () => {
 
                 {/* Badges */}
                 <div className="absolute top-10 left-10 bg-padel-green text-black font-black w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-[6px] border-black shadow-2xl">
-                  <span className="text-sm uppercase font-extrabold opacity-60">LVR</span>
-                  <span className="text-4xl leading-none">{selectedPlayer.level}</span>
+                  <span className="text-sm uppercase font-extrabold opacity-60">SKILL</span>
+                  <span className="text-4xl leading-none">{selectedPlayer.skill_rating ? Number(selectedPlayer.skill_rating).toFixed(1) : selectedPlayer.skill_rating || '-'}</span>
                 </div>
 
                 <div className="absolute top-10 right-10 bg-white/10 backdrop-blur-xl border border-white/20 text-white font-bold px-8 h-20 rounded-3xl flex flex-col items-center justify-center shadow-2xl">

@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import { useRankedin } from '../hooks/useRankedin';
 
 const Calendar = () => {
     const [events, setEvents] = useState([]);
@@ -26,9 +27,70 @@ const Calendar = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 9;
 
+    // Personalized State
+    const [userProfile, setUserProfile] = useState(null);
+    const [isMyCalendar, setIsMyCalendar] = useState(false);
+    const [personalEvents, setPersonalEvents] = useState([]);
+    const [personalLoading, setPersonalLoading] = useState(false);
+
+    const { getPlayerEventsAsync } = useRankedin();
+
     useEffect(() => {
         fetchEvents();
+        checkUserStatus();
     }, []);
+
+    const checkUserStatus = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+
+        // ADMIN IMPERSONATION CHECK
+        const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+        const isAdmin = session?.user?.email?.includes('admin') || session?.user?.email?.includes('bradein');
+
+        let targetEmail = session?.user?.email;
+        if (impersonationEmail && isAdmin) {
+            targetEmail = impersonationEmail;
+        }
+
+        if (targetEmail) {
+            const { data: profile } = await supabase
+                .from('players')
+                .select('*')
+                .eq('email', targetEmail)
+                .single();
+
+            if (profile) {
+                setUserProfile(profile);
+
+                // Track activity if it's the real user
+                if (!impersonationEmail && profile.email === session?.user?.email) {
+                    await supabase
+                        .from('players')
+                        .update({ last_login: new Date().toISOString() })
+                        .eq('id', profile.id);
+                }
+            }
+        }
+    };
+
+    useEffect(() => {
+        if (isMyCalendar && userProfile?.rankedin_id && personalEvents.length === 0) {
+            fetchPersonalEvents();
+        }
+    }, [isMyCalendar, userProfile]);
+
+    const fetchPersonalEvents = async () => {
+        if (!userProfile?.rankedin_id) return;
+        try {
+            setPersonalLoading(true);
+            const data = await getPlayerEventsAsync(userProfile.rankedin_id);
+            setPersonalEvents(data || []);
+        } catch (err) {
+            console.error('Error fetching personal events:', err);
+        } finally {
+            setPersonalLoading(false);
+        }
+    };
 
     const fetchEvents = async () => {
         try {
@@ -62,28 +124,41 @@ const Calendar = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        return events.filter(event => {
-            const matchesSearch =
-                event.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                event.venue.toLowerCase().includes(searchTerm.toLowerCase());
+        const sourceEvents = isMyCalendar ? personalEvents : events;
 
-            const matchesStatus = statusFilter === 'All' || event.sapa_status === statusFilter;
-            const matchesCity = cityFilter === 'All' || event.city === cityFilter;
+        return sourceEvents.filter(event => {
+            // Map Rankedin fields to local fields if needed
+            const eventName = event.event_name || event.eventName || '';
+            const venueName = event.venue || event.clubName || '';
+            const status = event.sapa_status || 'Gold'; // Default for Rankedin if not specified
+
+            const matchesSearch =
+                eventName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                venueName.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesStatus = statusFilter === 'All' || status === statusFilter;
+
+            // Adjust Rankedin city if possible, or just default to match
+            const city = event.city || 'Rankedin';
+            const matchesCity = cityFilter === 'All' || city === cityFilter;
 
             let matchesTiming = true;
             if (viewMode === 'list') {
+                const startDateStr = event.start_date || event.startDate;
+                const endDateStr = event.end_date || event.endDate || startDateStr;
+
                 if (timingFilter === 'Upcoming') {
-                    const eventDate = new Date(event.end_date || event.start_date);
-                    matchesTiming = eventDate >= today;
+                    const eventDate = new Date(endDateStr);
+                    matchesTiming = !isNaN(eventDate.getTime()) && eventDate >= today;
                 } else if (timingFilter === 'Past') {
-                    const eventDate = new Date(event.end_date || event.start_date);
-                    matchesTiming = eventDate < today;
+                    const eventDate = new Date(endDateStr);
+                    matchesTiming = !isNaN(eventDate.getTime()) && eventDate < today;
                 }
             }
 
             return matchesSearch && matchesStatus && matchesCity && matchesTiming;
         });
-    }, [events, searchTerm, statusFilter, cityFilter, timingFilter, viewMode]);
+    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilter, cityFilter, timingFilter, viewMode]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -95,7 +170,7 @@ const Calendar = () => {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, cityFilter, timingFilter, viewMode]);
+    }, [searchTerm, statusFilter, cityFilter, timingFilter, viewMode, isMyCalendar]);
 
     // Helper functions for Calendar View
     const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -229,6 +304,26 @@ const Calendar = () => {
                     </motion.p>
                 </div>
 
+                {/* Sub-Navigation (if logged in and visible) */}
+                {userProfile && userProfile.paid_registration && userProfile.approved && (
+                    <div className="flex justify-center mb-8">
+                        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex gap-2">
+                            <button
+                                onClick={() => setIsMyCalendar(false)}
+                                className={`px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${!isMyCalendar ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                All Events
+                            </button>
+                            <button
+                                onClick={() => setIsMyCalendar(true)}
+                                className={`px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${isMyCalendar ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                            >
+                                My Calendar
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Filters & Controls */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -312,7 +407,7 @@ const Calendar = () => {
                 </motion.div>
 
                 {/* Content Area */}
-                {loading ? (
+                {(loading || personalLoading) ? (
                     <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                         <Loader className="w-10 h-10 animate-spin mb-4 text-padel-green" />
                         <p>Loading events...</p>
@@ -358,7 +453,8 @@ const Calendar = () => {
                                                 transition={{ delay: index * 0.05 }}
                                             >
                                                 <Link
-                                                    to={`/calendar/${event.slug || event.id}`}
+                                                    to={event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.slug || event.id}`}
+                                                    target={event.eventId ? "_blank" : "_self"}
                                                     className={`group block backdrop-blur-sm border ${tierColor} rounded-3xl p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}
                                                 >
                                                     {/* Background Gradient */}
@@ -367,10 +463,10 @@ const Calendar = () => {
                                                     <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10">
                                                         {/* Poster Image Box */}
                                                         <div className="flex-shrink-0 w-full md:w-32 h-24 rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
-                                                            {event.image_url ? (
+                                                            {event.image_url || event.posterUrl ? (
                                                                 <img
-                                                                    src={event.image_url}
-                                                                    alt={event.event_name}
+                                                                    src={event.image_url || event.posterUrl}
+                                                                    alt={event.event_name || event.eventName}
                                                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                                                 />
                                                             ) : (
@@ -394,17 +490,17 @@ const Calendar = () => {
                                                             </div>
                                                             <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
                                                                 <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight">
-                                                                    {event.event_name}
+                                                                    {event.event_name || event.eventName}
                                                                 </h3>
                                                                 <div className="flex items-center gap-1.5 text-xs font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap">
                                                                     <CalendarIcon size={12} />
-                                                                    {event.event_dates}
+                                                                    {event.event_dates || (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`)}
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
                                                                 <div className="flex items-center gap-2">
                                                                     <MapPin className="w-4 h-4 text-padel-green/50" />
-                                                                    {event.venue}
+                                                                    {event.venue || event.clubName}
                                                                 </div>
                                                                 {event.registered_players > 0 && (
                                                                     <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 rounded-lg">

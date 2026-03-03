@@ -120,10 +120,10 @@ const TournamentCard = ({ index, title, label, image, linkPath, isLive = false }
     );
 };
 
-const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
+const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments }) => {
     const navigate = useNavigate();
     const isLeft = data.align === 'left';
-    const isRecentResults = data.id === 'recent-results';
+    const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1);
 
     const bgColors = [
         'bg-[#080C17]',
@@ -134,7 +134,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
     const Icon = data.icon;
 
     const textContent = (
-        <div className={`relative z-10 ${!isRecentResults ? 'lg:pr-8' : ''}`}>
+        <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
             <motion.div
                 initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
                 whileInView={{ opacity: 1, x: 0 }}
@@ -146,13 +146,13 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
                     <span>{data.highlight}</span>
                 </div>
 
-                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter text-white ${isRecentResults ? 'text-4xl xl:text-[42px]' : 'text-5xl lg:text-[56px] xl:text-[64px]'}`}>
-                    {data.title.split(' ')[0]} <br className={isRecentResults ? 'hidden lg:block' : ''} />
+                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter text-white ${isGridSection ? 'text-4xl xl:text-[42px]' : 'text-5xl lg:text-[56px] xl:text-[64px]'}`}>
+                    {data.title.split(' ')[0]} <br className={isGridSection ? 'hidden lg:block' : ''} />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600">
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
-                <p className={`text-gray-400 leading-relaxed mb-8 ${isRecentResults ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
+                <p className={`text-gray-400 leading-relaxed mb-8 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
                     {data.description}
                 </p>
 
@@ -169,27 +169,46 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
         </div>
     );
 
-    const imageContent = isRecentResults ? (
+    const imageContent = isGridSection ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 relative z-10 w-full mt-8 lg:mt-0">
-            {liveTournaments && liveTournaments.length > 0 ? (
-                liveTournaments.map((t, i) => (
-                    <TournamentCard
-                        key={t.eventId}
-                        index={i}
-                        title={t.eventName}
-                        label={t.city || 'Tournament'}
-                        image={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
-                        linkPath={`/results/${t.eventId}`}
-                    />
-                ))
-            ) : (
-                <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02]">
-                    <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
-                        <span className="text-padel-green animate-ping absolute inline-flex h-3 w-3 rounded-full opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-padel-green"></span>
+            {data.id === 'recent-results' ? (
+                liveTournaments && liveTournaments.length > 0 ? (
+                    liveTournaments.map((t, i) => (
+                        <TournamentCard
+                            key={t.eventId}
+                            index={i}
+                            title={t.eventName}
+                            label={t.city || 'Tournament'}
+                            image={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                            linkPath={`/results/${t.eventId}`}
+                        />
+                    ))
+                ) : (
+                    <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02]">
+                        <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
+                            <span className="text-padel-green animate-ping absolute inline-flex h-3 w-3 rounded-full opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-padel-green"></span>
+                        </div>
+                        <p className="text-gray-400 text-sm font-medium">Loading tournament data...</p>
                     </div>
-                    <p className="text-gray-400 text-sm font-medium">Loading tournament data...</p>
-                </div>
+                )
+            ) : (
+                featuredTournaments && featuredTournaments.length > 0 ? (
+                    featuredTournaments.map((t, i) => (
+                        <TournamentCard
+                            key={t.id}
+                            index={i}
+                            title={t.event_name}
+                            label={t.sapa_status || 'Major Event'}
+                            image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
+                            linkPath={`/calendar/${t.slug || t.id}`}
+                        />
+                    ))
+                ) : (
+                    <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02]">
+                        <p className="text-gray-400 text-sm font-medium">Loading featured tournaments...</p>
+                    </div>
+                )
             )}
         </div>
     ) : (
@@ -243,8 +262,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
 
     return (
         <section className={`relative py-12 lg:py-16 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
-            <div className={`w-full ${isRecentResults ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isRecentResults ? 'grid lg:grid-cols-4 gap-8 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-10 lg:gap-16 items-center'}`}>
-                {isRecentResults ? (
+            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-8 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-10 lg:gap-16 items-center'}`}>
+                {isGridSection ? (
                     <>
                         {/* Text takes 1 column on the left */}
                         <div className="lg:col-span-1">
@@ -267,7 +286,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
                 ) : (
                     <>
                         <div className="order-2 lg:order-1 lg:col-span-1 border border-transparent">
-                            {imageContent}
+                            {textContent}
                         </div>
                         <div className="order-1 lg:order-2 lg:col-span-1 border border-transparent">
                             {textContent}
@@ -282,6 +301,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments }) => {
 const FeaturedSections = () => {
     const { getRecentTournaments } = useRankedin();
     const [liveTournaments, setLiveTournaments] = useState([]);
+    const [featuredTournaments, setFeaturedTournaments] = useState([]);
     const [featuredData, setFeaturedData] = useState(featuredDataTemplate);
 
     useEffect(() => {
@@ -291,38 +311,43 @@ const FeaturedSections = () => {
         };
         fetchTours();
 
-        const fetchFeaturedEvent = async () => {
+        const fetchFeaturedEvents = async () => {
             try {
                 const { data, error } = await supabase
                     .from('calendar')
                     .select('*')
                     .eq('featured_event', true)
                     .order('start_date', { ascending: true })
-                    .limit(1)
-                    .single();
+                    .limit(3);
 
                 if (data && !error) {
-                    setFeaturedData(prevData => {
-                        const newData = [...prevData];
-                        const featuredIndex = newData.findIndex(item => item.id === 'featured-tournaments');
-                        if (featuredIndex !== -1) {
-                            newData[featuredIndex] = {
-                                ...newData[featuredIndex],
-                                cardTitle: data.event_name,
-                                cardLabel: data.sapa_status || 'Major Event',
-                                image: data.image_url || newData[featuredIndex].image,
-                                linkPath: `/calendar/${data.slug || data.id}`
-                            };
-                        }
-                        return newData;
-                    });
+                    setFeaturedTournaments(data);
+
+                    // If we only have one featured event, we still update the template for the single block fallback
+                    if (data.length === 1) {
+                        const singleEvent = data[0];
+                        setFeaturedData(prevData => {
+                            const newData = [...prevData];
+                            const featuredIndex = newData.findIndex(item => item.id === 'featured-tournaments');
+                            if (featuredIndex !== -1) {
+                                newData[featuredIndex] = {
+                                    ...newData[featuredIndex],
+                                    cardTitle: singleEvent.event_name,
+                                    cardLabel: singleEvent.sapa_status || 'Major Event',
+                                    image: singleEvent.image_url || newData[featuredIndex].image,
+                                    linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`
+                                };
+                            }
+                            return newData;
+                        });
+                    }
                 }
             } catch (err) {
-                console.error("Error fetching featured event:", err);
+                console.error("Error fetching featured events:", err);
             }
         };
 
-        fetchFeaturedEvent();
+        fetchFeaturedEvents();
     }, [getRecentTournaments]);
 
     return (
@@ -333,6 +358,7 @@ const FeaturedSections = () => {
                     data={section}
                     index={index}
                     liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
+                    featuredTournaments={section.id === 'featured-tournaments' ? featuredTournaments : null}
                 />
             ))}
         </div>

@@ -42,6 +42,8 @@ const CalendarManager = () => {
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
+    const [timeFilter, setTimeFilter] = useState('Upcoming');
     const [editingEvent, setEditingEvent] = useState(null);
 
     // Form State
@@ -243,11 +245,21 @@ const CalendarManager = () => {
         setIsModalOpen(true);
     };
 
-    const filteredEvents = events.filter(event =>
-        event.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.venue.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredEvents = events.filter(event => {
+        const matchesSearch = event.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            event.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            event.venue.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesStatus = statusFilter === 'All' || event.sapa_status === statusFilter;
+
+        const today = new Date().toISOString().split('T')[0];
+        const isUpcoming = !event.start_date || event.start_date >= today;
+        const matchesTime = timeFilter === 'All' ||
+            (timeFilter === 'Upcoming' && isUpcoming) ||
+            (timeFilter === 'Past' && !isUpcoming);
+
+        return matchesSearch && matchesStatus && matchesTime;
+    });
 
     return (
         <div className="space-y-6">
@@ -265,16 +277,44 @@ const CalendarManager = () => {
                 </button>
             </div>
 
-            {/* Search Bar */}
-            <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                    type="text"
-                    placeholder="Search events by name, city, or venue..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-colors"
-                />
+            {/* Filters Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="md:col-span-2 relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                        type="text"
+                        placeholder="Search events by name, city, or venue..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-colors"
+                    />
+                </div>
+                <div>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-colors appearance-none cursor-pointer"
+                    >
+                        <option value="All">All Statuses</option>
+                        <option value="Gold">Gold</option>
+                        <option value="Major">Major</option>
+                        <option value="Silver">Silver</option>
+                        <option value="Key Event">Key Event</option>
+                        <option value="FIP event">FIP event</option>
+                        <option value="S Gold">S Gold</option>
+                    </select>
+                </div>
+                <div>
+                    <select
+                        value={timeFilter}
+                        onChange={(e) => setTimeFilter(e.target.value)}
+                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-colors appearance-none cursor-pointer"
+                    >
+                        <option value="All">All Time</option>
+                        <option value="Upcoming">Upcoming</option>
+                        <option value="Past">Past Events</option>
+                    </select>
+                </div>
             </div>
 
             {/* Content List */}

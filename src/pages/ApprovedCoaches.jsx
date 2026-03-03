@@ -91,15 +91,25 @@ const ApprovedCoaches = () => {
     useEffect(() => {
         const fetchCoaches = async () => {
             try {
+                console.log('[ApprovedCoaches] Fetching approved coaches...');
                 const { data, error } = await supabase
                     .from('coach_applications')
                     .select('*')
                     .eq('status', 'approved');
 
-                if (error) throw error;
+                if (error) {
+                    console.error('[ApprovedCoaches] Error fetching coaches:', error);
+                    throw error;
+                }
+
+                console.log(`[ApprovedCoaches] Successfully fetched ${data?.length || 0} approved coaches.`);
+                if (data && data.length > 0) {
+                    console.log('[ApprovedCoaches] Coach IDs:', data.map(c => c.id));
+                }
+
                 setCoaches(data || []);
             } catch (error) {
-                console.error('Error fetching coaches:', error);
+                console.error('[ApprovedCoaches] Unexpected error:', error);
             } finally {
                 setLoading(false);
             }

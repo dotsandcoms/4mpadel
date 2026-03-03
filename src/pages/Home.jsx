@@ -6,7 +6,6 @@ import Hero from '../components/Hero';
 import FeaturedSections from '../components/FeaturedSections';
 import Services from '../components/Services';
 import Calendar from '../components/Calendar';
-import PlayerProfiles from '../components/PlayerProfiles';
 import FAQ from '../components/FAQ';
 import Partners from '../components/Partners';
 import dynamicsPlayer from '../assets/dynamicsPlayerAction.png';
@@ -100,9 +99,6 @@ const Home = () => {
 
                 {/* Calendar */}
                 <Calendar />
-
-                {/* Player Profiles */}
-                <PlayerProfiles />
 
                 {/* FAQ */}
                 <FAQ />

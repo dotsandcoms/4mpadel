@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PieChart,
@@ -155,7 +155,7 @@ const PlayerManager = () => {
     // Filtered players
     const filteredPlayers = useMemo(() => {
         return players.filter(player => {
-            const matchesSearch = !searchTerm || 
+            const matchesSearch = !searchTerm ||
                 player.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 player.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (player.home_club && player.home_club.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -227,6 +227,31 @@ const PlayerManager = () => {
         const { error } = await supabase.from('players').delete().eq('id', id);
         if (error) showToast('Error deleting player', 'error');
         else { showToast('Player deleted successfully'); fetchPlayers(); }
+    };
+
+    const handleInvite = async (player) => {
+        if (!player.email) {
+            showToast('Player has no email address', 'error');
+            return;
+        }
+
+        const { error } = await supabase.auth.signInWithOtp({
+            email: player.email,
+            options: {
+                emailRedirectTo: window.location.origin + '/profile?new_invite=true',
+            }
+        });
+
+        if (error) {
+            showToast('Failed to send invite: ' + error.message, 'error');
+        } else {
+            showToast('Invitation (Magic Link) sent to ' + player.email);
+        }
+    };
+
+    const handleTestLogin = (player) => {
+        sessionStorage.setItem('admin_test_login_email', player.email);
+        showToast('Now testing as ' + player.name + '. Go to Calendar to see personalized view.');
     };
 
     const handleSubmit = async (e) => {
@@ -435,6 +460,7 @@ const PlayerManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Name</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">License</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase">Last Activity</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Category</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Club</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Points</th>
@@ -462,11 +488,30 @@ const PlayerManager = () => {
                                                 <span className="flex items-center gap-1 text-gray-500 text-xs"><EyeOff size={12} /> Hidden</span>
                                             )}
                                         </td>
+                                        <td className="py-3 px-4">
+                                            <span className="text-gray-400 text-xs text-center block">
+                                                {player.last_login ? new Date(player.last_login).toLocaleDateString() : 'Never'}
+                                            </span>
+                                        </td>
                                         <td className="py-3 px-4 text-gray-300 text-sm">{player.category || '—'}</td>
                                         <td className="py-3 px-4 text-gray-400 text-sm">{player.home_club || '—'}</td>
                                         <td className="py-3 px-4 text-padel-green font-mono">{player.points ?? 0}</td>
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleTestLogin(player)}
+                                                    title="Test Login (Impersonate)"
+                                                    className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black"
+                                                >
+                                                    <ShieldAlert size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleInvite(player)}
+                                                    title="Send Login Invite"
+                                                    className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black"
+                                                >
+                                                    <Mail size={14} />
+                                                </button>
                                                 <button onClick={() => handleEdit(player)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white">
                                                     <Edit2 size={14} />
                                                 </button>

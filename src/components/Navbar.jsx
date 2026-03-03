@@ -28,16 +28,28 @@ const Navbar = () => {
   }, []);
 
   useEffect(() => {
-    if (!session?.user?.email) {
-      setPlayer(null);
-      return;
-    }
-    supabase
-      .from('players')
-      .select('name, rankedin_id')
-      .eq('email', session.user.email)
-      .maybeSingle()
-      .then(({ data }) => setPlayer(data));
+    const fetchPlayerData = async () => {
+      // Check for admin impersonation
+      const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+      const isAdmin = session?.user?.email?.includes('admin') || session?.user?.email?.includes('bradein');
+
+      const targetEmail = (impersonationEmail && isAdmin) ? impersonationEmail : session?.user?.email;
+
+      if (!targetEmail) {
+        setPlayer(null);
+        return;
+      }
+
+      const { data } = await supabase
+        .from('players')
+        .select('name, rankedin_id, rank_label')
+        .eq('email', targetEmail)
+        .maybeSingle();
+
+      setPlayer(data);
+    };
+
+    fetchPlayerData();
   }, [session?.user?.email]);
 
   const handleLogout = async () => {
@@ -91,6 +103,21 @@ const Navbar = () => {
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10' : 'py-6 bg-gradient-to-b from-black/80 to-transparent'
           }`}
       >
+        {/* Impersonation Banner */}
+        {sessionStorage.getItem('admin_test_login_email') && (
+          <div className="bg-amber-500 text-black py-1.5 px-4 text-center text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-4">
+            <span>Testing Mode: Impersonating {sessionStorage.getItem('admin_test_login_email')}</span>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('admin_test_login_email');
+                window.location.reload();
+              }}
+              className="bg-black text-white px-3 py-0.5 rounded-full hover:bg-white hover:text-black transition-colors"
+            >
+              Exit & Return to Admin
+            </button>
+          </div>
+        )}
         <div className="container mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
@@ -98,9 +125,16 @@ const Navbar = () => {
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
             {session && player && (
               <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
-                <span className="truncate max-w-[100px]">{player.name}</span>
+                <div className="flex flex-col">
+                  <span className="truncate max-w-[100px] leading-tight text-padel-green font-black">{player.name}</span>
+                  {(player.rank_label || player.points) && (
+                    <span className="text-white/60 text-[9px] font-bold uppercase tracking-widest leading-none">
+                      {player.rank_label ? `Rank: ${player.rank_label}` : `${player.points} Points`}
+                    </span>
+                  )}
+                </div>
                 {player.rankedin_id && (
-                  <span className="text-white/60 font-mono text-[10px] shrink-0">{player.rankedin_id}</span>
+                  <span className="text-white/40 font-mono text-[9px] shrink-0 border-l border-white/10 pl-2 ml-1">{player.rankedin_id}</span>
                 )}
               </div>
             )}

@@ -28,6 +28,8 @@ const DashboardHome = () => {
     const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalPlayers: 0,
+        totalCoaches: 0,
+        approvedCoaches: 0,
         upcomingEvents: 0,
         pastEvents: 0,
         featuredEvents: 0
@@ -49,6 +51,16 @@ const DashboardHome = () => {
             const { count: playerCount, error: playerError } = await supabase
                 .from('players')
                 .select('*', { count: 'exact', head: true });
+
+            // 1.5. Fetch Coach Stats
+            const { count: totalCoachCount, error: coachError } = await supabase
+                .from('coach_applications')
+                .select('*', { count: 'exact', head: true });
+
+            const { count: approvedCoachCount, error: approvedCoachError } = await supabase
+                .from('coach_applications')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'approved');
 
             // 2. Fetch Event Stats from 'calendar' table
             const { data: allEvents, error: calendarError } = await supabase
@@ -90,6 +102,8 @@ const DashboardHome = () => {
 
             setStats({
                 totalPlayers: playerCount || 0,
+                totalCoaches: totalCoachCount || 0,
+                approvedCoaches: approvedCoachCount || 0,
                 upcomingEvents: upcomingCount,
                 pastEvents: pastCount,
                 featuredEvents: featuredCount
@@ -128,18 +142,18 @@ const DashboardHome = () => {
                     loading={loading}
                 />
                 <StatCard
-                    title="Upcoming Events"
-                    value={stats.upcomingEvents}
-                    subtext="Scheduled Calendar"
-                    icon={Calendar}
+                    title="Coaches"
+                    value={stats.totalCoaches}
+                    subtext={`${stats.approvedCoaches} Approved`}
+                    icon={UserPlus}
                     delay={0.1}
                     loading={loading}
                 />
                 <StatCard
-                    title="Past Tournaments"
-                    value={stats.pastEvents}
-                    subtext="Completed Events"
-                    icon={Trophy}
+                    title="Upcoming Events"
+                    value={stats.upcomingEvents}
+                    subtext="Scheduled Calendar"
+                    icon={Calendar}
                     delay={0.2}
                     loading={loading}
                 />

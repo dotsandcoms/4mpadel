@@ -2,8 +2,10 @@ import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 
-dotenv.config();
+const envConfig = dotenv.parse(fs.readFileSync('.env'));
+for (const k in envConfig) process.env[k] = envConfig[k];
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
@@ -126,7 +128,9 @@ async function scrapePlayer(browser, player) {
         });
 
         // 2. Rankings
-        await page.goto(`${profileUrl.replace(/\/$/, '')}/rankings`, { waitUntil: 'networkidle2' });
+        const rankingUrl = profileUrl.replace(/\/info\/?$/, '/rankings');
+        console.log("Navigating to rankings:", rankingUrl);
+        await page.goto(rankingUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         await new Promise(r => setTimeout(r, 8000));
 
         const rankings = await page.evaluate(() => {
@@ -146,7 +150,30 @@ async function scrapePlayer(browser, player) {
             }).filter(r => r && r.org && r.org.length > 2);
         });
 
-        console.log(`Extracted: RID=${basics.rid}, Rankings=${rankings.length}, Skill=${basics.skill}`);
+        console.log(`Rankings found:`, JSON.stringify(rankings, null, 2));
+        console.log(`Extracted: RID=${basics.rid}, RankingsCount=${rankings.length}, Skill=${basics.skill}`);
+
+        let finalRank = 'Unranked';
+        let finalPoints = 0;
+
+        if (rankings.length > 0) {
+            finalRank = (rankings.find(r => r.org.includes('SAPA'))?.rank || 'Unranked').toString();
+            finalPoints = parseInt(rankings.find(r => r.org.includes('SAPA'))?.points) || 0;
+        } else {
+            console.log("No SAPA rankings found in HTML. Trying API fallback...");
+            try {
+                const apiRes = await fetch(`https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=15809&rankingType=3&ageGroup=82&weekFromNow=0&language=en&skip=0&take=50&query=${encodeURIComponent(player.name)}`);
+                const apiData = await apiRes.json();
+                const p = (apiData.Payload || []).find(x => x.Name.toLowerCase().includes(player.name.toLowerCase()));
+                if (p) {
+                    finalRank = p.Standing.toString();
+                    finalPoints = parseInt(p.ParticipantPoints?.Points) || 0;
+                    console.log(`API Found - Rank: ${finalRank}, Points: ${finalPoints}`);
+                }
+            } catch (e) {
+                console.error("API Fallback Error:", e.message);
+            }
+        }
 
         const updateData = {
             skill_rating: parseFloat(basics.skill) || (player.name === "Clorinda Wessels" ? 19.85 : null),
@@ -154,12 +181,19 @@ async function scrapePlayer(browser, player) {
             match_form: basics.form,
             rankings: rankings,
             rankedin_id: basics.rid || profileUrl.split('/').pop(),
-            rankedin_profile_url: profileUrl
+            rankedin_profile_url: profileUrl,
+            // Add these two
+            rank_label: finalRank,
+            points: finalPoints
         };
 
         if (player.id) {
-            await supabase.from('players').update(updateData).eq('id', player.id);
-            console.log(`Updated ${player.name} in DB`);
+            const { error: updateError } = await supabase.from('players').update(updateData).eq('id', player.id);
+            if (updateError) {
+                console.error(`Failed to update ${player.name}:`, updateError.message);
+            } else {
+                console.log(`Updated ${player.name} in DB`);
+            }
         }
 
     } catch (error) {
