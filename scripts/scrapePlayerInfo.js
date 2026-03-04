@@ -248,14 +248,18 @@ async function run() {
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
-        // Skip users that are actually me/user if we can identify them
-        query = query.is('rankedin_profile_url', null).not('name', 'ilike', '%brad elin%');
+        // Process all approved players who have paid
+        // Skip user 'brad elin' to avoid issues
+        query = query.not('name', 'ilike', '%brad elin%');
     }
 
     const { data: players } = await query;
     if (players) {
+        console.log(`Starting sync for ${players.length} players...`);
+        let current = 0;
         for (const p of players) {
-            console.log("Found player in DB:", JSON.stringify(p, null, 2));
+            current++;
+            console.log(`[${current}/${players.length}] Processing ${p.name}...`);
             await scrapePlayer(browser, p);
         }
     }
