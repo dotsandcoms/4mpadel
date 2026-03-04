@@ -40,7 +40,8 @@ async function syncCategory(type, ageGroup, categoryName) {
             const name = p.Name;
             const points = p.ParticipantPoints?.Points || 0;
             const rank = p.Standing;
-            const rankedinId = p.Participant?.Id || p.RankedinId;
+            const rankedinId = p.RankedinId || p.Participant?.Id;
+            const profileUrl = p.ParticipantUrl ? `https://www.rankedin.com${p.ParticipantUrl}` : null;
 
             let playerToUpdate = null;
 
@@ -73,13 +74,18 @@ async function syncCategory(type, ageGroup, categoryName) {
             }
 
             if (playerToUpdate) {
+                const updateData = {
+                    points: points,
+                    rank_label: rank.toString(),
+                    rankedin_id: rankedinId ? rankedinId.toString() : null
+                };
+                if (profileUrl) {
+                    updateData.rankedin_profile_url = profileUrl;
+                }
+
                 const { error: updateError } = await supabase
                     .from('players')
-                    .update({
-                        points: points,
-                        rank_label: rank.toString(),
-                        rankedin_id: rankedinId ? rankedinId.toString() : null
-                    })
+                    .update(updateData)
                     .eq('id', playerToUpdate.id);
 
                 if (updateError) {

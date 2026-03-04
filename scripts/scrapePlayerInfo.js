@@ -230,7 +230,7 @@ async function run() {
 
     const filterPlayer = process.argv.includes('--player') ? process.argv[process.argv.indexOf('--player') + 1] : null;
 
-    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id').eq('approved', true);
+    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id').eq('approved', true).eq('paid_registration', true);
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
