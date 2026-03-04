@@ -1,6 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
-import fetch from 'node-fetch';
 
 dotenv.config();
 
@@ -37,27 +36,37 @@ async function syncCategory(type, ageGroup, categoryName) {
             const rank = p.Standing;
             const rankedinId = p.Participant?.Id || p.RankedinId;
 
-            // Try to find the player in our DB
-            // We check by Rankedin ID first, then fallback to Name matching
-            let query = supabase.from('players').select('id, name');
+            let playerToUpdate = null;
 
+            // 1. Try finding by Rankedin ID first
             if (rankedinId) {
-                query = query.or(`rankedin_id.eq.${rankedinId},name.ilike.%${name}%`);
-            } else {
-                query = query.ilike('name', `%${name}%`);
+                const { data: idMatch } = await supabase
+                    .from('players')
+                    .select('id, name')
+                    .eq('rankedin_id', rankedinId.toString())
+                    .eq('approved', true)
+                    .maybeSingle();
+
+                if (idMatch) {
+                    playerToUpdate = idMatch;
+                }
             }
 
-            const { data: existingPlayers, error } = await query;
+            // 2. Fallback to Name matching if no ID match found
+            if (!playerToUpdate) {
+                const { data: nameMatches } = await supabase
+                    .from('players')
+                    .select('id, name')
+                    .ilike('name', `%${name}%`)
+                    .eq('approved', true);
 
-            if (error) {
-                console.error(`Error searching for ${name}:`, error.message);
-                continue;
+                if (nameMatches && nameMatches.length > 0) {
+                    // Critical: Must match exactly if we have multiple, or just pick the best one
+                    playerToUpdate = nameMatches.find(ep => ep.name.toLowerCase() === name.toLowerCase()) || nameMatches[0];
+                }
             }
 
-            if (existingPlayers && existingPlayers.length > 0) {
-                // If multiple found (rare but possible with name matching), use the best match
-                const playerToUpdate = existingPlayers.find(ep => ep.name.toLowerCase() === name.toLowerCase()) || existingPlayers[0];
-
+            if (playerToUpdate) {
                 const { error: updateError } = await supabase
                     .from('players')
                     .update({
