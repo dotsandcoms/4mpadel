@@ -197,12 +197,14 @@ async function scrapePlayer(browser, player) {
             }
         }
 
+        const extractedRid = profileUrl.match(/(R\d+)/)?.[1] || player.rankedin_id || profileUrl.split('/').pop();
+
         const updateData = {
-            skill_rating: parseFloat(basics.skill) || (player.name === "Clorinda Wessels" ? 19.85 : null),
-            age: basics.age,
-            match_form: basics.form,
+            skill_rating: basics.skill ? parseFloat(basics.skill) : (player.name === "Clorinda Wessels" ? 19.85 : null),
+            age: basics.age || null,
+            match_form: basics.form || null,
             rankings: rankings,
-            rankedin_id: basics.rid || profileUrl.split('/').pop(),
+            rankedin_id: basics.rid || extractedRid,
             rankedin_profile_url: profileUrl,
             // Add these two
             rank_label: finalRank,

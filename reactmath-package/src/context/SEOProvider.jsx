@@ -23,21 +23,22 @@ export const SEOProvider = ({ children, supabase: supabaseProp }) => {
 
     const currentDomain = useMemo(() => {
         if (linkedDomain) return linkedDomain;
-        // Use VITE_SEO_DOMAIN for preview/staging (e.g. 4mpadel.vercel.app) to share SEO data with production
+        // VITE_SEO_DOMAIN = hostname only (e.g. 4mpadel.co.za, localhost) - NOT the Supabase URL
         const envDomain = import.meta.env.VITE_SEO_DOMAIN;
+        const isUrl = envDomain && (String(envDomain).includes('://') || String(envDomain).includes('.supabase.co'));
+        const safeEnvDomain = envDomain && !isUrl ? String(envDomain).trim() : null;
         if (typeof window !== 'undefined') {
             const hostname = window.location.hostname;
             if (hostname === 'localhost' || hostname === '127.0.0.1') {
                 const projectName = import.meta.env.VITE_PROJECT_NAME;
                 return projectName ? `${projectName}.local` : 'localhost';
             }
-            // If on Vercel preview / staging and VITE_SEO_DOMAIN is set, use it for Supabase lookup
-            if (envDomain && (hostname.includes('vercel.app') || hostname.includes('netlify.app') || hostname.includes('preview'))) {
-                return envDomain;
+            if (safeEnvDomain && (hostname.includes('vercel.app') || hostname.includes('netlify.app'))) {
+                return safeEnvDomain;
             }
             return hostname;
         }
-        return envDomain || 'localhost';
+        return safeEnvDomain || 'localhost';
     }, [linkedDomain]);
 
     // 2. Storage Keys SECOND
