@@ -581,12 +581,36 @@ const PlayerManager = () => {
                                     {['name', 'rank_label', 'points', 'win_rate', 'home_club', 'age_group', 'category', 'level', 'nationality', 'contact_number', 'email'].map(field => (
                                         <div key={field}>
                                             <label className="block text-gray-400 text-sm mb-1 capitalize">{field.replace('_', ' ')}</label>
-                                            <input
-                                                type={field === 'points' ? 'number' : field === 'email' ? 'email' : 'text'}
-                                                value={formData[field] || ''}
-                                                onChange={e => setFormData({ ...formData, [field]: e.target.value })}
-                                                className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
-                                            />
+                                            {field === 'category' ? (
+                                                <select
+                                                    value={formData[field] || ''}
+                                                    onChange={e => setFormData({ ...formData, [field]: e.target.value })}
+                                                    className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none appearance-none cursor-pointer font-bold"
+                                                >
+                                                    <option value="">Select Category</option>
+                                                    <optgroup label="Men's" className="bg-[#1E293B]">
+                                                        <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
+                                                        <option value="Men's Advanced">Men's Advanced</option>
+                                                        <option value="Men's Intermediate">Men's Intermediate</option>
+                                                        <option value="Men's 35+">Men's 35+</option>
+                                                        <option value="Men's Juniors">Men's Juniors</option>
+                                                    </optgroup>
+                                                    <optgroup label="Ladies" className="bg-[#1E293B]">
+                                                        <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
+                                                        <option value="Ladies Advanced">Ladies Advanced</option>
+                                                        <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                        <option value="Ladies 35+">Ladies 35+</option>
+                                                        <option value="Ladies Juniors">Ladies Juniors</option>
+                                                    </optgroup>
+                                                </select>
+                                            ) : (
+                                                <input
+                                                    type={field === 'points' ? 'number' : field === 'email' ? 'email' : 'text'}
+                                                    value={formData[field] || ''}
+                                                    onChange={e => setFormData({ ...formData, [field]: e.target.value })}
+                                                    className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
+                                                />
+                                            )}
                                         </div>
                                     ))}
                                     <div>
