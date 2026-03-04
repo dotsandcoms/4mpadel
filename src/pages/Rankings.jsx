@@ -370,7 +370,7 @@ const Rankings = () => {
         {/* Points Breakdown Header */}
         <div className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-white/10 pb-6 gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Points Breakdown</h2>
+            <h2 className="text-3xl font-bold text-white mb-2">Points Breakdown for official SAPA Rankings 2026</h2>
             <p className="text-gray-400">Expand each tier to see detailed point structures by category.</p>
           </div>
         </div>
@@ -530,8 +530,8 @@ const Rankings = () => {
                             key={pageNum}
                             onClick={() => setCurrentPage(pageNum)}
                             className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-all duration-300 ${currentPage === pageNum
-                                ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20 scale-110'
-                                : 'text-gray-400 hover:bg-white/10 hover:text-white'
+                              ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20 scale-110'
+                              : 'text-gray-400 hover:bg-white/10 hover:text-white'
                               }`}
                           >
                             {pageNum}

@@ -193,6 +193,14 @@ const Players = () => {
             >
               Meet the talent driving the sport forward. From rising stars to seasoned pros.
             </motion.p>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-gray-500 text-sm max-w-2xl mx-auto mt-2 italic"
+            >
+              *Only players holding a valid SAPA Player’s License are shown
+            </motion.p>
           </div>
         </section>
 
