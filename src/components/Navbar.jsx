@@ -124,7 +124,7 @@ const Navbar = () => {
           {/* Logo */}
           <div className="flex items-center gap-4">
             <img src={logo} alt="4M Padel Logo" className="h-12 w-auto drop-shadow-none" style={{ filter: 'none' }} />
-            <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
+            <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
             {session && player && (
               <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
                 <div className="flex flex-col">

@@ -5,6 +5,7 @@ import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Sear
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
+import sapaLogo from '../assets/logo_6.png';
 
 const Calendar = () => {
     const [events, setEvents] = useState([]);
@@ -286,13 +287,16 @@ const Calendar = () => {
                         Official Schedule
                     </motion.div>
 
-                    <motion.h1
+                    <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-6 uppercase"
+                        className="flex flex-col md:flex-row items-center justify-center gap-4 mb-6"
                     >
-                        SAPA Tour <span className="text-padel-green">Calendar</span>
-                    </motion.h1>
+                        <img src={sapaLogo} alt="SAPA Logo" className="h-16 md:h-20 object-contain drop-shadow-lg" />
+                        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase m-0 leading-none">
+                            SAPA Tour <span className="text-padel-green">Calendar</span>
+                        </h1>
+                    </motion.div>
 
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
