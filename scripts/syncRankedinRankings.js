@@ -6,8 +6,14 @@ dotenv.config();
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
+if (!supabaseUrl) {
+    console.error("Missing VITE_SUPABASE_URL. Check .env or GitHub Secrets.");
+}
+if (!supabaseKey) {
+    console.error("Missing VITE_SUPABASE_SERVICE_ROLE_KEY or VITE_SUPABASE_ANON_KEY. Check .env or GitHub Secrets.");
+}
+
 if (!supabaseUrl || !supabaseKey) {
-    console.error("Missing Supabase configuration. Check .env file.");
     process.exit(1);
 }
 

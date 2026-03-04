@@ -4,15 +4,21 @@ import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
 
-const envConfig = dotenv.parse(fs.readFileSync('.env'));
-for (const k in envConfig) process.env[k] = envConfig[k];
+dotenv.config();
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 const rankedinEmail = process.env.RANKEDIN_EMAIL;
 const rankedinPassword = process.env.RANKEDIN_PASSWORD;
 
-if (!supabaseUrl || !supabaseKey) { process.exit(1); }
+if (!supabaseUrl) console.error("Missing VITE_SUPABASE_URL.");
+if (!supabaseKey) console.error("Missing VITE_SUPABASE_SERVICE_ROLE_KEY.");
+if (!rankedinEmail) console.error("Missing RANKEDIN_EMAIL.");
+if (!rankedinPassword) console.error("Missing RANKEDIN_PASSWORD.");
+
+if (!supabaseUrl || !supabaseKey) {
+    process.exit(1);
+}
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function loginToRankedin(page) {
@@ -46,8 +52,8 @@ async function findProfileUrl(page, name) {
         await page.click(searchInputSelector);
         await page.type(searchInputSelector, name, { delay: 50 });
 
-        // Wait for modal to appear
-        await new Promise(r => setTimeout(r, 4000));
+        // Wait for modal tabs to appear
+        await page.waitForSelector('.v-tabs-bar__content .v-tab, .search-container .v-tab', { timeout: 10000 }).catch(() => { });
 
         // Click on "Players" tab in the modal
         await page.evaluate(() => {
@@ -56,7 +62,8 @@ async function findProfileUrl(page, name) {
             if (playersTab) playersTab.click();
         });
 
-        await new Promise(r => setTimeout(r, 6000));
+        // Wait for results to load
+        await page.waitForSelector('a[href*="/en/player/"]', { timeout: 10000 }).catch(() => { });
 
         const profileUrl = await page.evaluate((name) => {
             // Target links inside the search results area specifically if possible
@@ -94,18 +101,30 @@ async function scrapePlayer(browser, player) {
         let profileUrl = player.rankedin_profile_url;
 
         if (!profileUrl) {
-            console.log(`URL missing for ${player.name}. Searching...`);
-            profileUrl = await findProfileUrl(page, player.name);
-            if (!profileUrl) {
-                console.log(`Could not find profile for ${player.name}`);
-                return;
+            if (player.rankedin_id) {
+                console.log(`Using existing ID ${player.rankedin_id} for ${player.name}`);
+                profileUrl = `https://www.rankedin.com/en/player/${player.rankedin_id}`;
+            } else {
+                console.log(`URL missing for ${player.name}. Searching...`);
+                profileUrl = await findProfileUrl(page, player.name);
+                if (!profileUrl) {
+                    console.log(`Could not find profile for ${player.name}`);
+                    return;
+                }
+                console.log(`Found URL: ${profileUrl}`);
             }
-            console.log(`Found URL: ${profileUrl}`);
         }
 
         // 1. Visit Info
-        await page.goto(profileUrl, { waitUntil: 'networkidle2' });
-        await new Promise(r => setTimeout(r, 5000));
+        console.log(`Navigating to info for ${player.name}: ${profileUrl}`);
+        try {
+            await page.goto(profileUrl, { waitUntil: 'load', timeout: 60000 });
+            await new Promise(r => setTimeout(r, 5000));
+        } catch (e) {
+            console.error(`Navigation to info failed for ${player.name}:`, e.message);
+            // Try one more time with simple load
+            await page.goto(profileUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => { });
+        }
 
         const basics = await page.evaluate(() => {
             const h = document.body.innerText;
@@ -211,12 +230,12 @@ async function run() {
 
     const filterPlayer = process.argv.includes('--player') ? process.argv[process.argv.indexOf('--player') + 1] : null;
 
-    let query = supabase.from('players').select('id, name, rankedin_profile_url').eq('approved', true);
+    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id').eq('approved', true);
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
-        // Skip users that are actually me/user if we can identify them, or just limit
-        query = query.is('rankedin_profile_url', null).not('name', 'ilike', '%brad elin%').limit(10);
+        // Skip users that are actually me/user if we can identify them
+        query = query.is('rankedin_profile_url', null).not('name', 'ilike', '%brad elin%');
     }
 
     const { data: players } = await query;
