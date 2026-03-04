@@ -150,13 +150,22 @@ async function scrapePlayer(browser, player) {
         });
 
         // 2. Rankings
-        const rankingUrl = profileUrl.replace(/\/info\/?$/, '/rankings');
+        let rankingUrl = profileUrl;
+        if (rankingUrl.endsWith('/')) {
+            rankingUrl = rankingUrl.slice(0, -1);
+        }
+        if (rankingUrl.endsWith('/info')) {
+            rankingUrl = rankingUrl.replace(/\/info$/, '/rankings');
+        } else if (!rankingUrl.endsWith('/rankings')) {
+            rankingUrl = `${rankingUrl}/rankings`;
+        }
+
         console.log("Navigating to rankings:", rankingUrl);
         await page.goto(rankingUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         await new Promise(r => setTimeout(r, 8000));
 
         const rankings = await page.evaluate(() => {
-            const table = document.querySelector('#vdtnetable1, table');
+            const table = document.querySelector('.rankings-table table, #vdtnetable1, table');
             if (!table) return [];
             const rows = Array.from(table.querySelectorAll('tbody tr, tr')).filter(r => r.querySelector('td'));
             return rows.map(row => {
@@ -246,6 +255,7 @@ async function run() {
     const { data: players } = await query;
     if (players) {
         for (const p of players) {
+            console.log("Found player in DB:", JSON.stringify(p, null, 2));
             await scrapePlayer(browser, p);
         }
     }
