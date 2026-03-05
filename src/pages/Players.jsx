@@ -165,7 +165,7 @@ const Players = () => {
         )}
       </Helmet>
       <Navbar />
-      <main className="bg-[#0F172A] min-h-screen text-white relative">
+      <main className="bg-[#0F172A] min-h-screen pb-12 text-white relative">
         {/* Hero Section */}
         <section className="relative h-[40vh] min-h-[400px] flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">

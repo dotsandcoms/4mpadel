@@ -279,7 +279,7 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pt-32 container mx-auto px-6 max-w-7xl">
+            <main className="relative z-10 pt-32 pb-20 container mx-auto px-6 max-w-7xl">
 
                 {/* Hero Header */}
                 <div className="text-center mb-16">

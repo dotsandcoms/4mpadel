@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, MapPin, Calendar, Trophy } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const fixtures = [
     { id: 1, date: "7 FEB", event: "Padel Odyssey Finals", city: "JHB", venue: "KCC", type: "Gold", confirmed: true },
@@ -110,9 +111,9 @@ const Fixtures = () => {
                         </motion.div>
 
                         <div className="mt-8 text-center md:text-left">
-                            <button className="px-6 py-2 rounded-full bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-[0.2em] hover:bg-white/10 hover:scale-105 transition-all duration-300">
+                            <Link to="/calendar" className="inline-block px-6 py-2 rounded-full bg-white/5 border border-white/10 text-white text-xs font-bold uppercase tracking-[0.2em] hover:bg-white/10 hover:scale-105 transition-all duration-300">
                                 View Full Calendar
-                            </button>
+                            </Link>
                         </div>
 
                         {/* League Standings - New Section to fill space */}

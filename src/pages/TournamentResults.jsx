@@ -85,7 +85,7 @@ const TournamentResults = () => {
 
             <Navbar />
 
-            <main className="min-h-screen bg-[#0F172A]">
+            <main className="min-h-screen bg-[#0F172A] pb-20">
                 {/* Hero Section with Image */}
                 <div className="relative h-[30vh] md:h-[40vh] min-h-[300px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img

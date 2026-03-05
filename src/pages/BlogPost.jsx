@@ -65,7 +65,7 @@ const BlogPost = () => {
     }
 
     return (
-        <div className="pt-32 min-h-screen bg-gray-900 font-sans">
+        <div className="pt-32 pb-12 min-h-screen bg-gray-900 font-sans">
             <Helmet>
                 <title>{post.title} | 4M Padel Blog</title>
                 <meta name="description" content={`Read about ${post.title} on the 4M Padel Blog.`} />

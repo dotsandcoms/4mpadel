@@ -328,8 +328,8 @@ const PlayerProfile = () => {
                                     transition={{ delay: 0.2 }}
                                 >
                                     <div className="flex items-center gap-3 mb-2">
-                                        <span className="bg-padel-green text-black px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg shadow-padel-green/20">
-                                            {player.approved ? 'License Paid' : 'Pending License'}
+                                        <span className={`${player.paid_registration ? 'bg-padel-green text-black' : 'bg-gray-700 text-gray-300'} px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg shadow-padel-green/20`}>
+                                            {player.paid_registration ? 'License Paid' : 'Pending License'}
                                         </span>
                                         {player.rankedin_id && (
                                             <span className="bg-black/40 backdrop-blur-md border border-white/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
@@ -454,11 +454,13 @@ const PlayerProfile = () => {
                                     <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex justify-between items-end">
                                         <div>
                                             <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Win Rate</p>
-                                            <p className="text-3xl font-black text-white">86%</p>
+                                            <p className="text-3xl font-black text-white">{player.win_rate || '0'}%</p>
                                         </div>
-                                        <div className="bg-padel-green/20 text-padel-green px-3 py-1 rounded-lg text-xs font-black">
-                                            Top 5%
-                                        </div>
+                                        {player.win_rate > 0 && (
+                                            <div className="bg-padel-green/20 text-padel-green px-3 py-1 rounded-lg text-xs font-black">
+                                                Top 5%
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Division</p>

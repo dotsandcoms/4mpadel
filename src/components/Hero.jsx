@@ -78,7 +78,7 @@ const Hero = () => {
                     >
                         <button
                             onClick={() => navigate('/calendar')}
-                            className="group relative px-8 py-4 bg-padel-green rounded-full font-bold text-black overflow-hidden hover:scale-105 transition-transform duration-300"
+                            className="group relative px-8 py-4 bg-padel-green rounded-full font-bold !text-black overflow-hidden hover:scale-105 transition-transform duration-300"
                         >
                             <span className="relative z-10 flex items-center gap-2">
                                 View Tournaments

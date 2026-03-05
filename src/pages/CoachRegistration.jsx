@@ -177,7 +177,7 @@ const CoachRegistration = () => {
     }
 
     return (
-        <div className="min-h-screen pt-32 bg-[#0A0D14] relative overflow-hidden">
+        <div className="min-h-screen pt-32 pb-20 bg-[#0A0D14] relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-40 left-0 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[100px] pointer-events-none" />

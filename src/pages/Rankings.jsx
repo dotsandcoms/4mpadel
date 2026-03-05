@@ -404,7 +404,7 @@ const Rankings = () => {
   }, [filteredData, currentPage]);
 
   return (
-    <div className="bg-[#0F172A] min-h-screen pt-32 font-sans selection:bg-padel-green selection:text-black">
+    <div className="bg-[#0F172A] min-h-screen pt-32 pb-20 font-sans selection:bg-padel-green selection:text-black">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />

@@ -90,7 +90,7 @@ const AlbumDetails = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#0A0D14] pt-24 relative">
+        <div className="min-h-screen bg-[#0A0D14] pt-24 pb-12 relative">
             <Helmet>
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
             </Helmet>

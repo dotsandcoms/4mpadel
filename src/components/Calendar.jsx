@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion } from 'framer-motion';
 import { Calendar as CalendarIcon, MapPin, Clock } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import tournamentBg from '../assets/tournament_bg.png';
 
 const Calendar = () => {
@@ -54,9 +55,9 @@ const Calendar = () => {
                         <span className="text-padel-green font-bold tracking-widest uppercase text-sm">Upcoming Events</span>
                         <h2 className="text-4xl md:text-5xl font-bold text-white mt-4">Calendar</h2>
                     </div>
-                    <button className="hidden md:block px-6 py-3 border border-white/20 rounded-full text-white hover:bg-white/10 transition-colors">
+                    <Link to="/calendar" className="hidden md:block px-6 py-3 border border-white/20 rounded-full text-white hover:bg-white/10 transition-colors">
                         View Full Calendar
-                    </button>
+                    </Link>
                 </div>
 
                 <div className="grid gap-6">

@@ -218,12 +218,10 @@ const Contact = () => {
                         >
                             Register Now
                         </button>
-                        <a href="/calendar" className="bg-padel-green text-black font-black px-10 py-4 rounded-full hover:bg-white transition-all uppercase tracking-widest text-sm shadow-lg shadow-padel-green/20 border border-padel-green">View Tournaments</a>
+                        <a href="/calendar" className="bg-padel-green !text-black font-black px-10 py-4 rounded-full hover:bg-white transition-all uppercase tracking-widest text-sm shadow-lg shadow-padel-green/20 border border-padel-green inline-flex items-center justify-center">View Tournaments</a>
                     </div>
                 </div>
             </section>
-
-            <SiteFooter />
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
         </div>
     );

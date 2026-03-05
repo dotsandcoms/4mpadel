@@ -123,7 +123,7 @@ const CoachingVideos = () => {
     const categories = ['All', 'Foundations', 'Defense', 'Technical', 'Tactics', 'Mixed'];
 
     return (
-        <div className="bg-[#0F172A] min-h-screen pt-32 font-sans">
+        <div className="bg-[#0F172A] min-h-screen pt-32 pb-24 font-sans">
             {/* Background elements */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
