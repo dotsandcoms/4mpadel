@@ -311,7 +311,9 @@ const Players = () => {
                     {/* Rank Badge */}
                     <motion.div layoutId={`level-${player.id}`} className="absolute top-4 left-4 bg-black/60 backdrop-blur border border-white/10 text-white font-bold w-12 h-12 rounded-full flex flex-col items-center justify-center text-xs z-10">
                       <span className="text-[8px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
-                      <span className="text-sm">#{player.rank_label || '-'}</span>
+                      <span className="text-sm">
+                        {(!player.rank_label || player.rank_label === 'Unranked') ? '-' : `#${player.rank_label}`}
+                      </span>
                     </motion.div>
 
                     {/* View Profile Button Overlay */}
