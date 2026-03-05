@@ -45,7 +45,7 @@ const BlogPost = () => {
 
     if (loading) {
         return (
-            <div className="pt-32 pb-20 min-h-screen bg-gray-900 flex justify-center items-center">
+            <div className="pt-32 min-h-screen bg-gray-900 flex justify-center items-center">
                 <div className="w-12 h-12 border-4 border-white/10 border-t-padel-green rounded-full animate-spin"></div>
             </div>
         );
@@ -53,7 +53,7 @@ const BlogPost = () => {
 
     if (!post) {
         return (
-            <div className="pt-32 min-h-screen bg-gray-900 pb-20 text-center flex flex-col items-center justify-center">
+            <div className="pt-32 min-h-screen bg-gray-900 text-center flex flex-col items-center justify-center">
                 <FileText className="w-20 h-20 text-gray-700 mb-6" />
                 <h1 className="text-4xl font-bold text-white mb-4">Post Not Found</h1>
                 <p className="text-gray-400 mb-8 max-w-md">The article you are looking for doesn't exist or has been removed.</p>
@@ -65,7 +65,7 @@ const BlogPost = () => {
     }
 
     return (
-        <div className="pt-32 pb-20 min-h-screen bg-gray-900 font-sans">
+        <div className="pt-32 min-h-screen bg-gray-900 font-sans">
             <Helmet>
                 <title>{post.title} | 4M Padel Blog</title>
                 <meta name="description" content={`Read about ${post.title} on the 4M Padel Blog.`} />

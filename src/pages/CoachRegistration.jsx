@@ -152,7 +152,7 @@ const CoachRegistration = () => {
 
     if (isSuccess) {
         return (
-            <div className="min-h-screen pt-32 pb-20 bg-[#0A0D14] flex items-center justify-center -mt-20">
+            <div className="min-h-screen pt-32 bg-[#0A0D14] flex items-center justify-center -mt-20">
                 <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -177,7 +177,7 @@ const CoachRegistration = () => {
     }
 
     return (
-        <div className="min-h-screen pt-32 pb-20 bg-[#0A0D14] relative overflow-hidden">
+        <div className="min-h-screen pt-32 bg-[#0A0D14] relative overflow-hidden">
             {/* Background Effects */}
             <div className="absolute top-40 left-0 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[120px] pointer-events-none" />
             <div className="absolute top-1/2 right-0 w-[400px] h-[400px] bg-white/5 rounded-full blur-[100px] pointer-events-none" />
@@ -205,10 +205,10 @@ const CoachRegistration = () => {
                                 <div key={step.id} className="flex flex-col items-center">
                                     <div
                                         className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors duration-300 ${isCompleted
-                                                ? 'bg-padel-green text-black'
-                                                : isActive
-                                                    ? 'bg-white border-2 border-padel-green text-black'
-                                                    : 'bg-[#1E293B] border border-white/20 text-gray-500'
+                                            ? 'bg-padel-green text-black'
+                                            : isActive
+                                                ? 'bg-white border-2 border-padel-green text-black'
+                                                : 'bg-[#1E293B] border border-white/20 text-gray-500'
                                             }`}
                                     >
                                         {isCompleted ? <CheckCircle2 className="w-6 h-6" /> : step.id}

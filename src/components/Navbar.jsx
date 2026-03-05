@@ -123,7 +123,7 @@ const Navbar = () => {
         <div className="container mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
-            <img src={logo} alt="4M Padel Logo" className="h-12 w-auto drop-shadow-none" style={{ filter: 'none' }} />
+            <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
             {session && player && (
               <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
@@ -161,7 +161,7 @@ const Navbar = () => {
                       <a
                         key={subItem.name}
                         href={subItem.href}
-                        className="block px-6 py-3 text-sm font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-widest border-l-2 border-transparent hover:border-padel-green"
+                        className="block px-6 py-2.5 text-xs font-medium text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-widest border-l-2 border-transparent hover:border-padel-green"
                       >
                         {subItem.name}
                       </a>

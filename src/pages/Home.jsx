@@ -23,7 +23,7 @@ const Home = () => {
 
             <Navbar />
 
-            <main className="bg-[#0F172A] text-white pb-20">
+            <main className="bg-[#0F172A] text-white">
                 <TopHeader />
                 <Hero />
 

@@ -279,7 +279,7 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pt-32 pb-32 container mx-auto px-6 max-w-7xl">
+            <main className="relative z-10 pt-32 container mx-auto px-6 max-w-7xl">
 
                 {/* Hero Header */}
                 <div className="text-center mb-16">
@@ -385,7 +385,6 @@ const Calendar = () => {
 
                         {/* League Filter */}
                         <div className="relative w-full md:w-auto min-w-[150px]">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green text-sm font-bold select-none">⚽</span>
                             <select
                                 value={leagueFilter}
                                 onChange={(e) => setLeagueFilter(e.target.value)}

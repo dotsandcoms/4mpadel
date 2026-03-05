@@ -49,7 +49,15 @@ const TopHeader = () => {
         { name: 'Calendar', href: '/calendar' },
         { name: 'Players', href: '/players' },
         { name: 'Rankings', href: '/rankings' },
-        { name: 'Academy', href: '#academy' },
+        {
+            name: 'Academy',
+            href: '#',
+            dropdown: [
+                { name: 'Approved Coaches', href: '/academy/coaches' },
+                { name: 'Coaching Videos', href: '/academy/videos' },
+                { name: 'Register', href: '/academy/register' },
+            ]
+        },
         {
             name: 'Tournaments',
             href: '#',
@@ -61,7 +69,7 @@ const TopHeader = () => {
                 { name: 'Mens 40 +', href: '/tournaments/mens40' },
             ]
         },
-        { name: 'Other', href: '#other' }
+        { name: 'Contact', href: '/contact' }
     ];
 
     return (
@@ -73,8 +81,8 @@ const TopHeader = () => {
                 className="w-full py-6 px-6 md:px-10 flex flex-col lg:flex-row items-center justify-between bg-black text-white gap-4 lg:gap-0 relative z-50"
             >
                 <div className="flex items-center gap-4">
-                    <a href="/" className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white drop-shadow-none" style={{ textShadow: 'none' }}>
-                        <span>4M <span className="text-padel-green">PADEL</span></span>
+                    <a href="/" className="flex items-center gap-3 text-2xl font-black tracking-tighter text-white" style={{ textShadow: 'none', filter: 'none' }}>
+                        <span style={{ textShadow: 'none', filter: 'none' }}>4M <span className="text-padel-green" style={{ textShadow: 'none', filter: 'none' }}>PADEL</span></span>
                         <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
                         {session && player && (
                             <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
@@ -94,7 +102,7 @@ const TopHeader = () => {
                             <div key={link.name} className="relative group">
                                 <a
                                     href={link.href}
-                                    className="px-5 py-2 rounded-full text-sm font-bold text-gray-300 hover:bg-white hover:text-black transition-all uppercase tracking-tighter flex items-center gap-1"
+                                    className="px-5 py-2 rounded-full text-sm font-bold text-gray-300 hover:text-padel-green hover:bg-white/10 transition-all uppercase tracking-tighter flex items-center gap-1"
                                 >
                                     {link.name}
                                     {link.dropdown && <ChevronDown size={14} className="group-hover:rotate-180 transition-transform" />}
@@ -106,7 +114,7 @@ const TopHeader = () => {
                                             <a
                                                 key={subItem.name}
                                                 href={subItem.href}
-                                                className="block px-6 py-2.5 text-xs font-bold text-gray-400 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest"
+                                                className="block px-6 py-2.5 text-xs font-medium text-gray-400 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest"
                                             >
                                                 {subItem.name}
                                             </a>
