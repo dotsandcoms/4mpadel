@@ -275,7 +275,7 @@ const Players = () => {
             {filteredPlayers.length > 0 ? (
               filteredPlayers.map((player, index) => (
                 <motion.div
-                  layoutId={`card - ${player.id} `}
+                  layoutId={`card-${player.id}`}
                   key={player.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -287,14 +287,14 @@ const Players = () => {
                   <div className="aspect-[4/5] bg-gradient-to-br from-gray-800 to-gray-900 relative overflow-hidden">
                     {player.image_url ? (
                       <motion.img
-                        layoutId={`image - ${player.id} `}
+                        layoutId={`image-${player.id}`}
                         src={player.image_url}
                         alt={player.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
                     ) : (
                       <motion.div
-                        layoutId={`image - ${player.id} `}
+                        layoutId={`image-${player.id}`}
                         className="w-full h-full flex items-center justify-center text-white/10"
                       >
                         <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
@@ -304,12 +304,12 @@ const Players = () => {
                     )}
 
                     {/* Badge */}
-                    <motion.div layoutId={`category - ${player.id} `} className="absolute top-4 right-4 bg-padel-green/90 backdrop-blur text-black font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider z-10">
+                    <motion.div layoutId={`category-${player.id}`} className="absolute top-4 right-4 bg-padel-green/90 backdrop-blur text-black font-bold px-3 py-1 rounded-full text-xs uppercase tracking-wider z-10">
                       {player.category}
                     </motion.div>
 
                     {/* Skill Rating Badge */}
-                    <motion.div layoutId={`level - ${player.id} `} className="absolute top-4 left-4 bg-black/60 backdrop-blur border border-white/10 text-white font-bold w-12 h-12 rounded-full flex items-center justify-center text-sm z-10">
+                    <motion.div layoutId={`level-${player.id}`} className="absolute top-4 left-4 bg-black/60 backdrop-blur border border-white/10 text-white font-bold w-12 h-12 rounded-full flex items-center justify-center text-sm z-10">
                       {player.skill_rating || '-'}
                     </motion.div>
 
@@ -325,7 +325,7 @@ const Players = () => {
                   <div className="p-6 relative bg-[#0F172A]">
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0F172A] to-transparent" />
 
-                    <motion.h3 layoutId={`name - ${player.id} `} className="text-xl font-bold text-white mb-2 group-hover:text-padel-green transition-colors">
+                    <motion.h3 layoutId={`name-${player.id}`} className="text-xl font-bold text-white mb-2 group-hover:text-padel-green transition-colors">
                       {player.name}
                     </motion.h3>
 
@@ -374,7 +374,7 @@ const Players = () => {
               />
               <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
                 <motion.div
-                  layoutId={`card - ${selectedPlayer.id} `}
+                  layoutId={`card-${selectedPlayer.id}`}
                   ref={cardRef}
                   className="w-full max-w-lg bg-[#0F172A] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] flex flex-col"
                 >
@@ -387,17 +387,17 @@ const Players = () => {
                   </button>
 
                   {/* Image Section */}
-                  <div className="relative h-[40vh] min-h-[300px]">
+                  <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
                     {selectedPlayer.image_url ? (
                       <motion.img
-                        layoutId={`image - ${selectedPlayer.id} `}
+                        layoutId={`image-${selectedPlayer.id}`}
                         src={selectedPlayer.image_url}
                         alt={selectedPlayer.name}
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <motion.div
-                        layoutId={`image - ${selectedPlayer.id} `}
+                        layoutId={`image-${selectedPlayer.id}`}
                         className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-white/10"
                       >
                         <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24">
@@ -408,26 +408,21 @@ const Players = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
 
                     {/* Big Stats Overlays on Image */}
-                    <motion.div layoutId={`level - ${selectedPlayer.id} `} className="absolute top-6 left-6 bg-padel-green text-black font-black w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-black shadow-xl">
+                    <motion.div layoutId={`level-${selectedPlayer.id}`} className="absolute top-4 left-4 bg-padel-green text-black font-black w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-black shadow-xl z-20">
                       <span className="text-xs uppercase font-bold opacity-60">SKILL</span>
                       <span className="text-2xl leading-none">{selectedPlayer.skill_rating ? Number(selectedPlayer.skill_rating).toFixed(1) : selectedPlayer.skill_rating || '-'}</span>
                     </motion.div>
 
-                    <motion.div layoutId={`category - ${selectedPlayer.id} `} className="absolute top-6 left-24 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl">
-                      <span className="text-xs uppercase font-bold text-padel-green mb-1">Category</span>
-                      <span className="text-sm">{selectedPlayer.category}</span>
-                    </motion.div>
-
                     {selectedPlayer.rankedin_id && (
-                      <div className="absolute top-6 right-20 bg-black/40 backdrop-blur-md border border-white/10 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl">
+                      <div className="absolute top-4 right-16 bg-black/40 backdrop-blur-md border border-white/10 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
                         <span className="text-[10px] uppercase font-black text-padel-green mb-1">Rankedin ID</span>
                         <span className="text-xs opacity-70 font-mono tracking-tight">{selectedPlayer.rankedin_id}</span>
                       </div>
                     )}
 
                     {/* Name Overlay */}
-                    <div className="absolute bottom-0 left-0 w-full p-8">
-                      <motion.h2 layoutId={`name - ${selectedPlayer.id} `} className="text-5xl md:text-6xl font-black text-white leading-[0.85] tracking-tighter uppercase mb-2 drop-shadow-lg">
+                    <div className="absolute bottom-0 left-0 w-full p-8 pl-24 pt-20 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/40 to-transparent">
+                      <motion.h2 layoutId={`name-${selectedPlayer.id}`} className="text-4xl md:text-5xl font-black text-white leading-[0.85] tracking-tighter uppercase mb-2 drop-shadow-lg">
                         {selectedPlayer.name.split(' ').map((n, i) => (
                           <span key={i} className="block">{n}</span>
                         ))}
@@ -435,13 +430,18 @@ const Players = () => {
                       <div className="flex items-center gap-2 text-gray-300 font-medium">
                         <MapPin className="w-4 h-4 text-padel-green" />
                         {selectedPlayer.home_club}, {selectedPlayer.nationality}
-                        {selectedPlayer.age && <span className="ml-2 px-2 py-0.5 bg-white/10 rounded text-xs">AGE: {selectedPlayer.age}</span>}
+                        {selectedPlayer.age && <span className="ml-2 px-2 py-0.5 bg-white/10 rounded text-xs font-bold uppercase">AGE: {selectedPlayer.age}</span>}
                       </div>
+
+                      <motion.div layoutId={`category-${selectedPlayer.id}`} className="mt-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 py-2 rounded-xl inline-flex flex-col items-start shadow-xl">
+                        <span className="text-[10px] uppercase font-bold text-padel-green mb-0.5 tracking-wider">Category</span>
+                        <span className="text-sm">{selectedPlayer.category}</span>
+                      </motion.div>
                     </div>
                   </div>
 
                   {/* Content Section (Scrollable) */}
-                  <div className="p-8 space-y-8 overflow-y-auto flex-1 bg-[#0F172A] border-t border-white/5">
+                  <div className="p-8 pb-12 space-y-8 overflow-y-auto flex-1 bg-[#0F172A] border-t border-white/5">
 
                     {/* Bio */}
                     <div>
@@ -605,7 +605,7 @@ const Players = () => {
 
                 {/* Name Overlay */}
                 <div className="absolute bottom-12 left-12 right-12">
-                  <h1 className="text-7xl font-black uppercase tracking-tighter leading-[0.82] mb-4 drop-shadow-2xl">
+                  <h1 className="text-6xl font-black uppercase tracking-tighter leading-[0.82] mb-4 drop-shadow-2xl">
                     {selectedPlayer.name.split(' ').map((n, i) => (
                       <span key={i} className="block">{n}</span>
                     ))}

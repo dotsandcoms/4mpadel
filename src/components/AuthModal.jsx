@@ -7,7 +7,7 @@ import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
 const AuthModal = ({ isOpen, onClose }) => {
-    const [activeTab, setActiveTab] = useState('login'); // 'login' or 'register'
+    const [activeTab, setActiveTab] = useState('login'); // 'login', 'register', 'forgot_password'
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const navigate = useNavigate();
@@ -77,6 +77,28 @@ const AuthModal = ({ isOpen, onClose }) => {
             showMessage(error.message, 'error');
         } else {
             showMessage('Successfully logged in!', 'success');
+        }
+        setLoading(false);
+    };
+
+    const handleForgotPassword = async (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage(null);
+
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + '/profile',
+        });
+
+        if (error) {
+            showMessage(error.message, 'error');
+        } else {
+            showMessage('Password reset link sent to your email!', 'success');
+            // We don't close the modal immediately so they can see the message
+            setTimeout(() => {
+                setActiveTab('login');
+                setMessage(null);
+            }, 3000);
         }
         setLoading(false);
     };
@@ -269,19 +291,21 @@ const AuthModal = ({ isOpen, onClose }) => {
 
                     <div className="pt-8 pb-6 px-8 text-center border-b border-white/5 bg-white/5">
                         <h2 className="text-2xl font-bold text-white mb-2">
-                            {activeTab === 'login' ? 'Welcome Back' : 'Create Profile'}
+                            {activeTab === 'login' ? 'Welcome Back' : activeTab === 'register' ? 'Create Profile' : 'Reset Password'}
                         </h2>
                         <p className="text-gray-400 text-sm">
                             {activeTab === 'login'
                                 ? 'Enter your credentials to access your profile'
-                                : 'Register to manage your player profile and stats'}
+                                : activeTab === 'register'
+                                    ? 'Register to manage your player profile and stats'
+                                    : 'Retrieve your account access'}
                         </p>
                     </div>
 
                     <div className="flex border-b border-white/10">
                         <button
                             onClick={() => { setActiveTab('login'); resetForm(); }}
-                            className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === 'login' ? 'text-padel-green border-b-2 border-padel-green' : 'text-gray-400 hover:text-white'}`}
+                            className={`flex-1 py-4 text-sm font-bold transition-colors ${activeTab === 'login' || activeTab === 'forgot_password' ? 'text-padel-green border-b-2 border-padel-green' : 'text-gray-400 hover:text-white'}`}
                         >
                             Sign In
                         </button>
@@ -301,7 +325,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                             </div>
                         )}
 
-                        <form onSubmit={activeTab === 'login' ? handleLogin : handleRegistrationSubmit} className="space-y-4">
+                        <form onSubmit={activeTab === 'login' ? handleLogin : activeTab === 'register' ? handleRegistrationSubmit : handleForgotPassword} className="space-y-4">
                             {activeTab === 'register' ? (
                                 <>
                                     {step === 1 ? (
@@ -557,7 +581,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                                         </div>
                                     )}
                                 </>
-                            ) : (
+                            ) : activeTab === 'login' ? (
                                 <div className="space-y-4">
                                     <div className="relative">
                                         <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
@@ -588,12 +612,53 @@ const AuthModal = ({ isOpen, onClose }) => {
                                             {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                                         </button>
                                     </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('forgot_password')}
+                                            className="text-[11px] text-gray-500 hover:text-padel-green font-bold uppercase tracking-widest transition-colors"
+                                        >
+                                            Forgot Password?
+                                        </button>
+                                    </div>
                                     <button
                                         type="submit"
                                         disabled={loading}
                                         className="w-full bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                     >
                                         {loading ? 'Entering...' : 'Sign In'}
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="text-center mb-6">
+                                        <h3 className="text-white font-bold mb-2">Reset Password</h3>
+                                        <p className="text-gray-400 text-xs">Enter your email address and we'll send you a link to reset your password.</p>
+                                    </div>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                                        <input
+                                            type="email"
+                                            placeholder="Email Address"
+                                            value={email}
+                                            onChange={(e) => setEmail(e.target.value)}
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all"
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        disabled={loading}
+                                        className="w-full bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
+                                    >
+                                        {loading ? 'Sending...' : 'Send Reset Link'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setActiveTab('login')}
+                                        className="w-full text-center text-xs text-gray-500 hover:text-white font-bold py-2 transition-colors"
+                                    >
+                                        Back to Login
                                     </button>
                                 </div>
                             )}

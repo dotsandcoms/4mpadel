@@ -19,6 +19,7 @@ const PlayerProfile = () => {
     const [isImpersonating, setIsImpersonating] = useState(false);
     const navigate = useNavigate();
 
+    const [isActivationRequired, setIsActivationRequired] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -48,8 +49,9 @@ const PlayerProfile = () => {
         if (error) {
             showMessage(error.message, 'error');
         } else {
-            showMessage('Password set successfully! You can now login with this password.', 'success');
+            showMessage('Password set successfully! Your account is now active.', 'success');
             setNewPassword('');
+            setIsActivationRequired(false);
             // Clear the URL param
             navigate('/profile', { replace: true });
         }
@@ -83,6 +85,12 @@ const PlayerProfile = () => {
                 showMessage(error.message, 'error');
             } else if (playerData) {
                 setPlayer(playerData);
+
+                // Check for activation state
+                const isInvite = window.location.search.includes('new_invite=true') || window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('type=magiclink');
+                if (isInvite) {
+                    setIsActivationRequired(true);
+                }
 
                 // Update last_login timestamp
                 await supabase
@@ -231,8 +239,8 @@ const PlayerProfile = () => {
             <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
                 <Navbar />
 
-                {/* Password Setup Prompt (for new invites) */}
-                {window.location.search.includes('new_invite=true') && (
+                {/* Password Setup Prompt (for new invites or recovery) */}
+                {isActivationRequired && (
                     <div className="container mx-auto px-6 pt-32 -mb-20 relative z-20">
                         <motion.div
                             initial={{ opacity: 0, y: -20 }}

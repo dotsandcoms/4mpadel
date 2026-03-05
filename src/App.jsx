@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Navbar from './components/Navbar';
@@ -25,10 +25,42 @@ import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import SiteFooter from './components/SiteFooter';
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from './supabaseClient';
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Listen for auth state changes to handle magic links, recovery links, etc.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('App: Auth Event:', event);
+
+      // SIGNED_IN can happen via magic link OR normal login
+      // INITIAL_SESSION occurs on page load if a session already exists
+      if (event === 'SIGNED_IN') {
+        const hash = window.location.hash;
+        const isMagicLink = hash.includes('access_token=') && (hash.includes('type=magiclink') || hash.includes('type=recovery') || hash.includes('type=invite'));
+
+        if (isMagicLink) {
+          console.log('App: Detected magic link / recovery link sign-in. Redirecting to profile...');
+          // Small delay to ensure session is fully processed
+          setTimeout(() => navigate('/profile'), 500);
+        }
+      }
+
+      if (event === 'PASSWORD_RECOVERY') {
+        console.log('App: Detected password recovery event. Redirecting to profile...');
+        navigate('/profile');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
+
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
 
   return (
