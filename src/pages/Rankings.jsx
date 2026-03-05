@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import player1 from '../assets/player_1.png';
 
 const RankingExplanation = () => (
   <div className="grid md:grid-cols-3 gap-6 mb-20 relative z-10">
@@ -56,7 +55,7 @@ const RankingSlider = ({ title, playersData }) => {
   const scroll = (dir) => {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir * 340, behavior: 'smooth' });
+    el.scrollBy({ left: dir * 260, behavior: 'smooth' });
   };
 
   const getInitials = (name) => {
@@ -105,23 +104,26 @@ const RankingSlider = ({ title, playersData }) => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ delay: Math.min(index * 0.1, 0.5) }}
-              className="min-w-[280px] md:min-w-[320px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40 flex-shrink-0"
+              className="w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40 flex-shrink-0"
             >
-              <div className="h-[380px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
+              <div className="slider-card-media h-[280px] md:h-[320px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
                 {player.image && !player._imgError ? (
                   <img
                     src={player.image}
                     alt={player.name}
-                    className={`w-full h-full object-cover filter opacity-80 group-hover:opacity-100 transition-all duration-500 scale-100 group-hover:scale-105 ${player.hasLocalProfile ? '' : 'grayscale group-hover:grayscale-0'}`}
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    className={`w-full h-full object-cover object-top filter opacity-80 group-hover:opacity-100 transition-all duration-500 scale-100 group-hover:scale-105 ${player.hasLocalProfile ? '' : 'grayscale group-hover:grayscale-0'}`}
+                    onError={(e) => { e.currentTarget.closest('.slider-card-media').dataset.err = '1'; e.currentTarget.style.display = 'none'; e.currentTarget.nextElementSibling && (e.currentTarget.nextElementSibling.style.display = 'flex'); }}
                   />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-[#253247] to-[#141d2e]">
-                    <div className="w-48 h-48 rounded-full bg-[#E2E4EB] flex items-center justify-center shadow-2xl mb-12">
-                      <span className="text-6xl font-black text-[#2B3B60] tracking-tighter">{getInitials(player.name)}</span>
-                    </div>
+                ) : null}
+                {/* Fallback initials — always rendered, hidden when image loads */}
+                <div
+                  className="absolute inset-0 w-full h-full flex flex-col items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity bg-gradient-to-b from-[#253247] to-[#141d2e]"
+                  style={{ display: player.image && !player._imgError ? 'none' : 'flex' }}
+                >
+                  <div className="w-24 h-24 rounded-full bg-[#E2E4EB] flex items-center justify-center shadow-2xl mb-8">
+                    <span className="text-3xl font-black text-[#2B3B60] tracking-tighter">{getInitials(player.name)}</span>
                   </div>
-                )}
+                </div>
                 {player.hasLocalProfile && (
                   <div className="absolute top-3 left-3 bg-padel-green/90 backdrop-blur-sm text-black text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full shadow-lg">
                     4M Profile
@@ -129,21 +131,21 @@ const RankingSlider = ({ title, playersData }) => {
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 p-6">
-                <p className="text-padel-green font-black mb-1 text-sm tracking-widest uppercase">{player.rank}</p>
-                <h4 className="text-2xl font-bold text-white mb-4 line-clamp-1">{player.name}</h4>
-                <div className="flex justify-between items-center border-t border-white/10 pt-4">
+              <div className="absolute bottom-0 left-0 right-0 p-4">
+                <p className="text-padel-green font-black mb-1 text-[9px] tracking-widest uppercase">{player.rank}</p>
+                <h4 className="text-lg font-bold text-white mb-3 line-clamp-1">{player.name}</h4>
+                <div className="flex justify-between items-center border-t border-white/10 pt-3">
                   <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-bold tracking-widest">Points</p>
-                    <p className="text-lg font-black text-white">{player.points.toLocaleString()}</p>
+                    <p className="text-[8px] text-gray-400 uppercase font-bold tracking-widest leading-none mb-1">Points</p>
+                    <p className="text-sm font-black text-white">{player.points.toLocaleString()}</p>
                   </div>
                   <a
                     href={player.rankedinProfile}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-padel-green hover:text-black transition-colors"
+                    className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-padel-green hover:text-black transition-colors"
                   >
-                    <Users className="w-4 h-4" />
+                    <Users className="w-3 h-3" />
                   </a>
                 </div>
               </div>
@@ -250,8 +252,8 @@ const TierCard = ({ tier }) => {
 
 const Rankings = () => {
   const { getOrganisationRankings } = useRankedin();
-  const [mensRankings, setMensRankings] = useState([]);
-  const [ladiesRankings, setLadiesRankings] = useState([]);
+  const [mensDataRaw, setMensDataRaw] = useState([]);
+  const [ladiesDataRaw, setLadiesDataRaw] = useState([]);
   const [rankingsLoading, setRankingsLoading] = useState(true);
   const [imageErrors, setImageErrors] = useState({});
   const [localProfileMap, setLocalProfileMap] = useState({});
@@ -269,9 +271,8 @@ const Rankings = () => {
           getOrganisationRankings(3, 82, 1000),
           getOrganisationRankings(4, 83, 1000),
         ]);
-        // Pass localProfileMap at time of format — will be re-merged via useEffect below
-        setMensRankings(formatRankings(mensData));
-        setLadiesRankings(formatRankings(ladiesData));
+        setMensDataRaw(mensData || []);
+        setLadiesDataRaw(ladiesData || []);
       } catch (err) {
         console.error('Error fetching rankings:', err);
       } finally {
@@ -302,48 +303,31 @@ const Rankings = () => {
     if (!rankingsLoading) fetchLocalProfiles();
   }, [rankingsLoading]);
 
-  // Once localProfileMap loads, patch image into already-formatted rankings
-  useEffect(() => {
-    if (Object.keys(localProfileMap).length === 0) return;
-    const patch = (list) => list.map(player => {
-      const localImage = localProfileMap[player.name?.trim().toLowerCase()];
-      return localImage ? { ...player, image: localImage, hasLocalProfile: true } : player;
-    });
-    setMensRankings(prev => patch(prev));
-    setLadiesRankings(prev => patch(prev));
-  }, [localProfileMap]);
-
-  // Reset page when searching or switching tabs
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, activeTab]);
-
-  const getInitials = (name) => {
-    if (!name) return '';
-    const parts = name.split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const formatRankings = (data) => {
+  // Format rankings using useMemo to ensure latest localProfileMap is used
+  const formatRankings = (data, profileMap) => {
     if (!data) return [];
     return data.map(item => {
-      const rankedinImage = item.Participant?.Id
-        ? `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/participant/${item.Participant.Id}.png`
-        : player1;
-      const localImage = localProfileMap[item.Name?.trim().toLowerCase()];
+      const localImage = profileMap[item.Name?.trim().toLowerCase()];
       return {
         id: item.Participant?.Id || item.RankedinId,
         name: item.Name,
         rawRank: item.Standing,
         rank: `Rank #${item.Standing}`,
-        image: localImage || rankedinImage,
+        image: localImage || null,
         hasLocalProfile: !!localImage,
         points: item.ParticipantPoints?.Points || 0,
         rankedinProfile: `https://www.rankedin.com${item.ParticipantUrl}`,
       };
     });
   };
+
+  const mensRankings = useMemo(() => formatRankings(mensDataRaw, localProfileMap), [mensDataRaw, localProfileMap]);
+  const ladiesRankings = useMemo(() => formatRankings(ladiesDataRaw, localProfileMap), [ladiesDataRaw, localProfileMap]);
+
+  // Reset page when searching or switching tabs
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, activeTab]);
 
   const rankingData = [
     {
