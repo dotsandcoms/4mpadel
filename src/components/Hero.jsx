@@ -67,7 +67,7 @@ const Hero = () => {
                         transition={{ delay: 0.8, duration: 0.8 }}
                         className="text-gray-300 text-lg md:text-xl max-w-xl mb-8 leading-relaxed flex items-center gap-2 flex-wrap"
                     >
-                        The Official Platform for events, calendar & rankings in Southern Africa.
+                        The Official Platform for events, calendar & rankings in South  Africa.
                     </motion.p>
 
                     <motion.div
