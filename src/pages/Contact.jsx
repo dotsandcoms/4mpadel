@@ -207,9 +207,9 @@ const Contact = () => {
             <section className="py-32">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-4xl md:text-5xl font-black italic uppercase mb-6 tracking-tighter">Ready to <span className="text-padel-green">Play?</span></h2>
-                    <p className="text-gray-400 mb-12 max-w-xl mx-auto font-medium">Download the Rankedin app and find 4M Padel to start booking courts and entering tournaments today.</p>
+                    <p className="text-gray-400 mb-12 max-w-xl mx-auto font-medium">Register on Rankedin and follow 4M Padel to start booking courts and entering tournaments today.</p>
                     <div className="flex flex-wrap justify-center gap-6">
-                        <a href="https://rankedin.com" target="_blank" rel="noopener noreferrer" className="bg-white/5 border border-white/10 px-10 py-4 rounded-full font-bold hover:bg-white/10 transition-all uppercase tracking-widest text-sm">Download App</a>
+                        <a href="https://rankedin.com" target="_blank" rel="noopener noreferrer" className="bg-white/5 border border-white/10 px-10 py-4 rounded-full font-bold hover:bg-white/10 transition-all uppercase tracking-widest text-sm">Register Now</a>
                         <a href="/calendar" className="bg-padel-green text-black px-10 py-4 rounded-full font-bold hover:bg-white transition-all uppercase tracking-widest text-sm shadow-lg shadow-padel-green/20">View Tournaments</a>
                     </div>
                 </div>
