@@ -23,6 +23,7 @@ import CoachingVideos from './pages/CoachingVideos';
 import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
+import Contact from './pages/Contact';
 import SiteFooter from './components/SiteFooter';
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -85,6 +86,7 @@ function AppContent() {
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:id" element={<AlbumDetails />} />
+          <Route path="/contact" element={<Contact />} />
           <Route path="/results/:id" element={<TournamentResults />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />

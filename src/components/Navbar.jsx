@@ -93,7 +93,7 @@ const Navbar = () => {
         { name: 'Mens 40 +', href: '/tournaments/mens40' },
       ]
     },
-    { name: 'Blog', href: '/blog' },
+    { name: 'Contact', href: '/contact' },
   ];
 
   return (
@@ -143,7 +143,7 @@ const Navbar = () => {
           </div>
 
           {/* Desktop Links */}
-          <div className={`hidden md:flex items-center gap-8 px-8 py-3 rounded-full transition-all duration-300 ${isScrolled ? 'bg-white/10 backdrop-blur-md border border-white/10' : 'bg-transparent'}`}>
+          <div className={`hidden md:flex items-center gap-8 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? 'bg-white/10 backdrop-blur-md border border-white/10' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40'}`}>
             {navLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
@@ -156,12 +156,12 @@ const Navbar = () => {
 
                 {/* Dropdown Menu */}
                 {link.dropdown && (
-                  <div className="absolute top-full left-0 mt-2 w-48 bg-black/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-left -translate-y-2 group-hover:translate-y-0 py-2">
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 transform origin-top-left -translate-y-2 group-hover:translate-y-0 py-2 z-[60]">
                     {link.dropdown.map((subItem) => (
                       <a
                         key={subItem.name}
                         href={subItem.href}
-                        className="block px-4 py-2 text-sm text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors"
+                        className="block px-6 py-3 text-sm font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-widest border-l-2 border-transparent hover:border-padel-green"
                       >
                         {subItem.name}
                       </a>
