@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import tournamentBg from '../assets/tournament_bg.png';
 
@@ -16,27 +16,15 @@ const Calendar = () => {
     const fetchEvents = async () => {
         const { data, error } = await supabase
             .from('calendar')
-            .select('*, rankedin_url')
+            .select('*')
             .eq('featured_event', true)
             .order('start_date', { ascending: true })
             .limit(3);
 
         if (error) {
-            console.error('Error fetching events:', error?.message || error, 'Code:', error?.code, 'Details:', error?.details);
+            console.error('Error fetching events:', error?.message || error);
         } else {
-            const formattedEvents = data.map(event => {
-                const dateObj = new Date(event.start_date);
-                return {
-                    day: dateObj.getDate().toString(),
-                    month: dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase(),
-                    title: event.event_name,
-                    time: event.start_time || 'TBA',
-                    location: event.venue || `${event.city ? `(${event.city})` : ''}`.trim() || 'TBA',
-                    category: event.sapa_status || 'Tournament',
-                    rankedin_url: event.rankedin_url || ''
-                };
-            });
-            setEvents(formattedEvents);
+            setEvents(data || []);
         }
         setLoading(false);
     };
@@ -61,47 +49,99 @@ const Calendar = () => {
                 </div>
 
                 <div className="grid gap-6">
-                    {events.map((event, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ delay: index * 0.1 }}
-                            className="bg-gray-900/80 backdrop-blur-md border border-white/10 p-6 rounded-2xl flex flex-col md:flex-row items-center gap-8 group hover:border-padel-green/50 transition-colors"
-                        >
-                            <div className="flex flex-col items-center bg-white/5 p-4 rounded-xl min-w-[80px]">
-                                <span className="text-sm font-bold text-padel-green uppercase">{event.month}</span>
-                                <span className="text-3xl font-black text-white">{event.day}</span>
-                            </div>
+                    {events.map((event, index) => {
+                        let tierColor = 'border-white/10';
+                        let badgeColor = 'bg-white/10 text-gray-400';
+                        let bgGradient = 'bg-white/5';
 
-                            <div className="flex-1 text-center md:text-left">
-                                <span className="inline-block px-3 py-1 bg-padel-green/20 text-padel-green text-xs font-bold rounded-full mb-2">
-                                    {event.category}
-                                </span>
-                                <h3 className="text-2xl font-bold text-white mb-2">{event.title}</h3>
-                                <div className="flex flex-wrap justify-center md:justify-start gap-4 text-gray-400 text-sm">
-                                    <div className="flex items-center gap-1">
-                                        <Clock size={16} />
-                                        {event.time}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <MapPin size={16} />
-                                        {event.location}
-                                    </div>
-                                </div>
-                            </div>
+                        if (event.sapa_status === 'Major') { tierColor = 'border-white/10 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; bgGradient = 'bg-gradient-to-r from-red-500/20 to-transparent'; }
+                        else if (event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
+                        else if (event.sapa_status === 'Gold') { tierColor = 'border-white/10 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; bgGradient = 'bg-gradient-to-r from-yellow-500/20 to-transparent'; }
+                        else if (event.sapa_status === 'Silver') { tierColor = 'border-white/10 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; bgGradient = 'bg-gradient-to-r from-gray-400/20 to-transparent'; }
+                        else if (event.sapa_status === 'FIP event') { tierColor = 'border-white/10 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; bgGradient = 'bg-gradient-to-r from-blue-500/20 to-transparent'; }
 
-                            <a
-                                href={event.rankedin_url || `https://www.rankedin.com/`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="px-8 py-3 bg-white !text-[#0F172A] font-black rounded-full hover:bg-padel-green transition-all hover:scale-105 w-full md:w-auto text-center text-sm uppercase tracking-widest block"
+                        return (
+                            <motion.div
+                                key={event.id}
+                                initial={{ opacity: 0, y: 20 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: index * 0.1 }}
                             >
-                                Register
-                            </a>
-                        </motion.div>
-                    ))}
+                                <Link
+                                    to={event.rankedin_url ? event.rankedin_url : `/calendar/${event.slug || event.id}`}
+                                    target={event.rankedin_url ? "_blank" : "_self"}
+                                    className={`group block backdrop-blur-md border ${tierColor} rounded-[2rem] p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}
+                                >
+                                    {/* Background Gradient */}
+                                    <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
+
+                                    <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10">
+                                        {/* Poster Image Box */}
+                                        <div className="flex-shrink-0 w-full md:w-32 h-24 rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
+                                            {event.image_url ? (
+                                                <img
+                                                    src={event.image_url}
+                                                    alt={event.event_name}
+                                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex flex-col items-center justify-center">
+                                                    <CalendarIcon className="w-6 h-6 text-padel-green mb-1 opacity-50" />
+                                                    <span className="text-[10px] text-gray-500 font-bold uppercase">No Poster</span>
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        </div>
+
+                                        {/* Info */}
+                                        <div className="flex-1">
+                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
+                                                    {event.sapa_status}
+                                                </span>
+                                                {event.is_league && (
+                                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                                        League
+                                                    </span>
+                                                )}
+                                                <span className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-300">
+                                                    {event.city}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
+                                                <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
+                                                    {event.event_name}
+                                                </h3>
+                                                <div className="flex items-center gap-1.5 text-xs font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap">
+                                                    <CalendarIcon size={12} />
+                                                    {event.event_dates || (event.start_date && `${new Date(event.start_date).toLocaleDateString()} - ${new Date(event.end_date || event.start_date).toLocaleDateString()}`)}
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    <MapPin className="w-4 h-4 text-padel-green/50" />
+                                                    {event.venue}
+                                                </div>
+                                                {event.registered_players > 0 && (
+                                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 rounded-lg">
+                                                        <Users className="w-3.5 h-3.5 text-padel-green" />
+                                                        <span className="text-white font-bold">{event.registered_players}</span>
+                                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400">Registered</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Arrow Action */}
+                                        <div className="hidden md:flex items-center justify-center w-12 h-12 rounded-full border border-white/10 bg-black/40 text-gray-400 group-hover:text-padel-green group-hover:border-padel-green transition-all transform group-hover:scale-110 group-hover:bg-white/5">
+                                            <ArrowRight className="w-5 h-5" />
+                                        </div>
+                                    </div>
+                                </Link>
+                            </motion.div>
+                        );
+                    })}
                 </div>
             </div>
         </section>
@@ -109,3 +149,4 @@ const Calendar = () => {
 };
 
 export default Calendar;
+
