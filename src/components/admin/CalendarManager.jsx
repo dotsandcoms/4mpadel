@@ -66,6 +66,7 @@ const CalendarManager = () => {
         organizer_website: '',
         image_url: '',
         featured_event: false,
+        is_league: false,
         registered_players: 0,
         rankedin_url: '',
         sponsor_logos: []
@@ -186,6 +187,7 @@ const CalendarManager = () => {
             organizer_website: '',
             image_url: '',
             featured_event: false,
+            is_league: false,
             registered_players: 0,
             rankedin_url: '',
             sponsor_logos: []
@@ -213,6 +215,7 @@ const CalendarManager = () => {
             organizer_website: event.organizer_website || '',
             image_url: event.image_url || '',
             featured_event: event.featured_event || false,
+            is_league: event.is_league || false,
             registered_players: event.registered_players || 0,
             rankedin_url: event.rankedin_url || '',
             sponsor_logos: event.sponsor_logos || []
@@ -323,7 +326,8 @@ const CalendarManager = () => {
                     <div className="col-span-3">Dates</div>
                     <div className="col-span-3">Event Name</div>
                     <div className="col-span-2">City/Venue</div>
-                    <div className="col-span-2">Status</div>
+                    <div className="col-span-1">Status</div>
+                    <div className="col-span-1 text-center">League</div>
                     <div className="col-span-1 text-center">Featured</div>
                     <div className="col-span-1 text-right">Actions</div>
                 </div>
@@ -345,7 +349,7 @@ const CalendarManager = () => {
                                     <div className="font-bold text-white truncate">{event.city}</div>
                                     <div className="text-[10px] uppercase tracking-wider truncate">{event.venue}</div>
                                 </div>
-                                <div className="col-span-2 flex items-center">
+                                <div className="col-span-1 flex items-center">
                                     <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border
                                         ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
                                             event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
@@ -353,6 +357,13 @@ const CalendarManager = () => {
                                                     'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
                                         {event.sapa_status || 'Event'}
                                     </span>
+                                </div>
+                                <div className="col-span-1 flex justify-center">
+                                    {event.is_league ? (
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30">League</span>
+                                    ) : (
+                                        <span className="text-gray-600 text-[10px]">—</span>
+                                    )}
                                 </div>
                                 <div className="col-span-1 flex justify-center">
                                     {event.featured_event ? (
@@ -454,19 +465,34 @@ const CalendarManager = () => {
                                         </div>
                                     </div>
 
-                                    {/* Featured Toggle */}
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            id="featured_event"
-                                            name="featured_event"
-                                            checked={formData.featured_event}
-                                            onChange={handleInputChange}
-                                            className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
-                                        />
-                                        <label htmlFor="featured_event" className="text-sm font-bold text-white uppercase cursor-pointer">
-                                            Feature Event on Homepage
-                                        </label>
+                                    {/* Featured & League Toggles */}
+                                    <div className="flex flex-wrap gap-6">
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="featured_event"
+                                                name="featured_event"
+                                                checked={formData.featured_event}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
+                                            />
+                                            <label htmlFor="featured_event" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Feature Event on Homepage
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="is_league"
+                                                name="is_league"
+                                                checked={formData.is_league}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-blue-400 focus:ring-blue-400"
+                                            />
+                                            <label htmlFor="is_league" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                League Event
+                                            </label>
+                                        </div>
                                     </div>
 
                                     <div>

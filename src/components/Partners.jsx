@@ -5,7 +5,7 @@ import logo2 from '../assets/logo_2.png';
 import logo3 from '../assets/logo_3.png';
 import logo4 from '../assets/logo_4.png';
 import logo5 from '../assets/logo_5.png';
-import logo6 from '../assets/logo_6.png';
+import logo6 from '../assets/sapa-logo.svg';
 import logo7 from '../assets/logo_7.png';
 // Importing an 8th just in case, though user said 7.
 import logo8 from '../assets/logo_8.png';

@@ -5,7 +5,7 @@ import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Sear
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
-import sapaLogo from '../assets/logo_6.png';
+import sapaLogo from '../assets/sapa-logo.svg';
 
 const Calendar = () => {
     const [events, setEvents] = useState([]);
@@ -17,6 +17,7 @@ const Calendar = () => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [cityFilter, setCityFilter] = useState('All');
     const [timingFilter, setTimingFilter] = useState('Upcoming');
+    const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Non-League'
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
@@ -157,9 +158,13 @@ const Calendar = () => {
                 }
             }
 
-            return matchesSearch && matchesStatus && matchesCity && matchesTiming;
+            const matchesLeague = leagueFilter === 'All' ||
+                (leagueFilter === 'League' && event.is_league === true) ||
+                (leagueFilter === 'Non-League' && !event.is_league);
+
+            return matchesSearch && matchesStatus && matchesCity && matchesTiming && matchesLeague;
         });
-    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilter, cityFilter, timingFilter, viewMode]);
+    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilter, cityFilter, timingFilter, leagueFilter, viewMode]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -171,7 +176,7 @@ const Calendar = () => {
     // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, cityFilter, timingFilter, viewMode, isMyCalendar]);
+    }, [searchTerm, statusFilter, cityFilter, timingFilter, leagueFilter, viewMode, isMyCalendar]);
 
     // Helper functions for Calendar View
     const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();
@@ -378,6 +383,20 @@ const Calendar = () => {
                             </select>
                         </div>
 
+                        {/* League Filter */}
+                        <div className="relative w-full md:w-auto min-w-[150px]">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green text-sm font-bold select-none">⚽</span>
+                            <select
+                                value={leagueFilter}
+                                onChange={(e) => setLeagueFilter(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
+                            >
+                                <option value="All" className="bg-slate-900">All Types</option>
+                                <option value="League" className="bg-slate-900">League Only</option>
+                                <option value="Non-League" className="bg-slate-900">Non-League</option>
+                            </select>
+                        </div>
+
                         {/* City Filter */}
                         <div className="relative w-full md:w-auto min-w-[140px]">
                             <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
@@ -425,7 +444,7 @@ const Calendar = () => {
                     <div className="text-center py-32 text-gray-400 bg-white/5 border border-white/10 rounded-3xl">
                         <p className="text-xl mb-4">No events found matching your criteria.</p>
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilter('All'); setCityFilter('All'); setTimingFilter('Upcoming'); }}
+                            onClick={() => { setSearchTerm(''); setStatusFilter('All'); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
                             className="text-padel-green font-bold hover:text-white flex items-center gap-2 mx-auto transition-colors"
                         >
                             <X className="w-4 h-4" /> Clear all filters
@@ -488,6 +507,11 @@ const Calendar = () => {
                                                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
                                                                     {event.sapa_status}
                                                                 </span>
+                                                                {event.is_league && (
+                                                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                                                        League
+                                                                    </span>
+                                                                )}
                                                                 <span className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-300">
                                                                     {event.city}
                                                                 </span>
