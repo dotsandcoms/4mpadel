@@ -126,7 +126,28 @@ const Calendar = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const sourceEvents = isMyCalendar ? personalEvents : events;
+        const sourceEvents = isMyCalendar ? personalEvents.map(pe => {
+            // Find a matching local event for internal routing
+            const localEvent = events.find(le =>
+                (le.rankedin_id && pe.eventId && le.rankedin_id.toString() === pe.eventId.toString()) ||
+                (le.event_name === pe.event_name) ||
+                (le.eventName === pe.event_name)
+            );
+
+            if (localEvent) {
+                return {
+                    ...pe,
+                    slug: localEvent.slug,
+                    id: localEvent.id, // Use local ID if slug missing
+                    image_url: localEvent.image_url,
+                    posterUrl: localEvent.image_url || localEvent.posterUrl,
+                    venue: localEvent.venue || localEvent.clubName,
+                    sapa_status: localEvent.sapa_status || pe.sapa_status,
+                    is_league: localEvent.is_league ?? pe.is_league
+                };
+            }
+            return pe;
+        }) : events;
 
         return sourceEvents.filter(event => {
             // Map Rankedin fields to local fields if needed
@@ -475,8 +496,8 @@ const Calendar = () => {
                                                 transition={{ delay: index * 0.05 }}
                                             >
                                                 <Link
-                                                    to={event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.slug || event.id}`}
-                                                    target={event.eventId ? "_blank" : "_self"}
+                                                    to={event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`)}
+                                                    target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
                                                     className={`group block backdrop-blur-sm border ${tierColor} rounded-3xl p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}
                                                 >
                                                     {/* Background Gradient */}
