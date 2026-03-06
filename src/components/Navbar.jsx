@@ -126,17 +126,17 @@ const Navbar = () => {
             <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
             {session && player && (
-              <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
+              <div className="hidden sm:flex items-center gap-3 ml-2 text-xs text-white/80 font-medium">
                 <div className="flex flex-col">
-                  <span className="truncate max-w-[100px] leading-tight text-padel-green font-black">{player.name}</span>
+                  <span className="truncate max-w-[120px] leading-tight text-padel-green font-black text-sm">{player.name}</span>
                   {(player.rank_label || player.points) && (
-                    <span className="text-white/60 text-[9px] font-bold uppercase tracking-widest leading-none">
+                    <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5">
                       {player.rank_label ? `Rank: ${player.rank_label}` : `${player.points} Points`}
                     </span>
                   )}
                 </div>
                 {player.rankedin_id && (
-                  <span className="text-white/40 font-mono text-[9px] shrink-0 border-l border-white/10 pl-2 ml-1">{player.rankedin_id}</span>
+                  <span className="text-white/40 font-mono text-[11px] shrink-0 border-l border-white/10 pl-3 ml-1">{player.rankedin_id}</span>
                 )}
               </div>
             )}

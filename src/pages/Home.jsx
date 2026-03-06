@@ -8,7 +8,7 @@ import Services from '../components/Services';
 import Calendar from '../components/Calendar';
 import FAQ from '../components/FAQ';
 import Partners from '../components/Partners';
-import dynamicsPlayer from '../assets/dynamicsPlayerAction.png';
+import dynamicsPlayer from '../assets/augustin.jpeg';
 // import Link from 'react-router-dom';
 import { motion } from 'framer-motion';
 
@@ -38,7 +38,7 @@ const Home = () => {
                                 transition={{ duration: 0.8 }}
                             >
                                 <h2 className="text-6xl md:text-9xl font-bold text-white/5 absolute -top-20 -left-10 select-none z-0">
-                                    PADEL
+                                    4M PADEL
                                 </h2>
                                 <h2 className="text-4xl md:text-5xl font-bold relative z-10 mb-6 font-display">
                                     Play padel - feel <br />
@@ -46,19 +46,8 @@ const Home = () => {
                                     <span className="text-padel-green">new tennis!</span>
                                 </h2>
                                 <p className="text-gray-400 text-lg leading-relaxed mb-8">
-                                    Welcome to our padel club! Modern padel tennis courts, professional equipment and a friendly atmosphere await you. Padel tennis is the perfect combination of active recreation, sport and fun for all levels of training. Join the game today!
+                                    Welcome to 4M Padel, the Home of Padel South Africa. Padel tennis is the perfect combination of active recreation, sport and fun for all levels of training. Join the game today!
                                 </p>
-
-                                <div className="flex items-center gap-4">
-                                    <div className="flex -space-x-4">
-                                        {[1, 2, 3].map(i => (
-                                            <div key={i} className="w-12 h-12 rounded-full bg-gray-700 border-2 border-[#0F172A]" />
-                                        ))}
-                                    </div>
-                                    <span className="text-sm font-medium text-white">
-                                        + 32 players in the last week
-                                    </span>
-                                </div>
                             </motion.div>
                         </div>
 
@@ -79,8 +68,8 @@ const Home = () => {
                             <div className="absolute bottom-8 left-8 right-8">
                                 <div className="glass-panel p-6 rounded-2xl flex justify-between items-end">
                                     <div>
-                                        <p className="text-sm text-gray-300 mb-1">Weekly Best</p>
-                                        <h3 className="text-2xl font-bold">Pro Tournament</h3>
+                                        <p className="text-sm text-gray-300 mb-1">Player Spotlight</p>
+                                        <h3 className="text-2xl font-bold">Augustin Tapia</h3>
                                     </div>
                                     <button className="w-12 h-12 bg-padel-green rounded-full flex items-center justify-center text-black hover:scale-110 transition-transform">
                                         ↗

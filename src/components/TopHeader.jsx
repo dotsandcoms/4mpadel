@@ -85,11 +85,15 @@ const TopHeader = () => {
                         <span style={{ textShadow: 'none', filter: 'none' }}>4M <span className="text-padel-green" style={{ textShadow: 'none', filter: 'none' }}>PADEL</span></span>
                         <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto rounded-sm mt-0.5 object-contain" />
                         {session && player && (
-                            <div className="hidden sm:flex items-center gap-2 ml-1 text-[11px] text-white/80 font-medium">
-                                <span className="truncate max-w-[100px]">{player.name}</span>
-                                {player.rankedin_id && (
-                                    <span className="text-white/60 font-mono text-[10px] shrink-0">{player.rankedin_id}</span>
-                                )}
+                            <div className="hidden sm:flex items-center gap-3 ml-2 text-xs text-white/80 font-medium">
+                                <div className="flex flex-col">
+                                    <span className="truncate max-w-[120px] leading-tight text-padel-green font-black text-sm">{player.name}</span>
+                                    {player.rankedin_id && (
+                                        <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5">
+                                            ID: {player.rankedin_id}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         )}
                     </a>
