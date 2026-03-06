@@ -1,8 +1,29 @@
 import React from 'react';
-import { Instagram, Twitter, Facebook, MapPin, Clock, Phone } from 'lucide-react';
+import { Instagram, Twitter, Facebook, MapPin, Clock, Phone, Youtube } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { supabase } from '../supabaseClient';
 
 const SiteFooter = () => {
+    const [links, setLinks] = React.useState({
+        instagram: '#',
+        facebook: '#',
+        youtube: '#',
+        website: '#'
+    });
+
+    React.useEffect(() => {
+        const fetchLinks = async () => {
+            const { data } = await supabase.from('settings').select('key, value');
+            if (data) {
+                const linksObj = {};
+                data.forEach(item => {
+                    linksObj[item.key] = item.value;
+                });
+                setLinks(prev => ({ ...prev, ...linksObj }));
+            }
+        };
+        fetchLinks();
+    }, []);
     return (
         <div className="w-full">
             {/* Big Text Banner */}
@@ -55,15 +76,21 @@ const SiteFooter = () => {
                     </div>
 
                     <div className="flex gap-6 text-gray-400">
-                        <a href="#" className="hover:text-padel-green transition-colors">
-                            <Instagram size={24} />
-                        </a>
-                        <a href="#" className="hover:text-padel-green transition-colors">
-                            <Twitter size={24} />
-                        </a>
-                        <a href="#" className="hover:text-padel-green transition-colors">
-                            <Facebook size={24} />
-                        </a>
+                        {links.instagram !== '#' && (
+                            <a href={links.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-padel-green transition-colors">
+                                <Instagram size={24} />
+                            </a>
+                        )}
+                        {links.facebook !== '#' && (
+                            <a href={links.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-padel-green transition-colors">
+                                <Facebook size={24} />
+                            </a>
+                        )}
+                        {links.youtube !== '#' && (
+                            <a href={links.youtube} target="_blank" rel="noopener noreferrer" className="hover:text-padel-green transition-colors">
+                                <Youtube size={24} />
+                            </a>
+                        )}
                     </div>
                 </div>
                 <p className="text-gray-600 text-sm">© 2026 4M Padel. All rights reserved.</p>

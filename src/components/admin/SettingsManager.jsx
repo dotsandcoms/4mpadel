@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Save, Instagram, Youtube, Facebook, Globe, Loader, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { supabase } from '../../supabaseClient';
 
 const SettingsManager = () => {
     const [loading, setLoading] = useState(false);
@@ -11,6 +12,26 @@ const SettingsManager = () => {
         facebook: 'https://facebook.com/4mpadel',
         website: 'https://4mpadel.co.za'
     });
+
+    useEffect(() => {
+        fetchSettings();
+    }, []);
+
+    const fetchSettings = async () => {
+        try {
+            const { data, error } = await supabase.from('settings').select('*');
+            if (error) throw error;
+            if (data && data.length > 0) {
+                const settingsObj = {};
+                data.forEach(item => {
+                    settingsObj[item.key] = item.value;
+                });
+                setSettings(prev => ({ ...prev, ...settingsObj }));
+            }
+        } catch (error) {
+            console.error('Error fetching settings:', error);
+        }
+    };
 
     const showToast = (message, type = 'success') => {
         const id = Date.now();
@@ -26,13 +47,25 @@ const SettingsManager = () => {
         setSettings({ ...settings, [e.target.name]: e.target.value });
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         setLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            const updates = Object.entries(settings).map(([key, value]) => ({
+                key,
+                value,
+                updated_at: new Date().toISOString()
+            }));
+
+            const { error } = await supabase.from('settings').upsert(updates);
+            if (error) throw error;
+
             showToast('Settings saved successfully!');
-        }, 1500);
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showToast('Failed to save settings: ' + error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -47,8 +80,8 @@ const SettingsManager = () => {
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl border pointer-events-auto ${toast.type === 'error'
-                                    ? 'bg-red-900/90 border-red-500/50 text-white'
-                                    : 'bg-gray-900/90 border-padel-green/50 text-white'
+                                ? 'bg-red-900/90 border-red-500/50 text-white'
+                                : 'bg-gray-900/90 border-padel-green/50 text-white'
                                 }`}
                         >
                             {toast.type === 'error' ? <AlertCircle size={20} className="text-red-400" /> : <CheckCircle size={20} className="text-padel-green" />}

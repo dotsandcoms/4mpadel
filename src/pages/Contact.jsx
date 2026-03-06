@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Phone, Mail, MapPin, Send, Instagram, Facebook, MessageSquare } from 'lucide-react';
+import { Phone, Mail, MapPin, Send, Instagram, Facebook, Youtube, MessageSquare } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 import AuthModal from '../components/AuthModal';
 import SiteFooter from '../components/SiteFooter';
 
@@ -12,6 +13,25 @@ const Contact = () => {
         subject: '',
         message: ''
     });
+    const [socialLinks, setSocialLinks] = useState({
+        instagram: '#',
+        facebook: '#',
+        youtube: '#'
+    });
+
+    useEffect(() => {
+        const fetchSocials = async () => {
+            const { data } = await supabase.from('settings').select('key, value');
+            if (data) {
+                const links = {};
+                data.forEach(item => {
+                    links[item.key] = item.value;
+                });
+                setSocialLinks(prev => ({ ...prev, ...links }));
+            }
+        };
+        fetchSocials();
+    }, []);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
 
@@ -104,11 +124,21 @@ const Contact = () => {
                             <div className="mt-16 pt-12 border-t border-white/5">
                                 <p className="text-xs font-black uppercase tracking-widest text-gray-500 mb-6">Follow our journey</p>
                                 <div className="flex gap-4">
-                                    {[Instagram, Facebook, MessageSquare].map((Icon, i) => (
-                                        <a key={i} href="#" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-padel-green hover:text-black hover:border-padel-green transition-all transform hover:-translate-y-1">
-                                            <Icon className="w-4 h-4" />
+                                    {socialLinks.instagram !== '#' && (
+                                        <a href={socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-padel-green hover:text-black hover:border-padel-green transition-all transform hover:-translate-y-1">
+                                            <Instagram className="w-4 h-4" />
                                         </a>
-                                    ))}
+                                    )}
+                                    {socialLinks.facebook !== '#' && (
+                                        <a href={socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-padel-green hover:text-black hover:border-padel-green transition-all transform hover:-translate-y-1">
+                                            <Facebook className="w-4 h-4" />
+                                        </a>
+                                    )}
+                                    {socialLinks.youtube !== '#' && (
+                                        <a href={socialLinks.youtube} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-padel-green hover:text-black hover:border-padel-green transition-all transform hover:-translate-y-1">
+                                            <Youtube className="w-4 h-4" />
+                                        </a>
+                                    )}
                                 </div>
                             </div>
                         </div>
