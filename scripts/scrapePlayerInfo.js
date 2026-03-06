@@ -131,22 +131,68 @@ async function scrapePlayer(browser, player) {
 
         const basics = await page.evaluate(() => {
             const h = document.body.innerText;
-            const rid = h.match(/ID:\s*([A-Z0-9]+)/i);
-            const age = h.match(/Age:\s*(\d+)/i);
-            const form = h.match(/Form:\s*([L W]+)/i);
+            // More robust ID matching to handle different formats or surrounding text
+            const ridMatch = h.match(/ID:\s*([A-Z0-9]+)/i) || h.match(/Player ID:\s*([A-Z0-9]+)/i);
+            const rid = ridMatch?.[1];
 
-            const ratings = Array.from(document.querySelectorAll('.rating'));
+            const age = h.match(/Age:\s*(\d+)/i);
+            const form = h.match(/Form:\s*([L W/]+)/i);
+
+            // Exhaustive search for Skill Rating
             let skillVal = null;
-            for (const r of ratings) {
-                if (r.innerText.toLowerCase().includes('skill')) {
-                    const b = r.querySelector('b');
-                    if (b && /\d+\.\d+/.test(b.innerText)) {
-                        skillVal = b.innerText.trim();
-                        break;
+
+            // Strategy A: Circular chart text (Common on desktop)
+            // Look for elements that have "skill" text and a sibling/child with a number
+            const allElements = Array.from(document.querySelectorAll('*'));
+            for (const el of allElements) {
+                if (el.children.length === 0 && el.innerText?.toLowerCase().trim() === 'skill') {
+                    // Check neighbors or parent for the value
+                    const container = el.parentElement;
+                    if (container) {
+                        const text = container.innerText;
+                        const match = text.match(/(\d+\.\d+)/);
+                        if (match) {
+                            skillVal = match[1];
+                            break;
+                        }
                     }
                 }
             }
-            return { rid: rid?.[1], age: parseInt(age?.[1]), form: form?.[1]?.trim(), skill: skillVal };
+
+            // Strategy B: .rating class (Original approach)
+            if (!skillVal) {
+                const ratings = Array.from(document.querySelectorAll('.rating, [class*="rating"]'));
+                for (const r of ratings) {
+                    if (r.innerText.toLowerCase().includes('skill')) {
+                        const valMatch = r.innerText.match(/(\d+\.\d+)/);
+                        if (valMatch) {
+                            skillVal = valMatch[1];
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Strategy C: Specific dropdown toggle text
+            if (!skillVal) {
+                const toggles = Array.from(document.querySelectorAll('button, .rin-dropdown-toggle, span'));
+                const skillToggle = toggles.find(t => t.innerText?.toLowerCase().includes('skill rating padel'));
+                if (skillToggle) {
+                    // The value is often above this toggle in the circular chart
+                    const chartArea = skillToggle.parentElement;
+                    if (chartArea) {
+                        const match = chartArea.innerText.match(/(\d+\.\d+)/);
+                        if (match) skillVal = match[1];
+                    }
+                }
+            }
+
+            return {
+                rid,
+                age: age ? parseInt(age[1]) : null,
+                form: form ? form[1].trim() : null,
+                skill: skillVal
+            };
         });
 
         // 2. Rankings
