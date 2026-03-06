@@ -1,8 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import {
+    PieChart,
+    Pie,
+    Cell,
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+} from 'recharts';
+
+const STAT_COLORS = { 'padel-green': '#beff00', green: '#22c55e', amber: '#f59e0b', slate: '#64748b', purple: '#a855f7' };
+
+const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', delay = 0 }) => {
+    const c = STAT_COLORS[color] || STAT_COLORS['padel-green'];
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay, duration: 0.3 }}
+            className="bg-[#1E293B]/50 backdrop-blur-md p-5 rounded-2xl border border-white/10 hover:border-white/20 transition-colors"
+        >
+            <div className="flex items-start justify-between">
+                <div>
+                    <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-1">{title}</p>
+                    <p className="text-3xl font-black text-white">{value}</p>
+                    <p className="text-gray-500 text-xs mt-1">{subtext}</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: c + '20' }}>
+                    <Icon size={24} style={{ color: c }} />
+                </div>
+            </div>
+        </motion.div>
+    );
+};
 
 const formatEventDates = (start, end) => {
     if (!start) return '';
@@ -54,7 +91,7 @@ const CalendarManager = () => {
         city: '',
         venue: '',
         address: '',
-        sapa_status: 'Gold',
+        sapa_status: 'None',
         description: '',
         start_date: '',
         end_date: '',
@@ -175,7 +212,7 @@ const CalendarManager = () => {
             city: '',
             venue: '',
             address: '',
-            sapa_status: 'Gold',
+            sapa_status: 'None',
             description: '',
             start_date: '',
             end_date: '',
@@ -203,7 +240,7 @@ const CalendarManager = () => {
             city: event.city || '',
             venue: event.venue || '',
             address: event.address || '',
-            sapa_status: event.sapa_status || 'Gold',
+            sapa_status: event.sapa_status || 'None',
             description: event.description || '',
             start_date: event.start_date ? event.start_date.substring(0, 10) : '',
             end_date: event.end_date ? event.end_date.substring(0, 10) : '',
@@ -248,151 +285,261 @@ const CalendarManager = () => {
         setIsModalOpen(true);
     };
 
-    const filteredEvents = events.filter(event => {
-        const matchesSearch = event.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            event.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            event.venue.toLowerCase().includes(searchTerm.toLowerCase());
+    // --- Derived State for Stats & Charts ---
+    const today = new Date().toISOString().split('T')[0];
 
-        const matchesStatus = statusFilter === 'All' || event.sapa_status === statusFilter;
+    const stats = useMemo(() => {
+        const upcoming = events.filter(e => !e.start_date || e.start_date >= today).length;
+        const past = events.length - upcoming;
+        const featured = events.filter(e => e.featured_event).length;
+        return {
+            total: events.length,
+            upcoming,
+            past,
+            featured
+        };
+    }, [events, today]);
 
-        const today = new Date().toISOString().split('T')[0];
-        const isUpcoming = !event.start_date || event.start_date >= today;
-        const matchesTime = timeFilter === 'All' ||
-            (timeFilter === 'Upcoming' && isUpcoming) ||
-            (timeFilter === 'Past' && !isUpcoming);
+    const statusChartData = useMemo(() => {
+        const map = {};
+        events.forEach(e => {
+            const status = e.sapa_status || 'None';
+            map[status] = (map[status] || 0) + 1;
+        });
+        const colors = {
+            'Major': '#a855f7',
+            'Gold': '#eab308',
+            'S Gold': '#f59e0b',
+            'Silver': '#94a3b8',
+            'Key Event': '#22c55e',
+            'FIP event': '#3b82f6',
+        };
+        return Object.entries(map).map(([name, value]) => ({
+            name,
+            value,
+            color: colors[name] || '#beff00'
+        })).sort((a, b) => b.value - a.value);
+    }, [events]);
 
-        return matchesSearch && matchesStatus && matchesTime;
-    });
+    const monthChartData = useMemo(() => {
+        const map = {};
+        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        events.forEach(e => {
+            if (e.start_date) {
+                const date = new Date(e.start_date);
+                const month = months[date.getMonth()];
+                map[month] = (map[month] || 0) + 1;
+            }
+        });
+        return months.map(month => ({ month, count: map[month] || 0 }));
+    }, [events]);
+
+    const filteredEvents = useMemo(() => {
+        return events.filter(event => {
+            const matchesSearch = event.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                event.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                event.venue.toLowerCase().includes(searchTerm.toLowerCase());
+
+            const matchesStatus = statusFilter === 'All' || event.sapa_status === statusFilter;
+
+            const isUpcoming = !event.start_date || event.start_date >= today;
+            const matchesTime = timeFilter === 'All' ||
+                (timeFilter === 'Upcoming' && isUpcoming) ||
+                (timeFilter === 'Past' && !isUpcoming);
+
+            return matchesSearch && matchesStatus && matchesTime;
+        });
+    }, [events, searchTerm, statusFilter, timeFilter, today]);
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h2 className="text-3xl font-bold text-white">Calendar Management</h2>
-                    <p className="text-gray-400">Add, edit, and remove upcoming events</p>
+                    <h2 className="text-2xl font-bold text-white">Calendar Dashboard</h2>
+                    <p className="text-gray-400 text-sm">Manage upcoming tournaments, leagues, and SAPA events</p>
                 </div>
                 <button
                     onClick={openNewModal}
-                    className="flex items-center gap-2 bg-padel-green text-black px-4 py-2 rounded-xl font-bold hover:scale-105 transition-transform shadow-lg shadow-padel-green/20"
+                    className="bg-padel-green text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors"
                 >
-                    <Plus className="w-5 h-5" />
-                    Add Event
+                    <Plus size={18} /> Add Event
                 </button>
             </div>
 
-            {/* Filters Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="md:col-span-2 relative">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                <StatCard title="Total Events" value={loading ? '—' : stats.total} subtext="All time" icon={CalendarDays} color="padel-green" delay={0} />
+                <StatCard title="Upcoming" value={loading ? '—' : stats.upcoming} subtext="Scheduled events" icon={Flag} color="green" delay={0.05} />
+                <StatCard title="Past" value={loading ? '—' : stats.past} subtext="Completed events" icon={MapPin} color="slate" delay={0.1} />
+                <StatCard title="Featured" value={loading ? '—' : stats.featured} subtext="On homepage" icon={Star} color="amber" delay={0.15} />
+            </div>
+
+            {/* Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                >
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Events by Status</h3>
+                    {loading ? (
+                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                            <PieChart>
+                                <Pie data={statusChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label={({ name, value }) => `${name} (${value})`}>
+                                    {statusChartData.map((entry, i) => (
+                                        <Cell key={i} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    )}
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25 }}
+                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 flex flex-col"
+                >
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Events by Month (Current Year)</h3>
+                    {loading ? (
+                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={220}>
+                            <BarChart data={monthChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} allowDecimals={false} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Bar dataKey="count" fill="#beff00" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </motion.div>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-col md:flex-row gap-4 flex-wrap">
+                <div className="flex-1 min-w-[200px] relative">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                         type="text"
                         placeholder="Search events by name, city, or venue..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-colors"
+                        className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 pl-12 text-white focus:border-padel-green focus:outline-none"
                     />
                 </div>
-                <div>
-                    <select
-                        value={statusFilter}
-                        onChange={(e) => setStatusFilter(e.target.value)}
-                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-colors appearance-none cursor-pointer"
-                    >
-                        <option value="All">All Statuses</option>
-                        <option value="Gold">Gold</option>
-                        <option value="Major">Major</option>
-                        <option value="Silver">Silver</option>
-                        <option value="Key Event">Key Event</option>
-                        <option value="FIP event">FIP event</option>
-                        <option value="S Gold">S Gold</option>
-                    </select>
-                </div>
-                <div>
-                    <select
-                        value={timeFilter}
-                        onChange={(e) => setTimeFilter(e.target.value)}
-                        className="w-full bg-[#1E293B] border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-colors appearance-none cursor-pointer"
-                    >
-                        <option value="All">All Time</option>
-                        <option value="Upcoming">Upcoming</option>
-                        <option value="Past">Past Events</option>
-                    </select>
-                </div>
+                <select
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
+                >
+                    <option value="All">All Statuses</option>
+                    <option value="Gold">Gold</option>
+                    <option value="Major">Major</option>
+                    <option value="Silver">Silver</option>
+                    <option value="Key Event">Key Event</option>
+                    <option value="FIP event">FIP event</option>
+                    <option value="S Gold">S Gold</option>
+                    <option value="None">None</option>
+                </select>
+                <select
+                    value={timeFilter}
+                    onChange={(e) => setTimeFilter(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
+                >
+                    <option value="All">All Time</option>
+                    <option value="Upcoming">Upcoming</option>
+                    <option value="Past">Past Events</option>
+                </select>
             </div>
 
-            {/* Content List */}
-            <div className="bg-[#1E293B] rounded-2xl border border-white/10 overflow-hidden">
-                <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-gray-400 font-bold text-sm uppercase">
-                    <div className="col-span-3">Dates</div>
-                    <div className="col-span-3">Event Name</div>
-                    <div className="col-span-2">City/Venue</div>
-                    <div className="col-span-1">Status</div>
-                    <div className="col-span-1 text-center">League</div>
-                    <div className="col-span-1 text-center">Featured</div>
-                    <div className="col-span-1 text-right">Actions</div>
-                </div>
-
-                <div className="divide-y divide-white/5 max-h-[600px] overflow-y-auto">
-                    {loading ? (
-                        <div className="p-8 text-center text-gray-500">Loading events...</div>
-                    ) : filteredEvents.length === 0 ? (
-                        <div className="p-8 text-center text-gray-500">No events found.</div>
-                    ) : (
-                        filteredEvents.map(event => (
-                            <div key={event.id} className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-white/5 transition-colors">
-                                <div className="col-span-3 font-bold text-padel-green text-sm">
-                                    {event.event_dates}
-                                    {event.start_date && <span className="block text-[10px] text-gray-500 font-normal">({event.start_date})</span>}
-                                </div>
-                                <div className="col-span-3 font-medium text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
-                                <div className="col-span-2 text-sm text-gray-400">
-                                    <div className="font-bold text-white truncate">{event.city}</div>
-                                    <div className="text-[10px] uppercase tracking-wider truncate">{event.venue}</div>
-                                </div>
-                                <div className="col-span-1 flex items-center">
-                                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border
-                                        ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
-                                            event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                                event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
-                                                    'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
-                                        {event.sapa_status || 'Event'}
-                                    </span>
-                                </div>
-                                <div className="col-span-1 flex justify-center">
-                                    {event.is_league ? (
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 border border-blue-500/30">League</span>
-                                    ) : (
-                                        <span className="text-gray-600 text-[10px]">—</span>
-                                    )}
-                                </div>
-                                <div className="col-span-1 flex justify-center">
-                                    {event.featured_event ? (
-                                        <div className="bg-yellow-500/20 p-1.5 rounded-full" title="Featured Event">
-                                            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                                        </div>
-                                    ) : (
-                                        <div className="bg-white/5 p-1.5 rounded-full" title="Not Featured">
-                                            <Star className="w-4 h-4 text-gray-600" />
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="col-span-1 flex justify-end gap-2">
-                                    <button
-                                        onClick={() => handleEdit(event)}
-                                        className="p-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors"
-                                    >
-                                        <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => handleDelete(event.id)}
-                                        className="p-2 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    )}
+            {/* Events Table Container */}
+            <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="bg-black/50 text-gray-400 border-b border-white/10">
+                                <th className="py-3 px-4 font-semibold text-xs uppercase w-48">Dates</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Event Name</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase">Location</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Featured">★</th>
+                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {loading ? (
+                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">Loading events...</td></tr>
+                            ) : filteredEvents.length === 0 ? (
+                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">No events found.</td></tr>
+                            ) : (
+                                filteredEvents.map(event => (
+                                    <tr key={event.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                                        <td className="py-3 px-4 align-top">
+                                            <div className="font-bold text-padel-green text-sm">{event.event_dates}</div>
+                                            {event.start_date && <div className="text-[10px] text-gray-500 mt-0.5">{event.start_date}</div>}
+                                        </td>
+                                        <td className="py-3 px-4 align-top">
+                                            <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
+                                            {event.organizer_name && <div className="text-xs text-gray-500 mt-1">by {event.organizer_name}</div>}
+                                        </td>
+                                        <td className="py-3 px-4 align-top">
+                                            <div className="font-medium text-gray-300 text-sm truncate max-w-[150px]">{event.city}</div>
+                                            <div className="text-[10px] text-gray-500 uppercase tracking-wider truncate max-w-[150px] mt-0.5">{event.venue}</div>
+                                        </td>
+                                        <td className="py-3 px-4 align-middle">
+                                            <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap inline-block
+                                                ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
+                                                    event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                        event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
+                                                            'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
+                                                {event.sapa_status || 'Event'}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {event.is_league ? (
+                                                <span className="inline-flex w-5 h-5 items-center justify-center bg-blue-500/20 text-blue-400 rounded-sm text-xs font-bold" title="League Event">L</span>
+                                            ) : (
+                                                <span className="text-gray-600">—</span>
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {event.featured_event ? (
+                                                <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mx-auto" title="Featured Event" />
+                                            ) : (
+                                                <Star className="w-4 h-4 text-gray-600 mx-auto" />
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-right">
+                                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleEdit(event)}
+                                                    className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white"
+                                                    title="Edit Event"
+                                                >
+                                                    <Edit2 size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDelete(event.id)}
+                                                    className="p-1.5 bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500 hover:text-white"
+                                                    title="Delete Event"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -455,6 +602,7 @@ const CalendarManager = () => {
                                                 onChange={handleInputChange}
                                                 className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                             >
+                                                <option value="None">None</option>
                                                 <option value="Gold">Gold</option>
                                                 <option value="Major">Major</option>
                                                 <option value="Silver">Silver</option>
