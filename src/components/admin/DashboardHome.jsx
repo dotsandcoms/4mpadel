@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink } from 'lucide-react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
 const StatCard = ({ title, value, subtext, icon: Icon, delay, loading }) => (
@@ -125,10 +125,19 @@ const DashboardHome = () => {
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
-                className="mb-8"
+                className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"
             >
-                <h2 className="text-3xl lg:text-4xl font-bold text-white mb-2">Platform Overview</h2>
-                <p className="text-gray-400">Live metrics across tournaments and players</p>
+                <div>
+                    <h2 className="text-3xl lg:text-4xl font-bold text-white mb-2">4M Padel Overview</h2>
+                    <p className="text-gray-400">Live metrics across tournaments and players</p>
+                </div>
+                <Link
+                    to="/"
+                    className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-colors self-start md:self-auto"
+                >
+                    <Home size={18} className="text-padel-green" />
+                    <span className="font-semibold text-sm">View Live Site</span>
+                </Link>
             </motion.div>
 
             {/* Stats Grid */}
