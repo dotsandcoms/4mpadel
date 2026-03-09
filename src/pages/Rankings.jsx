@@ -528,24 +528,24 @@ const Rankings = () => {
             {/* Table Area */}
             <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[600px]">
+                <table className="w-full text-left border-collapse min-w-full md:min-w-[600px]">
                   <thead>
                     <tr className="bg-white/5">
-                      <th className="py-5 px-6 font-bold text-gray-400 uppercase tracking-widest text-sm w-24">Pos</th>
-                      <th className="py-5 px-6 font-bold text-gray-400 uppercase tracking-widest text-sm">Player</th>
-                      <th className="py-5 px-6 font-bold text-gray-400 uppercase tracking-widest text-sm text-right">Points</th>
+                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm w-12 md:w-24">Pos</th>
+                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm">Player</th>
+                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm text-right">Points</th>
                     </tr>
                   </thead>
                   <tbody>
                     {paginatedData.length > 0 ? (
                       paginatedData.map((player) => (
                         <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                          <td className="py-4 px-6 text-2xl font-black text-gray-500 group-hover:text-padel-green transition-colors">
+                          <td className="py-3 px-3 md:py-4 md:px-6 text-xl md:text-2xl font-black text-gray-500 group-hover:text-padel-green transition-colors text-center md:text-left">
                             {player.rawRank}
                           </td>
-                          <td className="py-4 px-6">
-                            <a href={player.rankedinProfile} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 group/link">
-                              <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
+                          <td className="py-3 px-3 md:py-4 md:px-6">
+                            <a href={player.rankedinProfile} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 md:gap-4 group/link">
+                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
                                 {!imageErrors[player.id] ? (
                                   <img
                                     src={player.image}
@@ -554,14 +554,14 @@ const Rankings = () => {
                                     onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
                                   />
                                 ) : (
-                                  <span className="text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
+                                  <span className="text-xs md:text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
                                 )}
                               </div>
-                              <span className="text-lg font-bold text-white group-hover/link:text-padel-green transition-colors">{player.name}</span>
+                              <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">{player.name}</span>
                             </a>
                           </td>
-                          <td className="py-4 px-6 text-right">
-                            <span className="inline-block bg-white/10 px-4 py-2 rounded-xl text-lg font-black text-white group-hover:bg-padel-green group-hover:text-black transition-colors">
+                          <td className="py-3 px-3 md:py-4 md:px-6 text-right">
+                            <span className="inline-block bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-base md:text-lg font-black text-white group-hover:bg-padel-green group-hover:text-black transition-colors">
                               {player.points.toLocaleString()}
                             </span>
                           </td>
