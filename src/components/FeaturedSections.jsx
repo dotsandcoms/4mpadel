@@ -125,12 +125,13 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1);
 
+    const isFeatured = data.id === 'featured-tournaments';
     const bgColors = [
         'bg-[#080C17]',
         'bg-[#05070A]',
         'bg-[#080C17]'
     ];
-    const bgColor = bgColors[index % bgColors.length];
+    const bgColor = isFeatured ? 'bg-padel-green' : bgColors[index % bgColors.length];
     const Icon = data.icon;
 
     const textContent = (
@@ -141,28 +142,28 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
             >
-                <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full border border-white/10 text-padel-green text-[10px] font-bold uppercase tracking-widest mb-4">
+                <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${isFeatured ? 'border-black/20 text-black' : 'border-white/10 text-padel-green'} text-[10px] font-bold uppercase tracking-widest mb-4`}>
                     <Icon className="w-3.5 h-3.5" />
                     <span>{data.highlight}</span>
                 </div>
 
-                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter text-white ${isGridSection ? 'text-4xl xl:text-[42px]' : 'text-5xl lg:text-[56px] xl:text-[64px]'}`}>
+                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-4xl xl:text-[42px]' : 'text-5xl lg:text-[56px] xl:text-[64px]'}`}>
                     {data.title.split(' ')[0]} <br className={isGridSection ? 'hidden lg:block' : ''} />
-                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600">
+                    <span className={isFeatured ? 'text-black/70' : 'text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600'}>
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
-                <p className={`text-gray-400 leading-relaxed mb-8 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
+                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-8 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
                     {data.description}
                 </p>
 
                 <button
                     onClick={() => navigate(data.linkPath)}
-                    className="group inline-flex items-center gap-3 text-white font-bold hover:text-padel-green transition-colors uppercase text-[10px] tracking-[0.2em]"
+                    className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] ${isFeatured ? 'text-black hover:text-black/60' : 'text-white hover:text-padel-green'}`}
                 >
                     EXPLORE ALL
-                    <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors flex-shrink-0">
-                        <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-padel-green" />
+                    <div className={`w-7 h-7 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${isFeatured ? 'border-black/20 group-hover:border-black' : 'border-white/20 group-hover:border-padel-green'}`}>
+                        <ChevronRight className={`w-3.5 h-3.5 ${isFeatured ? 'text-black/60 group-hover:text-black' : 'text-gray-400 group-hover:text-padel-green'}`} />
                     </div>
                 </button>
             </motion.div>
@@ -286,7 +287,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ) : (
                     <>
                         <div className="order-2 lg:order-1 lg:col-span-1 border border-transparent">
-                            {textContent}
+                            {imageContent}
                         </div>
                         <div className="order-1 lg:order-2 lg:col-span-1 border border-transparent">
                             {textContent}
