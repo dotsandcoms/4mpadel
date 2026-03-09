@@ -177,11 +177,12 @@ export const useRankedin = () => {
 
             return rawEvents.map(e => {
                 const n = (e.Name || '').toLowerCase();
-                let status = 'Silver';
+                let status = 'None';
                 if (n.includes('fip')) status = 'FIP event';
-                else if (n.includes('super gold') || n.includes('s gold') || n.includes('sgold')) status = 'S Gold';
+                else if (n.includes('super gold') || n.includes('s gold') || n.includes('sgold')) status = 'Super Gold';
                 else if (n.includes('major')) status = 'Major';
                 else if (n.includes('gold')) status = 'Gold';
+                else if (n.includes('bronze')) status = 'Bronze';
                 else if (n.includes('key')) status = 'Key Event';
 
                 return {
