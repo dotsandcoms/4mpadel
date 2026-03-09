@@ -115,7 +115,7 @@ const Calendar = () => {
 
     // Extract unique cities and statuses for filters
     const uniqueCities = useMemo(() => {
-        const cities = events.map(e => e.city).filter(Boolean);
+        const cities = events.map(e => (e.city || '').trim()).filter(Boolean);
         return ['All', ...new Set(cities)].sort();
     }, [events]);
 

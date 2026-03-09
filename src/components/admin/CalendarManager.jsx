@@ -487,7 +487,7 @@ const CalendarManager = () => {
                         sapa_status: inferredStatus,
                         organizer_name: 'SAPA',
                         rankedin_url: fullUrl,
-                        city: re.city || '',
+                        city: (re.city || '').trim(),
                         venue: richDetails.venue || re.club || '',
                         description: richDetails.description || '',
                         image_url: richDetails.image_url || '',
