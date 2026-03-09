@@ -536,8 +536,10 @@ const CalendarManager = () => {
         const colors = {
             'Major': '#a855f7',
             'Gold': '#eab308',
+            'Super Gold': '#f59e0b',
             'S Gold': '#f59e0b',
             'Silver': '#94a3b8',
+            'Bronze': '#c2410c',
             'Key Event': '#22c55e',
             'FIP event': '#3b82f6',
         };
@@ -680,9 +682,10 @@ const CalendarManager = () => {
                     <option value="Gold">Gold</option>
                     <option value="Major">Major</option>
                     <option value="Silver">Silver</option>
+                    <option value="Bronze">Bronze</option>
                     <option value="Key Event">Key Event</option>
                     <option value="FIP event">FIP event</option>
-                    <option value="S Gold">S Gold</option>
+                    <option value="Super Gold">Super Gold</option>
                     <option value="None">None</option>
                 </select>
                 <select
@@ -735,8 +738,10 @@ const CalendarManager = () => {
                                             <span className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap inline-block
                                                 ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' :
                                                     event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                                        event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
-                                                            'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
+                                                        (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' :
+                                                            event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
+                                                                event.sapa_status === 'Bronze' ? 'bg-orange-700/10 text-orange-500 border-orange-700/20' :
+                                                                    'bg-padel-green/10 text-padel-green border-padel-green/20'}`}>
                                                 {event.sapa_status || 'Event'}
                                             </span>
                                         </td>
@@ -843,9 +848,10 @@ const CalendarManager = () => {
                                                 <option value="Gold">Gold</option>
                                                 <option value="Major">Major</option>
                                                 <option value="Silver">Silver</option>
+                                                <option value="Bronze">Bronze</option>
                                                 <option value="Key Event">Key Event</option>
                                                 <option value="FIP event">FIP event</option>
-                                                <option value="S Gold">S Gold</option>
+                                                <option value="Super Gold">Super Gold</option>
                                             </select>
                                         </div>
                                     </div>

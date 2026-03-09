@@ -119,7 +119,7 @@ const Calendar = () => {
         return ['All', ...new Set(cities)].sort();
     }, [events]);
 
-    const uniqueStatuses = ['All', 'Gold', 'Major', 'Silver', 'Key Event', 'FIP event', 'S Gold'];
+    const uniqueStatuses = ['All', 'Gold', 'Major', 'Silver', 'Bronze', 'Key Event', 'FIP event', 'Super Gold'];
 
     // Filter Logic
     const filteredEvents = useMemo(() => {
@@ -255,9 +255,10 @@ const Calendar = () => {
                             let glowClass = 'group-hover:border-gray-400';
 
                             if (ev.sapa_status === 'Major') { bgGradient = 'bg-red-500'; glowClass = 'hover:border-red-500 bg-gradient-to-r hover:from-red-500/10 hover:to-transparent'; }
-                            else if (ev.sapa_status === 'S Gold') { bgGradient = 'bg-amber-600'; glowClass = 'hover:border-amber-600 bg-gradient-to-r hover:from-amber-600/10 hover:to-transparent'; }
+                            else if (ev.sapa_status === 'Super Gold' || ev.sapa_status === 'S Gold') { bgGradient = 'bg-amber-600'; glowClass = 'hover:border-amber-600 bg-gradient-to-r hover:from-amber-600/10 hover:to-transparent'; }
                             else if (ev.sapa_status === 'Gold') { bgGradient = 'bg-yellow-500'; glowClass = 'hover:border-yellow-500 bg-gradient-to-r hover:from-yellow-500/10 hover:to-transparent'; }
                             else if (ev.sapa_status === 'Silver') { bgGradient = 'bg-gray-400'; glowClass = 'hover:border-gray-400 bg-gradient-to-r hover:from-gray-400/10 hover:to-transparent'; }
+                            else if (ev.sapa_status === 'Bronze') { bgGradient = 'bg-orange-700'; glowClass = 'hover:border-orange-700 bg-gradient-to-r hover:from-orange-700/10 hover:to-transparent'; }
                             else if (ev.sapa_status === 'FIP event') { bgGradient = 'bg-blue-500'; glowClass = 'hover:border-blue-500 bg-gradient-to-r hover:from-blue-500/10 hover:to-transparent'; }
 
                             return (
@@ -482,9 +483,10 @@ const Calendar = () => {
                                         let bgGradient = 'bg-white/5'; // Default
 
                                         if (event.sapa_status === 'Major') { tierColor = 'border-white/10 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; bgGradient = 'bg-gradient-to-r from-red-500/20 to-transparent'; }
-                                        else if (event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
+                                        else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
                                         else if (event.sapa_status === 'Gold') { tierColor = 'border-white/10 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; bgGradient = 'bg-gradient-to-r from-yellow-500/20 to-transparent'; }
                                         else if (event.sapa_status === 'Silver') { tierColor = 'border-white/10 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; bgGradient = 'bg-gradient-to-r from-gray-400/20 to-transparent'; }
+                                        else if (event.sapa_status === 'Bronze') { tierColor = 'border-white/10 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; bgGradient = 'bg-gradient-to-r from-orange-700/20 to-transparent'; }
                                         else if (event.sapa_status === 'FIP event') { tierColor = 'border-white/10 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; bgGradient = 'bg-gradient-to-r from-blue-500/20 to-transparent'; }
 
                                         return (

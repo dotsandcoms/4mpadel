@@ -218,9 +218,11 @@ const DashboardHome = () => {
                                                     <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {event.city}</span>
                                                     <span className={`px-2 py-0.5 rounded
                                                         ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400' :
-                                                            event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                                event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300' :
-                                                                    'bg-blue-500/10 text-blue-400'}`}>
+                                                            (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') ? 'bg-amber-500/10 text-amber-400' :
+                                                                event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                                    event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300' :
+                                                                        event.sapa_status === 'Bronze' ? 'bg-orange-700/10 text-orange-400' :
+                                                                            'bg-blue-500/10 text-blue-400'}`}>
                                                         {event.sapa_status || 'Event'}
                                                     </span>
                                                 </div>
