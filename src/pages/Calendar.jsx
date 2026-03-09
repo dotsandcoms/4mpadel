@@ -534,9 +534,11 @@ const Calendar = () => {
                                                                         League
                                                                     </span>
                                                                 )}
-                                                                <span className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-300">
-                                                                    {event.city}
-                                                                </span>
+                                                                {(event.city || event.clubCity) && (
+                                                                    <span className="bg-white/5 border border-white/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest text-gray-300">
+                                                                        {event.city || event.clubCity}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
                                                                 <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight">
@@ -544,7 +546,9 @@ const Calendar = () => {
                                                                 </h3>
                                                                 <div className="flex items-center gap-1.5 text-xs font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap">
                                                                     <CalendarIcon size={12} />
-                                                                    {event.event_dates || (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`)}
+                                                                    {event.event_dates ||
+                                                                        (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                                                        (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
                                                                 </div>
                                                             </div>
                                                             <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
