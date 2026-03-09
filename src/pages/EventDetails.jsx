@@ -13,6 +13,13 @@ const EventDetails = () => {
     const [loading, setLoading] = useState(true);
     const [weather, setWeather] = useState(null);
 
+    const stripHtml = (html) => {
+        if (!html) return '';
+        const tmp = document.createElement('DIV');
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || '';
+    };
+
     // Registration Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
@@ -203,7 +210,7 @@ const EventDetails = () => {
             `DTSTART:${dtStart}`,
             `DTEND:${dtEnd}`,
             `SUMMARY:${event.event_name}`,
-            `DESCRIPTION:${event.description || 'Padel Tournament Event'}`,
+            `DESCRIPTION:${stripHtml(event.description || 'Padel Tournament Event')}`,
             `LOCATION:${event.venue} ${event.address ? `, ${event.address}` : ''}`,
             'END:VEVENT',
             'END:VCALENDAR'
@@ -424,9 +431,12 @@ const EventDetails = () => {
                                     </div>
 
                                     <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-                                        <p className="text-slate-600 leading-relaxed text-lg mb-8 whitespace-pre-wrap">
-                                            {event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."}
-                                        </p>
+                                        <div
+                                            className="text-slate-600 leading-relaxed text-lg mb-8 event-rich-description"
+                                            dangerouslySetInnerHTML={{
+                                                __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
+                                            }}
+                                        />
 
 
                                     </div>
