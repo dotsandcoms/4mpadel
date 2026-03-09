@@ -78,9 +78,9 @@ const Hero = () => {
                     >
                         <button
                             onClick={() => navigate('/calendar')}
-                            className="group relative px-8 py-4 bg-padel-green rounded-full font-bold !text-black overflow-hidden hover:scale-105 transition-transform duration-300"
+                            className="group relative px-8 py-4 bg-padel-green rounded-full font-bold !text-black overflow-hidden hover:scale-105 transition-transform duration-300 w-full sm:w-auto flex justify-center items-center"
                         >
-                            <span className="relative z-10 flex items-center gap-2">
+                            <span className="relative z-10 flex items-center justify-center gap-2">
                                 View Tournaments
                                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg" className="transform group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform">
                                     <path d="M1 11L11 1M11 1H1M11 1V11" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -90,7 +90,7 @@ const Hero = () => {
 
                         <button
                             onClick={() => setIsAuthModalOpen(true)}
-                            className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors"
+                            className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors w-full sm:w-auto flex justify-center items-center"
                         >
                             Register
                         </button>

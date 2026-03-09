@@ -10,6 +10,7 @@ import AuthModal from './AuthModal';
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedMobileMenus, setExpandedMobileMenus] = useState([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [player, setPlayer] = useState(null);
@@ -208,40 +209,54 @@ const Navbar = () => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-8"
+            className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto py-20"
           >
             {navLinks.map((link, index) => (
-              <div key={link.name} className="flex flex-col items-center">
+              <div key={link.name} className="flex flex-col items-center w-full">
                 <motion.a
                   href={link.href}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * index }}
-                  onClick={!link.dropdown ? () => setIsMobileMenuOpen(false) : undefined}
-                  className="flex items-center gap-2 text-3xl font-bold text-white hover:text-padel-green"
+                  onClick={(e) => {
+                    if (link.dropdown) {
+                      e.preventDefault();
+                      setExpandedMobileMenus(prev =>
+                        prev.includes(link.name) ? prev.filter(n => n !== link.name) : [...prev, link.name]
+                      );
+                    } else {
+                      setIsMobileMenuOpen(false);
+                    }
+                  }}
+                  className="flex items-center gap-2 text-2xl font-bold text-white hover:text-padel-green px-4 py-2"
                 >
                   {link.name}
-                  {link.dropdown && <ChevronDown className="w-6 h-6" />}
+                  {link.dropdown && (
+                    <ChevronDown className={`w-5 h-5 transition-transform duration-300 ${expandedMobileMenus.includes(link.name) ? 'rotate-180' : ''}`} />
+                  )}
                 </motion.a>
-                {link.dropdown && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    transition={{ delay: 0.1 * index + 0.1 }}
-                    className="flex flex-col items-center mt-4 gap-4"
-                  >
-                    {link.dropdown.map((subItem) => (
-                      <a
-                        key={subItem.name}
-                        href={subItem.href}
-                        onClick={() => setIsMobileMenuOpen(false)}
-                        className="text-xl font-medium text-gray-400 hover:text-white transition-colors"
-                      >
-                        {subItem.name}
-                      </a>
-                    ))}
-                  </motion.div>
-                )}
+                <AnimatePresence>
+                  {link.dropdown && expandedMobileMenus.includes(link.name) && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="flex flex-col items-center gap-3 overflow-hidden w-full bg-white/5 py-2 my-1"
+                    >
+                      {link.dropdown.map((subItem) => (
+                        <a
+                          key={subItem.name}
+                          href={subItem.href}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="text-lg font-medium text-gray-400 hover:text-white transition-colors"
+                        >
+                          {subItem.name}
+                        </a>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ))}
             {session ? (
@@ -251,7 +266,7 @@ const Navbar = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.3 }}
                   href="/profile"
-                  className="bg-transparent border-2 border-padel-green text-padel-green px-8 py-4 rounded-full text-xl font-bold mt-4"
+                  className="bg-transparent border-2 border-padel-green text-padel-green px-6 py-3 rounded-full text-lg font-bold mt-2"
                 >
                   My Profile
                 </motion.a>
@@ -260,7 +275,7 @@ const Navbar = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
                   onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
-                  className="text-red-400 text-lg font-bold mt-2"
+                  className="text-red-400 text-base font-bold mt-1"
                 >
                   Logout
                 </motion.button>
@@ -271,7 +286,7 @@ const Navbar = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 onClick={() => { setIsMobileMenuOpen(false); setIsAuthModalOpen(true); }}
-                className="bg-padel-green text-black px-8 py-4 rounded-full text-xl font-bold mt-4"
+                className="bg-padel-green text-black px-6 py-3 rounded-full text-lg font-bold mt-2"
               >
                 Login / Register
               </motion.button>
