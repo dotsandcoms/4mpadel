@@ -26,6 +26,7 @@ import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
 import SiteFooter from './components/SiteFooter';
+import { Analytics } from "@vercel/analytics/react";
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
@@ -68,6 +69,7 @@ function AppContent() {
   return (
     <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
       <GoogleAnalytics />
+      <Analytics />
       {!isAdminRoute && <Navbar />}
       <div id="site-content">
         <Routes>
