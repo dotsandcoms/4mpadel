@@ -7,7 +7,7 @@ import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
 import AuthModal from './AuthModal';
 
-const Navbar = () => {
+const Navbar = ({ isDark = false }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState([]);
@@ -127,29 +127,29 @@ const Navbar = () => {
             <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
             {session && player && (
-              <div className="hidden sm:flex items-center gap-3 ml-2 text-xs text-white/80 font-medium">
+              <div className={`hidden sm:flex items-center gap-3 ml-2 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className="truncate max-w-[120px] leading-tight text-padel-green font-black text-sm">{player.name}</span>
+                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm ${isDark ? 'text-[#B3122B]' : 'text-padel-green'}`}>{player.name}</span>
                   {(player.rank_label || player.points) && (
-                    <span className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5">
+                    <span className={`text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5 ${isDark ? 'text-slate-400' : 'text-white/60'}`}>
                       {player.rank_label ? `Rank: ${player.rank_label}` : `${player.points} Points`}
                     </span>
                   )}
                 </div>
                 {player.rankedin_id && (
-                  <span className="text-white/40 font-mono text-[11px] shrink-0 border-l border-white/10 pl-3 ml-1">{player.rankedin_id}</span>
+                  <span className={`font-mono text-[11px] shrink-0 border-l pl-3 ml-1 ${isDark ? 'text-slate-300 border-slate-200' : 'text-white/40 border-white/10'}`}>{player.rankedin_id}</span>
                 )}
               </div>
             )}
           </div>
 
           {/* Desktop Links */}
-          <div className={`hidden md:flex items-center gap-8 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? 'bg-white/10 backdrop-blur-md border border-white/10' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40'}`}>
+          <div className={`hidden md:flex items-center gap-8 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
             {navLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
-                  className="flex items-center gap-1 text-sm font-medium text-white/80 hover:text-padel-green transition-colors py-2"
+                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? 'text-slate-700 hover:text-[#B3122B]' : 'text-white/80 hover:text-padel-green'}`}
                 >
                   {link.name}
                   {link.dropdown && <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />}
@@ -173,7 +173,7 @@ const Navbar = () => {
             ))}
             {session ? (
               <div className="flex items-center gap-4 ml-2">
-                <a href="/profile" className="text-sm font-bold text-white hover:text-padel-green transition-colors py-2">
+                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? 'text-slate-900 hover:text-[#B3122B]' : 'text-white hover:text-padel-green'}`}>
                   Profile
                 </a>
                 <button
@@ -185,7 +185,7 @@ const Navbar = () => {
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="bg-padel-green text-black px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:bg-white hover:scale-105 transition-all duration-300">
+                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 ${isDark ? 'bg-[#B3122B] text-white hover:bg-[#960f24]' : 'bg-padel-green text-black hover:bg-white'}`}>
                 Login / Register ↗
               </button>
             )}
@@ -193,7 +193,7 @@ const Navbar = () => {
 
           {/* Mobile Menu Button */}
           <button
-            className="md:hidden text-white p-2"
+            className={`md:hidden p-2 ${isDark ? 'text-slate-900' : 'text-white'}`}
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
             {isMobileMenuOpen ? <X /> : <Menu />}

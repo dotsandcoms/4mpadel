@@ -37,7 +37,7 @@ const Broll = () => {
 
     return (
         <div className="min-h-screen bg-white text-slate-900 font-sans">
-            <Navbar />
+            <Navbar isDark />
 
             {/* Hero Section - Official Broll Aesthetic */}
             <section className="relative pt-40 pb-24 px-6 overflow-hidden bg-slate-50">
@@ -83,8 +83,8 @@ const Broll = () => {
                         >
                             <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl border-8 border-white">
                                 <img
-                                    src="https://images.unsplash.com/photo-1592910129881-892bbe239cc0?q=80&w=1470&auto=format&fit=crop"
-                                    alt="Padel Court"
+                                    src="/src/assets/broll.png"
+                                    alt="4m Padel Broll"
                                     className="w-full h-full object-cover"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#B3122B]/40 to-transparent"></div>
