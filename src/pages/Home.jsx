@@ -71,9 +71,6 @@ const Home = () => {
                                         <p className="text-sm text-gray-300 mb-1">Player Spotlight</p>
                                         <h3 className="text-2xl font-bold">Augustin Tapia</h3>
                                     </div>
-                                    <button className="w-12 h-12 bg-padel-green rounded-full flex items-center justify-center text-black hover:scale-110 transition-transform">
-                                        ↗
-                                    </button>
                                 </div>
                             </div>
                         </motion.div>
