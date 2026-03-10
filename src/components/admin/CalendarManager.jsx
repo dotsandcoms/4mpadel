@@ -105,6 +105,7 @@ const CalendarManager = () => {
         image_url: '',
         featured_event: false,
         is_league: false,
+        tournament_tag: 'None',
         registered_players: 0,
         rankedin_url: '',
         sponsor_logos: []
@@ -226,6 +227,7 @@ const CalendarManager = () => {
             image_url: '',
             featured_event: false,
             is_league: false,
+            tournament_tag: 'None',
             registered_players: 0,
             rankedin_url: '',
             sponsor_logos: []
@@ -254,6 +256,7 @@ const CalendarManager = () => {
             image_url: event.image_url || '',
             featured_event: event.featured_event || false,
             is_league: event.is_league || false,
+            tournament_tag: event.tournament_tag || 'None',
             registered_players: event.registered_players || 0,
             rankedin_url: event.rankedin_url || '',
             sponsor_logos: event.sponsor_logos || []
@@ -884,6 +887,19 @@ const CalendarManager = () => {
                                                 League Event
                                             </label>
                                         </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2">
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Tournament Tag</label>
+                                        <select
+                                            name="tournament_tag"
+                                            value={formData.tournament_tag}
+                                            onChange={handleInputChange}
+                                            className="w-full max-w-[200px] bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                        >
+                                            <option value="None">None</option>
+                                            <option value="Broll">Broll</option>
+                                        </select>
                                     </div>
 
                                     <div>
