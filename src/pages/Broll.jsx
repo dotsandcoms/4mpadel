@@ -66,13 +66,16 @@ const Broll = () => {
                                     href="https://www.brollauctions.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="bg-[#F40020] text-white px-8 py-3.5 md:py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#F40020]/20"
+                                    className="bg-[#F40020] !text-white px-8 py-3.5 md:py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#F40020]/20"
                                 >
                                     Visit Broll Auctions <ExternalLink className="w-4 h-4" />
                                 </a>
-                                <button className="border-2 border-slate-200 text-slate-700 px-8 py-3.5 md:py-4 rounded-lg font-bold hover:bg-slate-100 transition-all">
+                                <Link
+                                    to="/calendar"
+                                    className="border-2 border-slate-200 !text-slate-900 px-8 py-3.5 md:py-4 rounded-lg font-bold hover:bg-slate-100 transition-all text-center flex items-center justify-center"
+                                >
                                     View Tour Schedule
-                                </button>
+                                </Link>
                             </div>
                         </motion.div>
 

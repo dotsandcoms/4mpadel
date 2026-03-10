@@ -149,7 +149,7 @@ const Navbar = ({ isDark = false }) => {
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
-                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? 'text-slate-700 hover:text-[#F40020]' : 'text-white/80 hover:text-padel-green'}`}
+                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? '!text-slate-700 hover:!text-[#F40020]' : 'text-white/80 hover:text-padel-green'}`}
                 >
                   {link.name}
                   {link.dropdown && <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />}
@@ -173,7 +173,7 @@ const Navbar = ({ isDark = false }) => {
             ))}
             {session ? (
               <div className="flex items-center gap-4 ml-2">
-                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? 'text-slate-900 hover:text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
+                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900 hover:!text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
                   Profile
                 </a>
                 <button
@@ -211,6 +211,28 @@ const Navbar = ({ isDark = false }) => {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto py-20"
           >
+            {/* Mobile Player Info */}
+            {session && player && (
+              <motion.div
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-col items-center mb-4 pb-6 border-b border-white/10 w-full max-w-[280px]"
+              >
+                <span className="text-padel-green font-black text-2xl tracking-tighter uppercase">{player.name}</span>
+                <div className="flex gap-3 mt-2">
+                  {player.rank_label && (
+                    <span className="text-white/40 text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">
+                      Rank: {player.rank_label}
+                    </span>
+                  )}
+                  {player.points !== undefined && (
+                    <span className="text-white/40 text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">
+                      {player.points} Points
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            )}
             {navLinks.map((link, index) => (
               <div key={link.name} className="flex flex-col items-center w-full">
                 <motion.a
