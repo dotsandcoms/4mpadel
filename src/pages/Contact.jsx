@@ -240,7 +240,7 @@ const Contact = () => {
             <section className="py-32">
                 <div className="container mx-auto px-6 text-center">
                     <h2 className="text-4xl md:text-5xl font-black italic uppercase mb-6 tracking-tighter">Ready to <span className="text-padel-green">Play?</span></h2>
-                    <p className="text-gray-400 mb-12 max-w-xl mx-auto font-medium">Register on Rankedin and follow 4M Padel to start booking courts and entering tournaments today.</p>
+                    <p className="text-gray-400 mb-12 max-w-xl mx-auto font-medium">Register with 4M Padel and start entering tournaments today.</p>
                     <div className="flex flex-wrap justify-center gap-6">
                         <button
                             onClick={() => setIsAuthModalOpen(true)}

@@ -36,7 +36,7 @@ const SiteFooter = () => {
                     >
                         {[1, 2, 3, 4, 5, 6].map((i) => (
                             <h2 key={i} className="text-5xl md:text-8xl font-black uppercase tracking-tighter">
-                                4M Padel • Active Life •
+                                4M Padel • For The Players •
                             </h2>
                         ))}
                     </motion.div>
