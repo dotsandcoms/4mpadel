@@ -17,6 +17,7 @@ import AllTournaments from './pages/AllTournaments';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import TournamentResults from './pages/TournamentResults';
+import TournamentDraw from './pages/TournamentDraw';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
 import ApprovedCoaches from './pages/ApprovedCoaches';
 import CoachingVideos from './pages/CoachingVideos';
@@ -88,6 +89,7 @@ function AppContent() {
           <Route path="/gallery/:id" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/results/:id" element={<TournamentResults />} />
+          <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />
           <Route path="/academy/videos" element={<CoachingVideos />} />

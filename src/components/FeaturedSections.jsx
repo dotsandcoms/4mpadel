@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronRight, PlayCircle, Trophy } from 'lucide-react';
+import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch } from 'lucide-react';
 
 const featuredDataTemplate = [
     {
@@ -72,7 +72,13 @@ const FallbackImage = ({ src, alt, className, title }) => {
     );
 };
 
-const TournamentCard = ({ index, title, label, image, linkPath, isLive = false }) => {
+const extractRankedinId = (url) => {
+    if (!url) return null;
+    const match = url.match(/\/tournament\/(\d+)/);
+    return match ? match[1] : null;
+};
+
+const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false }) => {
     const navigate = useNavigate();
 
     return (
@@ -109,11 +115,23 @@ const TournamentCard = ({ index, title, label, image, linkPath, isLive = false }
                 </div>
                 <h3 className="text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-5 group-hover:text-padel-green transition-colors duration-300 tracking-tight">{title}</h3>
 
-                <div className="flex items-center gap-3">
-                    <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
-                        <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-padel-green" />
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-padel-green" />
+                        </div>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">VIEW DETAILS</span>
                     </div>
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">VIEW DETAILS</span>
+
+                    {drawPath && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
+                            className="flex items-center gap-1.5 bg-padel-green/10 border border-padel-green/30 hover:bg-padel-green hover:border-padel-green px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw"
+                        >
+                            <GitBranch className="w-3 h-3 text-padel-green group-hover/draw:text-black transition-colors" />
+                            <span className="text-[9px] font-bold text-padel-green group-hover/draw:text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </motion.div>
@@ -203,6 +221,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             label={t.sapa_status || 'Major Event'}
                             image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
                             linkPath={`/calendar/${t.slug || t.id}`}
+                            drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
                         />
                     ))
                 ) : (
@@ -251,11 +270,27 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
                 <h3 className="text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-6 group-hover:text-padel-green transition-colors duration-500 tracking-tight">{data.cardTitle}</h3>
 
-                <div className="flex items-center gap-3 pointer-events-auto">
-                    <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
-                        <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-padel-green transform group-hover:translate-x-0.5 transition-transform" />
+                <div className="flex items-center gap-3 pointer-events-auto flex-wrap">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
+                            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-padel-green transform group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                        <span className="text-[10px] font-bold text-gray-400 group-hover:text-white transition-colors uppercase tracking-[0.2em]">VIEW DETAILS</span>
                     </div>
-                    <span className="text-[10px] font-bold text-gray-400 group-hover:text-white transition-colors uppercase tracking-[0.2em]">VIEW DETAILS</span>
+
+                    {(() => {
+                        const rId = extractRankedinId(data.rankedin_url);
+                        if (!rId) return null;
+                        return (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); navigate(`/draws/${rId}`); }}
+                                className="flex items-center gap-2 bg-padel-green/10 border border-padel-green/30 hover:bg-padel-green hover:border-padel-green px-4 py-2 rounded-full transition-all duration-300 group/draw"
+                            >
+                                <GitBranch className="w-3.5 h-3.5 text-padel-green group-hover/draw:text-black transition-colors" />
+                                <span className="text-[10px] font-bold text-padel-green group-hover/draw:text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                            </button>
+                        );
+                    })()}
                 </div>
             </div>
         </motion.div>
@@ -336,7 +371,8 @@ const FeaturedSections = () => {
                                     cardTitle: singleEvent.event_name,
                                     cardLabel: singleEvent.sapa_status || 'Major Event',
                                     image: singleEvent.image_url || newData[featuredIndex].image,
-                                    linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`
+                                    linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
+                                    rankedin_url: singleEvent.rankedin_url
                                 };
                             }
                             return newData;
