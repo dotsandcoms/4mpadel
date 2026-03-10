@@ -557,10 +557,10 @@ const Calendar = () => {
                                                                     {event.venue || event.clubName}
                                                                 </div>
                                                                 {event.registered_players > 0 && (
-                                                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 rounded-lg">
+                                                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2.5 py-1 rounded-full">
                                                                         <Users className="w-3.5 h-3.5 text-padel-green" />
-                                                                        <span>Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, Johannesburg, South Africa</span>
-                                                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400">Registered</span>
+                                                                        <span className="text-white font-bold">{event.registered_players}</span>
+                                                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Registered</span>
                                                                     </div>
                                                                 )}
                                                             </div>
