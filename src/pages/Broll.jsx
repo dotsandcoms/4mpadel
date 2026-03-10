@@ -190,9 +190,9 @@ const Broll = () => {
                                         to={event.slug ? `/calendar/${event.slug}` : `/calendar/${event.id}`}
                                         className="group block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-[#F40020]/30 hover:shadow-xl transition-all duration-500"
                                     >
-                                        <div className="flex flex-col lg:flex-row">
-                                            {/* Image Box - More compact */}
-                                            <div className="lg:w-1/5 aspect-video lg:aspect-auto relative overflow-hidden bg-slate-100">
+                                        <div className="flex flex-row">
+                                            {/* Image Box - Portrait Thumbnail on Mobile */}
+                                            <div className="w-[110px] sm:w-[140px] lg:w-1/5 aspect-[3/4] lg:aspect-auto relative overflow-hidden bg-slate-100 flex-shrink-0">
                                                 {event.image_url || event.posterUrl ? (
                                                     <img
                                                         src={event.image_url || event.posterUrl}
@@ -212,8 +212,8 @@ const Broll = () => {
                                                 </div>
                                             </div>
 
-                                            {/* Info Box - Reduced padding and font sizes */}
-                                            <div className="lg:w-4/5 p-4 lg:px-8 lg:py-4 flex flex-col justify-center relative">
+                                            {/* Info Box - Details on the Right */}
+                                            <div className="flex-1 p-3 md:p-4 lg:px-8 lg:py-4 flex flex-col justify-center relative min-w-0">
                                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                     <div className="flex-1">
                                                         <div className="flex items-center gap-2 mb-1">
