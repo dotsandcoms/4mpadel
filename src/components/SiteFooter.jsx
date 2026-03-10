@@ -53,15 +53,15 @@ const SiteFooter = () => {
                         <div className="space-y-3 mt-2">
                             <div className="flex items-center gap-3 text-gray-400 text-sm justify-center md:justify-start">
                                 <MapPin size={18} className="text-padel-green" />
-                                <span>Wanderers Club, Illovo</span>
+                                <span>Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, JHB, South Africa</span>
                             </div>
                             <div className="flex items-center gap-3 text-gray-400 text-sm justify-center md:justify-start">
                                 <Clock size={18} className="text-padel-green" />
-                                <span>Mon-Sun 06:00 - 23:00</span>
+                                <span>Mon-Sun 09:00 - 18:00</span>
                             </div>
                             <div className="flex items-center gap-3 text-gray-400 text-sm justify-center md:justify-start">
                                 <Phone size={18} className="text-padel-green" />
-                                <span>+27 12 345 6789</span>
+                                <span>083 790 9091</span>
                             </div>
                         </div>
                     </div>

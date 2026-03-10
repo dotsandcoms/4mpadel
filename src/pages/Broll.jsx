@@ -4,14 +4,14 @@ import Navbar from '../components/Navbar';
 import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
-import brollLogo from '../assets/broll.png';
+import brollLogo from '../assets/BrollLogo.png';
 
 const Broll = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const BROLL_RED = '#B3122B';
+    const BROLL_RED = '#F40020';
 
     useEffect(() => {
         fetchBrollEvents();
@@ -42,7 +42,7 @@ const Broll = () => {
 
             {/* Hero Section - Official Broll Aesthetic */}
             <section className="relative pt-40 pb-24 px-6 overflow-hidden bg-slate-50">
-                <div className="absolute top-0 right-0 w-1/3 h-full bg-[#B3122B]/5 skew-x-12 transform translate-x-1/2"></div>
+                <div className="absolute top-0 right-0 w-1/3 h-full bg-[#F40020]/5 skew-x-12 transform translate-x-1/2"></div>
                 <div className="max-w-7xl mx-auto relative z-10">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                         <motion.div
@@ -50,12 +50,12 @@ const Broll = () => {
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.8 }}
                         >
-                            <div className="inline-flex items-center gap-2 bg-[#B3122B] text-white px-4 py-1.5 rounded-sm mb-6 text-sm font-bold tracking-widest uppercase">
+                            <div className="inline-flex items-center gap-2 bg-[#F40020] text-white px-4 py-1.5 rounded-sm mb-6 text-sm font-bold tracking-widest uppercase">
                                 <Award className="w-4 h-4" />
                                 Official Partner
                             </div>
                             <h1 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter text-slate-900 leading-[0.9]">
-                                BROLL <span className="text-[#B3122B]">PRO TOUR</span>
+                                <span className="text-[#F40020]">BROLL</span> PRO TOUR
                             </h1>
                             <p className="text-lg md:text-2xl text-slate-600 max-w-xl font-medium mb-10 leading-relaxed">
                                 Premier property trading meets elite padel competition.
@@ -66,7 +66,7 @@ const Broll = () => {
                                     href="https://www.brollauctions.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="bg-[#B3122B] text-white px-8 py-3.5 md:py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#B3122B]/20"
+                                    className="bg-[#F40020] text-white px-8 py-3.5 md:py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#F40020]/20"
                                 >
                                     Visit Broll Auctions <ExternalLink className="w-4 h-4" />
                                 </a>
@@ -88,18 +88,18 @@ const Broll = () => {
                                     alt="4m Padel Broll"
                                     className="w-full h-full object-cover"
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-[#B3122B]/40 to-transparent"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#F40020]/40 to-transparent"></div>
                             </div>
                             {/* Stats Overlay */}
                             <div className="absolute -bottom-6 -left-0 md:-left-6 bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-slate-100 scale-90 md:scale-100 origin-left">
                                 <div className="flex gap-6 md:gap-8">
                                     <div>
-                                        <div className="text-2xl md:text-3xl font-black text-[#B3122B]">45+</div>
+                                        <div className="text-2xl md:text-3xl font-black text-[#F40020]">45+</div>
                                         <div className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Years Legacy</div>
                                     </div>
                                     <div className="w-px h-10 bg-slate-100"></div>
                                     <div>
-                                        <div className="text-2xl md:text-3xl font-black text-[#B3122B]">#1</div>
+                                        <div className="text-2xl md:text-3xl font-black text-[#F40020]">#1</div>
                                         <div className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Property Platform</div>
                                     </div>
                                 </div>
@@ -114,7 +114,7 @@ const Broll = () => {
                 <div className="max-w-7xl mx-auto">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
                         <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
                                 <Building2 className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-900">Premier Platform</h3>
@@ -123,7 +123,7 @@ const Broll = () => {
                             </p>
                         </div>
                         <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
                                 <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-900">Proven Success</h3>
@@ -132,7 +132,7 @@ const Broll = () => {
                             </p>
                         </div>
                         <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
                                 <Users className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
                             <h3 className="text-lg md:text-xl font-bold text-slate-900">Industry Leaders</h3>
@@ -149,9 +149,9 @@ const Broll = () => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-4">
                     <div>
                         <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                            UPCOMING TOUR <span className="text-[#B3122B]">DATES</span>
+                            UPCOMING TOUR <span className="text-[#F40020]">DATES</span>
                         </h2>
-                        <div className="h-1 w-24 bg-[#B3122B] mt-2"></div>
+                        <div className="h-1 w-24 bg-[#F40020] mt-2"></div>
                     </div>
                     <p className="text-slate-500 font-medium max-w-md md:text-right text-sm md:text-base">
                         Limited entries available for top-seed players. Secure your spot in the Broll Pro Tour.
@@ -160,7 +160,7 @@ const Broll = () => {
 
                 {loading ? (
                     <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                        <Loader className="w-10 h-10 animate-spin mb-4 text-[#B3122B]" />
+                        <Loader className="w-10 h-10 animate-spin mb-4 text-[#F40020]" />
                         <p>Loading tour dates...</p>
                     </div>
                 ) : error ? (
@@ -185,7 +185,7 @@ const Broll = () => {
                                 >
                                     <Link
                                         to={event.slug ? `/calendar/${event.slug}` : `/calendar/${event.id}`}
-                                        className="group block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-[#B3122B]/30 hover:shadow-xl transition-all duration-500"
+                                        className="group block bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-[#F40020]/30 hover:shadow-xl transition-all duration-500"
                                     >
                                         <div className="flex flex-col lg:flex-row">
                                             {/* Image Box - More compact */}
@@ -203,7 +203,7 @@ const Broll = () => {
                                                     </div>
                                                 )}
                                                 <div className="absolute top-2 left-2">
-                                                    <span className="bg-[#B3122B] text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest">
+                                                    <span className="bg-[#F40020] text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest">
                                                         {event.sapa_status || 'Pro Tour'}
                                                     </span>
                                                 </div>
@@ -214,25 +214,25 @@ const Broll = () => {
                                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                     <div className="flex-1">
                                                         <div className="flex items-center gap-2 mb-1">
-                                                            <div className="h-0.5 w-6 bg-[#B3122B]"></div>
-                                                            <span className="text-[#B3122B] text-[10px] font-black uppercase tracking-[0.2em]">Broll Pro Tour</span>
+                                                            <div className="h-0.5 w-6 bg-[#F40020]"></div>
+                                                            <span className="text-[#F40020] text-[10px] font-black uppercase tracking-[0.2em]">Broll Pro Tour</span>
                                                         </div>
                                                         <h3 className="text-lg md:text-xl lg:text-2xl font-black text-slate-900 leading-tight mb-2 tracking-tighter">
                                                             {event.event_name}
                                                         </h3>
                                                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 font-bold text-xs">
                                                             <div className="flex items-center gap-1.5">
-                                                                <CalendarIcon size={14} className="text-[#B3122B]" />
+                                                                <CalendarIcon size={14} className="text-[#F40020]" />
                                                                 {event.event_dates ||
                                                                     (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
                                                             </div>
                                                             <div className="flex items-center gap-1.5">
-                                                                <MapPin size={14} className="text-[#B3122B]" />
+                                                                <MapPin size={14} className="text-[#F40020]" />
                                                                 {event.venue}
                                                             </div>
                                                             {event.registered_players > 0 && (
                                                                 <div className="flex items-center gap-1.5 text-slate-900">
-                                                                    <Users size={14} className="text-[#B3122B]" />
+                                                                    <Users size={14} className="text-[#F40020]" />
                                                                     <span>{event.registered_players} Registered</span>
                                                                 </div>
                                                             )}
@@ -240,7 +240,7 @@ const Broll = () => {
                                                     </div>
 
                                                     <div className="flex-shrink-0">
-                                                        <div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-[#B3122B] group-hover:text-[#B3122B] transition-all duration-500 transform group-hover:rotate-45">
+                                                        <div className="w-10 h-10 rounded-full border border-slate-100 flex items-center justify-center text-slate-300 group-hover:border-[#F40020] group-hover:text-[#F40020] transition-all duration-500 transform group-hover:rotate-45">
                                                             <ArrowRight className="w-5 h-5" />
                                                         </div>
                                                     </div>

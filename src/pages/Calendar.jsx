@@ -17,7 +17,7 @@ const Calendar = () => {
     const [statusFilter, setStatusFilter] = useState('All');
     const [cityFilter, setCityFilter] = useState('All');
     const [timingFilter, setTimingFilter] = useState('Upcoming');
-    const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Non-League'
+    const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Tournaments'
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
@@ -181,7 +181,7 @@ const Calendar = () => {
 
             const matchesLeague = leagueFilter === 'All' ||
                 (leagueFilter === 'League' && event.is_league === true) ||
-                (leagueFilter === 'Non-League' && !event.is_league);
+                (leagueFilter === 'Tournaments' && !event.is_league);
 
             return matchesSearch && matchesStatus && matchesCity && matchesTiming && matchesLeague;
         });
@@ -375,6 +375,19 @@ const Calendar = () => {
 
                     {/* Filters & Toggle */}
                     <div className="flex flex-wrap md:flex-nowrap gap-4 w-full lg:w-auto items-center justify-end">
+                        {/* Type Filter */}
+                        <div className="relative w-full md:w-auto min-w-[150px]">
+                            <select
+                                value={leagueFilter}
+                                onChange={(e) => setLeagueFilter(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
+                            >
+                                <option value="All" className="bg-slate-900">All Types</option>
+                                <option value="League" className="bg-slate-900">League Only</option>
+                                <option value="Tournaments" className="bg-slate-900">Tournaments</option>
+                            </select>
+                        </div>
+
                         {/* Timing Filter (List View Only) */}
                         {viewMode === 'list' && (
                             <div className="relative w-full md:w-auto min-w-[140px]">
@@ -402,19 +415,6 @@ const Calendar = () => {
                                 {uniqueStatuses.map(status => (
                                     <option key={status} value={status} className="bg-slate-900">{status}</option>
                                 ))}
-                            </select>
-                        </div>
-
-                        {/* League Filter */}
-                        <div className="relative w-full md:w-auto min-w-[150px]">
-                            <select
-                                value={leagueFilter}
-                                onChange={(e) => setLeagueFilter(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
-                            >
-                                <option value="All" className="bg-slate-900">All Types</option>
-                                <option value="League" className="bg-slate-900">League Only</option>
-                                <option value="Non-League" className="bg-slate-900">Non-League</option>
                             </select>
                         </div>
 
@@ -559,7 +559,7 @@ const Calendar = () => {
                                                                 {event.registered_players > 0 && (
                                                                     <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 rounded-lg">
                                                                         <Users className="w-3.5 h-3.5 text-padel-green" />
-                                                                        <span className="text-white font-bold">{event.registered_players}</span>
+                                                                        <span>Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, Johannesburg, South Africa</span>
                                                                         <span className="text-[10px] uppercase tracking-tighter text-gray-400">Registered</span>
                                                                     </div>
                                                                 )}

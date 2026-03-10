@@ -129,7 +129,7 @@ const Navbar = ({ isDark = false }) => {
             {session && player && (
               <div className={`hidden sm:flex items-center gap-3 ml-2 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm ${isDark ? 'text-[#B3122B]' : 'text-padel-green'}`}>{player.name}</span>
+                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
                   {(player.rank_label || player.points) && (
                     <span className={`text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5 ${isDark ? 'text-slate-400' : 'text-white/60'}`}>
                       {player.rank_label ? `Rank: ${player.rank_label}` : `${player.points} Points`}
@@ -149,7 +149,7 @@ const Navbar = ({ isDark = false }) => {
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
-                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? 'text-slate-700 hover:text-[#B3122B]' : 'text-white/80 hover:text-padel-green'}`}
+                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? 'text-slate-700 hover:text-[#F40020]' : 'text-white/80 hover:text-padel-green'}`}
                 >
                   {link.name}
                   {link.dropdown && <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />}
@@ -173,7 +173,7 @@ const Navbar = ({ isDark = false }) => {
             ))}
             {session ? (
               <div className="flex items-center gap-4 ml-2">
-                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? 'text-slate-900 hover:text-[#B3122B]' : 'text-white hover:text-padel-green'}`}>
+                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? 'text-slate-900 hover:text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
                   Profile
                 </a>
                 <button
@@ -185,7 +185,7 @@ const Navbar = ({ isDark = false }) => {
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 ${isDark ? 'bg-[#B3122B] text-white hover:bg-[#960f24]' : 'bg-padel-green text-black hover:bg-white'}`}>
+                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 ${isDark ? 'bg-[#F40020] text-white hover:bg-[#960f24]' : 'bg-padel-green text-black hover:bg-white'}`}>
                 Login / Register ↗
               </button>
             )}

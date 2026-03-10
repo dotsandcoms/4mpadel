@@ -87,7 +87,7 @@ const Contact = () => {
 
                         {/* Contact Info Sidebar */}
                         <div className="lg:col-span-5 p-8 md:p-12 bg-gradient-to-br from-[#1E293B] to-[#0F172A] border-r border-white/5">
-                            <h2 className="text-3xl font-black uppercase tracking-tight mb-8">Connect with <span className="text-padel-green text-shadow-glow">4M</span></h2>
+                            <h2 className="text-3xl font-black uppercase tracking-tight mb-8">Connect with <span className="text-padel-green text-shadow-glow">4M Padel</span></h2>
 
                             <div className="space-y-8">
                                 <div className="flex gap-6 items-start group">
@@ -96,7 +96,7 @@ const Contact = () => {
                                     </div>
                                     <div>
                                         <p className="text-[10px] uppercase font-black text-gray-500 tracking-widest mb-1">Email Us</p>
-                                        <a href="mailto:info@4mpadel.com" className="text-xl font-bold hover:text-padel-green transition-colors underline decoration-padel-green/30 underline-offset-4">info@4mpadel.com</a>
+                                        <a href="mailto:info@4mpadel.com" className="text-xl font-bold hover:text-padel-green transition-colors underline decoration-padel-green/30 underline-offset-4">info@4mpadel.co.za</a>
                                     </div>
                                 </div>
 
@@ -106,7 +106,7 @@ const Contact = () => {
                                     </div>
                                     <div>
                                         <p className="text-[10px] uppercase font-black text-gray-500 tracking-widest mb-1">Call Us</p>
-                                        <a href="tel:+27123456789" className="text-xl font-bold hover:text-padel-green transition-colors">+27 12 345 6789</a>
+                                        <a href="tel:0837909091" className="text-xl font-bold hover:text-padel-green transition-colors">083 790 9091</a>
                                     </div>
                                 </div>
 
@@ -116,7 +116,7 @@ const Contact = () => {
                                     </div>
                                     <div>
                                         <p className="text-[10px] uppercase font-black text-gray-500 tracking-widest mb-1">Location</p>
-                                        <p className="text-xl font-bold">Johannesburg, South Africa</p>
+                                        <p className="text-xl font-bold text-shadow-glow leading-tight">Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, JHB</p>
                                     </div>
                                 </div>
                             </div>
