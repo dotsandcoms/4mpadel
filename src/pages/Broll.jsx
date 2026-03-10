@@ -192,7 +192,7 @@ const Broll = () => {
                                     >
                                         <div className="flex flex-col lg:flex-row">
                                             {/* Image Box - More compact */}
-                                            <div className="lg:w-1/5 aspect-[21/9] lg:aspect-auto relative overflow-hidden bg-slate-100">
+                                            <div className="lg:w-1/5 aspect-video lg:aspect-auto relative overflow-hidden bg-slate-100">
                                                 {event.image_url || event.posterUrl ? (
                                                     <img
                                                         src={event.image_url || event.posterUrl}
