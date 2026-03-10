@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import brollLogo from '../assets/broll.png';
 
 const Broll = () => {
     const [events, setEvents] = useState([]);
@@ -83,7 +84,7 @@ const Broll = () => {
                         >
                             <div className="aspect-[4/3] rounded-2xl overflow-hidden shadow-2xl border-8 border-white">
                                 <img
-                                    src="/src/assets/broll.png"
+                                    src={brollLogo}
                                     alt="4m Padel Broll"
                                     className="w-full h-full object-cover"
                                 />
