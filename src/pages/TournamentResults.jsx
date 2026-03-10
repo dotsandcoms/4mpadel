@@ -4,33 +4,78 @@ import { SEOHead } from '@burkcorp/reactmath';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Loader2, ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
+import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import KnockoutBracket from '../components/KnockoutBracket';
 
 const TournamentResults = () => {
-    const { id } = useParams();
+    const { id: idOrSlug } = useParams();
     const navigate = useNavigate();
-    const { getTournamentClasses, getDrawsForClass, getTournamentDetails, loading, error } = useRankedin();
+    const { getTournamentClasses, getDrawsForClass, getTournamentDetails, loading: apiLoading, error } = useRankedin();
 
+    const [resolvedId, setResolvedId] = useState(null);
+    const [lookupLoading, setLookupLoading] = useState(true);
     const [classes, setClasses] = useState([]);
     const [selectedClassId, setSelectedClassId] = useState('');
     const [selectedDrawId, setSelectedDrawId] = useState('');
     const [drawData, setDrawData] = useState(null);
     const [tournamentDetails, setTournamentDetails] = useState(null);
 
+    // Resolve slug to RankedIn ID if necessary
+    useEffect(() => {
+        const resolveId = async () => {
+            if (/^\d+$/.test(idOrSlug)) {
+                setResolvedId(idOrSlug);
+                setLookupLoading(false);
+                return;
+            }
+
+            try {
+                const { data, error: sbError } = await supabase
+                    .from('calendar')
+                    .select('rankedin_url')
+                    .eq('slug', idOrSlug)
+                    .single();
+
+                if (sbError) throw sbError;
+
+                let rId = null;
+                if (data.rankedin_url) {
+                    const match = data.rankedin_url.match(/tournament\/(\d+)/i);
+                    if (match) rId = match[1];
+                }
+
+                if (rId) {
+                    setResolvedId(rId);
+                } else {
+                    console.error('Could not find RankedIn ID for slug:', idOrSlug);
+                }
+            } catch (err) {
+                console.error('Error resolving slug:', err);
+            } finally {
+                setLookupLoading(false);
+            }
+        };
+        resolveId();
+    }, [idOrSlug]);
+
+    const loading = lookupLoading || apiLoading;
+
     // Initial fetch for tournament details
     useEffect(() => {
+        if (!resolvedId) return;
         const fetchTournamentDetails = async () => {
-            const details = await getTournamentDetails(id);
+            const details = await getTournamentDetails(resolvedId);
             if (details) setTournamentDetails(details);
         };
         fetchTournamentDetails();
-    }, [id, getTournamentDetails]);
+    }, [resolvedId, getTournamentDetails]);
 
     // Initial fetch for the classes mapping to this tournament ID
     useEffect(() => {
+        if (!resolvedId) return;
         const fetchClasses = async () => {
-            const data = await getTournamentClasses(id);
+            const data = await getTournamentClasses(resolvedId);
             setClasses(data);
             if (data && data.length > 0) {
                 // Default to the first class (usually Men's Pro or similar)
@@ -38,7 +83,7 @@ const TournamentResults = () => {
             }
         };
         fetchClasses();
-    }, [id, getTournamentClasses]);
+    }, [resolvedId, getTournamentClasses]);
 
     // When classes or selectedClassId changes, update the selectedDrawId to default to the last draw (often Knock-out)
     useEffect(() => {
@@ -89,7 +134,7 @@ const TournamentResults = () => {
                 {/* Hero Section with Image */}
                 <div className="relative h-[30vh] md:h-[40vh] min-h-[300px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
-                        src={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${id}.png`}
+                        src={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${resolvedId}.png`}
                         alt="Tournament Hero"
                         className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
                         onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop'; }}

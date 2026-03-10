@@ -221,7 +221,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             label={t.sapa_status || 'Major Event'}
                             image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
                             linkPath={`/calendar/${t.slug || t.id}`}
-                            drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
+                            drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
                         />
                     ))
                 ) : (
@@ -280,10 +280,15 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
                     {(() => {
                         const rId = extractRankedinId(data.rankedin_url);
-                        if (!rId) return null;
+                        if (!rId && !data.linkPath?.includes('/calendar/')) return null;
+
+                        // If we have a slug in linkPath, use it for draws too
+                        const slugMatch = data.linkPath?.match(/\/calendar\/([^\/]+)/);
+                        const slug = slugMatch ? slugMatch[1] : null;
+
                         return (
                             <button
-                                onClick={(e) => { e.stopPropagation(); navigate(`/draws/${rId}`); }}
+                                onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
                                 className="flex items-center gap-2 bg-padel-green/10 border border-padel-green/30 hover:bg-padel-green hover:border-padel-green px-4 py-2 rounded-full transition-all duration-300 group/draw"
                             >
                                 <GitBranch className="w-3.5 h-3.5 text-padel-green group-hover/draw:text-black transition-colors" />
