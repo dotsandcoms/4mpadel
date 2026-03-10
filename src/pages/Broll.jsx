@@ -54,23 +54,23 @@ const Broll = () => {
                                 <Award className="w-4 h-4" />
                                 Official Partner
                             </div>
-                            <h1 className="text-6xl md:text-8xl font-black mb-6 tracking-tighter text-slate-900 leading-[0.9]">
+                            <h1 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter text-slate-900 leading-[0.9]">
                                 BROLL <span className="text-[#B3122B]">PRO TOUR</span>
                             </h1>
-                            <p className="text-xl md:text-2xl text-slate-600 max-w-xl font-medium mb-10 leading-relaxed">
+                            <p className="text-lg md:text-2xl text-slate-600 max-w-xl font-medium mb-10 leading-relaxed">
                                 Premier property trading meets elite padel competition.
                                 Experience the pinnacle of South African sport and commerce.
                             </p>
-                            <div className="flex flex-wrap gap-4">
+                            <div className="flex flex-col sm:flex-row gap-4">
                                 <a
                                     href="https://www.brollauctions.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="bg-[#B3122B] text-white px-8 py-4 rounded-lg font-bold flex items-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#B3122B]/20"
+                                    className="bg-[#B3122B] text-white px-8 py-3.5 md:py-4 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all shadow-lg shadow-[#B3122B]/20"
                                 >
                                     Visit Broll Auctions <ExternalLink className="w-4 h-4" />
                                 </a>
-                                <button className="border-2 border-slate-200 text-slate-700 px-8 py-4 rounded-lg font-bold hover:bg-slate-100 transition-all">
+                                <button className="border-2 border-slate-200 text-slate-700 px-8 py-3.5 md:py-4 rounded-lg font-bold hover:bg-slate-100 transition-all">
                                     View Tour Schedule
                                 </button>
                             </div>
@@ -91,16 +91,16 @@ const Broll = () => {
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#B3122B]/40 to-transparent"></div>
                             </div>
                             {/* Stats Overlay */}
-                            <div className="absolute -bottom-6 -left-6 bg-white p-8 rounded-2xl shadow-xl border border-slate-100 hidden md:block">
-                                <div className="flex gap-8">
+                            <div className="absolute -bottom-6 -left-0 md:-left-6 bg-white p-6 md:p-8 rounded-2xl shadow-xl border border-slate-100 scale-90 md:scale-100 origin-left">
+                                <div className="flex gap-6 md:gap-8">
                                     <div>
-                                        <div className="text-3xl font-black text-[#B3122B]">45+</div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Years Legacy</div>
+                                        <div className="text-2xl md:text-3xl font-black text-[#B3122B]">45+</div>
+                                        <div className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Years Legacy</div>
                                     </div>
                                     <div className="w-px h-10 bg-slate-100"></div>
                                     <div>
-                                        <div className="text-3xl font-black text-[#B3122B]">#1</div>
-                                        <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">Property Platform</div>
+                                        <div className="text-2xl md:text-3xl font-black text-[#B3122B]">#1</div>
+                                        <div className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-widest">Property Platform</div>
                                     </div>
                                 </div>
                             </div>
@@ -110,33 +110,33 @@ const Broll = () => {
             </section>
 
             {/* Sponsor Info Section */}
-            <section className="py-24 px-6 bg-white border-b border-slate-100">
+            <section className="py-16 md:py-24 px-6 bg-white border-b border-slate-100">
                 <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
-                        <div className="space-y-4">
-                            <div className="w-12 h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
-                                <Building2 className="w-6 h-6" />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                                <Building2 className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900">Premier Platform</h3>
-                            <p className="text-slate-500 leading-relaxed">
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Premier Platform</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
                                 Broll Auctions and Sales is one of South Africa's leading commercial real estate auction houses with a proven track record.
                             </p>
                         </div>
-                        <div className="space-y-4">
-                            <div className="w-12 h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
-                                <TrendingUp className="w-6 h-6" />
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                                <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900">Proven Success</h3>
-                            <p className="text-slate-500 leading-relaxed">
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Proven Success</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
                                 Specializing in the sale of iconic commercial, industrial, and retail properties across South Africa for over four decades.
                             </p>
                         </div>
-                        <div className="space-y-4">
-                            <div className="w-12 h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
-                                <Users className="w-6 h-6" />
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#B3122B]/10 rounded-xl flex items-center justify-center text-[#B3122B]">
+                                <Users className="w-5 h-5 md:w-6 md:h-6" />
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900">Industry Leaders</h3>
-                            <p className="text-slate-500 leading-relaxed">
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Industry Leaders</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
                                 Committed to excellence and transparency, bringing the same standard of professionalism to the South African Padel scene.
                             </p>
                         </div>
@@ -146,14 +146,14 @@ const Broll = () => {
 
             {/* Tournaments Listing */}
             <section className="max-w-7xl mx-auto px-6 py-24">
-                <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-4">
+                <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-4">
                     <div>
-                        <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                        <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
                             UPCOMING TOUR <span className="text-[#B3122B]">DATES</span>
                         </h2>
-                        <div className="h-1.5 w-24 bg-[#B3122B] mt-2"></div>
+                        <div className="h-1 w-24 bg-[#B3122B] mt-2"></div>
                     </div>
-                    <p className="text-slate-500 font-medium max-w-md md:text-right">
+                    <p className="text-slate-500 font-medium max-w-md md:text-right text-sm md:text-base">
                         Limited entries available for top-seed players. Secure your spot in the Broll Pro Tour.
                     </p>
                 </div>
@@ -217,7 +217,7 @@ const Broll = () => {
                                                             <div className="h-0.5 w-6 bg-[#B3122B]"></div>
                                                             <span className="text-[#B3122B] text-[10px] font-black uppercase tracking-[0.2em]">Broll Pro Tour</span>
                                                         </div>
-                                                        <h3 className="text-xl lg:text-2xl font-black text-slate-900 leading-tight mb-2 tracking-tighter">
+                                                        <h3 className="text-lg md:text-xl lg:text-2xl font-black text-slate-900 leading-tight mb-2 tracking-tighter">
                                                             {event.event_name}
                                                         </h3>
                                                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-slate-500 font-bold text-xs">
