@@ -505,9 +505,9 @@ const Calendar = () => {
                                                     {/* Background Gradient */}
                                                     <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
 
-                                                    <div className="flex flex-col md:flex-row gap-6 items-start md:items-center justify-between relative z-10">
-                                                        {/* Poster Image Box */}
-                                                        <div className="flex-shrink-0 w-full md:w-32 aspect-video md:h-24 rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
+                                                    <div className="flex flex-row gap-4 items-center justify-between relative z-10">
+                                                        {/* Poster Image Box - Portrait Thumbnail */}
+                                                        <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-24 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
                                                             {event.image_url || event.posterUrl ? (
                                                                 <img
                                                                     src={event.image_url || event.posterUrl}
