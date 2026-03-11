@@ -5,6 +5,73 @@ import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
 
+const getStatusColors = (status) => {
+    const s = status?.toLowerCase() || '';
+    if (s.includes('major')) return { 
+        text: 'text-red-500', 
+        bg: 'bg-red-500/20', 
+        border: 'border-red-500/30', 
+        hover: 'hover:border-red-500', 
+        glow: 'shadow-red-500/20',
+        solid: 'bg-red-600',
+        solidText: 'text-white'
+    };
+    if (s.includes('super gold') || s === 's gold') return { 
+        text: 'text-amber-500', 
+        bg: 'bg-amber-500/20', 
+        border: 'border-amber-500/30', 
+        hover: 'hover:border-amber-500', 
+        glow: 'shadow-amber-500/20',
+        solid: 'bg-amber-500',
+        solidText: 'text-black'
+    };
+    if (s.includes('gold')) return { 
+        text: 'text-yellow-400', 
+        bg: 'bg-yellow-400/20', 
+        border: 'border-yellow-400/30', 
+        hover: 'hover:border-yellow-400', 
+        glow: 'shadow-yellow-400/20',
+        solid: 'bg-yellow-400',
+        solidText: 'text-black'
+    };
+    if (s.includes('silver')) return { 
+        text: 'text-gray-400', 
+        bg: 'bg-gray-400/20', 
+        border: 'border-gray-400/30', 
+        hover: 'hover:border-gray-400', 
+        glow: 'shadow-gray-400/20',
+        solid: 'bg-gray-400',
+        solidText: 'text-black'
+    };
+    if (s.includes('bronze')) return { 
+        text: 'text-orange-700', 
+        bg: 'bg-orange-700/20', 
+        border: 'border-orange-700/30', 
+        hover: 'hover:border-orange-700', 
+        glow: 'shadow-orange-700/20',
+        solid: 'bg-orange-700',
+        solidText: 'text-white'
+    };
+    if (s.includes('fip')) return { 
+        text: 'text-blue-500', 
+        bg: 'bg-blue-500/20', 
+        border: 'border-blue-500/30', 
+        hover: 'hover:border-blue-500', 
+        glow: 'shadow-blue-500/20',
+        solid: 'bg-blue-500',
+        solidText: 'text-white'
+    };
+    return { 
+        text: 'text-padel-green', 
+        bg: 'bg-padel-green/20', 
+        border: 'border-padel-green/30', 
+        hover: 'hover:border-padel-green', 
+        glow: 'shadow-padel-green/20',
+        solid: 'bg-padel-green',
+        solidText: 'text-black'
+    };
+};
+
 const featuredDataTemplate = [
     {
         id: 'featured-live',
@@ -171,18 +238,6 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
         checkDraw();
     }, [drawPath, linkPath, getTournamentClasses, rankedinId]);
 
-    // Color mapping based on status
-    const getStatusColors = (status) => {
-        const s = status?.toLowerCase() || '';
-        if (s.includes('major')) return { text: 'text-red-500', bg: 'bg-red-500/20', border: 'border-red-500/30', hover: 'hover:border-red-500', glow: 'shadow-red-500/20' };
-        if (s.includes('super gold') || s === 's gold') return { text: 'text-amber-600', bg: 'bg-amber-600/20', border: 'border-amber-600/30', hover: 'hover:border-amber-600', glow: 'shadow-amber-600/20' };
-        if (s.includes('gold')) return { text: 'text-yellow-500', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', hover: 'hover:border-yellow-500', glow: 'shadow-yellow-500/20' };
-        if (s.includes('silver')) return { text: 'text-gray-400', bg: 'bg-gray-400/20', border: 'border-gray-400/30', hover: 'hover:border-gray-400', glow: 'shadow-gray-400/20' };
-        if (s.includes('bronze')) return { text: 'text-orange-700', bg: 'bg-orange-700/20', border: 'border-orange-700/30', hover: 'hover:border-orange-700', glow: 'shadow-orange-700/20' };
-        if (s.includes('fip')) return { text: 'text-blue-500', bg: 'bg-blue-500/20', border: 'border-blue-500/30', hover: 'hover:border-blue-500', glow: 'shadow-blue-500/20' };
-        return { text: 'text-padel-green', bg: 'bg-padel-green/20', border: 'border-padel-green/30', hover: 'hover:border-padel-green', glow: 'shadow-padel-green/20' };
-    };
-
     const colors = getStatusColors(status);
 
     return (
@@ -220,7 +275,7 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                     </div>
                     {registeredPlayers > 0 && (
                         <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
-                            <GitBranch className="w-2.5 h-2.5 text-padel-green" />
+                            <GitBranch className={`w-2.5 h-2.5 ${colors.text}`} />
                             <span className="text-[8px] font-bold text-white uppercase tracking-wider">{registeredPlayers} <span className="opacity-60">Players</span></span>
                         </div>
                     )}
@@ -238,10 +293,10 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                     {drawPath && hasDraw && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} hover:bg-padel-green hover:border-padel-green px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw`}
+                            className={`flex items-center gap-1.5 ${colors.solid} border ${colors.border} hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw shadow-lg ${colors.glow}`}
                         >
-                            <GitBranch className={`w-3 h-3 ${colors.text} group-hover/draw:!text-black transition-colors`} />
-                            <span className={`text-[9px] font-bold ${colors.text} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
+                            <GitBranch className={`w-3 h-3 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
+                            <span className={`text-[9px] font-bold ${colors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
                         </button>
                     )}
 
@@ -299,6 +354,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     ];
     const bgColor = isFeatured ? 'bg-padel-green' : bgColors[index % bgColors.length];
     const Icon = data.icon;
+    const statusColors = getStatusColors(data.cardLabel);
 
     const textContent = (
         <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
@@ -431,7 +487,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full aspect-[4/3] sm:aspect-video lg:aspect-square max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border border-white/10 hover:border-padel-green/30 transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
+            className={`relative w-full aspect-[4/3] sm:aspect-video lg:aspect-square max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border border-white/10 ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000">
@@ -455,18 +511,18 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             <div className="absolute inset-x-0 bottom-0 p-6 md:p-8 z-20 flex flex-col justify-end pointer-events-none">
                 <div className="flex items-center gap-2 mb-2">
                     {data.id === 'live-events' ? (
-                        <PlayCircle className="w-3.5 h-3.5 text-padel-green" />
+                        <PlayCircle className={`w-3.5 h-3.5 ${statusColors.text}`} />
                     ) : (
-                        <Calendar className="w-3.5 h-3.5 text-padel-green" />
+                        <Calendar className={`w-3.5 h-3.5 ${statusColors.text}`} />
                     )}
-                    <p className="text-[10px] font-bold text-padel-green uppercase tracking-widest">{data.cardLabel}</p>
+                    <p className={`text-[10px] font-bold ${statusColors.text} uppercase tracking-widest`}>{data.cardLabel}</p>
                 </div>
 
-                <h3 className="text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:text-padel-green transition-colors duration-500 tracking-tight">{data.cardTitle}</h3>
+                <h3 className={`text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
 
                 {data.registeredPlayers > 0 && (
                     <div className="flex items-center gap-1.5 mb-6 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                        <Users className="w-3.5 h-3.5 text-padel-green" />
+                        <Users className={`w-3.5 h-3.5 ${statusColors.text}`} />
                         <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Registered Players</span>
                     </div>
                 )}
@@ -500,10 +556,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                 {hasDraw && rId && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
-                                        className="flex items-center gap-2 bg-padel-green border border-padel-green hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg shadow-padel-green/20"
+                                        className={`flex items-center gap-2 ${statusColors.solid} border ${statusColors.border} hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg ${statusColors.glow}`}
                                     >
-                                        <GitBranch className="w-3.5 h-3.5 !text-black transition-colors" />
-                                        <span className="text-xs font-black !text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                                        <GitBranch className={`w-3.5 h-3.5 ${statusColors.solidText} group-hover/draw:!text-black transition-colors`} />
+                                        <span className={`text-xs font-black ${statusColors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
                                     </button>
                                 )}
                             </div>
