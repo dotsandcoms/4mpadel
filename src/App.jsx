@@ -25,6 +25,7 @@ import CoachRegistration from './pages/CoachRegistration';
 import Gallery from './pages/Gallery';
 import AlbumDetails from './pages/AlbumDetails';
 import Contact from './pages/Contact';
+import ResetPassword from './pages/ResetPassword';
 import SiteFooter from './components/SiteFooter';
 import { Analytics } from "@vercel/analytics/react";
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
@@ -47,15 +48,18 @@ function AppContent() {
         const isMagicLink = hash.includes('access_token=') && (hash.includes('type=magiclink') || hash.includes('type=recovery') || hash.includes('type=invite'));
 
         if (isMagicLink) {
-          console.log('App: Detected magic link / recovery link sign-in. Redirecting to profile...');
+          const isRecovery = hash.includes('type=recovery');
+          const targetPath = isRecovery ? '/reset-password' : '/profile';
+          
+          console.log(`App: Detected link sign-in (${targetPath}). Redirecting...`);
           // Small delay to ensure session is fully processed
-          setTimeout(() => navigate('/profile'), 500);
+          setTimeout(() => navigate(targetPath), 500);
         }
       }
 
       if (event === 'PASSWORD_RECOVERY') {
-        console.log('App: Detected password recovery event. Redirecting to profile...');
-        navigate('/profile');
+        console.log('App: Detected password recovery event. Redirecting to reset-password...');
+        navigate('/reset-password');
       }
     });
 
@@ -93,6 +97,7 @@ function AppContent() {
           <Route path="/results/:id" element={<TournamentResults />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/profile" element={<PlayerProfile />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/academy/coaches" element={<ApprovedCoaches />} />
           <Route path="/academy/videos" element={<CoachingVideos />} />
           <Route path="/academy/register" element={<CoachRegistration />} />

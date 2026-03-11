@@ -17,6 +17,7 @@ const PlayerProfile = () => {
     const [player, setPlayer] = useState(null);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isImpersonating, setIsImpersonating] = useState(false);
+    const [loadingReset, setLoadingReset] = useState(false);
     const navigate = useNavigate();
 
     const [isActivationRequired, setIsActivationRequired] = useState(false);
@@ -126,7 +127,21 @@ const PlayerProfile = () => {
             setLoading(false);
         };
 
-        checkUserAndFetchProfile();
+    const handleInitiatePasswordReset = async () => {
+        if (!player?.email) return;
+        setLoadingReset(true);
+        const { error } = await supabase.auth.resetPasswordForEmail(player.email, {
+            redirectTo: window.location.origin + '/reset-password',
+        });
+        if (error) {
+            showMessage(error.message, 'error');
+        } else {
+            showMessage('Password reset email sent! Please check your inbox.', 'success');
+        }
+        setLoadingReset(false);
+    };
+
+    checkUserAndFetchProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
 
@@ -469,13 +484,20 @@ const PlayerProfile = () => {
                                 </div>
                             </motion.div>
 
-                            {/* Security Notice */}
                             <div className="bg-padel-green/5 border border-padel-green/20 rounded-[2.5rem] p-8">
                                 <ShieldCheck className="text-padel-green mb-4" size={32} />
-                                <h4 className="font-bold text-white mb-2">Verified Account</h4>
-                                <p className="text-xs text-white/50 leading-relaxed uppercase tracking-wider font-bold">
+                                <h4 className="font-bold text-white mb-2">Account Security</h4>
+                                <p className="text-xs text-white/50 leading-relaxed uppercase tracking-wider font-bold mb-6">
                                     Your profile is protected by 4M Padel Community security. Updates are synced across all tournament leaderboards.
                                 </p>
+                                <button
+                                    onClick={handleInitiatePasswordReset}
+                                    disabled={loadingReset}
+                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Lock size={14} className="text-padel-green" />
+                                    {loadingReset ? 'Sending Email...' : 'Reset Password'}
+                                </button>
                             </div>
                         </div>
 
