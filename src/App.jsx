@@ -28,6 +28,7 @@ import Contact from './pages/Contact';
 import ResetPassword from './pages/ResetPassword';
 import SiteFooter from './components/SiteFooter';
 import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/react";
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
@@ -74,6 +75,7 @@ function AppContent() {
     <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
       <GoogleAnalytics />
       <Analytics />
+      <SpeedInsights />
       {!isAdminRoute && <Navbar />}
       <div id="site-content">
         <Routes>
