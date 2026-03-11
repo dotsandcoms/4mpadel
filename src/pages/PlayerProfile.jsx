@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as ImageIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
@@ -316,7 +316,7 @@ const PlayerProfile = () => {
                                         </div>
                                     )}
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-sm">
-                                        <ImageIcon className="w-8 h-8 text-padel-green mb-2" />
+                                        <PhotoIcon className="w-8 h-8 text-padel-green mb-2" />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-white">Change Photo</span>
                                     </div>
                                     {uploadingImage && (
