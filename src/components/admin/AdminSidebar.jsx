@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
-const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
+const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) => {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
@@ -16,13 +16,34 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
     ];
 
     return (
-        <aside className="w-64 bg-black/90 backdrop-blur-xl border-r border-white/10 h-screen fixed left-0 top-0 flex flex-col z-50">
-            <div className="p-8">
-                <div className="flex items-center gap-2">
-                    <img src={logo} alt="4M Padel" className="h-10 w-auto" />
-                    <span className="text-xl font-bold text-white">South Africa</span>
+        <>
+            {/* Mobile Overlay */}
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={onClose}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] lg:hidden"
+                    />
+                )}
+            </AnimatePresence>
+
+            <aside className={`w-64 bg-[#0F172A] lg:bg-black/90 backdrop-blur-xl border-r border-white/10 h-screen fixed left-0 top-0 flex flex-col z-[60] transition-transform duration-300 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+                }`}>
+                <div className="p-8 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <img src={logo} alt="4M Padel" className="h-10 w-auto" />
+                        <span className="text-xl font-bold text-white">South Africa</span>
+                    </div>
+                    <button
+                        onClick={onClose}
+                        className="p-2 text-gray-400 hover:text-white lg:hidden"
+                    >
+                        <X size={24} />
+                    </button>
                 </div>
-            </div>
 
             <nav className="flex-1 px-4 space-y-2">
                 {menuItems.map((item) => {
@@ -31,7 +52,10 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
                     return (
                         <button
                             key={item.id}
-                            onClick={() => setActiveTab(item.id)}
+                            onClick={() => {
+                                setActiveTab(item.id);
+                                if (window.innerWidth < 1024) onClose();
+                            }}
                             className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 relative group ${isActive ? 'text-black font-bold' : 'text-gray-400 hover:text-white'
                                 }`}
                         >
@@ -62,6 +86,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout }) => {
                 </button>
             </div>
         </aside>
+    </>
     );
 };
 

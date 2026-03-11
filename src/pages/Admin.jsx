@@ -11,6 +11,7 @@ import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import { Menu } from 'lucide-react';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -19,6 +20,7 @@ const Admin = () => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -106,10 +108,29 @@ const Admin = () => {
     }
 
     return (
-        <div className="min-h-screen bg-black text-white flex">
-            <AdminSidebar activeTab={activeTab} setActiveTab={setActiveTab} onLogout={handleLogout} />
+        <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row">
+            {/* Mobile Header */}
+            <header className="lg:hidden bg-black border-b border-white/10 p-4 sticky top-0 z-[50] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">4M Admin</span>
+                </div>
+                <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="p-2 text-gray-400 hover:text-white"
+                >
+                    <Menu size={24} />
+                </button>
+            </header>
 
-            <main className="flex-1 ml-64 p-8 lg:p-12 overflow-y-auto h-screen bg-gradient-to-br from-black to-[#0F172A]">
+            <AdminSidebar
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
+                onLogout={handleLogout}
+                isOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+            />
+
+            <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
                 <div className="max-w-7xl mx-auto">
                     <AnimatePresence mode="wait">
                         <motion.div
