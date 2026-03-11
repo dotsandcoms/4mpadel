@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
+import { useRankedin } from '../hooks/useRankedin';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
 import tournamentHero from '../assets/tournament_hero.jpg'; // Specific tournament hero
 
 const extractRankedinId = (url) => {
     if (!url) return null;
-    const match = url.match(/\/tournament\/(\d+)/);
+    // Matches /tournament/123, /clubleague/123, /draws/123, or just 123 at the end of a path
+    const match = url.match(/\/(?:tournament|clubleague|draws|results)\/(\d+)/) || url.match(/\/(\d+)(?:\/|$)/);
     return match ? match[1] : null;
 };
 
@@ -18,6 +20,8 @@ const EventDetails = () => {
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [weather, setWeather] = useState(null);
+    const [hasDraw, setHasDraw] = useState(false);
+    const { getTournamentClasses } = useRankedin();
 
     const stripHtml = (html) => {
         if (!html) return '';
@@ -78,6 +82,25 @@ const EventDetails = () => {
 
         fetchEventDetails();
     }, [slug]);
+
+    useEffect(() => {
+        const checkDrawAvailable = async () => {
+            if (!event) return;
+            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            if (rId) {
+                const classes = await getTournamentClasses(rId);
+                const drawAvailable = classes && classes.some(c => 
+                    c.IsPublished && 
+                    Array.isArray(c.TournamentDraws) && 
+                    c.TournamentDraws.length > 0
+                );
+                setHasDraw(drawAvailable);
+            } else if (event.slug) {
+                setHasDraw(false);
+            }
+        };
+        checkDrawAvailable();
+    }, [event, getTournamentClasses]);
 
     useEffect(() => {
         const fetchWeather = async () => {
@@ -405,13 +428,13 @@ const EventDetails = () => {
 
                                     {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                        if (!rId && !event.slug) return null;
+                                        if (!hasDraw || (!rId && !event.slug)) return null;
                                         return (
                                             <Link
                                                 to={`/draws/${event.slug || rId}`}
-                                                className="w-full flex items-center justify-center gap-2 bg-[#0F172A] text-white font-bold py-3 rounded-xl hover:bg-padel-green hover:text-black transition-all duration-300 uppercase tracking-wide text-xs shadow-lg shadow-black/10"
+                                                className="w-full flex items-center justify-center gap-2 bg-slate-900 text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all duration-300 uppercase tracking-widest text-sm"
                                             >
-                                                <GitBranch className="w-3.5 h-3.5" />
+                                                <GitBranch className="w-4 h-4" />
                                                 View Draw
                                             </Link>
                                         );

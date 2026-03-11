@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch } from 'lucide-react';
+import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users } from 'lucide-react';
 
 const featuredDataTemplate = [
     {
@@ -74,12 +74,32 @@ const FallbackImage = ({ src, alt, className, title }) => {
 
 const extractRankedinId = (url) => {
     if (!url) return null;
-    const match = url.match(/\/tournament\/(\d+)/);
+    // Matches /tournament/123, /clubleague/123, /draws/123, or just 123 at the end of a path
+    const match = url.match(/\/(?:tournament|clubleague|draws|results)\/(\d+)/) || url.match(/\/(\d+)(?:\/|$)/);
     return match ? match[1] : null;
 };
 
-const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, buttonLabel = "VIEW DETAILS", status = 'Gold' }) => {
+const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
     const navigate = useNavigate();
+    const { getTournamentClasses } = useRankedin();
+    const [hasDraw, setHasDraw] = useState(false);
+
+    useEffect(() => {
+        const checkDraw = async () => {
+            const rId = rankedinId || extractRankedinId(drawPath) || extractRankedinId(linkPath);
+            if (rId) {
+                const classes = await getTournamentClasses(rId);
+                // A draw is only valid if it's published and has at least one draw/bracket established
+                const drawAvailable = classes && classes.some(c => 
+                    c.IsPublished && 
+                    Array.isArray(c.TournamentDraws) && 
+                    c.TournamentDraws.length > 0
+                );
+                setHasDraw(drawAvailable);
+            }
+        };
+        checkDraw();
+    }, [drawPath, linkPath, getTournamentClasses, rankedinId]);
 
     // Color mapping based on status
     const getStatusColors = (status) => {
@@ -123,9 +143,17 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
             )}
 
             <div className="absolute inset-x-0 bottom-0 p-5 xl:p-6 z-10 flex flex-col justify-end">
-                <div className="flex items-center gap-1.5 mb-2 opacity-90">
-                    <Calendar className={`w-3 h-3 ${colors.text}`} />
-                    <p className={`text-[9px] font-bold ${colors.text} uppercase tracking-widest truncate`}>{label}</p>
+                <div className="flex items-center justify-between gap-1.5 mb-2">
+                    <div className="flex items-center gap-1.5 opacity-90">
+                        <Calendar className={`w-3 h-3 ${colors.text}`} />
+                        <p className={`text-[9px] font-bold ${colors.text} uppercase tracking-widest truncate`}>{label}</p>
+                    </div>
+                    {registeredPlayers > 0 && (
+                        <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                            <GitBranch className="w-2.5 h-2.5 text-padel-green" />
+                            <span className="text-[8px] font-bold text-white uppercase tracking-wider">{registeredPlayers} <span className="opacity-60">Players</span></span>
+                        </div>
+                    )}
                 </div>
                 <h3 className={`text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-5 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
 
@@ -137,7 +165,7 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">{buttonLabel}</span>
                     </div>
 
-                    {drawPath && (
+                    {drawPath && hasDraw && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
                             className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw`}
@@ -154,6 +182,27 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
 
 const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments }) => {
     const navigate = useNavigate();
+    const { getTournamentClasses } = useRankedin();
+    const [hasDraw, setHasDraw] = useState(false);
+
+    useEffect(() => {
+        const checkDraw = async () => {
+            // Only check for single blocks (where data.linkPath or data.rankedin_url exists)
+            if (data.id !== 'recent-results' && !(data.id === 'featured-tournaments' && featuredTournaments?.length > 1)) {
+                const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
+                if (rId) {
+                    const classes = await getTournamentClasses(rId);
+                    const drawAvailable = classes && classes.some(c => 
+                        c.IsPublished && 
+                        Array.isArray(c.TournamentDraws) && 
+                        c.TournamentDraws.length > 0
+                    );
+                    setHasDraw(drawAvailable);
+                }
+            }
+        };
+        checkDraw();
+    }, [data.rankedin_url, data.linkPath, data.id, data.rankedinId, featuredTournaments, getTournamentClasses]);
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1);
 
@@ -216,6 +265,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             linkPath={t.customLink || `/results/${t.eventId}`}
                             buttonLabel="VIEW RESULTS"
                             status={t.sapaStatus || 'Gold'}
+                            registeredPlayers={t.registeredPlayers}
+                            rankedinId={t.eventId}
                         />
                     ))
                 ) : (
@@ -239,6 +290,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             linkPath={`/calendar/${t.slug || t.id}`}
                             drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
                             status={t.sapa_status || 'Gold'}
+                            registeredPlayers={t.registered_players}
+                            rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
                         />
                     ))
                 ) : (
@@ -285,7 +338,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <p className="text-[10px] font-bold text-padel-green uppercase tracking-widest">{data.cardLabel}</p>
                 </div>
 
-                <h3 className="text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-6 group-hover:text-padel-green transition-colors duration-500 tracking-tight">{data.cardTitle}</h3>
+                <h3 className="text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:text-padel-green transition-colors duration-500 tracking-tight">{data.cardTitle}</h3>
+
+                {data.registeredPlayers > 0 && (
+                    <div className="flex items-center gap-1.5 mb-6 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
+                        <Users className="w-3.5 h-3.5 text-padel-green" />
+                        <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Registered Players</span>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-3 pointer-events-auto flex-wrap">
                     <div className="flex items-center gap-3">
@@ -296,8 +356,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     </div>
 
                     {(() => {
-                        const rId = extractRankedinId(data.rankedin_url);
-                        if (!rId && !data.linkPath?.includes('/calendar/')) return null;
+                        const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
+                        if (!hasDraw || !rId) return null;
 
                         // If we have a slug in linkPath, use it for draws too
                         const slugMatch = data.linkPath?.match(/\/calendar\/([^\/]+)/);
@@ -306,10 +366,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         return (
                             <button
                                 onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
-                                className="flex items-center gap-2 bg-padel-green/10 border border-padel-green/30 hover:bg-padel-green hover:border-padel-green px-4 py-2 rounded-full transition-all duration-300 group/draw"
+                                className="flex items-center gap-2 bg-padel-green border border-padel-green hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg shadow-padel-green/20"
                             >
-                                <GitBranch className="w-3.5 h-3.5 text-padel-green group-hover/draw:text-black transition-colors" />
-                                <span className="text-[10px] font-bold text-padel-green group-hover/draw:text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                                <GitBranch className="w-3.5 h-3.5 text-black transition-colors" />
+                                <span className="text-xs font-black text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
                             </button>
                         );
                     })()}
@@ -368,7 +428,7 @@ const FeaturedSections = () => {
                 // First try to fetch results marked as featured_result in our calendar table
                 const { data: featuredResults, error } = await supabase
                     .from('calendar')
-                    .select('*')
+                    .select('*, registered_players')
                     .eq('featured_result', true)
                     .order('start_date', { ascending: false })
                     .limit(3);
@@ -381,7 +441,8 @@ const FeaturedSections = () => {
                         city: t.city || 'Tournament',
                         image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
                         customLink: `/results/${t.slug || t.id}`,
-                        sapaStatus: t.sapa_status
+                        sapaStatus: t.sapa_status,
+                        registeredPlayers: t.registered_players
                     }));
                     setLiveTournaments(mappedResults);
                 } else {
@@ -401,7 +462,7 @@ const FeaturedSections = () => {
             try {
                 const { data, error } = await supabase
                     .from('calendar')
-                    .select('*')
+                    .select('*, registered_players')
                     .eq('featured_event', true)
                     .order('start_date', { ascending: true })
                     .limit(3);
@@ -422,7 +483,9 @@ const FeaturedSections = () => {
                                     cardLabel: singleEvent.sapa_status || 'Major Event',
                                     image: singleEvent.image_url || newData[featuredIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
-                                    rankedin_url: singleEvent.rankedin_url
+                                    rankedin_url: singleEvent.rankedin_url,
+                                    registeredPlayers: singleEvent.registered_players,
+                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)
                                 };
                             }
                             return newData;
