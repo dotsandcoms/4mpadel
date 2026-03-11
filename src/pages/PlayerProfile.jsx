@@ -127,6 +127,10 @@ const PlayerProfile = () => {
             setLoading(false);
         };
 
+        checkUserAndFetchProfile();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [navigate]);
+
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;
         setLoadingReset(true);
@@ -140,10 +144,6 @@ const PlayerProfile = () => {
         }
         setLoadingReset(false);
     };
-
-    checkUserAndFetchProfile();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [navigate]);
 
     const refetchPlayer = async () => {
         const { data: { session } } = await supabase.auth.getSession();
