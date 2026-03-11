@@ -79,7 +79,7 @@ const CalendarEventItem = ({ event, index }) => {
                         </div>
 
                         {/* Info */}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 py-1">
                             <div className="flex flex-wrap gap-2 mb-2">
                                 <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
                                     {event.sapa_status}
@@ -94,24 +94,24 @@ const CalendarEventItem = ({ event, index }) => {
                                 </span>
                             </div>
                             <div className="mb-2">
-                                <h3 className="text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight truncate">
+                                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
                                     {event.event_name}
                                 </h3>
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2 py-0.5 rounded-full w-fit mt-1">
+                                <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2 py-0.5 rounded-full w-fit mt-1">
                                     <CalendarIcon size={10} />
                                     {event.event_dates || (event.start_date && `${new Date(event.start_date).toLocaleDateString()} - ${new Date(event.end_date || event.start_date).toLocaleDateString()}`)}
                                 </div>
                             </div>
-                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-[11px] font-medium">
-                                <div className="flex items-center gap-1.5">
-                                    <MapPin className="w-3.5 h-3.5 text-padel-green/50" />
-                                    <span className="truncate max-w-[150px]">{event.venue}</span>
+                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-[10px] sm:text-[11px] font-medium">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <MapPin className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-padel-green/50 shrink-0" />
+                                    <span className="truncate">{event.venue}</span>
                                 </div>
                                 {event.registered_players > 0 && (
-                                    <div className="flex items-center gap-1 bg-padel-green/5 border border-padel-green/10 px-1.5 py-0.5 rounded-lg">
+                                    <div className="flex items-center gap-1 bg-padel-green/5 border border-padel-green/10 px-1.5 py-0.5 rounded-lg whitespace-nowrap">
                                         <Users className="w-3 h-3 text-padel-green" />
                                         <span className="text-white font-bold">{event.registered_players}</span>
-                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400">Registered</span>
+                                        <span className="text-[9px] sm:text-[10px] uppercase tracking-tighter text-gray-400">Registered</span>
                                     </div>
                                 )}
                             </div>
@@ -119,7 +119,7 @@ const CalendarEventItem = ({ event, index }) => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-3 w-full md:w-auto shrink-0 self-end md:self-center justify-end">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-end">
                         {hasDraw && (
                              <Link
                                 to={drawPath}

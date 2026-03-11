@@ -89,10 +89,10 @@ const CalendarEventItem = ({ event, index }) => {
                                 )}
                             </div>
                             <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
-                                <h3 className="text-xl md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight">
+                                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
                                     {event.event_name || event.eventName}
                                 </h3>
-                                <div className="flex items-center gap-1.5 text-xs font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap">
+                                <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap w-fit">
                                     <CalendarIcon size={12} />
                                     {event.event_dates ||
                                         (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
@@ -116,7 +116,7 @@ const CalendarEventItem = ({ event, index }) => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-3 w-full md:w-auto shrink-0 self-end md:self-center justify-end">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-end">
                         {hasDraw && (
                              <Link
                                 to={drawPath}
