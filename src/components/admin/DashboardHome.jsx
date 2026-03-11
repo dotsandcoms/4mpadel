@@ -4,12 +4,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 
-const StatCard = ({ title, value, subtext, icon: Icon, delay, loading }) => (
+const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay, duration: 0.5 }}
-        className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 relative overflow-hidden group hover:border-padel-green/30 transition-colors"
+        onClick={onClick}
+        className={`bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 relative overflow-hidden group hover:border-padel-green/30 transition-all cursor-pointer hover:bg-[#1E293B]/80 hover:scale-[1.02] active:scale-[0.98] ${onClick ? 'cursor-pointer' : ''}`}
     >
         <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-300">
             <Icon size={48} className="text-padel-green" />
@@ -18,13 +19,13 @@ const StatCard = ({ title, value, subtext, icon: Icon, delay, loading }) => (
         <p className="text-4xl font-black text-white mb-2 font-display">
             {loading ? <span className="animate-pulse">---</span> : value}
         </p>
-        <p className="text-padel-green/80 text-xs font-bold uppercase tracking-widest flex items-center gap-1">
+        <p className="text-padel-green/80 text-xs font-bold uppercase tracking-widest flex items-center gap-1 group-hover:text-white transition-colors">
             {subtext}
         </p>
     </motion.div>
 );
 
-const DashboardHome = () => {
+const DashboardHome = ({ onTabChange }) => {
     const navigate = useNavigate();
     const [stats, setStats] = useState({
         totalPlayers: 0,
@@ -149,6 +150,7 @@ const DashboardHome = () => {
                     icon={Users}
                     delay={0.0}
                     loading={loading}
+                    onClick={() => onTabChange?.('players')}
                 />
                 <StatCard
                     title="Coaches"
@@ -157,6 +159,7 @@ const DashboardHome = () => {
                     icon={UserPlus}
                     delay={0.1}
                     loading={loading}
+                    onClick={() => onTabChange?.('coaches')}
                 />
                 <StatCard
                     title="Upcoming Events"
@@ -165,6 +168,7 @@ const DashboardHome = () => {
                     icon={Calendar}
                     delay={0.2}
                     loading={loading}
+                    onClick={() => onTabChange?.('calendar')}
                 />
                 <StatCard
                     title="Featured Events"
@@ -173,6 +177,7 @@ const DashboardHome = () => {
                     icon={Star}
                     delay={0.3}
                     loading={loading}
+                    onClick={() => onTabChange?.('calendar')}
                 />
             </div>
 
@@ -201,7 +206,11 @@ const DashboardHome = () => {
                         ) : (
                             <div className="grid gap-3">
                                 {upcomingCalendar.map((event, index) => (
-                                    <div key={event.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group">
+                                    <div
+                                        key={event.id}
+                                        onClick={() => onTabChange?.('calendar')}
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group cursor-pointer"
+                                    >
                                         <div className="flex items-start sm:items-center gap-4">
                                             <div className="hidden sm:flex w-12 h-12 rounded-lg bg-[#0F172A] border border-white/10 flex-col items-center justify-center flex-shrink-0">
                                                 <span className="text-[10px] font-bold text-gray-500 uppercase">{new Date(event.start_date || new Date()).toLocaleString('default', { month: 'short' })}</span>
@@ -256,7 +265,11 @@ const DashboardHome = () => {
                             </div>
                         ) : (
                             recentPlayers.map((player) => (
-                                <div key={player.id} className="flex items-center gap-4 p-3.5 rounded-xl bg-black/40 hover:bg-white/5 transition-colors border border-white/5">
+                                <div
+                                    key={player.id}
+                                    onClick={() => onTabChange?.('players')}
+                                    className="flex items-center gap-4 p-3.5 rounded-xl bg-black/40 hover:bg-white/5 transition-all border border-white/5 cursor-pointer group hover:border-padel-green/30"
+                                >
                                     <div className="w-10 h-10 rounded-full bg-[#0F172A] border border-white/10 flex items-center justify-center text-gray-400 shadow-inner flex-shrink-0">
                                         <Users size={18} />
                                     </div>

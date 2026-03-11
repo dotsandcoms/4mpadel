@@ -140,7 +140,7 @@ const Admin = () => {
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.3 }}
                         >
-                            {activeTab === 'dashboard' && <DashboardHome />}
+                            {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
                             {activeTab === 'players' && <PlayerManager />}
                             {activeTab === 'blog' && <BlogManager />}
                             {activeTab === 'calendar' && <CalendarManager />}
