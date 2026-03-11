@@ -65,7 +65,7 @@ const TopHeader = () => {
                 { name: 'Broll Pro Tour', href: '/tournaments/broll' },
                 { name: 'Ladies Tour', href: '/tournaments/ladies' },
                 { name: 'Juniors', href: '/tournaments/juniors' },
-                { name: 'All Tournaments', href: '/tournaments/all' },
+                { name: 'All Tournaments', href: '/calendar' },
                 { name: 'Mens 40 +', href: '/tournaments/mens40' },
             ]
         },

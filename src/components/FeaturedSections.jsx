@@ -300,17 +300,21 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                         </button>
                     )}
 
-                    {youtubeUrl && (
+                    {isLive && (
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
-                                if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                else window.open(youtubeUrl, '_blank');
+                                if (youtubeUrl) {
+                                    if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                    else window.open(youtubeUrl, '_blank');
+                                } else {
+                                    navigate(linkPath);
+                                }
                             }}
                             className={`flex items-center gap-1.5 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/live`}
                         >
                             <PlayCircle className={`w-3 h-3 text-white group-hover/live:!text-red-600 transition-colors`} />
-                            <span className={`text-[9px] font-bold text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest`}>WATCH LIVE</span>
+                            <span className={`text-[9px] font-bold text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest`}>{youtubeUrl ? 'WATCH LIVE' : 'WATCH LIVE SOON'}</span>
                         </button>
                     )}
                 </div>
@@ -382,12 +386,16 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 {isLiveSection && data.linkPath ? (
                     <button
                         onClick={() => {
-                            if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
-                            else window.open(data.youtubeUrl, '_blank');
+                            if (data.youtubeUrl) {
+                                if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
+                                else window.open(data.youtubeUrl, '_blank');
+                            } else {
+                                navigate(data.linkPath || '/calendar');
+                            }
                         }}
                         className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] text-white bg-red-600 hover:bg-black px-6 py-3 rounded-full transition-all duration-300`}
                     >
-                        WATCH LIVE NOW
+                        {data.youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
                         <div className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center transition-colors flex-shrink-0 group-hover:border-white text-white`}>
                             <PlayCircle className={`w-3.5 h-3.5`} />
                         </div>
@@ -539,17 +547,21 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
                         return (
                             <div className="flex items-center gap-3">
-                                {data.id === 'featured-live' && data.youtubeUrl && (
+                                {data.id === 'featured-live' && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
-                                            else window.open(data.youtubeUrl, '_blank');
+                                            if (data.youtubeUrl) {
+                                                if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
+                                                else window.open(data.youtubeUrl, '_blank');
+                                            } else {
+                                                navigate(data.linkPath || `/calendar/${slug || rId}`);
+                                            }
                                         }}
                                         className="flex items-center gap-2 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/live shadow-lg shadow-red-600/20"
                                     >
                                         <PlayCircle className="w-3.5 h-3.5 !text-white group-hover/live:!text-red-600 transition-colors" />
-                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">WATCH LIVE</span>
+                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">{data.youtubeUrl ? 'WATCH ON SITE' : 'WATCH LIVE SOON'}</span>
                                     </button>
                                 )}
 
