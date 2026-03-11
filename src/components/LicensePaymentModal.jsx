@@ -5,6 +5,9 @@ import { usePaystackPayment } from 'react-paystack';
 import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
+const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '').trim().replace(/['"]/g, '');
+const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.length > 10;
+
 const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal) => {
     const { error: rpcError } = await supabase.rpc('mark_player_paid');
     if (rpcError) {
@@ -24,7 +27,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
         reference: `${(new Date()).getTime()}-${amountInRands}`,
         email: userEmail || '',
         amount: toPaystackAmount(amountInRands),
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+        publicKey: PAYSTACK_PUBLIC_KEY,
         currency: 'ZAR',
     });
 
@@ -87,7 +90,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                         <div className="space-y-3">
                             <button
                                 onClick={() => runPayment(handleFullLicensePay)}
-                                disabled={loading || !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}
+                                disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-padel-green/20 border border-padel-green/50 hover:bg-padel-green/30 transition-all group"
                             >
                                 <div className="text-left">
@@ -101,7 +104,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
 
                             <button
                                 onClick={() => runPayment(handleTemporaryLicensePay)}
-                                disabled={loading || !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY}
+                                disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
                             >
                                 <div className="text-left">

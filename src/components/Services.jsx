@@ -12,7 +12,7 @@ const Services = () => {
         {
             icon: <Users className="w-8 h-8" />,
             title: "Club Development",
-            description: "Supporting clubs across Western Cape and Gauteng with infrastructure and management."
+            description: "Supporting clubs across South Africa with infrastructure and management."
         },
         {
             icon: <Zap className="w-8 h-8" />,
@@ -22,7 +22,7 @@ const Services = () => {
         {
             icon: <Trophy className="w-8 h-8" />,
             title: "National Tournaments",
-            description: "Official SAPA rankings events held monthly in major cities nationwide."
+            description: "Official SAPA rankings events held throughout the year in major cities nationwide."
         }
     ];
 

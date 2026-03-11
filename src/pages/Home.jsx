@@ -56,7 +56,7 @@ const Home = () => {
                             whileInView={{ opacity: 1, scale: 1 }}
                             viewport={{ once: true }}
                             transition={{ duration: 0.8 }}
-                            className="relative h-[600px] rounded-3xl overflow-hidden group"
+                            className="hidden md:block relative h-[600px] rounded-3xl overflow-hidden group"
                         >
                             <img
                                 src={dynamicsPlayer}
@@ -69,7 +69,7 @@ const Home = () => {
                                 <div className="glass-panel p-6 rounded-2xl flex justify-between items-end">
                                     <div>
                                         <p className="text-sm text-gray-300 mb-1">Player Spotlight</p>
-                                        <h3 className="text-2xl font-bold">Augustin Tapia</h3>
+                                        <h3 className="text-2xl font-bold">Agustin Tapia</h3>
                                     </div>
                                 </div>
                             </div>

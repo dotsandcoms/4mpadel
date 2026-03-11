@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
     PieChart,
@@ -104,6 +104,7 @@ const CalendarManager = () => {
         organizer_website: '',
         image_url: '',
         featured_event: false,
+        featured_result: false,
         is_league: false,
         tournament_tag: 'None',
         registered_players: 0,
@@ -226,6 +227,7 @@ const CalendarManager = () => {
             organizer_website: '',
             image_url: '',
             featured_event: false,
+            featured_result: false,
             is_league: false,
             tournament_tag: 'None',
             registered_players: 0,
@@ -255,6 +257,7 @@ const CalendarManager = () => {
             organizer_website: event.organizer_website || '',
             image_url: event.image_url || '',
             featured_event: event.featured_event || false,
+            featured_result: event.featured_result || false,
             is_league: event.is_league || false,
             tournament_tag: event.tournament_tag || 'None',
             registered_players: event.registered_players || 0,
@@ -713,7 +716,8 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Location</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Featured">★</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Homepage Featured">★</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Recent Results Featured">🏆</th>
                                 <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
                             </tr>
                         </thead>
@@ -760,6 +764,13 @@ const CalendarManager = () => {
                                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mx-auto" title="Featured Event" />
                                             ) : (
                                                 <Star className="w-4 h-4 text-gray-600 mx-auto" />
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {event.featured_result ? (
+                                                <Trophy className="w-4 h-4 text-padel-green fill-padel-green/20 mx-auto" title="Featured Result" />
+                                            ) : (
+                                                <Trophy className="w-4 h-4 text-gray-600 mx-auto" />
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-middle text-right">
@@ -871,7 +882,20 @@ const CalendarManager = () => {
                                                 className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
                                             />
                                             <label htmlFor="featured_event" className="text-sm font-bold text-white uppercase cursor-pointer">
-                                                Feature Event on Homepage
+                                                Feature Event
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="featured_result"
+                                                name="featured_result"
+                                                checked={formData.featured_result}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
+                                            />
+                                            <label htmlFor="featured_result" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Show in Recent Results
                                             </label>
                                         </div>
                                         <div className="flex items-center gap-2">

@@ -3,9 +3,15 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
 import tournamentHero from '../assets/tournament_hero.jpg'; // Specific tournament hero
+
+const extractRankedinId = (url) => {
+    if (!url) return null;
+    const match = url.match(/\/tournament\/(\d+)/);
+    return match ? match[1] : null;
+};
 
 const EventDetails = () => {
     const { slug } = useParams(); // changed from id to slug
@@ -391,11 +397,25 @@ const EventDetails = () => {
                                     </a>
 
                                     <button
-                                        className="w-full bg-white border-2 border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:border-slate-900 hover:text-slate-900 transition-all duration-300 uppercase tracking-wide text-xs"
+                                        className="w-full bg-white border-2 border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:border-slate-900 hover:text-slate-900 transition-all duration-300 uppercase tracking-wide text-xs mb-3"
                                         onClick={handleAddToCalendar}
                                     >
                                         Add to Calendar
                                     </button>
+
+                                    {(() => {
+                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                        if (!rId && !event.slug) return null;
+                                        return (
+                                            <Link
+                                                to={`/draws/${event.slug || rId}`}
+                                                className="w-full flex items-center justify-center gap-2 bg-[#0F172A] text-white font-bold py-3 rounded-xl hover:bg-padel-green hover:text-black transition-all duration-300 uppercase tracking-wide text-xs shadow-lg shadow-black/10"
+                                            >
+                                                <GitBranch className="w-3.5 h-3.5" />
+                                                View Draw
+                                            </Link>
+                                        );
+                                    })()}
                                 </div>
 
                                 {/* Event Poster Image */}

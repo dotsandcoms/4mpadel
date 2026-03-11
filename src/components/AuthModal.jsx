@@ -6,6 +6,9 @@ import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
+const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '').trim().replace(/['"]/g, '');
+const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.length > 10;
+
 const AuthModal = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState('login'); // 'login', 'register', 'forgot_password'
     const [loading, setLoading] = useState(false);
@@ -213,7 +216,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         reference: (new Date()).getTime().toString(),
         email: email,
         amount: toPaystackAmount(FEES.FULL_LICENSE),
-        publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+        publicKey: PAYSTACK_PUBLIC_KEY,
         currency: 'ZAR',
     };
 
@@ -539,7 +542,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                             </div>
                                                             <div className="text-left">
                                                                 <p className="text-white font-bold text-sm">Pay Now</p>
-                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Registration Fee: {formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
+                                                                <p className="text-gray-500 text-[10px] uppercase font-bold">Annual License Fee: {formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
                                                             </div>
                                                         </div>
                                                         <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'pay_now' ? 'border-padel-green' : 'border-white/30'}`}>
@@ -572,10 +575,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 </button>
                                                 <button
                                                     type="submit"
-                                                    disabled={loading || (paymentOption === 'pay_now' && !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY)}
+                                                    disabled={loading || (paymentOption === 'pay_now' && !isPaystackConfigured())}
                                                     className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                                 >
-                                                    {loading ? 'Processing...' : paymentOption === 'pay_later' ? 'Register' : !import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? 'Paystack Key Missing' : 'Pay & Register'}
+                                                    {loading ? 'Processing...' : paymentOption === 'pay_later' ? 'Register' : !isPaystackConfigured() ? 'Paystack Key Missing' : 'Pay & Register'}
                                                 </button>
                                             </div>
                                         </div>

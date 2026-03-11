@@ -20,7 +20,7 @@ const featuredDataTemplate = [
     },
     {
         id: 'recent-results',
-        title: 'Recent Tournament',
+        title: 'Recent Featured Tournaments',
         highlight: 'Results',
         description: 'Relive the highlights and unbelievable moments from last weekend\'s finals. Upsets, brilliant plays, and unmatched sportsmanship on display.',
         cardLabel: 'Tournament Champions',
@@ -78,8 +78,22 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
-const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false }) => {
+const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, buttonLabel = "VIEW DETAILS", status = 'Gold' }) => {
     const navigate = useNavigate();
+
+    // Color mapping based on status
+    const getStatusColors = (status) => {
+        const s = status?.toLowerCase() || '';
+        if (s.includes('major')) return { text: 'text-red-500', bg: 'bg-red-500/20', border: 'border-red-500/30', hover: 'hover:border-red-500', glow: 'shadow-red-500/20' };
+        if (s.includes('super gold') || s === 's gold') return { text: 'text-amber-600', bg: 'bg-amber-600/20', border: 'border-amber-600/30', hover: 'hover:border-amber-600', glow: 'shadow-amber-600/20' };
+        if (s.includes('gold')) return { text: 'text-yellow-500', bg: 'bg-yellow-500/20', border: 'border-yellow-500/30', hover: 'hover:border-yellow-500', glow: 'shadow-yellow-500/20' };
+        if (s.includes('silver')) return { text: 'text-gray-400', bg: 'bg-gray-400/20', border: 'border-gray-400/30', hover: 'hover:border-gray-400', glow: 'shadow-gray-400/20' };
+        if (s.includes('bronze')) return { text: 'text-orange-700', bg: 'bg-orange-700/20', border: 'border-orange-700/30', hover: 'hover:border-orange-700', glow: 'shadow-orange-700/20' };
+        if (s.includes('fip')) return { text: 'text-blue-500', bg: 'bg-blue-500/20', border: 'border-blue-500/30', hover: 'hover:border-blue-500', glow: 'shadow-blue-500/20' };
+        return { text: 'text-padel-green', bg: 'bg-padel-green/20', border: 'border-padel-green/30', hover: 'hover:border-padel-green', glow: 'shadow-padel-green/20' };
+    };
+
+    const colors = getStatusColors(status);
 
     return (
         <motion.div
@@ -87,7 +101,7 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative w-full h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border border-white/5 hover:border-padel-green/30 transition-all duration-500 bg-[#060913]`}
+            className={`relative w-full h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border border-white/5 ${colors.hover} transition-all duration-500 bg-[#060913]`}
             onClick={() => navigate(linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
@@ -110,26 +124,26 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
 
             <div className="absolute inset-x-0 bottom-0 p-5 xl:p-6 z-10 flex flex-col justify-end">
                 <div className="flex items-center gap-1.5 mb-2 opacity-90">
-                    <Calendar className="w-3 h-3 text-padel-green" />
-                    <p className="text-[9px] font-bold text-padel-green uppercase tracking-widest truncate">{label}</p>
+                    <Calendar className={`w-3 h-3 ${colors.text}`} />
+                    <p className={`text-[9px] font-bold ${colors.text} uppercase tracking-widest truncate`}>{label}</p>
                 </div>
-                <h3 className="text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-5 group-hover:text-padel-green transition-colors duration-300 tracking-tight">{title}</h3>
+                <h3 className={`text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-5 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
 
                 <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
-                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-padel-green" />
+                        <div className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white transition-colors`}>
+                            <ChevronRight className={`w-3.5 h-3.5 text-gray-400 group-hover:text-white`} />
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">VIEW DETAILS</span>
+                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">{buttonLabel}</span>
                     </div>
 
                     {drawPath && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className="flex items-center gap-1.5 bg-padel-green/10 border border-padel-green/30 hover:bg-padel-green hover:border-padel-green px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw"
+                            className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw`}
                         >
-                            <GitBranch className="w-3 h-3 text-padel-green group-hover/draw:text-black transition-colors" />
-                            <span className="text-[9px] font-bold text-padel-green group-hover/draw:text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                            <GitBranch className={`w-3 h-3 ${colors.text} group-hover/draw:text-black transition-colors`} />
+                            <span className={`text-[9px] font-bold ${colors.text} group-hover/draw:text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
                         </button>
                     )}
                 </div>
@@ -198,8 +212,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             index={i}
                             title={t.eventName}
                             label={t.city || 'Tournament'}
-                            image={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
-                            linkPath={`/results/${t.eventId}`}
+                            image={t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                            linkPath={t.customLink || `/results/${t.eventId}`}
+                            buttonLabel="VIEW RESULTS"
+                            status={t.sapaStatus || 'Gold'}
                         />
                     ))
                 ) : (
@@ -222,6 +238,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
                             linkPath={`/calendar/${t.slug || t.id}`}
                             drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
+                            status={t.sapa_status || 'Gold'}
                         />
                     ))
                 ) : (
@@ -347,8 +364,36 @@ const FeaturedSections = () => {
 
     useEffect(() => {
         const fetchTours = async () => {
-            const data = await getRecentTournaments(3);
-            setLiveTournaments(data);
+            try {
+                // First try to fetch results marked as featured_result in our calendar table
+                const { data: featuredResults, error } = await supabase
+                    .from('calendar')
+                    .select('*')
+                    .eq('featured_result', true)
+                    .order('start_date', { ascending: false })
+                    .limit(3);
+
+                if (featuredResults && featuredResults.length > 0 && !error) {
+                    // Map calendar events to the format expected by TournamentCard for results
+                    const mappedResults = featuredResults.map(t => ({
+                        eventId: t.id,
+                        eventName: t.event_name,
+                        city: t.city || 'Tournament',
+                        image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
+                        customLink: `/results/${t.slug || t.id}`,
+                        sapaStatus: t.sapa_status
+                    }));
+                    setLiveTournaments(mappedResults);
+                } else {
+                    // Fallback to RankedIn API for recent results
+                    const data = await getRecentTournaments(3);
+                    setLiveTournaments(data);
+                }
+            } catch (err) {
+                console.error("Error fetching tournament results:", err);
+                const data = await getRecentTournaments(3);
+                setLiveTournaments(data);
+            }
         };
         fetchTours();
 
