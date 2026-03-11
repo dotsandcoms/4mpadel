@@ -51,9 +51,12 @@ const SiteFooter = () => {
                         </span>
 
                         <div className="space-y-3 mt-2">
-                            <div className="flex items-center gap-3 text-gray-400 text-sm justify-center md:justify-start">
-                                <MapPin size={18} className="text-padel-green" />
-                                <span>Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, JHB, South Africa</span>
+                            <div className="flex items-start gap-3 text-gray-400 text-sm justify-center md:justify-start">
+                                <MapPin size={18} className="text-padel-green mt-0.5" />
+                                <span>
+                                    Commerce Square, building 2, 39 Rivonia Rd,<br />
+                                    Sandhurst, JHB, South Africa
+                                </span>
                             </div>
                             <div className="flex items-center gap-3 text-gray-400 text-sm justify-center md:justify-start">
                                 <Clock size={18} className="text-padel-green" />
