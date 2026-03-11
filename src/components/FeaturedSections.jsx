@@ -3,9 +3,21 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users } from 'lucide-react';
+import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
 
 const featuredDataTemplate = [
+    {
+        id: 'featured-live',
+        title: 'Featured Live Event',
+        highlight: 'Starting Soon',
+        description: 'Experience the thrill of the game as it happens. Watch top-tier Padel action streamed live from our courts.',
+        cardLabel: 'Live Stream',
+        cardTitle: 'Loading Live Event...',
+        image: 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop',
+        align: 'left',
+        linkPath: null,
+        icon: PlayCircle
+    },
     {
         id: 'featured-tournaments',
         title: 'Featured Tournaments',
@@ -30,18 +42,6 @@ const featuredDataTemplate = [
         linkPath: '/results',
         icon: Trophy
     },
-    {
-        id: 'live-events',
-        title: 'Featured Live',
-        highlight: 'Events',
-        description: 'Experience the thrill in real-time. Tune in to our live broadcasts and witness Padel history unfold as the best compete on center court.',
-        cardLabel: 'Live Now',
-        cardTitle: 'SAPA Regional Qualifiers',
-        image: 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop', // Reusing a padel image
-        align: 'left',
-        linkPath: '/calendar',
-        icon: PlayCircle
-    }
 ];
 
 const FallbackImage = ({ src, alt, className, title }) => {
@@ -79,7 +79,77 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
-const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
+const getYoutubeEmbedUrl = (url) => {
+    if (!url) return null;
+    let videoId = null;
+
+    if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
+    } else if (url.includes('youtube.com/watch')) {
+        videoId = url.split('v=')[1].split(/[&#]/)[0];
+    } else if (url.includes('youtube.com/live/')) {
+        videoId = url.split('live/')[1].split(/[?#]/)[0];
+    } else if (url.includes('youtube.com/embed/')) {
+        return url;
+    }
+
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+};
+
+const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
+    if (!isOpen) return null;
+
+    const embedUrl = getYoutubeEmbedUrl(videoUrl);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-black/90 backdrop-blur-sm shadow-2xl"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="relative w-full max-w-5xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-10"
+            >
+                <div className="absolute top-4 right-4 z-20">
+                    <button
+                        onClick={onClose}
+                        className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md transition-colors border border-white/10"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {embedUrl ? (
+                    <iframe
+                        src={embedUrl}
+                        title={title || "YouTube video player"}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                    />
+                ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-white p-8">
+                        <PlayCircle className="w-16 h-16 text-padel-green/20 mb-4" />
+                        <p className="text-xl font-bold">Unable to load live stream</p>
+                        <p className="text-gray-400 mt-2">Invalid YouTube URL or stream information.</p>
+                        <button
+                            onClick={() => window.open(videoUrl, '_blank')}
+                            className="mt-6 px-6 py-2 bg-white text-black font-bold rounded-full hover:bg-padel-green transition-colors"
+                        >
+                            Open on YouTube
+                        </button>
+                    </div>
+                )}
+            </motion.div>
+        </div>
+    );
+};
+
+const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -90,9 +160,9 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
             if (rId) {
                 const classes = await getTournamentClasses(rId);
                 // A draw is only valid if it's published and has at least one draw/bracket established
-                const drawAvailable = classes && classes.some(c => 
-                    c.IsPublished && 
-                    Array.isArray(c.TournamentDraws) && 
+                const drawAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    Array.isArray(c.TournamentDraws) &&
                     c.TournamentDraws.length > 0
                 );
                 setHasDraw(drawAvailable);
@@ -174,13 +244,27 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                             <span className={`text-[9px] font-bold ${colors.text} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
                         </button>
                     )}
+
+                    {youtubeUrl && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                else window.open(youtubeUrl, '_blank');
+                            }}
+                            className={`flex items-center gap-1.5 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/live`}
+                        >
+                            <PlayCircle className={`w-3 h-3 text-white group-hover/live:!text-red-600 transition-colors`} />
+                            <span className={`text-[9px] font-bold text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest`}>WATCH LIVE</span>
+                        </button>
+                    )}
                 </div>
             </div>
         </motion.div>
     );
 };
 
-const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments }) => {
+const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments, liveFeaturedTournaments, onWatchLive }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -188,13 +272,13 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     useEffect(() => {
         const checkDraw = async () => {
             // Only check for single blocks (where data.linkPath or data.rankedin_url exists)
-            if (data.id !== 'recent-results' && !(data.id === 'featured-tournaments' && featuredTournaments?.length > 1)) {
+            if (data.id !== 'recent-results' && !(data.id === 'featured-tournaments' && featuredTournaments?.length > 1) && !(data.id === 'featured-live' && liveFeaturedTournaments?.length > 1)) {
                 const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
                 if (rId) {
                     const classes = await getTournamentClasses(rId);
-                    const drawAvailable = classes && classes.some(c => 
-                        c.IsPublished && 
-                        Array.isArray(c.TournamentDraws) && 
+                    const drawAvailable = classes && classes.some(c =>
+                        c.IsPublished &&
+                        Array.isArray(c.TournamentDraws) &&
                         c.TournamentDraws.length > 0
                     );
                     setHasDraw(drawAvailable);
@@ -204,9 +288,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         checkDraw();
     }, [data.rankedin_url, data.linkPath, data.id, data.rankedinId, featuredTournaments, getTournamentClasses]);
     const isLeft = data.align === 'left';
-    const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1);
+    const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
 
     const isFeatured = data.id === 'featured-tournaments';
+    const isLiveSection = data.id === 'featured-live';
     const bgColors = [
         'bg-[#080C17]',
         'bg-[#05070A]',
@@ -223,7 +308,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
             >
-                <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${isFeatured ? 'border-black/20 text-black' : 'border-white/10 text-padel-green'} text-[10px] font-bold uppercase tracking-widest mb-4`}>
+                <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${isFeatured ? 'border-black/20 text-black' : isLiveSection ? 'border-purple-500/20 text-purple-400 bg-purple-500/10' : 'border-white/10 text-padel-green'} text-[10px] font-bold uppercase tracking-widest mb-4`}>
                     <Icon className="w-3.5 h-3.5" />
                     <span>{data.highlight}</span>
                 </div>
@@ -238,15 +323,30 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     {data.description}
                 </p>
 
-                <button
-                    onClick={() => navigate(data.linkPath)}
-                    className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] ${isFeatured ? 'text-black hover:text-black/60' : 'text-white hover:text-padel-green'}`}
-                >
-                    EXPLORE ALL
-                    <div className={`w-7 h-7 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${isFeatured ? 'border-black/20 group-hover:border-black' : 'border-white/20 group-hover:border-padel-green'}`}>
-                        <ChevronRight className={`w-3.5 h-3.5 ${isFeatured ? 'text-black/60 group-hover:text-black' : 'text-gray-400 group-hover:text-padel-green'}`} />
-                    </div>
-                </button>
+                {isLiveSection && data.linkPath ? (
+                    <button
+                        onClick={() => {
+                            if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
+                            else window.open(data.youtubeUrl, '_blank');
+                        }}
+                        className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] text-white bg-red-600 hover:bg-black px-6 py-3 rounded-full transition-all duration-300`}
+                    >
+                        WATCH LIVE NOW
+                        <div className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center transition-colors flex-shrink-0 group-hover:border-white text-white`}>
+                            <PlayCircle className={`w-3.5 h-3.5`} />
+                        </div>
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => navigate(data.linkPath || '/calendar')}
+                        className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] ${isFeatured ? 'text-black hover:text-black/60' : 'text-white hover:text-padel-green'}`}
+                    >
+                        EXPLORE ALL
+                        <div className={`w-7 h-7 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${isFeatured ? 'border-black/20 group-hover:border-black' : 'border-white/20 group-hover:border-padel-green'}`}>
+                            <ChevronRight className={`w-3.5 h-3.5 ${isFeatured ? 'text-black/60 group-hover:text-black' : 'text-gray-400 group-hover:text-padel-green'}`} />
+                        </div>
+                    </button>
+                )}
             </motion.div>
         </div>
     );
@@ -276,6 +376,30 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-padel-green"></span>
                         </div>
                         <p className="text-gray-400 text-sm font-medium">Loading tournament data...</p>
+                    </div>
+                )
+            ) : data.id === 'featured-live' ? (
+                liveFeaturedTournaments && liveFeaturedTournaments.length > 0 ? (
+                    liveFeaturedTournaments.map((t, i) => (
+                        <TournamentCard
+                            key={t.id}
+                            index={i}
+                            title={t.event_name}
+                            label={t.sapa_status || 'Live Event'}
+                            image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
+                            linkPath={`/calendar/${t.slug || t.id}`}
+                            drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
+                            youtubeUrl={t.live_youtube_url}
+                            onWatchLive={onWatchLive}
+                            isLive={true}
+                            status={t.sapa_status || 'Gold'}
+                            registeredPlayers={t.registered_players}
+                            rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
+                        />
+                    ))
+                ) : (
+                    <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02]">
+                        <p className="text-gray-400 text-sm font-medium">Loading live events...</p>
                     </div>
                 )
             ) : (
@@ -348,29 +472,41 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 )}
 
                 <div className="flex items-center gap-3 pointer-events-auto flex-wrap">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border border-white/20 flex items-center justify-center group-hover:border-padel-green transition-colors">
-                            <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-padel-green transform group-hover:translate-x-0.5 transition-transform" />
-                        </div>
-                        <span className="text-[10px] font-bold text-gray-400 group-hover:text-white transition-colors uppercase tracking-[0.2em]">VIEW DETAILS</span>
-                    </div>
+
 
                     {(() => {
                         const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
-                        if (!hasDraw || !rId) return null;
 
                         // If we have a slug in linkPath, use it for draws too
                         const slugMatch = data.linkPath?.match(/\/calendar\/([^\/]+)/);
                         const slug = slugMatch ? slugMatch[1] : null;
 
                         return (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
-                                className="flex items-center gap-2 bg-padel-green border border-padel-green hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg shadow-padel-green/20"
-                            >
-                                <GitBranch className="w-3.5 h-3.5 !text-black transition-colors" />
-                                <span className="text-xs font-black !text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
-                            </button>
+                            <div className="flex items-center gap-3">
+                                {data.id === 'featured-live' && data.youtubeUrl && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
+                                            else window.open(data.youtubeUrl, '_blank');
+                                        }}
+                                        className="flex items-center gap-2 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/live shadow-lg shadow-red-600/20"
+                                    >
+                                        <PlayCircle className="w-3.5 h-3.5 !text-white group-hover/live:!text-red-600 transition-colors" />
+                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">WATCH LIVE</span>
+                                    </button>
+                                )}
+
+                                {hasDraw && rId && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
+                                        className="flex items-center gap-2 bg-padel-green border border-padel-green hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg shadow-padel-green/20"
+                                    >
+                                        <GitBranch className="w-3.5 h-3.5 !text-black transition-colors" />
+                                        <span className="text-xs font-black !text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                                    </button>
+                                )}
+                            </div>
                         );
                     })()}
                 </div>
@@ -420,7 +556,17 @@ const FeaturedSections = () => {
     const { getRecentTournaments } = useRankedin();
     const [liveTournaments, setLiveTournaments] = useState([]);
     const [featuredTournaments, setFeaturedTournaments] = useState([]);
+    const [liveFeaturedTournaments, setLiveFeaturedTournaments] = useState([]);
     const [featuredData, setFeaturedData] = useState(featuredDataTemplate);
+    const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
+
+    const openVideoModal = (url, title) => {
+        setVideoModal({ isOpen: true, url, title });
+    };
+
+    const closeVideoModal = () => {
+        setVideoModal({ ...videoModal, isOpen: false });
+    };
 
     useEffect(() => {
         const fetchTours = async () => {
@@ -498,7 +644,77 @@ const FeaturedSections = () => {
         };
 
         fetchFeaturedEvents();
+
+        const fetchLiveFeatured = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('calendar')
+                    .select('*, registered_players')
+                    .eq('featured_live', true)
+                    .order('start_date', { ascending: true })
+                    .limit(3);
+
+                if (data && !error) {
+                    setLiveFeaturedTournaments(data);
+
+                    if (data.length === 1) {
+                        const singleEvent = data[0];
+                        setFeaturedData(prevData => {
+                            const newData = [...prevData];
+                            const liveIndex = newData.findIndex(item => item.id === 'featured-live');
+                            if (liveIndex !== -1) {
+                                newData[liveIndex] = {
+                                    ...newData[liveIndex],
+                                    cardTitle: singleEvent.event_name,
+                                    cardLabel: singleEvent.sapa_status || 'Live Event',
+                                    image: singleEvent.image_url || newData[liveIndex].image,
+                                    linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
+                                    youtubeUrl: singleEvent.live_youtube_url,
+                                    rankedin_url: singleEvent.rankedin_url,
+                                    registeredPlayers: singleEvent.registered_players,
+                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)
+                                };
+                            }
+                            return newData;
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching live featured events:", err);
+            }
+        };
+
+        fetchLiveFeatured();
     }, [getRecentTournaments]);
+
+    if (liveFeaturedTournaments.length === 0) {
+        // Hide the live section if no live events are found
+        return (
+            <>
+                <div className="flex flex-col w-full">
+                    {featuredData
+                        .filter(section => section.id !== 'featured-live')
+                        .map((section, index) => (
+                            <FeaturedSectionBlock
+                                key={section.id}
+                                data={section}
+                                index={index}
+                                liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
+                                featuredTournaments={section.id === 'featured-tournaments' ? featuredTournaments : null}
+                                liveFeaturedTournaments={null}
+                                onWatchLive={openVideoModal}
+                            />
+                        ))}
+                </div>
+                <VideoModal
+                    isOpen={videoModal.isOpen}
+                    onClose={closeVideoModal}
+                    videoUrl={videoModal.url}
+                    title={videoModal.title}
+                />
+            </>
+        );
+    }
 
     return (
         <div className="flex flex-col w-full">
@@ -509,8 +725,16 @@ const FeaturedSections = () => {
                     index={index}
                     liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
                     featuredTournaments={section.id === 'featured-tournaments' ? featuredTournaments : null}
+                    liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
+                    onWatchLive={openVideoModal}
                 />
             ))}
+            <VideoModal
+                isOpen={videoModal.isOpen}
+                onClose={closeVideoModal}
+                videoUrl={videoModal.url}
+                title={videoModal.title}
+            />
         </div>
     );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
     PieChart,
@@ -109,6 +109,8 @@ const CalendarManager = () => {
         tournament_tag: 'None',
         registered_players: 0,
         rankedin_url: '',
+        featured_live: false,
+        live_youtube_url: '',
         sponsor_logos: []
     });
 
@@ -232,6 +234,8 @@ const CalendarManager = () => {
             tournament_tag: 'None',
             registered_players: 0,
             rankedin_url: '',
+            featured_live: false,
+            live_youtube_url: '',
             sponsor_logos: []
         });
     }
@@ -262,6 +266,8 @@ const CalendarManager = () => {
             tournament_tag: event.tournament_tag || 'None',
             registered_players: event.registered_players || 0,
             rankedin_url: event.rankedin_url || '',
+            featured_live: event.featured_live || false,
+            live_youtube_url: event.live_youtube_url || '',
             sponsor_logos: event.sponsor_logos || []
         });
         setIsModalOpen(true);
@@ -500,7 +506,9 @@ const CalendarManager = () => {
                         registered_players: richDetails.registered_players || 0,
                         address: richDetails.address || '',
                         sponsor_logos: richDetails.sponsor_logos || [],
-                        is_league: isLeague
+                        is_league: isLeague,
+                        featured_live: false,
+                        live_youtube_url: ''
                     }]);
                     addedCount++;
                 }
@@ -525,11 +533,13 @@ const CalendarManager = () => {
         const upcoming = events.filter(e => !e.start_date || e.start_date >= today).length;
         const past = events.length - upcoming;
         const featured = events.filter(e => e.featured_event).length;
+        const live = events.filter(e => e.featured_live).length;
         return {
             total: events.length,
             upcoming,
             past,
-            featured
+            featured,
+            live
         };
     }, [events, today]);
 
@@ -612,11 +622,12 @@ const CalendarManager = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                <StatCard title="Total Events" value={loading ? '—' : stats.total} subtext="All time" icon={CalendarDays} color="padel-green" delay={0} />
-                <StatCard title="Upcoming" value={loading ? '—' : stats.upcoming} subtext="Scheduled events" icon={Flag} color="green" delay={0.05} />
-                <StatCard title="Past" value={loading ? '—' : stats.past} subtext="Completed events" icon={MapPin} color="slate" delay={0.1} />
-                <StatCard title="Featured" value={loading ? '—' : stats.featured} subtext="On homepage" icon={Star} color="amber" delay={0.15} />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                <StatCard title="Total" value={loading ? '—' : stats.total} subtext="Events" icon={CalendarDays} color="padel-green" delay={0} />
+                <StatCard title="Upcoming" value={loading ? '—' : stats.upcoming} subtext="Scheduled" icon={Flag} color="green" delay={0.05} />
+                <StatCard title="Featured" value={loading ? '—' : stats.featured} subtext="On Hero" icon={Star} color="amber" delay={0.1} />
+                <StatCard title="Live" value={loading ? '—' : stats.live} subtext="Featured Live" icon={PlayCircle} color="purple" delay={0.15} />
+                <StatCard title="Past" value={loading ? '—' : stats.past} subtext="Completed" icon={MapPin} color="slate" delay={0.2} />
             </div>
 
             {/* Charts Row */}
@@ -717,6 +728,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Homepage Featured">★</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Live Event Featured">📺</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Recent Results Featured">🏆</th>
                                 <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
                             </tr>
@@ -764,6 +776,13 @@ const CalendarManager = () => {
                                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mx-auto" title="Featured Event" />
                                             ) : (
                                                 <Star className="w-4 h-4 text-gray-600 mx-auto" />
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {event.featured_live ? (
+                                                <PlayCircle className="w-4 h-4 text-purple-400 fill-purple-400/20 mx-auto" title="Live Featured" />
+                                            ) : (
+                                                <PlayCircle className="w-4 h-4 text-gray-600 mx-auto" />
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-middle text-center">
@@ -901,6 +920,19 @@ const CalendarManager = () => {
                                         <div className="flex items-center gap-2">
                                             <input
                                                 type="checkbox"
+                                                id="featured_live"
+                                                name="featured_live"
+                                                checked={formData.featured_live}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-purple-500 focus:ring-purple-500"
+                                            />
+                                            <label htmlFor="featured_live" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Featured Live
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
                                                 id="is_league"
                                                 name="is_league"
                                                 checked={formData.is_league}
@@ -960,6 +992,24 @@ const CalendarManager = () => {
                                             className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                         />
                                     </div>
+
+                                    {formData.featured_live && (
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            className="space-y-4"
+                                        >
+                                            <label className="block text-xs font-bold text-purple-400 mb-1 uppercase italic">YouTube Live Stream URL (For "Watch Live" Button)</label>
+                                            <input
+                                                type="url"
+                                                name="live_youtube_url"
+                                                value={formData.live_youtube_url}
+                                                onChange={handleInputChange}
+                                                placeholder="https://www.youtube.com/watch?v=..."
+                                                className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                                            />
+                                        </motion.div>
+                                    )}
 
                                     {/* Date & Time */}
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
