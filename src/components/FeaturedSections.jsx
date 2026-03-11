@@ -168,10 +168,10 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                     {drawPath && hasDraw && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw`}
+                            className={`flex items-center gap-1.5 ${colors.bg} border ${colors.border} hover:bg-padel-green hover:border-padel-green px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw`}
                         >
-                            <GitBranch className={`w-3 h-3 ${colors.text} group-hover/draw:text-black transition-colors`} />
-                            <span className={`text-[9px] font-bold ${colors.text} group-hover/draw:text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
+                            <GitBranch className={`w-3 h-3 ${colors.text} group-hover/draw:!text-black transition-colors`} />
+                            <span className={`text-[9px] font-bold ${colors.text} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
                         </button>
                     )}
                 </div>
@@ -368,8 +368,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                 onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
                                 className="flex items-center gap-2 bg-padel-green border border-padel-green hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg shadow-padel-green/20"
                             >
-                                <GitBranch className="w-3.5 h-3.5 text-black transition-colors" />
-                                <span className="text-xs font-black text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
+                                <GitBranch className="w-3.5 h-3.5 !text-black transition-colors" />
+                                <span className="text-xs font-black !text-black transition-colors uppercase tracking-widest">VIEW DRAW</span>
                             </button>
                         );
                     })()}

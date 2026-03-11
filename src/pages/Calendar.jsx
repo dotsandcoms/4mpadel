@@ -123,8 +123,7 @@ const CalendarEventItem = ({ event, index }) => {
                                 className="flex items-center gap-2 bg-padel-green/5 border border-padel-green/20 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-2.5 rounded-xl transition-all duration-300 font-bold text-xs md:text-sm uppercase tracking-widest group/draw"
                             >
                                 <GitBranch className="w-4 h-4 !text-padel-green group-hover/draw:!text-black transition-colors" />
-                                <span className="hidden sm:inline">View Draw</span>
-                                <span className="sm:hidden">Draw</span>
+                                <span className="!text-current">View Draw</span>
                             </Link>
                         )}
                         <Link
@@ -132,8 +131,8 @@ const CalendarEventItem = ({ event, index }) => {
                             target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
                             className="bg-padel-green !text-black px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-xs md:text-sm hover:bg-white hover:!text-black hover:scale-105 transition-all shadow-lg shadow-padel-green/20 flex items-center gap-2"
                         >
-                            <span>Details</span>
-                            <ArrowRight className="w-4 h-4" />
+                            <span className="!text-black">Details</span>
+                            <ArrowRight className="w-4 h-4 !text-black" />
                         </Link>
                     </div>
                 </div>
@@ -329,10 +328,16 @@ const Calendar = () => {
         currentPage * itemsPerPage
     );
 
-    // Reset page on filter change
+    // Reset page on filter change and scroll to top
     useEffect(() => {
         setCurrentPage(1);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [searchTerm, statusFilter, cityFilter, timingFilter, leagueFilter, viewMode, isMyCalendar]);
+
+    // Scroll to top on page change
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentPage]);
 
     // Helper functions for Calendar View
     const getDaysInMonth = (year, month) => new Date(year, month + 1, 0).getDate();

@@ -432,7 +432,7 @@ const EventDetails = () => {
                                         return (
                                             <Link
                                                 to={`/draws/${event.slug || rId}`}
-                                                className="w-full flex items-center justify-center gap-2 bg-slate-900 text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all duration-300 uppercase tracking-widest text-sm"
+                                                className="w-full flex items-center justify-center gap-2 bg-slate-900 !text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-widest text-sm"
                                             >
                                                 <GitBranch className="w-4 h-4" />
                                                 View Draw
