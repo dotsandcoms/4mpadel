@@ -361,7 +361,7 @@ const GalleryManager = () => {
                         {images.map(img => (
                             <div key={img.id} className="relative group bg-black/50 border border-white/10 rounded-xl overflow-hidden aspect-square">
                                 <img src={img.image_url} alt="Gallery" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <div className="absolute inset-0 bg-black/60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button
                                         onClick={() => window.open(img.image_url, '_blank')}
                                         className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
@@ -426,7 +426,7 @@ const GalleryManager = () => {
                                 ) : (
                                     <ImageIcon className="w-12 h-12 text-gray-500" />
                                 )}
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/50 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                     <button
                                         onClick={() => selectAlbum(album)}
                                         className="bg-padel-green text-black font-bold px-6 py-2 rounded-xl"

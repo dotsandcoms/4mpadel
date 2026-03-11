@@ -396,7 +396,7 @@ const CoachManager = () => {
                                         <td className="py-3 px-4 text-right">
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); setSelectedApp(app); }}
-                                                className="px-3 py-1.5 bg-white/5 text-white text-xs font-bold rounded-lg hover:bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                className="px-3 py-1.5 bg-white/5 text-white text-xs font-bold rounded-lg hover:bg-white/10 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                                             >
                                                 Review
                                             </button>
