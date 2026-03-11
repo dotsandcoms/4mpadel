@@ -488,7 +488,7 @@ const PlayerProfile = () => {
                                 <ShieldCheck className="text-padel-green mb-4" size={32} />
                                 <h4 className="font-bold text-white mb-2">Account Security</h4>
                                 <p className="text-xs text-white/50 leading-relaxed uppercase tracking-wider font-bold mb-6">
-                                    Your profile is protected by 4M Padel Community security. Updates are synced across all tournament leaderboards.
+                                    To Reset your password, click the button below and follow the instructions on the email.
                                 </p>
                                 <button
                                     onClick={handleInitiatePasswordReset}
