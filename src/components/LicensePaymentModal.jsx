@@ -5,8 +5,19 @@ import { usePaystackPayment } from 'react-paystack';
 import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
-const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '').trim().replace(/['"]/g, '');
-const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.length > 10;
+const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
+    .trim()
+    .replace(/['"]/g, '')
+    .split(/\s+/)[0]
+    .replace(/[^a-zA-Z0-9_]/g, '');
+
+console.log('Paystack Config Check (Modal):', {
+    keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
+    keyLength: PAYSTACK_PUBLIC_KEY.length,
+    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_')
+});
+
+const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.startsWith('pk_');
 
 const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal) => {
     const { error: rpcError } = await supabase.rpc('mark_player_paid');

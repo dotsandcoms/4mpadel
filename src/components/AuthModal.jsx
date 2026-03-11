@@ -6,8 +6,19 @@ import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 
-const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '').trim().replace(/['"]/g, '');
-const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.length > 10;
+const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
+    .trim()
+    .replace(/['"]/g, '')
+    .split(/\s+/)[0] // Take only the first word in case of multiple values
+    .replace(/[^a-zA-Z0-9_]/g, ''); // Remove any non-alphanumeric/underscore characters (BOMs, etc)
+
+console.log('Paystack Config Check:', {
+    keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
+    keyLength: PAYSTACK_PUBLIC_KEY.length,
+    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_')
+});
+
+const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.startsWith('pk_');
 
 const AuthModal = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState('login'); // 'login', 'register', 'forgot_password'
