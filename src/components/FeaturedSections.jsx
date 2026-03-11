@@ -7,65 +7,65 @@ import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users, X } from 
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
-    if (s.includes('major')) return { 
-        text: 'text-red-500', 
-        bg: 'bg-red-500/20', 
-        border: 'border-red-500/30', 
-        hover: 'hover:border-red-500', 
+    if (s.includes('major')) return {
+        text: 'text-red-500',
+        bg: 'bg-red-500/20',
+        border: 'border-red-500/30',
+        hover: 'hover:border-red-500',
         glow: 'shadow-red-500/20',
         solid: 'bg-red-600',
         solidText: 'text-white'
     };
-    if (s.includes('super gold') || s === 's gold') return { 
-        text: 'text-amber-500', 
-        bg: 'bg-amber-500/20', 
-        border: 'border-amber-500/30', 
-        hover: 'hover:border-amber-500', 
+    if (s.includes('super gold') || s === 's gold') return {
+        text: 'text-amber-500',
+        bg: 'bg-amber-500/20',
+        border: 'border-amber-500/30',
+        hover: 'hover:border-amber-500',
         glow: 'shadow-amber-500/20',
         solid: 'bg-amber-500',
         solidText: 'text-black'
     };
-    if (s.includes('gold')) return { 
-        text: 'text-yellow-400', 
-        bg: 'bg-yellow-400/20', 
-        border: 'border-yellow-400/30', 
-        hover: 'hover:border-yellow-400', 
+    if (s.includes('gold')) return {
+        text: 'text-yellow-400',
+        bg: 'bg-yellow-400/20',
+        border: 'border-yellow-400/30',
+        hover: 'hover:border-yellow-400',
         glow: 'shadow-yellow-400/20',
         solid: 'bg-yellow-400',
         solidText: 'text-black'
     };
-    if (s.includes('silver')) return { 
-        text: 'text-gray-400', 
-        bg: 'bg-gray-400/20', 
-        border: 'border-gray-400/30', 
-        hover: 'hover:border-gray-400', 
+    if (s.includes('silver')) return {
+        text: 'text-gray-400',
+        bg: 'bg-gray-400/20',
+        border: 'border-gray-400/30',
+        hover: 'hover:border-gray-400',
         glow: 'shadow-gray-400/20',
         solid: 'bg-gray-400',
         solidText: 'text-black'
     };
-    if (s.includes('bronze')) return { 
-        text: 'text-orange-700', 
-        bg: 'bg-orange-700/20', 
-        border: 'border-orange-700/30', 
-        hover: 'hover:border-orange-700', 
+    if (s.includes('bronze')) return {
+        text: 'text-orange-700',
+        bg: 'bg-orange-700/20',
+        border: 'border-orange-700/30',
+        hover: 'hover:border-orange-700',
         glow: 'shadow-orange-700/20',
         solid: 'bg-orange-700',
         solidText: 'text-white'
     };
-    if (s.includes('fip')) return { 
-        text: 'text-blue-500', 
-        bg: 'bg-blue-500/20', 
-        border: 'border-blue-500/30', 
-        hover: 'hover:border-blue-500', 
+    if (s.includes('fip')) return {
+        text: 'text-blue-500',
+        bg: 'bg-blue-500/20',
+        border: 'border-blue-500/30',
+        hover: 'hover:border-blue-500',
         glow: 'shadow-blue-500/20',
         solid: 'bg-blue-500',
         solidText: 'text-white'
     };
-    return { 
-        text: 'text-padel-green', 
-        bg: 'bg-padel-green/20', 
-        border: 'border-padel-green/30', 
-        hover: 'hover:border-padel-green', 
+    return {
+        text: 'text-padel-green',
+        bg: 'bg-padel-green/20',
+        border: 'border-padel-green/30',
+        hover: 'hover:border-padel-green',
         glow: 'shadow-padel-green/20',
         solid: 'bg-padel-green',
         solidText: 'text-black'
@@ -561,7 +561,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                         className="flex items-center gap-2 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/live shadow-lg shadow-red-600/20"
                                     >
                                         <PlayCircle className="w-3.5 h-3.5 !text-white group-hover/live:!text-red-600 transition-colors" />
-                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">{data.youtubeUrl ? 'WATCH ON SITE' : 'WATCH LIVE SOON'}</span>
+                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">{data.youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}</span>
                                     </button>
                                 )}
 
