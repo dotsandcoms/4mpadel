@@ -254,36 +254,61 @@ const PlayerProfile = () => {
             <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
                 <Navbar />
 
-                {/* Password Setup Prompt (for new invites or recovery) */}
-                {isActivationRequired && (
-                    <div className="container mx-auto px-6 pt-32 -mb-20 relative z-20">
+                {/* Password Setup Modal (for new invites or recovery) */}
+                <AnimatePresence>
+                    {isActivationRequired && (
                         <motion.div
-                            initial={{ opacity: 0, y: -20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-padel-green/10 border border-padel-green/20 p-8 rounded-[2.5rem] backdrop-blur-xl"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/90 backdrop-blur-md"
                         >
-                            <h3 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Secure Your Account</h3>
-                            <p className="text-gray-400 mb-6 font-medium">Please set a permanent password to complete your profile setup.</p>
-                            <form onSubmit={handleUpdatePassword} className="flex flex-col md:flex-row gap-4">
-                                <input
-                                    type="password"
-                                    value={newPassword}
-                                    onChange={(e) => setNewPassword(e.target.value)}
-                                    placeholder="Enter at least 6 characters"
-                                    className="flex-1 bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none transition-all"
-                                    required
-                                />
-                                <button
-                                    type="submit"
-                                    disabled={isUpdatingPassword}
-                                    className="bg-padel-green text-black px-10 py-4 rounded-2xl font-black uppercase tracking-widest hover:bg-white transition-all disabled:opacity-50"
-                                >
-                                    {isUpdatingPassword ? 'Saving...' : 'Set Password'}
-                                </button>
-                            </form>
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                                className="w-full max-w-lg bg-[#0F172A] border border-white/10 p-8 md:p-12 rounded-[2.5rem] shadow-2xl relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                
+                                <div className="relative z-10 text-center">
+                                    <div className="w-20 h-20 bg-padel-green/10 rounded-2xl flex items-center justify-center mx-auto mb-8">
+                                        <ShieldCheck className="text-padel-green w-10 h-10" />
+                                    </div>
+                                    
+                                    <h3 className="text-3xl font-black text-white mb-4 uppercase tracking-tighter">Secure Your Account</h3>
+                                    <p className="text-gray-400 mb-10 font-medium text-lg">Please set a permanent password to complete your profile setup and secure your tournament data.</p>
+                                    
+                                    <form onSubmit={handleUpdatePassword} className="space-y-6">
+                                        <div className="relative">
+                                            <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-padel-green/40" size={20} />
+                                            <input
+                                                type="password"
+                                                value={newPassword}
+                                                onChange={(e) => setNewPassword(e.target.value)}
+                                                placeholder="Enter at least 6 characters"
+                                                className="w-full bg-black/40 border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none transition-all text-lg font-bold"
+                                                required
+                                            />
+                                        </div>
+                                        
+                                        <button
+                                            type="submit"
+                                            disabled={isUpdatingPassword}
+                                            className="w-full bg-padel-green text-black py-5 rounded-2xl font-black uppercase tracking-widest text-lg hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl shadow-padel-green/20 disabled:opacity-50"
+                                        >
+                                            {isUpdatingPassword ? 'Saving Password...' : 'Initialize Account'}
+                                        </button>
+                                        
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest pt-4">
+                                            This is a one-time requirement for invited players.
+                                        </p>
+                                    </form>
+                                </div>
+                            </motion.div>
                         </motion.div>
-                    </div>
-                )}
+                    )}
+                </AnimatePresence>
 
                 {/* Hero Section */}
                 <div className="relative h-[40vh] min-h-[400px] overflow-hidden">
