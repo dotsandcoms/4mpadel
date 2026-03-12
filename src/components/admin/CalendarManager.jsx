@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
     PieChart,
@@ -77,6 +77,8 @@ const formatEventDates = (start, end) => {
 const CalendarManager = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 20;
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
@@ -596,6 +598,18 @@ const CalendarManager = () => {
         });
     }, [events, searchTerm, statusFilter, timeFilter, today]);
 
+    const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
+    
+    const paginatedEvents = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredEvents.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredEvents, currentPage]);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, timeFilter]);
+
     return (
         <div className="space-y-8 pb-12">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -739,7 +753,7 @@ const CalendarManager = () => {
                             ) : filteredEvents.length === 0 ? (
                                 <tr><td colSpan="7" className="text-center py-12 text-gray-500">No events found.</td></tr>
                             ) : (
-                                filteredEvents.map(event => (
+                                paginatedEvents.map(event => (
                                     <tr key={event.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                                         <td className="py-3 px-4 align-top">
                                             <div className="font-bold text-padel-green text-sm">{event.event_dates}</div>
@@ -817,6 +831,55 @@ const CalendarManager = () => {
                     </table>
                 </div>
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#1E293B]/30 p-4 rounded-2xl border border-white/10">
+                    <p className="text-sm text-gray-400">
+                        Showing <span className="text-white font-bold">{Math.min((currentPage - 1) * itemsPerPage + 1, filteredEvents.length)}</span> to <span className="text-white font-bold">{Math.min(currentPage * itemsPerPage, filteredEvents.length)}</span> of <span className="text-white font-bold">{filteredEvents.length}</span> events
+                    </p>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                            title="Previous Page"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
+                        
+                        <div className="flex items-center gap-1 mx-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                                .map((p, i, arr) => (
+                                    <React.Fragment key={p}>
+                                        {i > 0 && arr[i - 1] !== p - 1 && <span className="text-gray-500 px-1">...</span>}
+                                        <button
+                                            onClick={() => setCurrentPage(p)}
+                                            className={`min-w-[32px] h-8 px-2 rounded-lg text-sm font-bold flex items-center justify-center transition-colors ${
+                                                currentPage === p 
+                                                    ? 'bg-padel-green text-black' 
+                                                    : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                                            }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    </React.Fragment>
+                                ))
+                            }
+                        </div>
+
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 rounded-xl bg-white/5 border border-white/10 text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-white/10 transition-colors"
+                            title="Next Page"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Edit/Create Modal */}
             <AnimatePresence>
