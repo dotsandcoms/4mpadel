@@ -41,12 +41,18 @@ const Home = () => {
                                     4M PADEL
                                 </h2>
                                 <h2 className="text-4xl md:text-5xl font-bold relative z-10 mb-6 font-display">
-                                    Play padel - feel <br />
-                                    the dynamics of a <br />
-                                    <span className="text-padel-green">new tennis!</span>
+                                    Play Padel - Experience the energy of the <span className="text-padel-green">fastest-growing</span> sport. <br />
                                 </h2>
                                 <p className="text-gray-400 text-lg leading-relaxed mb-8">
-                                    Welcome to 4M Padel, the Home of Padel South Africa. Padel tennis is the perfect combination of active recreation, sport and fun for all levels of training. Join the game today!
+                                    Welcome to 4M Padel - The home of padel in South Africa.
+                                </p>
+                                <p className="text-gray-400 text-lg leading-relaxed mb-8">
+                                    Your central hub for tournaments, rankings, players, and everything happening in the sport
+                                    nationwide</p>
+                                <p className="text-gray-400 text-lg leading-relaxed mb-8">
+                                    Discover events, follow the rankings, and connect with the growing padel community.</p>
+                                <p className="text-gray-400 text-2xl leading-relaxed mb-8">
+                                    <span className="text-padel-green">Join the game today!</span>
                                 </p>
                             </motion.div>
                         </div>
