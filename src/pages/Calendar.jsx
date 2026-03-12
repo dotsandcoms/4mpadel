@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
@@ -23,9 +23,9 @@ const CalendarEventItem = ({ event, index }) => {
             const rId = event.rankedin_id || event.eventId || extractRankedinId(event.rankedin_url);
             if (rId) {
                 const classes = await getTournamentClasses(rId);
-                const drawAvailable = classes && classes.some(c => 
-                    c.IsPublished && 
-                    Array.isArray(c.TournamentDraws) && 
+                const drawAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    Array.isArray(c.TournamentDraws) &&
                     c.TournamentDraws.length > 0
                 );
                 setHasDraw(drawAvailable);
@@ -36,7 +36,7 @@ const CalendarEventItem = ({ event, index }) => {
 
     let tierColor = 'border-white/10';
     let badgeColor = 'bg-white/10 text-gray-400';
-    let bgGradient = 'bg-white/5'; 
+    let bgGradient = 'bg-white/5';
 
     if (event.sapa_status === 'Major') { tierColor = 'border-white/10 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; bgGradient = 'bg-gradient-to-r from-red-500/20 to-transparent'; }
     else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
@@ -118,7 +118,7 @@ const CalendarEventItem = ({ event, index }) => {
                     {/* Actions */}
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-end">
                         {hasDraw && (
-                             <Link
+                            <Link
                                 to={drawPath}
                                 className="flex items-center gap-2 bg-padel-green/5 border border-padel-green/20 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-2.5 rounded-xl transition-all duration-300 font-bold text-xs md:text-sm uppercase tracking-widest group/draw"
                             >
@@ -148,7 +148,9 @@ const Calendar = () => {
 
     // Filter & Search State
     const [searchTerm, setSearchTerm] = useState('');
-    const [statusFilter, setStatusFilter] = useState('All');
+    const [statusFilters, setStatusFilters] = useState([]);
+    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+    const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
     const [timingFilter, setTimingFilter] = useState('Upcoming');
     const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Tournaments'
@@ -174,6 +176,16 @@ const Calendar = () => {
     useEffect(() => {
         fetchEvents();
         checkUserStatus();
+    }, []);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                setIsStatusDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const checkUserStatus = async () => {
@@ -293,7 +305,7 @@ const Calendar = () => {
                 eventName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 venueName.toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesStatus = statusFilter === 'All' || status === statusFilter;
+            const matchesStatus = statusFilters.length === 0 || statusFilters.includes(status);
 
             // Adjust Rankedin city if possible, or just default to match
             const city = event.city || 'Rankedin';
@@ -319,7 +331,7 @@ const Calendar = () => {
 
             return matchesSearch && matchesStatus && matchesCity && matchesTiming && matchesLeague;
         });
-    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilter, cityFilter, timingFilter, leagueFilter, viewMode]);
+    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilters, cityFilter, timingFilter, leagueFilter, viewMode]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -332,7 +344,7 @@ const Calendar = () => {
     useEffect(() => {
         setCurrentPage(1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [searchTerm, statusFilter, cityFilter, timingFilter, leagueFilter, viewMode, isMyCalendar]);
+    }, [searchTerm, statusFilters, cityFilter, timingFilter, leagueFilter, viewMode, isMyCalendar]);
 
     // Scroll to top on page change
     useEffect(() => {
@@ -499,7 +511,7 @@ const Calendar = () => {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-4 mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between"
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-4 mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between relative z-40"
                 >
                     {/* Search */}
                     <div className="relative w-full lg:w-96 flex-shrink-0">
@@ -545,17 +557,65 @@ const Calendar = () => {
                         )}
 
                         {/* Status Filter */}
-                        <div className="relative w-full md:w-auto min-w-[140px]">
-                            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
+                        <div className="relative w-full md:w-auto min-w-[160px]" ref={dropdownRef}>
+                            <Filter className="absolute z-10 left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                            <button
+                                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors"
                             >
-                                {uniqueStatuses.map(status => (
-                                    <option key={status} value={status} className="bg-slate-900">{status}</option>
-                                ))}
-                            </select>
+                                <span className="truncate block">
+                                    {statusFilters.length === 0
+                                        ? 'All Statuses'
+                                        : statusFilters.length === 1
+                                            ? statusFilters[0]
+                                            : `${statusFilters.length} Selected`}
+                                </span>
+                            </button>
+                            <ChevronDown className={`w-4 h-4 text-gray-400 absolute z-10 right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
+
+                            {/* Dropdown Menu */}
+                            <AnimatePresence>
+                                {isStatusDropdownOpen && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: -10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        transition={{ duration: 0.15 }}
+                                        className="absolute z-50 top-full left-0 mt-2 w-full bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col"
+                                    >
+                                        <div className="max-h-60 overflow-y-auto nice-scrollbar py-2">
+                                            <button
+                                                onClick={() => {
+                                                    setStatusFilters([]);
+                                                    setIsStatusDropdownOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.length === 0 ? 'text-padel-green font-bold bg-white/5' : 'text-gray-300'}`}
+                                            >
+                                                <span>All Statuses</span>
+                                                {statusFilters.length === 0 && <Check className="w-4 h-4" />}
+                                            </button>
+
+                                            {uniqueStatuses.filter(s => s !== 'All').map(status => (
+                                                <button
+                                                    key={status}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setStatusFilters(prev =>
+                                                            prev.includes(status)
+                                                                ? prev.filter(s => s !== status)
+                                                                : [...prev, status]
+                                                        );
+                                                    }}
+                                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.includes(status) ? 'text-white font-bold bg-white/5' : 'text-gray-300'}`}
+                                                >
+                                                    <span>{status}</span>
+                                                    {statusFilters.includes(status) && <Check className="w-4 h-4 text-padel-green" />}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
 
                         {/* City Filter */}
@@ -605,7 +665,7 @@ const Calendar = () => {
                     <div className="text-center py-32 text-gray-400 bg-white/5 border border-white/10 rounded-3xl">
                         <p className="text-xl mb-4">No events found matching your criteria.</p>
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilter('All'); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
+                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
                             className="text-padel-green font-bold hover:text-white flex items-center gap-2 mx-auto transition-colors"
                         >
                             <X className="w-4 h-4" /> Clear all filters
