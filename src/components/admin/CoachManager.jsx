@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
-import { Loader2, UserX, CheckCircle2, XCircle, Search, Mail, Phone, MapPin, Instagram, Youtube, Trash2, X, ExternalLink, Edit2, Save, FileSignature, AlertCircle, Clock } from 'lucide-react';
+import { Loader2, UserX, CheckCircle2, XCircle, Search, Mail, Phone, MapPin, Instagram, Youtube, Trash2, X, ExternalLink, Edit2, Save, FileSignature, AlertCircle, Clock, UploadCloud } from 'lucide-react';
 import {
     PieChart,
     Pie,
@@ -50,6 +50,9 @@ const CoachManager = () => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editFormData, setEditFormData] = useState(null);
+    const [newProfilePic, setNewProfilePic] = useState(null);
+    const [newProfilePicPreview, setNewProfilePicPreview] = useState(null);
+    const fileInputRef = useRef(null);
 
     useEffect(() => {
         fetchApplications();
@@ -140,7 +143,52 @@ const CoachManager = () => {
             youtube_link: selectedApp.youtube_link || '',
             bio: selectedApp.bio
         });
+        setNewProfilePic(null);
+        setNewProfilePicPreview(null);
         setIsEditing(true);
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setNewProfilePic(file);
+            setNewProfilePicPreview(URL.createObjectURL(file));
+        }
+    };
+
+    const resizeImage = (file, maxWidth = 800, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        }));
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
     };
 
     const handleEditChange = (e) => {
@@ -151,18 +199,52 @@ const CoachManager = () => {
     const handleSaveEdit = async () => {
         setIsUpdating(true);
         try {
+            let updatedProfilePicUrl = selectedApp.profile_pic_url;
+
+            if (newProfilePic) {
+                // Delete old image if it exists
+                if (selectedApp.profile_pic_url) {
+                    const oldFileName = selectedApp.profile_pic_url.split('/').pop();
+                    await supabase.storage.from('coach-profiles').remove([oldFileName]);
+                }
+
+                // Upload new image
+                const resizedFile = await resizeImage(newProfilePic);
+                const fileExt = 'jpg';
+                const fileName = `${editFormData.full_name.replace(/\s+/g, '-').toLowerCase()}_${Date.now()}.${fileExt}`;
+                
+                const { error: uploadError } = await supabase.storage
+                    .from('coach-profiles')
+                    .upload(fileName, resizedFile);
+
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabase.storage
+                    .from('coach-profiles')
+                    .getPublicUrl(fileName);
+
+                updatedProfilePicUrl = publicUrl;
+            }
+
+            const dataToUpdate = {
+                ...editFormData,
+                profile_pic_url: updatedProfilePicUrl
+            };
+
             const { error } = await supabase
                 .from('coach_applications')
-                .update(editFormData)
+                .update(dataToUpdate)
                 .eq('id', selectedApp.id);
 
             if (error) throw error;
             toast.success('Coach information updated successfully');
 
-            const updatedApp = { ...selectedApp, ...editFormData };
+            const updatedApp = { ...selectedApp, ...dataToUpdate };
             setSelectedApp(updatedApp);
             setApplications(apps => apps.map(a => a.id === updatedApp.id ? updatedApp : a));
             setIsEditing(false);
+            setNewProfilePic(null);
+            setNewProfilePicPreview(null);
         } catch (error) {
             console.error('Error updating coach:', error);
             toast.error('Failed to update coach information');
@@ -417,7 +499,7 @@ const CoachManager = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-                        onClick={() => { setSelectedApp(null); setIsEditing(false); }}
+                        onClick={() => { setSelectedApp(null); setIsEditing(false); setNewProfilePic(null); setNewProfilePicPreview(null); }}
                     >
                         <motion.div
                             initial={{ scale: 0.95, opacity: 0 }}
@@ -427,7 +509,7 @@ const CoachManager = () => {
                             className="bg-[#0F172A] border border-white/10 rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl relative"
                         >
                             <button
-                                onClick={() => { setSelectedApp(null); setIsEditing(false); }}
+                                onClick={() => { setSelectedApp(null); setIsEditing(false); setNewProfilePic(null); setNewProfilePicPreview(null); }}
                                 className="absolute top-6 right-6 text-gray-400 hover:text-white bg-black/50 p-2 rounded-full z-10"
                             >
                                 <X size={24} />
@@ -436,11 +518,35 @@ const CoachManager = () => {
                             <div className="flex flex-col md:flex-row">
                                 {/* Left Sidebar: Image & Actions */}
                                 <div className="md:w-1/3 bg-[#1E293B]/50 p-8 flex flex-col">
-                                    <div className="w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-padel-green shadow-xl mb-6 flex-shrink-0 bg-black">
-                                        {selectedApp.profile_pic_url ? (
-                                            <img src={selectedApp.profile_pic_url} alt={selectedApp.full_name} className="w-full h-full object-cover" />
+                                    <div className="relative w-48 h-48 mx-auto rounded-full overflow-hidden border-4 border-padel-green shadow-xl mb-6 flex-shrink-0 bg-black group">
+                                        {isEditing ? (
+                                            <>
+                                                {newProfilePicPreview || selectedApp.profile_pic_url ? (
+                                                    <img src={newProfilePicPreview || selectedApp.profile_pic_url} alt={selectedApp.full_name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <UserX className="w-full h-full p-8 text-gray-500" />
+                                                )}
+                                                <div 
+                                                    onClick={() => fileInputRef.current?.click()}
+                                                    className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity text-white"
+                                                >
+                                                    <UploadCloud size={32} className="mb-2" />
+                                                    <span className="text-xs font-bold px-2 py-1 bg-padel-green text-black rounded-full">Change Photo</span>
+                                                </div>
+                                                <input 
+                                                    type="file" 
+                                                    accept="image/*" 
+                                                    ref={fileInputRef} 
+                                                    onChange={handleFileChange} 
+                                                    className="hidden" 
+                                                />
+                                            </>
                                         ) : (
-                                            <UserX className="w-full h-full p-8 text-gray-500" />
+                                            selectedApp.profile_pic_url ? (
+                                                <img src={selectedApp.profile_pic_url} alt={selectedApp.full_name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <UserX className="w-full h-full p-8 text-gray-500" />
+                                            )
                                         )}
                                     </div>
 
@@ -498,7 +604,7 @@ const CoachManager = () => {
                                                     <Save size={18} /> Save Changes
                                                 </button>
                                                 <button
-                                                    onClick={() => setIsEditing(false)}
+                                                    onClick={() => { setIsEditing(false); setNewProfilePic(null); setNewProfilePicPreview(null); }}
                                                     disabled={isUpdating}
                                                     className="w-full flex items-center justify-center gap-2 text-gray-400 font-bold py-3 hover:text-white transition-colors"
                                                 >
