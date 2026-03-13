@@ -26,6 +26,7 @@ const Home = () => {
             <main className="bg-[#0F172A] text-white">
                 <TopHeader />
                 <Hero />
+                <FeaturedSections />
 
                 {/* Intro / Dynamics Section */}
                 <section className="relative py-24 px-6 md:px-20 container mx-auto">
@@ -82,9 +83,6 @@ const Home = () => {
                         </motion.div>
                     </div>
                 </section>
-
-                {/* New 4 Featured Sections */}
-                <FeaturedSections />
 
                 {/* Services Section */}
                 <Services />
