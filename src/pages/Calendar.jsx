@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
@@ -529,6 +529,7 @@ const Calendar = () => {
                     <div className="flex flex-wrap md:flex-nowrap gap-4 w-full lg:w-auto items-center justify-end">
                         {/* Type Filter */}
                         <div className="relative w-full md:w-auto min-w-[150px]">
+                            <Layers className="absolute pointer-events-none left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
                             <select
                                 value={leagueFilter}
                                 onChange={(e) => setLeagueFilter(e.target.value)}
