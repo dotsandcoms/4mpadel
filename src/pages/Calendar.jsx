@@ -265,7 +265,7 @@ const Calendar = () => {
         return ['All', ...new Set(cities)].sort();
     }, [events]);
 
-    const uniqueStatuses = ['All', 'Gold', 'Major', 'Silver', 'Bronze', 'Key Event', 'FIP event', 'Super Gold'];
+    const uniqueStatuses = ['All', 'Major', 'Super Gold', 'Gold', 'Silver', 'Bronze', 'Key Event', 'FIP event'];
 
     // Filter Logic
     const filteredEvents = useMemo(() => {

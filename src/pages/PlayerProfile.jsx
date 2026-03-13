@@ -5,6 +5,7 @@ import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefc
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
+import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 
 const PlayerProfile = () => {
@@ -18,6 +19,8 @@ const PlayerProfile = () => {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [isImpersonating, setIsImpersonating] = useState(false);
     const [loadingReset, setLoadingReset] = useState(false);
+    const [coachApplication, setCoachApplication] = useState(null);
+    const [showCoachModal, setShowCoachModal] = useState(false);
     const navigate = useNavigate();
 
     const [isActivationRequired, setIsActivationRequired] = useState(false);
@@ -123,6 +126,17 @@ const PlayerProfile = () => {
                     category: playerData.category || '',
                     id_number: playerData.id_number || '',
                 });
+
+                // Fetch associated coach application if any
+                const { data: coachData } = await supabase
+                    .from('coach_applications')
+                    .select('*')
+                    .eq('email', emailToFetch)
+                    .maybeSingle();
+                
+                if (coachData) {
+                    setCoachApplication(coachData);
+                }
             }
             setLoading(false);
         };
@@ -518,11 +532,24 @@ const PlayerProfile = () => {
                                 <button
                                     onClick={handleInitiatePasswordReset}
                                     disabled={loadingReset}
-                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2 mb-4"
                                 >
                                     <Lock size={14} className="text-padel-green" />
                                     {loadingReset ? 'Sending Email...' : 'Reset Password'}
                                 </button>
+
+                                {coachApplication && (
+                                    <>
+                                        <div className="border-t border-white/10 my-4"></div>
+                                        <button
+                                            onClick={() => setShowCoachModal(true)}
+                                            className="w-full bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/30 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                                        >
+                                            <Briefcase size={14} className="text-padel-green" />
+                                            Coach Profile
+                                        </button>
+                                    </>
+                                )}
                             </div>
                         </div>
 
@@ -733,6 +760,15 @@ const PlayerProfile = () => {
                     userEmail={player?.email}
                     onPaymentSuccess={refetchPlayer}
                 />
+
+                {showCoachModal && coachApplication && (
+                    <CoachProfileModal
+                        app={coachApplication}
+                        isAdmin={false}
+                        onClose={() => setShowCoachModal(false)}
+                        onUpdate={(updatedApp) => setCoachApplication(updatedApp)}
+                    />
+                )}
             </div >
         </>
     );
