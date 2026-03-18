@@ -22,8 +22,8 @@ const PlayerProfile = () => {
     const [coachApplication, setCoachApplication] = useState(null);
     const [showCoachModal, setShowCoachModal] = useState(false);
     const navigate = useNavigate();
-
     const [isActivationRequired, setIsActivationRequired] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -201,6 +201,7 @@ const PlayerProfile = () => {
             showMessage(error.message, 'error');
         } else {
             showMessage('Profile updated successfully!', 'success');
+            setIsEditing(false);
         }
         setSaving(false);
     };
@@ -568,177 +569,254 @@ const PlayerProfile = () => {
                                     )}
                                 </AnimatePresence>
 
-                                <div className="mb-10">
-                                    <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
-                                    <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Complete your profile to unlock premium player features</p>
+                                <div className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div>
+                                        <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
+                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Complete your profile to unlock premium player features</p>
+                                    </div>
+                                    {!isEditing && (
+                                        <button
+                                            onClick={() => setIsEditing(true)}
+                                            className="bg-padel-green text-black font-black uppercase tracking-widest px-6 py-3 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20 text-xs"
+                                        >
+                                            Edit Profile
+                                        </button>
+                                    )}
                                 </div>
 
-                                <form onSubmit={handleSave} className="space-y-8">
-                                    <fieldset disabled={isImpersonating} className="space-y-8">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Full Name</label>
-                                                <div className="relative">
-                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                    <input
-                                                        type="text"
-                                                        value={formData.name}
-                                                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Enter full name"
-                                                    />
+                                <AnimatePresence mode="wait">
+                                    {!isEditing ? (
+                                        <motion.div
+                                            key="summary"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="space-y-8"
+                                        >
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Full Name</p>
+                                                    <p className="text-xl font-bold text-white">{player.name || 'Not set'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Gender</p>
+                                                    <p className="text-xl font-bold text-white">{player.gender || 'Not set'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Nationality</p>
+                                                    <p className="text-xl font-bold text-white">{player.nationality || 'Not set'}</p>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
+                                                    <p className="text-xl font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
                                                 </div>
                                             </div>
 
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Gender</label>
-                                                <div className="relative">
-                                                    <select
-                                                        value={formData.gender}
-                                                        onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
-                                                    >
-                                                        <option value="" disabled>Select Gender</option>
-                                                        <option value="Male">Male</option>
-                                                        <option value="Female">Female</option>
-                                                    </select>
-                                                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={18} />
+                                            {player.bio && (
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Biography</p>
+                                                    <p className="text-gray-400 leading-relaxed font-medium">{player.bio}</p>
                                                 </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Nationality</label>
-                                                <div className="relative">
-                                                    <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                    <input
-                                                        type="text"
-                                                        value={formData.nationality}
-                                                        onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Nationality"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">ID Number</label>
-                                                <div className="relative">
-                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                    <input
-                                                        type="text"
-                                                        value={formData.id_number}
-                                                        onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="ID Number"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Phone Number</label>
-                                                <div className="relative">
-                                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                    <input
-                                                        type="tel"
-                                                        value={formData.contact_number}
-                                                        onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Phone Number"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Home Club</label>
-                                                <div className="relative">
-                                                    <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                    <input
-                                                        type="text"
-                                                        value={formData.home_club}
-                                                        onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Your Home Club"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Player Biography</label>
-                                            <div className="relative">
-                                                <Briefcase className="absolute left-4 top-6 text-padel-green/40" size={18} />
-                                                <textarea
-                                                    value={formData.bio}
-                                                    onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                    className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
-                                                    placeholder="Tell us about your padel journey..."
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="md:col-span-2 space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Sponsors (comma separated)</label>
-                                            <div className="relative">
-                                                <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
-                                                <input
-                                                    type="text"
-                                                    value={formData.sponsors}
-                                                    onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
-                                                    className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                    placeholder="Babolat, Nike, Red Bull, etc."
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Category / Division</label>
-                                            <div className="relative">
-                                                <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
-                                                <select
-                                                    value={formData.category}
-                                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                                    className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
-                                                >
-                                                    <option value="" disabled>Select Category</option>
-                                                    <optgroup label="Men's" className="bg-[#0F172A]">
-                                                        <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
-                                                        <option value="Men's Advanced">Men's Advanced</option>
-                                                        <option value="Men's Intermediate">Men's Intermediate</option>
-                                                    </optgroup>
-                                                    <optgroup label="Ladies" className="bg-[#0F172A]">
-                                                        <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
-                                                        <option value="Ladies Advanced">Ladies Advanced</option>
-                                                        <option value="Ladies Intermediate">Ladies Intermediate</option>
-                                                    </optgroup>
-                                                </select>
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
-                                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                    </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-                                            <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest leading-loose">
-                                                By saving, you agree to updated profile data <br />
-                                                being displayed on public community leaderboards.
-                                            </p>
-                                            {!isImpersonating && (
-                                                <button
-                                                    type="submit"
-                                                    disabled={saving}
-                                                    className="w-full md:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95"
-                                                >
-                                                    <Save size={20} className="group-hover:rotate-12 transition-transform" />
-                                                    {saving ? 'Syncing...' : 'Save Profile'}
-                                                </button>
                                             )}
-                                        </div>
-                                    </fieldset>
-                                </form>
+
+                                            <div className="pt-8 border-t border-white/5">
+                                                <div className="flex flex-wrap gap-4">
+                                                    <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                                                        <Phone size={14} className="text-padel-green" />
+                                                        <span className="text-xs font-bold text-white">{player.contact_number || 'No phone'}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                                                        <Mail size={14} className="text-padel-green" />
+                                                        <span className="text-xs font-bold text-white">{player.email}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ) : (
+                                        <motion.form
+                                            key="form"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            onSubmit={handleSave}
+                                            className="space-y-8"
+                                        >
+                                            <fieldset disabled={isImpersonating} className="space-y-8">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Full Name</label>
+                                                        <div className="relative">
+                                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="text"
+                                                                value={formData.name}
+                                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Enter full name"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Gender</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={formData.gender}
+                                                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
+                                                            >
+                                                                <option value="" disabled>Select Gender</option>
+                                                                <option value="Male">Male</option>
+                                                                <option value="Female">Female</option>
+                                                            </select>
+                                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={18} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Nationality</label>
+                                                        <div className="relative">
+                                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="text"
+                                                                value={formData.nationality}
+                                                                onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Nationality"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">ID Number</label>
+                                                        <div className="relative">
+                                                            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="text"
+                                                                value={formData.id_number}
+                                                                onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="ID Number"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Phone Number</label>
+                                                        <div className="relative">
+                                                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="tel"
+                                                                value={formData.contact_number}
+                                                                onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Phone Number"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Home Club</label>
+                                                        <div className="relative">
+                                                            <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="text"
+                                                                value={formData.home_club}
+                                                                onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Your Home Club"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Player Biography</label>
+                                                    <div className="relative">
+                                                        <Briefcase className="absolute left-4 top-6 text-padel-green/40" size={18} />
+                                                        <textarea
+                                                            value={formData.bio}
+                                                            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
+                                                            placeholder="Tell us about your padel journey..."
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="md:col-span-2 space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Sponsors (comma separated)</label>
+                                                    <div className="relative">
+                                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.sponsors}
+                                                            onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                            placeholder="Babolat, Nike, Red Bull, etc."
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Category / Division</label>
+                                                    <div className="relative">
+                                                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
+                                                        <select
+                                                            value={formData.category}
+                                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
+                                                        >
+                                                            <option value="" disabled>Select Category</option>
+                                                            <optgroup label="Men's" className="bg-[#0F172A]">
+                                                                <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
+                                                                <option value="Men's Advanced">Men's Advanced</option>
+                                                                <option value="Men's Intermediate">Men's Intermediate</option>
+                                                            </optgroup>
+                                                            <optgroup label="Ladies" className="bg-[#0F172A]">
+                                                                <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
+                                                                <option value="Ladies Advanced">Ladies Advanced</option>
+                                                                <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                            </optgroup>
+                                                        </select>
+                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
+                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                            </svg>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+                                                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest leading-loose">
+                                                        By saving, you agree to updated profile data <br />
+                                                        being displayed on public community leaderboards.
+                                                    </p>
+                                                    {!isImpersonating && (
+                                                        <div className="flex items-center gap-4 w-full md:w-auto">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setIsEditing(false)}
+                                                                className="flex-1 md:flex-none bg-white/5 text-white font-black uppercase tracking-widest px-8 py-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                type="submit"
+                                                                disabled={saving}
+                                                                className="flex-1 md:flex-none bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95"
+                                                            >
+                                                                <Save size={20} className="group-hover:rotate-12 transition-transform" />
+                                                                {saving ? 'Syncing...' : 'Save Profile'}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </fieldset>
+                                        </motion.form>
+                                    )}
+                                </AnimatePresence>
                             </motion.div>
                         </div>
                     </div>
