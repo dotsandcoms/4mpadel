@@ -338,18 +338,22 @@ const Rankings = () => {
       iconColor: 'text-red-500',
       rows: [
         { cat: '1', winner: '2,000', finals: '1,200', semis: '720', quarters: '360', r16: '180', r32: '90', bold: true },
-        { cat: '2', winner: '800', finals: '480', semis: '240', quarters: '120', r16: '60', r32: '30', bold: false }
+        { cat: '2', winner: '600', finals: '360', semis: '180', quarters: '90', r16: '45', r32: '23', bold: false },
+        { cat: '3', winner: '240', finals: '144', semis: '72', quarters: '36', r16: '18', r32: '9', bold: false },
+        { cat: '4', winner: '96', finals: '86', semis: '36', quarters: '18', r16: '9', r32: '5', bold: false }
       ]
     },
     {
-      type: 'S GOLD',
+      type: 'SUPER GOLD',
       maxPoints: '1,500',
       bgGradient: 'bg-amber-600',
       bgIcon: 'bg-amber-600/20',
       iconColor: 'text-amber-500',
       rows: [
         { cat: '1', winner: '1,500', finals: '900', semis: '540', quarters: '270', r16: '135', r32: '68', bold: true },
-        { cat: '2', winner: '600', finals: '360', semis: '216', quarters: '130', r16: '78', r32: '47', bold: false }
+        { cat: '2', winner: '450', finals: '270', semis: '162', quarters: '97', r16: '58', r32: '35', bold: false },
+        { cat: '3', winner: '180', finals: '108', semis: '65', quarters: '39', r16: '23', r32: '14', bold: false },
+        { cat: '4', winner: '72', finals: '43', semis: '26', quarters: '16', r16: '9', r32: '6', bold: false }
       ]
     },
     {
@@ -360,7 +364,9 @@ const Rankings = () => {
       iconColor: 'text-yellow-400',
       rows: [
         { cat: '1', winner: '1,000', finals: '600', semis: '360', quarters: '180', r16: '90', r32: '45', bold: true },
-        { cat: '2', winner: '400', finals: '240', semis: '144', quarters: '72', r16: '36', r32: '18', bold: false }
+        { cat: '2', winner: '300', finals: '180', semis: '108', quarters: '54', r16: '27', r32: '14', bold: false },
+        { cat: '3', winner: '120', finals: '72', semis: '43', quarters: '22', r16: '11', r32: '5', bold: false },
+        { cat: '4', winner: '48', finals: '29', semis: '17', quarters: '9', r16: '4', r32: '2', bold: false }
       ]
     },
     {
@@ -371,7 +377,9 @@ const Rankings = () => {
       iconColor: 'text-gray-300',
       rows: [
         { cat: '1', winner: '600', finals: '360', semis: '180', quarters: '90', r16: '45', r32: '22', bold: true },
-        { cat: '2', winner: '240', finals: '144', semis: '86', quarters: '43', r16: '22', r32: '11', bold: false }
+        { cat: '2', winner: '180', finals: '108', semis: '65', quarters: '32', r16: '16', r32: '8', bold: false },
+        { cat: '3', winner: '72', finals: '43', semis: '26', quarters: '13', r16: '6', r32: '3', bold: false },
+        { cat: '4', winner: '29', finals: '17', semis: '10', quarters: '5', r16: '3', r32: '1', bold: false }
       ]
     },
     {
@@ -382,7 +390,8 @@ const Rankings = () => {
       iconColor: 'text-orange-700',
       rows: [
         { cat: '1', winner: '300', finals: '180', semis: '90', quarters: '45', r16: '25', r32: '14', bold: true },
-        { cat: '2', winner: '120', finals: '72', semis: '43', quarters: '22', r16: '11', r32: '5', bold: false }
+        { cat: '2', winner: '120', finals: '72', semis: '43', quarters: '22', r16: '11', r32: '5', bold: false },
+        { cat: '3', winner: '48', finals: '29', semis: '17', quarters: '9', r16: '4', r32: '2', bold: false }
       ]
     }
   ];
