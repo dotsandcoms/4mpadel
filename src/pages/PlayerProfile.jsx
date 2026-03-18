@@ -505,17 +505,7 @@ const PlayerProfile = () => {
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Points</p>
                                         <p className="text-3xl font-black text-white">{player.points}</p>
                                     </div>
-                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 flex justify-between items-end">
-                                        <div>
-                                            <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Win Rate</p>
-                                            <p className="text-3xl font-black text-white">{player.win_rate || '0'}%</p>
-                                        </div>
-                                        {player.win_rate > 0 && (
-                                            <div className="bg-padel-green/20 text-padel-green px-3 py-1 rounded-lg text-xs font-black">
-                                                Top 5%
-                                            </div>
-                                        )}
-                                    </div>
+
                                     <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">Division</p>
                                         <p className="text-xl font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
