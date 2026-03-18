@@ -152,7 +152,7 @@ const Calendar = () => {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
-    const [timingFilter, setTimingFilter] = useState('Upcoming');
+    const [timingFilter, setTimingFilter] = useState('All');
     const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Tournaments'
 
     // View State
@@ -666,7 +666,7 @@ const Calendar = () => {
                     <div className="text-center py-32 text-gray-400 bg-white/5 border border-white/10 rounded-3xl">
                         <p className="text-xl mb-4">No events found matching your criteria.</p>
                         <button
-                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('Upcoming'); setLeagueFilter('All'); }}
+                            onClick={() => { setSearchTerm(''); setStatusFilters([]); setCityFilter('All'); setTimingFilter('All'); setLeagueFilter('All'); }}
                             className="text-padel-green font-bold hover:text-white flex items-center gap-2 mx-auto transition-colors"
                         >
                             <X className="w-4 h-4" /> Clear all filters
