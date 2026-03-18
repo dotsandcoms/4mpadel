@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
+import { useRankedin } from '../hooks/useRankedin';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -24,6 +25,8 @@ const PlayerProfile = () => {
     const navigate = useNavigate();
     const [isActivationRequired, setIsActivationRequired] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const { getPlayerEventsAsync, loading: loadingEvents } = useRankedin();
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -144,6 +147,21 @@ const PlayerProfile = () => {
         checkUserAndFetchProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
+
+    useEffect(() => {
+        if (player?.rankedin_id) {
+            const fetchEvents = async () => {
+                const events = await getPlayerEventsAsync(player.rankedin_id);
+                // Filter for upcoming events and sort by date
+                const now = new Date();
+                const filtered = (events || [])
+                    .filter(e => new Date(e.start_date) >= now)
+                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+                setUpcomingEvents(filtered);
+            };
+            fetchEvents();
+        }
+    }, [player?.rankedin_id, getPlayerEventsAsync]);
 
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;
@@ -544,8 +562,8 @@ const PlayerProfile = () => {
                             </div>
                         </div>
 
-                        {/* Right Panel: Edit Form */}
-                        <div className="lg:col-span-8">
+                        {/* Right Panel: Edit Form and Upcoming Events */}
+                        <div className="lg:col-span-8 space-y-8">
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -817,6 +835,122 @@ const PlayerProfile = () => {
                                         </motion.form>
                                     )}
                                 </AnimatePresence>
+                            </motion.div>
+
+                            {/* My Upcoming Events Section */}
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.5 }}
+                                className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                            >
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                
+                                <div className="relative z-10">
+                                    <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 rounded-xl bg-padel-green/10 flex items-center justify-center">
+                                                <CalendarIcon className="text-padel-green" size={24} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
+                                                <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {loadingEvents ? (
+                                        <div className="flex items-center justify-center py-12">
+                                            <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
+                                        </div>
+                                    ) : upcomingEvents && upcomingEvents.length > 0 ? (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {upcomingEvents.map((event) => {
+                                                let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
+                                                let hoverBorder = 'hover:border-padel-green/50';
+                                                let glowColor = 'bg-padel-green/10';
+                                                let textColor = 'group-hover:text-padel-green';
+
+                                                if (event.sapa_status === 'Major') {
+                                                    badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
+                                                    hoverBorder = 'hover:border-red-500/50';
+                                                    glowColor = 'bg-red-500/10';
+                                                    textColor = 'group-hover:text-red-400';
+                                                } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                    badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                                                    hoverBorder = 'hover:border-amber-500/50';
+                                                    glowColor = 'bg-amber-500/10';
+                                                    textColor = 'group-hover:text-amber-400';
+                                                } else if (event.sapa_status === 'Gold') {
+                                                    badgeColor = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+                                                    hoverBorder = 'hover:border-yellow-500/50';
+                                                    glowColor = 'bg-yellow-500/10';
+                                                    textColor = 'group-hover:text-yellow-400';
+                                                } else if (event.sapa_status === 'Silver') {
+                                                    badgeColor = 'bg-gray-500/20 text-gray-300 border-gray-400/30';
+                                                    hoverBorder = 'hover:border-gray-400/50';
+                                                    glowColor = 'bg-gray-400/10';
+                                                    textColor = 'group-hover:text-gray-300';
+                                                } else if (event.sapa_status === 'Bronze') {
+                                                    badgeColor = 'bg-orange-700/20 text-orange-400 border-orange-700/30';
+                                                    hoverBorder = 'hover:border-orange-700/50';
+                                                    glowColor = 'bg-orange-700/10';
+                                                    textColor = 'group-hover:text-orange-400';
+                                                } else if (event.sapa_status === 'FIP event') {
+                                                    badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+                                                    hoverBorder = 'hover:border-blue-500/50';
+                                                    glowColor = 'bg-blue-500/10';
+                                                    textColor = 'group-hover:text-blue-400';
+                                                }
+
+                                                return (
+                                                    <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden`}>
+                                                        <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
+
+                                                        <div className="relative z-10">
+                                                            <div className="flex justify-between items-start mb-4">
+                                                                <div className="flex flex-col">
+                                                                    <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
+                                                                    <span className="text-xs font-bold text-white">
+                                                                        {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                    </span>
+                                                                </div>
+                                                                <a
+                                                                    href={`https://www.rankedin.com/en/tournament/${event.id}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                                                                >
+                                                                    <ExternalLink size={14} />
+                                                                </a>
+                                                            </div>
+
+                                                            <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
+                                                                {event.event_name}
+                                                            </h4>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Status</span>
+                                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${badgeColor}`}>
+                                                                    {event.sapa_status !== 'None' ? event.sapa_status : 'Upcoming'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-16 bg-black/20 rounded-3xl border border-white/5 relative overflow-hidden">
+                                            <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
+                                            <div className="relative z-10">
+                                                <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
+                                                <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">No upcoming events listed</p>
+                                                <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
                             </motion.div>
                         </div>
                     </div>
