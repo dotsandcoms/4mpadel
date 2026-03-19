@@ -37,7 +37,8 @@ const PlayerProfile = () => {
         sponsors: '',
         category: '',
         id_number: '',
-        home_club: ''
+        home_club: '',
+        age: ''
     });
 
     const showMessage = (text, type = 'success') => {
@@ -128,6 +129,7 @@ const PlayerProfile = () => {
                     image_url: playerData.image_url || '',
                     category: playerData.category || '',
                     id_number: playerData.id_number || '',
+                    age: playerData.age || ''
                 });
 
                 // Fetch associated coach application if any
@@ -190,6 +192,9 @@ const PlayerProfile = () => {
         setSaving(true);
         setMessage(null);
 
+        // Check if email is being changed
+        const emailChanged = formData.email !== player.email;
+        
         // Parse sponsors back to JSON array before saving
         let sponsorsArray = [];
         if (formData.sponsors && formData.sponsors.trim() !== '') {
@@ -199,6 +204,7 @@ const PlayerProfile = () => {
 
         const updates = {
             name: formData.name,
+            email: formData.email,
             contact_number: formData.contact_number,
             nationality: formData.nationality,
             gender: formData.gender,
@@ -208,20 +214,37 @@ const PlayerProfile = () => {
             image_url: formData.image_url,
             category: formData.category,
             id_number: formData.id_number,
+            age: formData.age
         };
 
-        const { error } = await supabase
-            .from('players')
-            .update(updates)
-            .eq('id', player.id);
+        try {
+            // Update the players table
+            const { error: dbError } = await supabase
+                .from('players')
+                .update(updates)
+                .eq('id', player.id);
 
-        if (error) {
-            showMessage(error.message, 'error');
-        } else {
-            showMessage('Profile updated successfully!', 'success');
+            if (dbError) throw dbError;
+
+            // If email changed, update it in Supabase Auth as well
+            if (emailChanged) {
+                const { error: authError } = await supabase.auth.updateUser({ email: formData.email });
+                if (authError) {
+                    showMessage(`Profile updated, but email change failed: ${authError.message}`, 'error');
+                } else {
+                    showMessage('Profile updated! Please check your new email for confirmation.', 'success');
+                }
+            } else {
+                showMessage('Profile updated successfully!', 'success');
+            }
+            
             setIsEditing(false);
+            await refetchPlayer();
+        } catch (error) {
+            showMessage(error.message, 'error');
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
     };
 
     const handleImageUpload = async (event) => {
@@ -676,6 +699,22 @@ const PlayerProfile = () => {
                                                     </div>
 
                                                     <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Email Address</label>
+                                                        <div className="relative">
+                                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="email"
+                                                                value={formData.email}
+                                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Email Address"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="space-y-2">
                                                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Gender</label>
                                                         <div className="relative">
                                                             <select
@@ -688,6 +727,20 @@ const PlayerProfile = () => {
                                                                 <option value="Female">Female</option>
                                                             </select>
                                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={18} />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-2">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Age</label>
+                                                        <div className="relative">
+                                                            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                            <input
+                                                                type="number"
+                                                                value={formData.age}
+                                                                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                placeholder="Your Age"
+                                                            />
                                                         </div>
                                                     </div>
                                                 </div>
