@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
 import tournamentHero from '../assets/tournament_hero.jpg'; // Specific tournament hero
 
@@ -15,12 +15,84 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
+const getYoutubeEmbedUrl = (url) => {
+    if (!url) return null;
+    let videoId = '';
+
+    if (url.includes('youtube.com/watch?v=')) {
+        videoId = url.split('v=')[1].split('&')[0];
+    } else if (url.includes('youtu.be/')) {
+        videoId = url.split('youtu.be/')[1].split('?')[0];
+    } else if (url.includes('youtube.com/embed/')) {
+        videoId = url.split('embed/')[1].split('?')[0];
+    }
+
+    if (!videoId && /^[a-zA-Z0-9_-]{11}$/.test(url)) {
+        videoId = url;
+    }
+
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+};
+
+const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
+    if (!isOpen) return null;
+
+    const embedUrl = getYoutubeEmbedUrl(videoUrl);
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+            <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                onClick={onClose}
+                className="absolute inset-0 bg-black/90 backdrop-blur-sm shadow-2xl"
+            />
+            <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                className="relative w-full max-w-5xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-10"
+            >
+                <div className="absolute top-4 right-4 z-20">
+                    <button
+                        onClick={onClose}
+                        className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md transition-colors border border-white/10"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
+
+                {embedUrl ? (
+                    <iframe
+                        src={embedUrl}
+                        title={title || "YouTube video player"}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                    />
+                ) : (
+                    <div className="w-full h-full flex items-center justify-center text-white p-8 text-center">
+                        <p>Video not found or invalid URL</p>
+                    </div>
+                )}
+            </motion.div>
+        </div>
+    );
+};
+
 const EventDetails = () => {
+    const getPlaylistEmbedUrl = (url) => {
+        if (!url) return null;
+        const match = url.match(/[&?]list=([^&]+)/);
+        const playlistId = match ? match[1] : null;
+        return playlistId ? `https://www.youtube.com/embed/videoseries?list=${playlistId}` : null;
+    };
+
     const { slug } = useParams(); // changed from id to slug
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [weather, setWeather] = useState(null);
     const [hasDraw, setHasDraw] = useState(false);
+    const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const { getTournamentClasses } = useRankedin();
 
     const stripHtml = (html) => {
@@ -42,6 +114,50 @@ const EventDetails = () => {
         partner_name: '',
         division: 'Gold'
     });
+
+    const [playlistVideos, setPlaylistVideos] = useState([]);
+    const [fetchingVideos, setFetchingVideos] = useState(false);
+    const YOUTUBE_API_KEY = 'AIzaSyDZ7zEDpj_MVUPl_bWFYocKi76MRVAJb2Q';
+
+    useEffect(() => {
+        const fetchPlaylistItems = async () => {
+            if (!event?.youtube_playlist_url) return;
+            
+            const match = event.youtube_playlist_url.match(/[&?]list=([^&]+)/);
+            const playlistId = match ? match[1] : null;
+            if (!playlistId) return;
+
+            setFetchingVideos(true);
+            try {
+                const response = await fetch(
+                    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=12&playlistId=${playlistId}&key=${YOUTUBE_API_KEY}`
+                );
+                const data = await response.json();
+                if (data.items) {
+                    setPlaylistVideos(data.items
+                        .filter(item => 
+                            item.snippet.title !== 'Deleted video' && 
+                            item.snippet.title !== 'Private video'
+                        )
+                        .map(item => ({
+                            id: item.snippet.resourceId.videoId,
+                            title: item.snippet.title,
+                            thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+                            publishedAt: item.snippet.publishedAt
+                        }))
+                    );
+                } else if (data.error) {
+                    console.error('YouTube API Error:', data.error.message);
+                }
+            } catch (error) {
+                console.error('Error fetching playlist videos:', error);
+            } finally {
+                setFetchingVideos(false);
+            }
+        };
+
+        fetchPlaylistItems();
+    }, [event?.youtube_playlist_url]);
 
     useEffect(() => {
         const fetchEventDetails = async () => {
@@ -457,6 +573,7 @@ const EventDetails = () => {
                     {/* Content Component */}
                     <div className="mt-12 max-w-6xl mx-auto space-y-8">
 
+
                         {/* Top Section: Details + Sidebar */}
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
@@ -595,6 +712,95 @@ const EventDetails = () => {
                             </div>
                         </div>
 
+                        {/* YouTube Playlist / Highlights */}
+                        {event.youtube_playlist_url && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8"
+                            >
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                                    <h2 className="text-2xl font-bold flex items-center gap-3 text-slate-900">
+                                        <PlayCircle className="text-padel-green w-6 h-6" />
+                                        Event Highlights & Videos
+                                    </h2>
+                                    <a
+                                        href={event.youtube_playlist_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-sm font-bold text-padel-green hover:underline flex items-center gap-2"
+                                    >
+                                        View Full Playlist on YouTube
+                                    </a>
+                                </div>
+
+                                {fetchingVideos ? (
+                                    <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                        <Loader className="w-8 h-8 animate-spin text-padel-green mb-4" />
+                                        <p className="text-gray-400 font-medium italic">Fetching latest highlights...</p>
+                                    </div>
+                                ) : playlistVideos.length > 0 ? (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {playlistVideos.map((video) => (
+                                            <motion.div
+                                                key={video.id}
+                                                whileHover={{ y: -5 }}
+                                                className="group relative cursor-pointer"
+                                                onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
+                                            >
+                                                <div className="aspect-video rounded-xl overflow-hidden bg-slate-100 relative shadow-md group-hover:shadow-xl transition-all duration-300">
+                                                    <img
+                                                        src={video.thumbnail}
+                                                        alt={video.title}
+                                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-colors duration-300" />
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                                        <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-lg transform scale-90 group-hover:scale-100 transition-transform duration-300">
+                                                            <PlayCircle className="w-8 h-8 fill-current" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-3">
+                                                    <h3 className="font-bold text-slate-800 line-clamp-2 group-hover:text-padel-green transition-colors leading-tight">
+                                                        {video.title}
+                                                    </h3>
+                                                    <p className="text-xs text-gray-400 mt-1 uppercase font-bold tracking-wider">
+                                                        {new Date(video.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                    </p>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="aspect-video w-full rounded-2xl overflow-hidden border border-gray-100 shadow-lg" id="event-highlights">
+                                        {getPlaylistEmbedUrl(event.youtube_playlist_url) ? (
+                                            <iframe
+                                                src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
+                                                title="YouTube playlist player"
+                                                className="w-full h-full border-0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                                allowFullScreen
+                                            />
+                                        ) : (
+                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 p-8 text-center">
+                                                <PlayCircle className="w-12 h-12 mb-4 opacity-20" />
+                                                <p className="font-medium">Playlist found, but link format is invalid.</p>
+                                                <a
+                                                    href={event.youtube_playlist_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="mt-4 text-padel-green hover:underline text-sm"
+                                                >
+                                                    Watch on YouTube instead
+                                                </a>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+
                     </div>
                 </div>
 
@@ -724,6 +930,13 @@ const EventDetails = () => {
                         </>
                     )}
                 </AnimatePresence>
+
+                <VideoModal
+                    isOpen={videoModal.isOpen}
+                    onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
+                    videoUrl={videoModal.url}
+                    title={videoModal.title}
+                />
             </main>
         </>
     );

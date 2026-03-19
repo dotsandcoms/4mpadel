@@ -113,6 +113,7 @@ const CalendarManager = () => {
         rankedin_url: '',
         featured_live: false,
         live_youtube_url: '',
+        youtube_playlist_url: '',
         sponsor_logos: []
     });
 
@@ -238,6 +239,7 @@ const CalendarManager = () => {
             rankedin_url: '',
             featured_live: false,
             live_youtube_url: '',
+            youtube_playlist_url: '',
             sponsor_logos: []
         });
     }
@@ -270,6 +272,7 @@ const CalendarManager = () => {
             rankedin_url: event.rankedin_url || '',
             featured_live: event.featured_live || false,
             live_youtube_url: event.live_youtube_url || '',
+            youtube_playlist_url: event.youtube_playlist_url || '',
             sponsor_logos: event.sponsor_logos || []
         });
         setIsModalOpen(true);
@@ -510,7 +513,8 @@ const CalendarManager = () => {
                         sponsor_logos: richDetails.sponsor_logos || [],
                         is_league: isLeague,
                         featured_live: false,
-                        live_youtube_url: ''
+                        live_youtube_url: '',
+                        youtube_playlist_url: ''
                     }]);
                     addedCount++;
                 }
@@ -1073,6 +1077,18 @@ const CalendarManager = () => {
                                             />
                                         </motion.div>
                                     )}
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">YouTube Playlist URL (For Highlights/Videos)</label>
+                                        <input
+                                            type="url"
+                                            name="youtube_playlist_url"
+                                            value={formData.youtube_playlist_url}
+                                            onChange={handleInputChange}
+                                            placeholder="https://www.youtube.com/playlist?list=..."
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                        />
+                                    </div>
 
                                     {/* Date & Time */}
                                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
