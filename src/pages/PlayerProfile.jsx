@@ -308,7 +308,6 @@ const PlayerProfile = () => {
     return (
         <>
             <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
-                <Navbar />
 
                 {/* Password Setup Modal (for new invites or recovery) */}
                 <AnimatePresence>

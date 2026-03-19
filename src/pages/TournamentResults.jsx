@@ -128,7 +128,6 @@ const TournamentResults = () => {
                 description="View live tournament results and knockout brackets."
             />
 
-            <Navbar />
 
             <main className="min-h-screen bg-[#0F172A] pb-20">
                 {/* Hero Section with Image */}

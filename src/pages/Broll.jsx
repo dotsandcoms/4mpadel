@@ -38,7 +38,6 @@ const Broll = () => {
 
     return (
         <div className="min-h-screen bg-white text-slate-900 font-sans">
-            <Navbar isDark />
 
             {/* Hero Section - Official Broll Aesthetic */}
             <section className="relative pt-40 pb-24 px-6 overflow-hidden bg-slate-50">

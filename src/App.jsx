@@ -76,8 +76,8 @@ function AppContent() {
       <GoogleAnalytics />
       <Analytics />
       <SpeedInsights />
-      {!isAdminRoute && <Navbar />}
-      <div id="site-content">
+      {!isAdminRoute && <Navbar isDark={location.pathname === '/tournaments/broll'} />}
+      <div id="site-content" className="max-md:pt-20">
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />

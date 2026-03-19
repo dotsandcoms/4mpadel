@@ -286,7 +286,6 @@ const EventDetails = () => {
 
     return (
         <>
-            <Navbar />
             <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans">
                 {/* Hero Section with Image */}
                 <div className="relative h-[45vh] min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">

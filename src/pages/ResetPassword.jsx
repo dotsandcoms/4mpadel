@@ -49,7 +49,6 @@ const ResetPassword = () => {
 
     return (
         <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
-            <Navbar />
 
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />

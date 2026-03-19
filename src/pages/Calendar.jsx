@@ -444,7 +444,6 @@ const Calendar = () => {
 
     return (
         <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
-            <Navbar />
 
             {/* Background elements matched from Rankings */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">

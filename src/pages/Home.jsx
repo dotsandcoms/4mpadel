@@ -1,7 +1,5 @@
 import React from 'react';
 import { SEOHead } from '@burkcorp/reactmath';
-import Navbar from '../components/Navbar';
-import TopHeader from '../components/TopHeader';
 import Hero from '../components/Hero';
 import FeaturedSections from '../components/FeaturedSections';
 import Services from '../components/Services';
@@ -21,10 +19,8 @@ const Home = () => {
                 keywords={["padel", "indoor courts", "sports", "premium", "odessa"]}
             />
 
-            <Navbar />
 
             <main className="bg-[#0F172A] text-white">
-                <TopHeader />
                 <Hero />
                 <FeaturedSections />
 

@@ -103,7 +103,9 @@ const Navbar = ({ isDark = false }) => {
         initial={{ y: 0 }}
         animate={{ y: 0 }}
         transition={{ duration: 0.4 }}
-        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10' : 'py-6 bg-gradient-to-b from-black/80 to-transparent'
+        className={`fixed top-0 left-0 right-0 z-[999] transition-all duration-300 ${isScrolled
+            ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10'
+            : 'py-6 bg-gradient-to-b from-black/80 to-transparent md:bg-gradient-to-b max-md:bg-black/80 max-md:backdrop-blur-xl max-md:py-4 max-md:border-b max-md:border-white/10'
           }`}
       >
         {/* Impersonation Banner */}

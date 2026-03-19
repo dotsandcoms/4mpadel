@@ -126,7 +126,6 @@ const TournamentDraw = () => {
                 description="View live tournament draws and knockout brackets."
             />
 
-            <Navbar />
 
             <main className="min-h-screen bg-[#0F172A] pb-20">
                 {/* Hero */}
