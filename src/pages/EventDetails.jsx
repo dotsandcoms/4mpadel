@@ -117,7 +117,7 @@ const EventDetails = () => {
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
-    const YOUTUBE_API_KEY = 'AIzaSyDZ7zEDpj_MVUPl_bWFYocKi76MRVAJb2Q';
+    const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 
     useEffect(() => {
         const fetchPlaylistItems = async () => {
