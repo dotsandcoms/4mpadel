@@ -75,7 +75,9 @@ const PlayerManager = () => {
         gender: '',
         approved: true,
         paid_registration: true,
+        license_type: 'none',
     });
+
 
     useEffect(() => {
         fetchPlayers();
@@ -109,24 +111,27 @@ const PlayerManager = () => {
 
     // Derived stats
     const stats = useMemo(() => {
-        const paid = players.filter(p => p.paid_registration === true).length;
-        const unpaid = players.length - paid;
-        const visible = players.filter(p => p.approved !== false && p.paid_registration === true).length;
-        const hidden = players.length - visible;
+        const full = players.filter(p => p.paid_registration === true && p.license_type === 'full').length;
+        const temp = players.filter(p => p.paid_registration === true && p.license_type === 'temporary').length;
+        const unpaid = players.length - (full + temp);
+        const visible = players.filter(p => p.approved !== false && p.paid_registration === true && p.license_type === 'full').length;
         return {
             total: players.length,
-            paid,
+            paid: full + temp,
+            full,
+            temp,
             unpaid,
             visible,
-            hidden,
         };
     }, [players]);
 
     // Chart data
     const paymentChartData = useMemo(() => [
-        { name: 'Paid', value: stats.paid, color: '#beff00' },
+        { name: 'Full License', value: stats.full, color: '#beff00' },
+        { name: 'Temp License', value: stats.temp, color: '#2563eb' },
         { name: 'Unpaid', value: stats.unpaid, color: '#f59e0b' },
-    ], [stats.paid, stats.unpaid]);
+    ], [stats.full, stats.temp, stats.unpaid]);
+
 
     const categoryChartData = useMemo(() => {
         const map = {};
@@ -160,15 +165,17 @@ const PlayerManager = () => {
                 player.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 (player.home_club && player.home_club.toLowerCase().includes(searchTerm.toLowerCase()));
             const matchesPaid = filterPaid === 'all' ||
-                (filterPaid === 'paid' && player.paid_registration === true) ||
+                (filterPaid === 'full' && player.paid_registration === true && player.license_type === 'full') ||
+                (filterPaid === 'temporary' && player.paid_registration === true && player.license_type === 'temporary') ||
                 (filterPaid === 'unpaid' && player.paid_registration !== true);
             const matchesActive = filterActive === 'all' ||
-                (filterActive === 'visible' && player.approved !== false && player.paid_registration === true) ||
-                (filterActive === 'hidden' && (player.approved === false || player.paid_registration !== true));
+                (filterActive === 'visible' && player.approved !== false && player.paid_registration === true && player.license_type === 'full') ||
+                (filterActive === 'hidden' && (player.approved === false || player.paid_registration !== true || player.license_type !== 'full'));
             const matchesCategory = filterCategory === 'All' || player.category === filterCategory;
             return matchesSearch && matchesPaid && matchesActive && matchesCategory;
         });
     }, [players, searchTerm, filterPaid, filterActive, filterCategory]);
+
 
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -184,7 +191,7 @@ const PlayerManager = () => {
         setFormData({
             name: '', rank_label: '', points: '', win_rate: '', image_url: '', home_club: '', age_group: '',
             category: '', level: '', nationality: '', bio: '', sponsors: '', contact_number: '', email: '',
-            gender: '', approved: true, paid_registration: true,
+            gender: '', approved: true, paid_registration: false, license_type: 'none',
         });
         setIsEditing(true);
     };
@@ -218,9 +225,11 @@ const PlayerManager = () => {
             gender: player.gender || '',
             approved: player.approved !== false,
             paid_registration: player.paid_registration === true,
+            license_type: player.license_type || 'none',
         });
         setIsEditing(true);
     };
+
 
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this player?')) return;
@@ -282,7 +291,9 @@ const PlayerManager = () => {
             gender: formData.gender,
             approved: formData.approved,
             paid_registration: formData.paid_registration,
+            license_type: formData.license_type,
         };
+
         let error;
         if (currentPlayer) {
             const { error: updateError } = await supabase.from('players').update(payload).eq('id', currentPlayer.id);
@@ -432,9 +443,11 @@ const PlayerManager = () => {
                     className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
                 >
                     <option value="all">All Payment Status</option>
-                    <option value="paid">Paid</option>
+                    <option value="full">Full License</option>
+                    <option value="temporary">Temp License</option>
                     <option value="unpaid">Unpaid</option>
                 </select>
+
                 <select
                     value={filterActive}
                     onChange={(e) => setFilterActive(e.target.value)}
@@ -481,10 +494,11 @@ const PlayerManager = () => {
                                     <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                                         <td className="py-3 px-4 font-medium text-white">{player.name}</td>
                                         <td className="py-3 px-4">
-                                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${player.paid_registration ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
-                                                {player.paid_registration ? 'Paid' : 'Unpaid'}
+                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${player.paid_registration ? (player.license_type === 'full' ? 'bg-padel-green/20 text-padel-green' : 'bg-blue-500/20 text-blue-400') : 'bg-amber-500/20 text-amber-400'}`}>
+                                                {player.paid_registration ? (player.license_type === 'full' ? 'Full' : 'Temp') : 'Unpaid'}
                                             </span>
                                         </td>
+
                                         <td className="py-3 px-4">
                                             {player.approved !== false && player.paid_registration ? (
                                                 <span className="flex items-center gap-1 text-green-400 text-xs"><Eye size={12} /> Visible</span>
@@ -633,16 +647,49 @@ const PlayerManager = () => {
                                         <label className="block text-gray-400 text-sm mb-1">Bio</label>
                                         <textarea value={formData.bio || ''} onChange={e => setFormData({ ...formData, bio: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" rows="3" />
                                     </div>
-                                    <div className="md:col-span-2 flex items-center gap-6">
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={formData.approved} onChange={e => setFormData({ ...formData, approved: e.target.checked })} className="w-4 h-4 accent-padel-green" />
-                                            <span className="text-gray-300 text-sm">Approved</span>
+                                    <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
+                                        <label className="flex items-center gap-2 cursor-pointer group">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={formData.approved} 
+                                                onChange={e => setFormData({ ...formData, approved: e.target.checked })} 
+                                                className="w-5 h-5 rounded border-white/20 bg-black text-padel-green focus:ring-padel-green cursor-pointer" 
+                                            />
+                                            <div className="flex flex-col">
+                                                <span className="text-white font-bold text-sm group-hover:text-padel-green transition-colors">Approved</span>
+                                                <span className="text-gray-500 text-[10px] uppercase">Account status</span>
+                                            </div>
                                         </label>
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={formData.paid_registration} onChange={e => setFormData({ ...formData, paid_registration: e.target.checked })} className="w-4 h-4 accent-padel-green" />
-                                            <span className="text-gray-300 text-sm">Paid / License</span>
-                                        </label>
+
+                                        <div className="h-8 w-px bg-white/10 hidden sm:block" />
+
+                                        <div className="flex-1 w-full sm:w-auto">
+                                            <label className="block text-gray-400 text-[10px] uppercase font-black tracking-widest mb-2">License Status</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[
+                                                    { id: 'none', label: 'Unpaid', color: 'bg-gray-800' },
+                                                    { id: 'temporary', label: 'Temp', color: 'bg-blue-600' },
+                                                    { id: 'full', label: 'Full', color: 'bg-padel-green' }
+                                                ].map(opt => (
+                                                    <button
+                                                        key={opt.id}
+                                                        type="button"
+                                                        onClick={() => setFormData({ 
+                                                            ...formData, 
+                                                            license_type: opt.id, 
+                                                            paid_registration: opt.id !== 'none' 
+                                                        })}
+                                                        className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${formData.license_type === opt.id 
+                                                            ? `${opt.color} ${opt.id === 'full' ? 'text-black' : 'text-white'} border-white/20 shadow-lg` 
+                                                            : 'bg-black/40 text-gray-500 border-white/5 hover:border-white/10'}`}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
+
                                 </div>
                                 <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
                                     <button type="button" onClick={() => setIsEditing(false)} className="bg-gray-700 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-600">Cancel</button>

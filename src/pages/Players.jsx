@@ -37,7 +37,9 @@ const Players = () => {
         .select('*')
         .eq('approved', true)
         .eq('paid_registration', true)
+        .eq('license_type', 'full')
         .order('points', { ascending: false });
+
 
       if (!error && data) {
         const processedPlayers = data.map(player => {

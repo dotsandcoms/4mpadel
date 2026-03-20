@@ -23,6 +23,15 @@ const PlayerProfile = () => {
     const [coachApplication, setCoachApplication] = useState(null);
     const [showCoachModal, setShowCoachModal] = useState(false);
     const navigate = useNavigate();
+    const [transactions, setTransactions] = useState([]);
+    const [transactionsLoading, setTransactionsLoading] = useState(false);
+    const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
+    const [transactionsPerPage] = useState(5);
+    const [activeTab, setActiveTab] = useState('personal');
+
+
+
+
     const [isActivationRequired, setIsActivationRequired] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -142,13 +151,55 @@ const PlayerProfile = () => {
                 if (coachData) {
                     setCoachApplication(coachData);
                 }
+
+                // Fetch transactions for this user
+                fetchTransactions(emailToFetch);
             }
             setLoading(false);
         };
 
+        const fetchTransactions = async (email) => {
+            setTransactionsLoading(true);
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+
+                const res = await fetch(`${supabaseUrl}/functions/v1/paystack-transactions?email=${encodeURIComponent(email)}`, {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    }
+                });
+
+                if (!res.ok) {
+                    const text = await res.text();
+                    throw new Error(`Status ${res.status}: ${text}`);
+                }
+
+                const data = await res.json();
+                if (data && data.transactions) {
+                    setTransactions(data.transactions);
+                }
+            } catch (err) {
+                console.error("Failed to fetch transactions:", err);
+                alert("Transaction error: " + err.message);
+            } finally {
+                setTransactionsLoading(false);
+            }
+        };
+
+
+
+
         checkUserAndFetchProfile();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
+
+    const indexOfLastTransaction = currentTransactionPage * transactionsPerPage;
+    const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
+    const currentTransactionsList = transactions.slice(indexOfFirstTransaction, indexOfLastTransaction);
+    const totalTransactionPages = Math.ceil(transactions.length / transactionsPerPage);
+
 
     useEffect(() => {
         if (player?.rankedin_id) {
@@ -423,10 +474,16 @@ const PlayerProfile = () => {
                                     transition={{ delay: 0.2 }}
                                 >
                                     <div className="flex items-center gap-3 mb-2">
-                                        <span className={`${player.paid_registration ? 'bg-padel-green text-black' : 'bg-gray-700 text-gray-300'} px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg shadow-padel-green/20`}>
-                                            {player.paid_registration ? 'License Paid' : 'Pending License'}
+                                        <span className={`${player.paid_registration ? (player.license_type === 'full' ? 'bg-padel-green text-black' : 'bg-blue-500 text-white') : 'bg-gray-700 text-gray-300'} px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg border border-white/10`}>
+                                            {player.paid_registration ? (player.license_type === 'full' ? 'Full License' : 'Temporary License') : 'Pending License'}
                                         </span>
+                                        {player.license_type === 'temporary' && (
+                                            <span className="bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
+                                                Hidden from Players Page
+                                            </span>
+                                        )}
                                         {player.rankedin_id && (
+
                                             <span className="bg-black/40 backdrop-blur-md border border-white/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
                                                 ID: {player.rankedin_id}
                                             </span>
@@ -461,20 +518,26 @@ const PlayerProfile = () => {
 
                 {/* Main Content Area */}
                 <div className="container mx-auto px-6 -mt-10 pb-24 relative z-20">
-                    {/* Payment Required Banner - shown when profile is not visible */}
-                    {player && !player.paid_registration && (
+                    {/* Payment Required Banner - shown when profile is not visible (none or temporary) */}
+                    {player && (player.license_type !== 'full') && (
                         <motion.div
                             initial={{ opacity: 0, y: 10 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="mb-8 p-6 rounded-2xl bg-padel-green/10 border border-padel-green/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                            className={`mb-8 p-6 rounded-2xl ${player.license_type === 'temporary' ? 'bg-blue-500/10 border-blue-500/30' : 'bg-padel-green/10 border-padel-green/30'} border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4`}
                         >
                             <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-xl bg-padel-green/20 flex items-center justify-center">
-                                    <CreditCard className="text-padel-green" size={24} />
+                                <div className={`w-12 h-12 rounded-xl ${player.license_type === 'temporary' ? 'bg-blue-500/20' : 'bg-padel-green/20'} flex items-center justify-center`}>
+                                    <CreditCard className={player.license_type === 'temporary' ? 'text-blue-400' : 'text-padel-green'} size={24} />
                                 </div>
                                 <div>
-                                    <h3 className="text-white font-bold text-lg">License Required</h3>
-                                    <p className="text-gray-400 text-sm">Your profile is hidden from the Players page. Pay for a license to go live.</p>
+                                    <h3 className="text-white font-bold text-lg">
+                                        {player.license_type === 'temporary' ? 'Temporary License Active' : 'License Required'}
+                                    </h3>
+                                    <p className="text-gray-400 text-sm">
+                                        {player.license_type === 'temporary' 
+                                            ? 'Your profile is hidden from the public Players page. Upgrade to a full license to be visible.' 
+                                            : 'Your profile is hidden from the Players page. Pay for a full license to go live.'}
+                                    </p>
                                 </div>
                             </div>
                             <div className="flex gap-3 w-full sm:w-auto">
@@ -482,17 +545,20 @@ const PlayerProfile = () => {
                                     onClick={() => setShowPaymentModal(true)}
                                     className="flex-1 sm:flex-none bg-padel-green text-black font-black uppercase tracking-widest py-3 px-6 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20"
                                 >
-                                    Pay Now - Full License
+                                    {player.license_type === 'temporary' ? 'Upgrade to Full License' : 'Pay Now - Full License'}
                                 </button>
-                                <button
-                                    onClick={() => setShowPaymentModal(true)}
-                                    className="flex-1 sm:flex-none bg-white/10 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 border border-white/10 transition-all"
-                                >
-                                    Buy Temporary License
-                                </button>
+                                {player.license_type !== 'temporary' && (
+                                    <button
+                                        onClick={() => setShowPaymentModal(true)}
+                                        className="flex-1 sm:flex-none bg-white/10 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 border border-white/10 transition-all"
+                                    >
+                                        Buy Temporary License
+                                    </button>
+                                )}
                             </div>
                         </motion.div>
                     )}
+
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
@@ -584,14 +650,45 @@ const PlayerProfile = () => {
                             </div>
                         </div>
 
-                        {/* Right Panel: Edit Form and Upcoming Events */}
+                        {/* Right Panel: Content */}
                         <div className="lg:col-span-8 space-y-8">
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
+                            
+                            {/* Tab Navigation */}
+                            <motion.div 
+                                initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.4 }}
-                                className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                className="flex overflow-x-auto no-scrollbar gap-2 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
                             >
+                                <button
+                                    onClick={() => setActiveTab('personal')}
+                                    className={`whitespace-nowrap px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] transition-all flex items-center gap-3 ${activeTab === 'personal' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <User size={16} /> Personal Info
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('payments')}
+                                    className={`whitespace-nowrap px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] transition-all flex items-center gap-3 ${activeTab === 'payments' ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <CreditCard size={16} /> Payment History
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('events')}
+                                    className={`whitespace-nowrap px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] transition-all flex items-center gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <CalendarIcon size={16} /> Upcoming Events
+                                </button>
+                            </motion.div>
+
+                            <AnimatePresence mode="wait">
+                                {activeTab === 'personal' && (
+                                    <motion.div
+                                        key="personal"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                    >
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                 <AnimatePresence>
@@ -888,14 +985,127 @@ const PlayerProfile = () => {
                                     )}
                                 </AnimatePresence>
                             </motion.div>
+                                )}
 
-                            {/* My Upcoming Events Section */}
-                            <motion.div
-                                initial={{ opacity: 0, y: 20 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.5 }}
-                                className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
-                            >
+                                {/* Payment Transactions Section */}
+                                {activeTab === 'payments' && (
+                                    <motion.div
+                                        key="payments"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                    >
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                
+                                <div className="mb-10 flex items-center justify-between">
+                                    <div>
+                                        <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
+                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Your financial history with SAPA</p>
+                                    </div>
+                                    <div className="bg-blue-500/10 text-blue-400 p-3 rounded-2xl">
+                                        <CreditCard size={24} />
+                                    </div>
+                                </div>
+
+                                {transactionsLoading ? (
+                                    <div className="flex flex-col items-center justify-center py-12">
+                                        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+                                        <p className="text-gray-500 text-xs font-black uppercase tracking-widest">Fetching payment history...</p>
+                                    </div>
+                                ) : transactions.length === 0 ? (
+                                    <div className="bg-white/5 rounded-3xl p-12 text-center border border-white/5">
+                                        <AlertCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                        <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No transactions found</p>
+                                        <p className="text-gray-600 text-xs mt-2">Payments are processed securely via Paystack</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {/* Table Header - for desktop */}
+                                        <div className="hidden md:grid grid-cols-4 gap-4 px-6 py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                            <div>Reference</div>
+                                            <div>Date</div>
+                                            <div>Amount</div>
+                                            <div className="text-right">Status</div>
+                                        </div>
+
+                                        {/* Transaction Rows */}
+                                        {currentTransactionsList.map((trx) => (
+                                            <div key={trx.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-6 transition-all flex flex-col md:grid md:grid-cols-4 md:items-center gap-4">
+
+                                                <div className="flex flex-col text-sm border-b md:border-none border-white/5 pb-2 md:pb-0">
+                                                    <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
+                                                    <span className="font-mono text-gray-400">{trx.id}</span>
+                                                </div>
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Date</span>
+                                                    <span className="text-gray-200">{trx.date}</span>
+                                                </div>
+                                                <div className="flex flex-col text-sm">
+                                                    <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
+                                                    <span className="text-white font-black">{trx.amount}</span>
+                                                </div>
+                                                <div className="flex flex-col items-start md:items-end">
+                                                    <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Status</span>
+                                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                        trx.status === 'Success' 
+                                                            ? 'bg-padel-green text-black' 
+                                                            : trx.status === 'Failed' 
+                                                                ? 'bg-red-500/20 text-red-500 border border-red-500/20' 
+                                                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20'
+                                                    }`}>
+                                                        {trx.status}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        {/* Pagination Controls */}
+                                        {transactions.length > transactionsPerPage && (
+                                            <div className="flex justify-between items-center mt-8 px-2">
+                                                <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
+                                                    Page {currentTransactionPage} of {totalTransactionPages}
+                                                </span>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => setCurrentTransactionPage(prev => Math.max(prev - 1, 1))}
+                                                        disabled={currentTransactionPage === 1}
+                                                        className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 transition-all shadow-xl"
+                                                    >
+                                                        Prev
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setCurrentTransactionPage(prev => Math.min(prev + 1, totalTransactionPages))}
+                                                        disabled={currentTransactionPage === totalTransactionPages}
+                                                        className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 transition-all shadow-xl"
+                                                    >
+                                                        Next
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <p className="text-[10px] text-gray-600 font-bold uppercase tracking-[0.2em] text-center pt-8">
+
+                                            Only your 50 most recent SAPA transactions are displayed.
+                                        </p>
+                                    </div>
+                                )}
+                            </motion.div>
+                                )}
+
+
+                                {/* My Upcoming Events Section */}
+                                {activeTab === 'events' && (
+                                    <motion.div
+                                        key="events"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                    >
                                 <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
                                 
                                 <div className="relative z-10">
@@ -1004,6 +1214,8 @@ const PlayerProfile = () => {
                                     )}
                                 </div>
                             </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 </div>

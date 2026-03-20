@@ -19,8 +19,8 @@ console.log('Paystack Config Check (Modal):', {
 
 const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.startsWith('pk_');
 
-const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal) => {
-    const { error: rpcError } = await supabase.rpc('mark_player_paid');
+const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal, licenseType = 'full') => {
+    const { error: rpcError } = await supabase.rpc('mark_player_paid', { p_license_type: licenseType });
     if (rpcError) {
         setError('Payment received but failed to update profile. Please contact support.');
     } else {
@@ -45,7 +45,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
     const handleFullLicensePay = usePaystackPayment(getConfig(FEES.FULL_LICENSE));
     const handleTemporaryLicensePay = usePaystackPayment(getConfig(FEES.TEMPORARY_LICENSE));
 
-    const runPayment = (paymentFn) => {
+    const runPayment = (paymentFn, licenseType) => {
         setError(null);
         setLoading(true);
         paymentFn({
@@ -54,12 +54,14 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                     () => setLoading(false),
                     onPaymentSuccess,
                     setError,
-                    onClose
+                    onClose,
+                    licenseType
                 );
             },
             onClose: () => setLoading(false),
         });
     };
+
 
     if (!isOpen) return null;
 
@@ -100,13 +102,13 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
 
                         <div className="space-y-3">
                             <button
-                                onClick={() => runPayment(handleFullLicensePay)}
+                                onClick={() => runPayment(handleFullLicensePay, 'full')}
                                 disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-padel-green/20 border border-padel-green/50 hover:bg-padel-green/30 transition-all group"
                             >
                                 <div className="text-left">
                                     <p className="text-white font-bold">Pay Now - Full License</p>
-                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.FULL_LICENSE)} • Profile visible immediately</p>
+                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.FULL_LICENSE)} • Profile visible on Players page</p>
                                 </div>
                                 <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
                                     {loading ? 'Processing...' : 'Pay'}
@@ -114,13 +116,13 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                             </button>
 
                             <button
-                                onClick={() => runPayment(handleTemporaryLicensePay)}
+                                onClick={() => runPayment(handleTemporaryLicensePay, 'temporary')}
                                 disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
                             >
                                 <div className="text-left">
                                     <p className="text-white font-bold">Buy Temporary License</p>
-                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)} • Profile visible immediately</p>
+                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)} • Hidden from Players page</p>
                                 </div>
                                 <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
                                     {loading ? 'Processing...' : 'Pay'}
@@ -129,8 +131,9 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                         </div>
 
                         <p className="text-gray-500 text-xs mt-4 text-center">
-                            Both options process payment in this modal. Your profile will be visible immediately after payment.
+                            Only full license holders are displayed on the public Players page.
                         </p>
+
                     </div>
                 </motion.div>
             </div>

@@ -260,7 +260,9 @@ const AuthModal = ({ isOpen, onClose }) => {
             p_sponsors: sponsors,
             p_instagram_link: instagramLink || null,
             p_paid_registration: true,
+            p_license_type: 'full',
         });
+
 
         if (insertError) {
             showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');

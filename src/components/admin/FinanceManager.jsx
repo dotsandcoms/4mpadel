@@ -8,16 +8,37 @@ const FinanceManager = () => {
     const [transactions, setTransactions] = useState([]);
     const [stats, setStats] = useState({ totalRevenue: 'R 0.00', successfulPayouts: 'R 0.00' });
     const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all'); // 'all', 'full', 'temp'
+    const [searchQuery, setSearchQuery] = useState('');
+
+
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 8;
 
+    // Filter Transactions
+    const filteredTransactions = transactions.filter(trx => {
+        // License Type Filter
+        const matchesLicense = filter === 'all' || 
+            (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= 450) ||
+            (filter === 'temp' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) === 120);
+
+        // Search Filter
+        const matchesSearch = !searchQuery || 
+            trx.user.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            trx.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+        return matchesLicense && matchesSearch;
+    });
+
+
     // Calculate Pagination
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentTransactions = transactions.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(transactions.length / itemsPerPage);
+    const currentTransactions = filteredTransactions.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+
 
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
@@ -25,13 +46,13 @@ const FinanceManager = () => {
         try {
             setLoading(true);
 
-            // Use direct fetch again to see the exact payload now that JWT is bypassed
+            const { data: { session } } = await supabase.auth.getSession();
+            const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
             const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
             const res = await fetch(`${supabaseUrl}/functions/v1/paystack-transactions`, {
                 headers: {
-                    Authorization: `Bearer ${anonKey}`,
+                    Authorization: `Bearer ${token}`,
                 }
             });
 
@@ -46,6 +67,7 @@ const FinanceManager = () => {
                 setTransactions(data.transactions);
                 setStats(data.stats);
             }
+
         } catch (error) {
             console.error('Error fetching transactions from Edge Function:', error);
             setTransactions([]);
@@ -54,6 +76,7 @@ const FinanceManager = () => {
             setLoading(false);
         }
     };
+
 
     useEffect(() => {
         if (paystackEnabled) {
@@ -140,12 +163,53 @@ const FinanceManager = () => {
 
             {/* Recent Transactions */}
             <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
-                <div className="p-6 border-b border-white/10 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-white">Recent Transactions</h3>
-                    <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
-                        <Download size={16} /> Export CSV
-                    </button>
+                <div className="p-6 border-b border-white/10 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+                    <div className="flex-1 w-full">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                            <h3 className="text-lg font-bold text-white">Recent Transactions</h3>
+                            
+                            {/* Search Input */}
+                            <div className="relative w-full md:w-80">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                                <input
+                                    type="text"
+                                    placeholder="Search by user email or ID..."
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-sm text-white focus:outline-none focus:ring-2 focus:ring-padel-green/50 placeholder:text-gray-600"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2 mt-4">
+                            <button
+                                onClick={() => { setFilter('all'); setCurrentPage(1); }}
+                                className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${filter === 'all' ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                            >
+                                All Transactions
+                            </button>
+                            <button
+                                onClick={() => { setFilter('full'); setCurrentPage(1); }}
+                                className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${filter === 'full' ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                            >
+                                Full Licenses (R450)
+                            </button>
+                            <button
+                                onClick={() => { setFilter('temp'); setCurrentPage(1); }}
+                                className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${filter === 'temp' ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:bg-white/10'}`}
+                            >
+                                Temp Licenses (R120)
+                            </button>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-4 shrink-0">
+                        <button className="flex items-center gap-2 text-sm text-gray-400 hover:text-white">
+                            <Download size={16} /> Export CSV
+                        </button>
+                    </div>
                 </div>
+
+
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
@@ -201,8 +265,9 @@ const FinanceManager = () => {
                 {/* Pagination Controls */}
                 <div className="p-4 border-t border-white/10 flex justify-between items-center text-sm">
                     <span className="text-gray-400">
-                        Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, transactions.length)} of {transactions.length} transactions
+                        Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredTransactions.length)} of {filteredTransactions.length} transactions
                     </span>
+
                     <div className="flex gap-2">
                         <button
                             onClick={() => paginate(currentPage - 1)}
