@@ -589,7 +589,7 @@ const PlayerProfile = () => {
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
 
                         {/* Left Panel: Statistics & Quick Updates */}
-                        <div className="lg:col-span-4 space-y-6">
+                        <div className="lg:col-span-4 space-y-6 order-2 lg:order-1">
                             <motion.div
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
@@ -677,7 +677,7 @@ const PlayerProfile = () => {
                         </div>
 
                         {/* Right Panel: Content */}
-                        <div className="lg:col-span-8 space-y-8">
+                        <div className="lg:col-span-8 space-y-8 order-1 lg:order-2">
                             
                             {/* Tab Navigation */}
                             <motion.div 
