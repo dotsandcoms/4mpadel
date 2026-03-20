@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { usePaystackPayment } from 'react-paystack';
 import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
+import { useRankedin } from '../hooks/useRankedin';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -33,6 +34,37 @@ const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeM
 const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [showTempOptions, setShowTempOptions] = useState(false);
+
+    // Temporary License Addition
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [selectedEventId, setSelectedEventId] = useState('');
+    const [eventsLoading, setEventsLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (isOpen && upcomingEvents.length === 0) {
+            const fetchEvents = async () => {
+                setEventsLoading(true);
+                try {
+                    const { data: events, error } = await supabase
+                        .from('calendar')
+                        .select('id, event_name, start_date')
+                        .gte('start_date', new Date().toISOString())
+                        .order('start_date', { ascending: true });
+
+                    if (!error && events) {
+                        setUpcomingEvents(events);
+                    }
+                } catch (e) {
+                    console.error("Failed to load events", e);
+                } finally {
+                    setEventsLoading(false);
+                }
+            };
+            fetchEvents();
+        }
+    }, [isOpen, upcomingEvents.length]);
+
 
     const getConfig = (amountInRands) => ({
         reference: `${(new Date()).getTime()}-${amountInRands}`,
@@ -50,9 +82,29 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
         setLoading(true);
         paymentFn({
             onSuccess: async () => {
+                let successCallback = onPaymentSuccess;
+
+                if (licenseType === 'temporary' && selectedEventId) {
+                    const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
+                    if (eventDetails) {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (user) {
+                            const { data: pData } = await supabase.from('players').select('id').eq('email', userEmail).maybeSingle();
+                            if (pData?.id) {
+                                await supabase.from('temporary_licenses').insert({
+                                    player_id: pData.id,
+                                    event_id: eventDetails.id,
+                                    event_name: eventDetails.event_name || 'Calendar Event',
+                                    event_date: eventDetails.start_date
+                                });
+                            }
+                        }
+                    }
+                }
+
                 await handlePaymentComplete(
                     () => setLoading(false),
-                    onPaymentSuccess,
+                    successCallback,
                     setError,
                     onClose,
                     licenseType
@@ -115,19 +167,54 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
                                 </div>
                             </button>
 
-                            <button
-                                onClick={() => runPayment(handleTemporaryLicensePay, 'temporary')}
-                                disabled={loading || !isPaystackConfigured()}
-                                className="w-full flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all group"
-                            >
-                                <div className="text-left">
-                                    <p className="text-white font-bold">Buy Temporary License</p>
-                                    <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)} • Hidden from Players page</p>
-                                </div>
-                                <div className="bg-padel-green text-black font-black px-4 py-2 rounded-lg text-sm group-hover:scale-105 transition-transform">
-                                    {loading ? 'Processing...' : 'Pay'}
-                                </div>
-                            </button>
+                            <div className="w-full flex-col rounded-xl bg-white/5 border border-white/10 transition-all">
+                                <button
+                                    onClick={() => {
+                                        if (showTempOptions && selectedEventId) {
+                                            runPayment(handleTemporaryLicensePay, 'temporary');
+                                        } else {
+                                            setShowTempOptions(true);
+                                        }
+                                    }}
+                                    disabled={loading || !isPaystackConfigured() || (showTempOptions && !selectedEventId && upcomingEvents.length > 0)}
+                                    className="w-full flex items-center justify-between p-4 hover:bg-white/10 transition-all group rounded-xl"
+                                >
+                                    <div className="text-left">
+                                        <p className="text-white font-bold">Buy Temporary License</p>
+                                        <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)}</p>
+                                    </div>
+                                    <div className={`text-black font-black px-4 py-2 rounded-lg text-sm transition-transform ${(!showTempOptions || selectedEventId) ? 'bg-padel-green group-hover:scale-105' : 'bg-gray-500'}`}>
+                                        {loading ? 'Processing...' : (showTempOptions ? 'Pay For Event' : 'Select Event')}
+                                    </div>
+                                </button>
+
+                                {showTempOptions && (
+                                    <div className="p-4 border-t border-white/10 w-full animate-in fade-in slide-in-from-top-2">
+                                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-left">Select Event</label>
+                                        {eventsLoading ? (
+                                            <div className="text-center py-4 bg-black/40 rounded-xl border border-white/5">
+                                                <div className="w-5 h-5 border-2 border-padel-green border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                            </div>
+                                        ) : upcomingEvents?.length > 0 ? (
+                                            <select
+                                                value={selectedEventId}
+                                                onChange={(e) => setSelectedEventId(e.target.value)}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-padel-green outline-none"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <option value="">Select an upcoming event...</option>
+                                                {upcomingEvents.map((event, i) => (
+                                                    <option key={event.id || i} value={event.id}>
+                                                        {event.event_name} ({new Date(event.start_date).toLocaleDateString()})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <p className="text-[10px] text-yellow-500 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 text-left">No upcoming events found. You must wait for an event to be posted to buy a temporary license.</p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <p className="text-gray-500 text-xs mt-4 text-center">

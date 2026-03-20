@@ -28,6 +28,7 @@ const PlayerProfile = () => {
     const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
     const [transactionsPerPage] = useState(5);
     const [activeTab, setActiveTab] = useState('personal');
+    const [tempLicenseDetails, setTempLicenseDetails] = useState(null);
 
 
 
@@ -102,6 +103,20 @@ const PlayerProfile = () => {
                 showMessage(error.message, 'error');
             } else if (playerData) {
                 setPlayer(playerData);
+
+                if (playerData.license_type === 'temporary') {
+                    const { data: tempLicenseData } = await supabase
+                        .from('temporary_licenses')
+                        .select('*')
+                        .eq('player_id', playerData.id)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (tempLicenseData) {
+                        setTempLicenseDetails(tempLicenseData);
+                    }
+                }
 
                 // Check for activation state
                 const isInvite = window.location.search.includes('new_invite=true') || window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('type=magiclink');
@@ -533,11 +548,22 @@ const PlayerProfile = () => {
                                     <h3 className="text-white font-bold text-lg">
                                         {player.license_type === 'temporary' ? 'Temporary License Active' : 'License Required'}
                                     </h3>
-                                    <p className="text-gray-400 text-sm">
-                                        {player.license_type === 'temporary' 
-                                            ? 'Your profile is hidden from the public Players page. Upgrade to a full license to be visible.' 
-                                            : 'Your profile is hidden from the Players page. Pay for a full license to go live.'}
-                                    </p>
+                                    <div className="text-gray-400 text-sm">
+                                        {player.license_type === 'temporary' ? (
+                                            <>
+                                                <p>Your profile is hidden from the public Players page. Upgrade to a full license to be visible.</p>
+                                                {tempLicenseDetails && (
+                                                    <div className="mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+                                                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest mb-1">Assigned Event</p>
+                                                        <p className="text-white font-bold">{tempLicenseDetails.event_name}</p>
+                                                        <p className="text-xs text-gray-500 mt-1">{new Date(tempLicenseDetails.event_date).toLocaleDateString()}</p>
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <p>Your profile is hidden from the Players page. Pay for a full license to go live.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                             <div className="flex gap-3 w-full sm:w-auto">

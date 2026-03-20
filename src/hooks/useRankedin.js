@@ -36,6 +36,31 @@ export const useRankedin = () => {
     }, []);
 
     /**
+     * Fetches the upcoming tournaments for SAPA.
+     * @returns {Promise<Array>} Array of upcoming tournament objects
+     */
+    const getUpcomingOrganisationEvents = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(
+                `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`
+            );
+
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+
+            const data = await response.json();
+            return data.payload || [];
+        } catch (err) {
+            console.error('Error fetching upcoming tournaments:', err);
+            setError(err.message);
+            return [];
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
      * Fetches the classes (e.g. Men's Pro, Mixed) available for a specific tournament.
      * @param {string|number} tournamentId 
      * @returns {Promise<Array>} Array of class objects
@@ -208,6 +233,7 @@ export const useRankedin = () => {
         loading,
         error,
         getRecentTournaments,
+        getUpcomingOrganisationEvents,
         getTournamentClasses,
         getDrawsForClass,
         getTournamentDetails,

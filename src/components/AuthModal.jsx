@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
+import { useRankedin } from '../hooks/useRankedin';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -43,8 +44,37 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [instagramLink, setInstagramLink] = useState('');
     const [acceptTerms, setAcceptTerms] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
-    const [paymentOption, setPaymentOption] = useState('pay_now'); // 'pay_now' | 'pay_later'
+    const [paymentOption, setPaymentOption] = useState('pay_now'); // 'pay_now' | 'temporary' | 'pay_later'
     const [showPassword, setShowPassword] = useState(false);
+
+    // Temporary License Addition
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [selectedEventId, setSelectedEventId] = useState('');
+    const [eventsLoading, setEventsLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (step === 3 && paymentOption === 'temporary' && upcomingEvents.length === 0) {
+            const fetchEvents = async () => {
+                setEventsLoading(true);
+                try {
+                    const { data: events, error } = await supabase
+                        .from('calendar')
+                        .select('id, event_name, start_date')
+                        .gte('start_date', new Date().toISOString())
+                        .order('start_date', { ascending: true });
+                    
+                    if (!error && events) {
+                        setUpcomingEvents(events);
+                    }
+                } catch (e) {
+                    console.error("Failed to load events", e);
+                } finally {
+                    setEventsLoading(false);
+                }
+            };
+            fetchEvents();
+        }
+    }, [step, paymentOption, upcomingEvents.length]);
 
     const resetForm = () => {
         setStep(1);
@@ -63,6 +93,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         setInstagramLink('');
         setAcceptTerms(false);
         setPaymentOption('pay_now');
+        setSelectedEventId('');
         setMessage(null);
     };
 
@@ -160,6 +191,11 @@ const AuthModal = ({ isOpen, onClose }) => {
 
         // Validation for Step 3: Payment Options
         if (step === 3) {
+            if (paymentOption === 'temporary' && !selectedEventId) {
+                setMessage({ type: 'error', text: 'Please select an event for your temporary license.' });
+                return;
+            }
+
             setLoading(true);
 
             if (paymentOption === 'pay_later') {
@@ -226,7 +262,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     const paystackConfig = {
         reference: (new Date()).getTime().toString(),
         email: email,
-        amount: toPaystackAmount(FEES.FULL_LICENSE),
+        amount: toPaystackAmount(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE),
         publicKey: PAYSTACK_PUBLIC_KEY,
         currency: 'ZAR',
     };
@@ -260,7 +296,7 @@ const AuthModal = ({ isOpen, onClose }) => {
             p_sponsors: sponsors,
             p_instagram_link: instagramLink || null,
             p_paid_registration: true,
-            p_license_type: 'full',
+            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full',
         });
 
 
@@ -268,6 +304,22 @@ const AuthModal = ({ isOpen, onClose }) => {
             showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
             setLoading(false);
             return;
+        }
+
+        // Output Temporary License row if applicable
+        if (paymentOption === 'temporary' && selectedEventId) {
+            const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
+            if (eventDetails) {
+                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
+                if (pData?.id) {
+                    await supabase.from('temporary_licenses').insert({
+                        player_id: pData.id,
+                        event_id: eventDetails.id,
+                        event_name: eventDetails.event_name || 'Calendar Event',
+                        event_date: eventDetails.start_date
+                    });
+                }
+            }
         }
 
         showMessage('Payment and Registration successful! Please check your email for confirmation.', 'success');
@@ -562,6 +614,53 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                             {paymentOption === 'pay_now' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
                                                         </div>
                                                     </button>
+                                                    <div className={`w-full flex-col rounded-xl border transition-all ${paymentOption === 'temporary' ? 'bg-black/40 border-padel-green/50' : 'bg-black/30 border-white/10 hover:border-white/20'}`}>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setPaymentOption('temporary')}
+                                                            className="w-full flex items-center justify-between p-4"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1.5">
+                                                                    <img src="https://upload.wikimedia.org/wikipedia/commons/0/0b/Paystack_Logo.png" alt="Paystack" className="w-full h-full object-contain" />
+                                                                </div>
+                                                                <div className="text-left">
+                                                                    <p className="text-white font-bold text-sm">Temporary License</p>
+                                                                    <p className="text-gray-500 text-[10px] uppercase font-bold">Single Event Fee: {formatCurrency(FEES.TEMPORARY_LICENSE)}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${paymentOption === 'temporary' ? 'border-padel-green' : 'border-white/30'}`}>
+                                                                {paymentOption === 'temporary' && <div className="w-2.5 h-2.5 bg-padel-green rounded-full"></div>}
+                                                            </div>
+                                                        </button>
+
+                                                        {paymentOption === 'temporary' && (
+                                                            <div className="p-4 border-t border-white/10 w-full animate-in fade-in slide-in-from-top-2">
+                                                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 text-left">Select Event</label>
+                                                                {eventsLoading ? (
+                                                                    <div className="text-center py-4 bg-black/40 rounded-xl border border-white/5">
+                                                                        <div className="w-5 h-5 border-2 border-padel-green border-t-transparent rounded-full animate-spin mx-auto"></div>
+                                                                    </div>
+                                                                ) : upcomingEvents?.length > 0 ? (
+                                                                    <select
+                                                                        value={selectedEventId}
+                                                                        onChange={(e) => setSelectedEventId(e.target.value)}
+                                                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-padel-green outline-none"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    >
+                                                                        <option value="">Select an upcoming event...</option>
+                                                                        {upcomingEvents.map((event, i) => (
+                                                                            <option key={event.id || i} value={event.id}>
+                                                                                {event.event_name} ({new Date(event.start_date).toLocaleDateString()})
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                ) : (
+                                                                    <p className="text-[10px] text-yellow-500 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 text-left">No upcoming events found. You must wait for an event to be posted to buy a temporary license.</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                     <button
                                                         type="button"
                                                         onClick={() => setPaymentOption('pay_later')}
