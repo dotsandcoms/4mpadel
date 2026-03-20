@@ -6,6 +6,19 @@ const KnockoutBracket = ({ matches }) => {
     const scrollContainerRef = useRef(null);
     const [activeRoundIndex, setActiveRoundIndex] = useState(0);
     const [showSwipeHint, setShowSwipeHint] = useState(true);
+    const [viewMode, setViewMode] = useState('bracket'); // 'bracket' or 'list'
+
+    // Set default view on mobile
+    useEffect(() => {
+        const checkMobile = () => {
+            if (window.innerWidth < 768) {
+                setViewMode('list');
+            }
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
 
     if (!matches || !Array.isArray(matches) || matches.length === 0) {
         return <div className="text-gray-400 p-10 text-center">No bracket data available.</div>;
@@ -35,6 +48,12 @@ const KnockoutBracket = ({ matches }) => {
     };
 
     const scrollToRound = (index) => {
+        if (viewMode === 'list') {
+            setActiveRoundIndex(index);
+            setShowSwipeHint(false);
+            return;
+        }
+
         if (!scrollContainerRef.current) return;
         const rounds = scrollContainerRef.current.querySelectorAll('.bracket-round');
         if (rounds[index]) {
@@ -45,7 +64,7 @@ const KnockoutBracket = ({ matches }) => {
     };
 
     const handleScroll = () => {
-        if (!scrollContainerRef.current) return;
+        if (viewMode === 'list' || !scrollContainerRef.current) return;
         const container = scrollContainerRef.current;
         const rounds = container.querySelectorAll('.bracket-round');
         let closestIndex = 0;
@@ -72,7 +91,25 @@ const KnockoutBracket = ({ matches }) => {
     let eliminationCount = 0;
 
     return (
-        <div className="flex flex-col gap-8 md:gap-16">
+        <div className="flex flex-col gap-8 md:gap-12">
+            {/* View Mode Toggle */}
+            <div className="flex justify-center md:justify-end">
+                <div className="bg-white/5 border border-white/10 p-1 rounded-2xl flex items-center shadow-lg backdrop-blur-md">
+                    <button 
+                        onClick={() => setViewMode('list')}
+                        className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        Match List
+                    </button>
+                    <button 
+                        onClick={() => setViewMode('bracket')}
+                        className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'bracket' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        Bracket
+                    </button>
+                </div>
+            </div>
+
             {matches.map((bracket, bracketIndex) => {
                 if (bracket.BaseType === 'RoundRobin') {
                     const pool = bracket.RoundRobin;
@@ -165,8 +202,8 @@ const KnockoutBracket = ({ matches }) => {
 
                     return (
                         <div key={`elim-${bracketIndex}`} className="w-full space-y-6">
-                            {/* Mobile Round Navigation */}
-                            <div className="flex md:hidden items-center justify-between bg-black/20 p-2 rounded-2xl border border-white/5 sticky top-0 z-30 backdrop-blur-md">
+                            {/* Round Navigation */}
+                            <div className={`${viewMode === 'bracket' ? 'flex md:hidden' : 'flex'} items-center justify-between bg-black/20 p-2 rounded-2xl border border-white/5 sticky top-0 z-30 backdrop-blur-md`}>
                                 <button
                                     onClick={() => scrollToRound(Math.max(0, activeRoundIndex - 1))}
                                     className="p-2 text-padel-green disabled:opacity-30"
@@ -188,7 +225,6 @@ const KnockoutBracket = ({ matches }) => {
                                             {name}
                                         </button>
                                     ))}
-                                    {/* Winner Pill */}
                                     <button
                                         onClick={() => scrollToRound(sortedRounds.length)}
                                         className={`px-4 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest transition-all shrink-0 ${activeRoundIndex === sortedRounds.length
@@ -209,9 +245,8 @@ const KnockoutBracket = ({ matches }) => {
                                 </button>
                             </div>
 
-                            {/* Swipe Hint */}
                             <AnimatePresence>
-                                {showSwipeHint && (
+                                {showSwipeHint && viewMode === 'bracket' && (
                                     <motion.div
                                         initial={{ opacity: 0, y: 10 }}
                                         animate={{ opacity: 1, y: 0 }}
@@ -227,87 +262,87 @@ const KnockoutBracket = ({ matches }) => {
                             <div
                                 ref={scrollContainerRef}
                                 onScroll={handleScroll}
-                                className="flex gap-8 overflow-x-auto pb-10 pt-4 custom-scrollbar snap-x snap-mandatory scroll-smooth"
+                                className={`${viewMode === 'bracket' ? 'flex gap-8 overflow-x-auto pb-10 custom-scrollbar snap-x snap-mandatory scroll-smooth' : 'flex flex-col gap-6 pb-10'} pt-4 group`}
                                 style={{ minWidth: "100%" }}
                             >
-                                {sortedRounds.map((roundMatches, roundIndex) => (
-                                    <div key={roundIndex} className="bracket-round flex flex-col justify-around min-w-[280px] md:min-w-[300px] relative gap-4 snap-center">
-                                        <h3 className="hidden md:block text-center font-bold text-padel-green mb-6 tracking-widest uppercase text-xs min-h-[16px]">
-                                            {roundIndex === sortedRounds.length - 1 ? 'Final' :
-                                                roundIndex === sortedRounds.length - 2 ? 'Semi Finals' :
-                                                    roundIndex === sortedRounds.length - 3 ? 'Quarter Finals' :
-                                                        `Round ${roundIndex + 1}`}
-                                        </h3>
+                                {sortedRounds.map((roundMatches, roundIndex) => {
+                                    if (viewMode === 'list' && activeRoundIndex !== roundIndex) return null;
 
-                                        <div className="flex flex-col justify-around h-full gap-6">
-                                            {roundMatches.map((cell, cellIndex) => {
-                                                const m = cell.MatchCell || cell;
-                                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
-                                                const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                                    return (
+                                        <div key={roundIndex} className={`${viewMode === 'bracket' ? 'bracket-round flex flex-col justify-around min-w-[280px] md:min-w-[320px] relative gap-4 snap-center' : 'w-full max-w-2xl mx-auto space-y-4'}`}>
+                                            <h3 className={`${viewMode === 'bracket' ? 'hidden md:block' : 'block'} text-center font-bold text-padel-green mb-6 tracking-widest uppercase text-xs min-h-[16px]`}>
+                                                {roundIndex === sortedRounds.length - 1 ? 'Final' :
+                                                    roundIndex === sortedRounds.length - 2 ? 'Semi Finals' :
+                                                        roundIndex === sortedRounds.length - 3 ? 'Quarter Finals' :
+                                                            `Round ${roundIndex + 1}`}
+                                            </h3>
 
-                                                const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
-                                                const isSecondWinner = scoreObj ? !scoreObj.IsFirstParticipantWinner : (!m.MatchViewModel?.IsFirstParticipantWinner && hasScore);
+                                            <div className={`${viewMode === 'bracket' ? 'flex flex-col justify-around h-full gap-6' : 'grid gap-4 md:grid-cols-1'}`}>
+                                                {roundMatches.map((cell, cellIndex) => {
+                                                    const m = cell.MatchCell || cell;
+                                                    const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
+                                                    const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
 
-                                                const team1Players = getTeamPlayers(cell.ChallengerParticipant || m.ChallengerParticipant);
-                                                const team2Players = getTeamPlayers(cell.ChallengedParticipant || m.ChallengedParticipant);
+                                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                                                    const isSecondWinner = scoreObj ? !scoreObj.IsFirstParticipantWinner : (!m.MatchViewModel?.IsFirstParticipantWinner && hasScore);
 
-                                                return (
-                                                    <motion.div
-                                                        key={m.MatchId || cellIndex}
-                                                        initial={{ opacity: 0, scale: 0.95 }}
-                                                        animate={{ opacity: 1, scale: 1 }}
-                                                        transition={{ delay: (roundIndex * 0.1) + (cellIndex * 0.05) }}
-                                                        className="relative bg-[#131C2F] rounded-xl border border-white/5 p-4 shadow-xl hover:border-padel-green/50 transition-colors z-10 w-full"
-                                                    >
-                                                        {/* Participant 1 */}
-                                                        <div className={`flex justify-between items-center pb-3 border-b border-white/5 mb-3 ${hasScore && isFirstWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isFirstWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
-                                                                    {(cellIndex * 2) + 1}
-                                                                </div>
-                                                                <div className="flex flex-col gap-1">
-                                                                    {team1Players.map((player, idx) => (
-                                                                        <div key={idx} className="flex items-center gap-1.5 leading-none">
-                                                                            {player.country && <span className="text-xs">{getFlagEmoji(player.country)}</span>}
-                                                                            <span className="truncate max-w-[140px] text-xs md:text-sm font-medium">{player.name}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                    const team1Players = getTeamPlayers(cell.ChallengerParticipant || m.ChallengerParticipant);
+                                                    const team2Players = getTeamPlayers(cell.ChallengedParticipant || m.ChallengedParticipant);
 
-                                                        {/* Participant 2 */}
-                                                        <div className={`flex justify-between items-center ${hasScore && isSecondWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isSecondWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
-                                                                    {(cellIndex * 2) + 2}
-                                                                </div>
-                                                                <div className="flex flex-col gap-1">
-                                                                    {team2Players.map((player, idx) => (
-                                                                        <div key={idx} className="flex items-center gap-1.5 leading-none">
-                                                                            {player.country && <span className="text-xs">{getFlagEmoji(player.country)}</span>}
-                                                                            <span className="truncate max-w-[140px] text-xs md:text-sm font-medium">{player.name}</span>
-                                                                        </div>
-                                                                    ))}
+                                                    return (
+                                                        <motion.div
+                                                            key={m.MatchId || cellIndex}
+                                                            initial={{ opacity: 0, scale: 0.95 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            transition={{ delay: (roundIndex * 0.1) + (cellIndex * 0.05) }}
+                                                            className="relative bg-[#131C2F] rounded-xl border border-white/5 p-4 shadow-xl hover:border-padel-green/50 transition-colors z-10 w-full"
+                                                        >
+                                                            <div className={`flex justify-between items-center pb-3 border-b border-white/5 mb-3 ${hasScore && isFirstWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isFirstWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
+                                                                        {(cellIndex * 2) + 1}
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        {team1Players.map((player, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-1.5 leading-none">
+                                                                                {player.country && <span className="text-xs">{getFlagEmoji(player.country)}</span>}
+                                                                                <span className="truncate max-w-[140px] text-xs md:text-sm font-medium">{player.name}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
 
-                                                        {/* Score Indicator Badge */}
-                                                        {hasScore && (
-                                                            <div className="absolute -top-2 -right-2 bg-padel-green text-black text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-padel-green/50">
-                                                                PLAYED
+                                                            <div className={`flex justify-between items-center ${hasScore && isSecondWinner ? 'text-white font-bold' : 'text-gray-400'}`}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-display text-[10px] shrink-0 ${hasScore && isSecondWinner ? 'bg-padel-green text-black' : 'bg-[#1e293b] text-white'}`}>
+                                                                        {(cellIndex * 2) + 2}
+                                                                    </div>
+                                                                    <div className="flex flex-col gap-1">
+                                                                        {team2Players.map((player, idx) => (
+                                                                            <div key={idx} className="flex items-center gap-1.5 leading-none">
+                                                                                {player.country && <span className="text-xs">{getFlagEmoji(player.country)}</span>}
+                                                                                <span className="truncate max-w-[140px] text-xs md:text-sm font-medium">{player.name}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
                                                             </div>
-                                                        )}
-                                                    </motion.div>
-                                                );
-                                            })}
+
+                                                            {hasScore && (
+                                                                <div className="absolute -top-2 -right-2 bg-padel-green text-black text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-padel-green/50">
+                                                                    PLAYED
+                                                                </div>
+                                                            )}
+                                                        </motion.div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
-                                {/* Winner Column */}
-                                {sortedRounds.length > 0 && (() => {
+                                {(viewMode === 'bracket' || activeRoundIndex === sortedRounds.length) && sortedRounds.length > 0 && (() => {
                                     const finalRound = sortedRounds[sortedRounds.length - 1];
                                     const finalMatch = finalRound.length > 0 ? finalRound[0] : null;
                                     let finalWinnerPlayers = null;
@@ -325,17 +360,16 @@ const KnockoutBracket = ({ matches }) => {
                                     }
 
                                     return (
-                                        <div className="bracket-round flex flex-col justify-around min-w-[280px] md:min-w-[300px] relative gap-4 snap-center">
-                                            <h3 className="hidden md:block text-center font-bold text-[#FFD700] mb-6 tracking-widest uppercase text-xs font-display">
+                                        <div className={`${viewMode === 'bracket' ? 'bracket-round flex flex-col justify-around min-w-[280px] md:min-w-[320px] relative gap-4 snap-center' : 'w-full max-w-2xl mx-auto space-y-4'}`}>
+                                            <h3 className={`${viewMode === 'bracket' ? 'hidden md:block' : 'block'} text-center font-bold text-[#FFD700] mb-6 tracking-widest uppercase text-xs font-display`}>
                                                 Winner
                                             </h3>
-                                            <div className="flex flex-col justify-around h-full gap-6">
+                                            <div className={`${viewMode === 'bracket' ? 'flex flex-col justify-around h-full gap-6' : 'flex flex-col'}`}>
                                                 <motion.div
                                                     initial={{ opacity: 0, scale: 0.95 }}
                                                     animate={{ opacity: 1, scale: 1 }}
                                                     transition={{ delay: sortedRounds.length * 0.1 }}
-                                                    className={`relative bg-[#131C2F] rounded-xl border p-4 shadow-xl z-10 w-full flex flex-col justify-center gap-3 ${finalWinnerPlayers ? 'border-[#FFD700] shadow-[#FFD700]/10' : 'border-white/5 text-gray-500'
-                                                        }`}
+                                                    className={`relative bg-[#131C2F] rounded-xl border p-4 shadow-xl z-10 w-full flex flex-col justify-center gap-3 ${finalWinnerPlayers ? 'border-[#FFD700] shadow-[#FFD700]/10' : 'border-white/5 text-gray-500'}`}
                                                 >
                                                     <div className="flex items-center gap-4">
                                                         <div className="w-10 h-10 rounded-full bg-[#FFD700]/10 text-[#FFD700] flex items-center justify-center shrink-0">

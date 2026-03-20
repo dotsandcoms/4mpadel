@@ -129,7 +129,7 @@ const TournamentDraw = () => {
 
             <main className="min-h-screen bg-[#0F172A] pb-20">
                 {/* Hero */}
-                <div className="relative h-[30vh] md:h-[40vh] min-h-[300px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                <div className="relative h-[20vh] md:h-[30vh] min-h-[250px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
                         src={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${resolvedId}.png`}
                         alt="Tournament Hero"

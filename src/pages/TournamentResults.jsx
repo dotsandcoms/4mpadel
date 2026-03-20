@@ -131,7 +131,7 @@ const TournamentResults = () => {
 
             <main className="min-h-screen bg-[#0F172A] pb-20">
                 {/* Hero Section with Image */}
-                <div className="relative h-[30vh] md:h-[40vh] min-h-[300px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                <div className="relative h-[20vh] md:h-[30vh] min-h-[250px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
                         src={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${resolvedId}.png`}
                         alt="Tournament Hero"
@@ -139,6 +139,7 @@ const TournamentResults = () => {
                         onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop'; }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-[#0F172A]" />
+
 
                     {/* Background Big Text Inside Hero */}
                     <div className="relative z-10 w-full overflow-hidden select-none pointer-events-none translate-y-1/4">
