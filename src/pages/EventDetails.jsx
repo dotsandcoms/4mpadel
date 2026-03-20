@@ -718,22 +718,35 @@ const EventDetails = () => {
 
                 {/* YouTube Playlist / Highlights Section with Navy Background - Spans across the page */}
                 {event.youtube_playlist_url && (
-                    <section className="bg-slate-900 py-20 my-16 border-y border-slate-800">
+                    <section className="bg-slate-900 py-24 my-16 border-y border-slate-800 relative overflow-hidden">
+                        {/* Background Wording Effect */}
+                        <motion.h2
+                            initial={{ opacity: 0, x: -50 }}
+                            whileInView={{ opacity: 1, x: 0 }}
+                            viewport={{ once: true }}
+                            transition={{ duration: 0.8 }}
+                            className="text-[100px] md:text-[180px] font-black text-white/[0.03] absolute top-0 -left-10 select-none uppercase tracking-tighter z-0"
+                        >
+                            Highlights
+                        </motion.h2>
+
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
-                            className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12"
+                            className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 relative z-10"
                         >
-                            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 p-8 md:p-14 overflow-hidden">
-                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-                                    <h2 className="text-3xl md:text-4xl font-black flex items-center gap-4 text-slate-900 tracking-tight">
-                                        <div className="w-14 h-14 rounded-2xl bg-padel-green/10 flex items-center justify-center">
-                                            <PlayCircle className="text-padel-green w-9 h-9" />
-                                        </div>
-                                        Event Highlights & Videos
-                                    </h2>
-                                </div>
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                                <h2 className="text-4xl md:text-5xl font-black flex items-center gap-4 text-white tracking-tight">
+                                    <div className="w-16 h-16 rounded-2xl bg-padel-green/10 flex items-center justify-center">
+                                        <PlayCircle className="text-padel-green w-10 h-10" />
+                                    </div>
+                                    Event Highlights
+                                </h2>
+                            </div>
+
+                            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 p-8 md:p-14 overflow-hidden relative">
+
 
                                 {fetchingVideos ? (
                                     <div className="flex flex-col items-center justify-center py-24 bg-gray-50 rounded-[2rem] border border-dashed border-gray-200">
