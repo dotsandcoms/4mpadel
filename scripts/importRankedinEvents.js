@@ -204,7 +204,7 @@ const run = async () => {
                 start_time: startTimeStr,
                 end_time: endTimeStr,
                 event_dates: formatEventDates(startDateStr, endDateStr),
-                organizer_name: 'SAPA',
+                organizer_name: event.club || 'SAPA',
                 image_url: details.image_url || '',
                 registered_players: details.registered_players || 0,
                 rankedin_url: details.rankedin_url || '',

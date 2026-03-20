@@ -1,5 +1,8 @@
 // scripts/sync-rankedin.js
 import { createClient } from '@supabase/supabase-js';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 // Requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -138,6 +141,7 @@ async function syncRankedin() {
                     richDetails.address = sidebar.Address || sidebar.address || '';
                     richDetails.registered_players = sidebar.TotalUniquePersonsInTournament || sidebar.PlayersCount || 0;
                     richDetails.venue = sidebar.LocationName || sidebar.locationName || '';
+                    richDetails.organizer_name = sidebar.ClubName || sidebar.clubName || 'SAPA';
 
                     // Extract images
                     const logosModel = infoData.EventLogosModel || infoData.ClubleagueLogosModel || infoData.Logos || infoData;
@@ -216,6 +220,10 @@ async function syncRankedin() {
                     updates.venue = richDetails.venue;
                     needsUpdate = true;
                 }
+                if (richDetails.organizer_name && existingEvent.organizer_name !== richDetails.organizer_name) {
+                    updates.organizer_name = richDetails.organizer_name;
+                    needsUpdate = true;
+                }
                 if (richDetails.sponsor_logos && richDetails.sponsor_logos.length > 0) {
                     updates.sponsor_logos = richDetails.sponsor_logos;
                     needsUpdate = true;
@@ -253,7 +261,7 @@ async function syncRankedin() {
                     start_date: sDate ? sDate.substring(0, 10) : null,
                     end_date: eDate ? eDate.substring(0, 10) : null,
                     sapa_status: inferredStatus,
-                    organizer_name: 'SAPA',
+                    organizer_name: richDetails.organizer_name || 'SAPA',
                     rankedin_url: fullUrl,
                     city: (re.city || '').trim(),
                     venue: richDetails.venue || re.club || '',
