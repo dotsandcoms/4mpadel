@@ -32,7 +32,8 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
-    const [name, setName] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [lastName, setLastName] = useState('');
     const [contactNumber, setContactNumber] = useState('');
     const [category, setCategory] = useState('');
     const [gender, setGender] = useState('');
@@ -81,7 +82,8 @@ const AuthModal = ({ isOpen, onClose }) => {
         setEmail('');
         setPassword('');
         setConfirmPassword('');
-        setName('');
+        setFirstName('');
+        setLastName('');
         setContactNumber('');
         setCategory('');
         setGender('');
@@ -148,7 +150,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         setLoading(false);
     };
 
-    const handleRegistrationSubmit = (e) => {
+    const handleRegistrationSubmit = async (e) => {
         e.preventDefault();
         setMessage(null);
 
@@ -167,10 +169,26 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'error', text: 'Passwords do not match.' });
                 return;
             }
-            if (!name || !contactNumber || !gender || !nationality || !idNumber) {
+            if (!firstName || !lastName || !contactNumber || !gender || !nationality || !idNumber) {
                 setMessage({ type: 'error', text: 'Please fill in all required fields for Step 1.' });
                 return;
             }
+
+            // Check if email already exists
+            setLoading(true);
+            const { data: existingPlayer } = await supabase
+                .from('players')
+                .select('email')
+                .eq('email', email)
+                .maybeSingle();
+                
+            if (existingPlayer) {
+                setLoading(false);
+                setMessage({ type: 'error', text: 'This email is already registered. Please sign in or reset your password.' });
+                return;
+            }
+            
+            setLoading(false);
             setStep(2);
             return;
         }
@@ -228,7 +246,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
         const baseParams = {
             p_email: email,
-            p_name: name,
+            p_name: `${firstName} ${lastName}`.trim(),
             p_contact: contactNumber,
             p_category: category || 'Unranked',
             p_gender: gender,
@@ -285,7 +303,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
         const { data: rpcData, error: insertError } = await supabase.rpc('create_player_profile', {
             p_email: email,
-            p_name: name,
+            p_name: `${firstName} ${lastName}`.trim(),
             p_contact: contactNumber,
             p_category: category || 'Unranked',
             p_gender: gender,
@@ -402,17 +420,34 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 1: Personal</span>
                                                 <span className="text-gray-500 text-[10px] font-bold">1 / 3</span>
                                             </div>
-                                            <div className="relative">
-                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Full Name"
-                                                    value={name}
-                                                    onChange={(e) => setName(e.target.value)}
-                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all"
-                                                    required
-                                                />
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="relative">
+                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Name"
+                                                        value={firstName}
+                                                        onChange={(e) => setFirstName(e.target.value)}
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:outline-none focus:border-padel-green transition-all text-sm"
+                                                        required
+                                                    />
+                                                </div>
+                                                <div className="relative">
+                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Surname"
+                                                        value={lastName}
+                                                        onChange={(e) => setLastName(e.target.value)}
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:outline-none focus:border-padel-green transition-all text-sm"
+                                                        required
+                                                    />
+                                                </div>
                                             </div>
+                                            <p className="text-[10px] text-gray-400 mt-1 pl-1">
+                                                <Info className="inline-block w-3 h-3 mr-1 -mt-0.5 text-padel-green/70" />
+                                                Please use your name exactly as it is shown on Rankedin
+                                            </p>
                                             <div className="relative">
                                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                                                 <input
@@ -432,9 +467,16 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                         placeholder="Password"
                                                         value={password}
                                                         onChange={(e) => setPassword(e.target.value)}
-                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white text-sm focus:outline-none focus:border-padel-green transition-all"
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-10 text-white text-sm focus:outline-none focus:border-padel-green transition-all"
                                                         required
                                                     />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                    >
+                                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    </button>
                                                 </div>
                                                 <div className="relative">
                                                     <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
@@ -443,9 +485,16 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                         placeholder="Confirm"
                                                         value={confirmPassword}
                                                         onChange={(e) => setConfirmPassword(e.target.value)}
-                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white text-sm focus:outline-none focus:border-padel-green transition-all"
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-10 text-white text-sm focus:outline-none focus:border-padel-green transition-all"
                                                         required
                                                     />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white transition-colors"
+                                                    >
+                                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                                    </button>
                                                 </div>
                                             </div>
                                             <div className="relative">
@@ -491,9 +540,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                                             </div>
                                             <button
                                                 type="submit"
-                                                className="w-full bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20"
+                                                disabled={loading}
+                                                className="w-full bg-padel-green text-black font-black uppercase tracking-widest py-4 rounded-xl hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all shadow-lg shadow-padel-green/20 disabled:opacity-50"
                                             >
-                                                Next Step
+                                                {loading ? 'Checking...' : 'Next Step'}
                                             </button>
                                         </div>
                                     ) : step === 2 ? (
