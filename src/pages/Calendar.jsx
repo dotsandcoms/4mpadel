@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers, User } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
@@ -109,6 +109,13 @@ const CalendarEventItem = ({ event, index }) => {
                                         <Users className="w-3.5 h-3.5 text-padel-green" />
                                         <span className="text-white font-bold">{event.registered_players}</span>
                                         <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Registered</span>
+                                    </div>
+                                )}
+                                {event.organizer_name && event.organizer_name !== 'SAPA' && (
+                                    <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
+                                        <User className="w-3.5 h-3.5 text-gray-400" />
+                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Org:</span>
+                                        <span className="text-white font-bold text-xs">{event.organizer_name}</span>
                                     </div>
                                 )}
                             </div>
