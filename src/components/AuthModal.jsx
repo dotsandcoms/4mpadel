@@ -282,11 +282,11 @@ const AuthModal = ({ isOpen, onClose }) => {
                     onSuccess: async (reference) => {
                         console.log('Payment successful. Reference:', reference);
                         
-                        const { error: rpcError } = await supabase.rpc('mark_player_paid', { 
-                            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full' 
+                        const { error: updateError } = await supabase.rpc('mark_player_paid', {
+                            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full',
                         });
 
-                        if (rpcError) {
+                        if (updateError) {
                             showMessage('Payment successful, but failed to update profile status. Please contact support.', 'error');
                             setLoading(false);
                             return;
