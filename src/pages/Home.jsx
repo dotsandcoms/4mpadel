@@ -14,9 +14,9 @@ const Home = () => {
     return (
         <>
             <SEOHead
-                title="4M Padel - Premium Indoor Padel Courts"
-                description="Experience the finest indoor Padel courts. Book your court today at 4M Padel."
-                keywords={["padel", "indoor courts", "sports", "premium", "odessa"]}
+                title="4M Padel - For the Players"
+                description="Your central hub for tournaments, rankings, players, and everything happening in the sport nationwide"
+                keywords={["padel", "indoor courts", "sports", "premium", "4M Padel", "South Africa", "rankedin", "SAPA", "Padel South Africa", "Padel Rankings", "Padel Tournaments", "Padel Players", "Padel SA"]}
             />
 
 
