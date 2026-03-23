@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal, PlayCircle, Video } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import brollLogo from '../assets/BrollLogo.png';
@@ -246,7 +246,7 @@ const Broll = () => {
                 <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-4">
                     <div>
                         <h2 className="text-3xl md:text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                            UPCOMING TOUR <span className="text-[#F40020]">DATES</span>
+                            BROLL TOUR <span className="text-[#F40020]">DATES</span>
                         </h2>
                         <div className="h-1 w-24 bg-[#F40020] mt-2"></div>
                     </div>
@@ -313,6 +313,28 @@ const Broll = () => {
                                                         <div className="flex items-center gap-2 mb-1">
                                                             <div className="h-0.5 w-6 bg-[#F40020]"></div>
                                                             <span className="text-[#F40020] text-[10px] font-black uppercase tracking-[0.2em]">Broll Pro Tour</span>
+
+                                                            {/* Status Pills */}
+                                                            <div className="flex flex-wrap gap-2 ml-4">
+                                                                {event.live_youtube_url && event.featured_live && (
+                                                                    <div className="flex items-center gap-1 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-sm shadow-red-500/20">
+                                                                        <PlayCircle className="w-2.5 h-2.5" />
+                                                                        Live Now
+                                                                    </div>
+                                                                )}
+                                                                {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
+                                                                    <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border border-padel-green/50 shadow-sm">
+                                                                        <Trophy className="w-2.5 h-2.5" />
+                                                                        Results Available
+                                                                    </div>
+                                                                )}
+                                                                {event.youtube_playlist_url && (
+                                                                    <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest shadow-sm">
+                                                                        <Video className="w-2.5 h-2.5 text-[#F40020]" />
+                                                                        Media & Highlights
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                         <h3 className="text-lg md:text-xl lg:text-2xl font-black text-slate-900 leading-tight mb-2 tracking-tighter">
                                                             {event.event_name}
