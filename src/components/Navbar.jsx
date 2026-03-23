@@ -87,11 +87,8 @@ const Navbar = ({ isDark = false }) => {
       name: 'Tournaments',
       href: '#',
       dropdown: [
-        { name: 'Broll Pro Tour', href: '/tournaments/broll' },
-        { name: 'Ladies Tour', href: '/tournaments/ladies' },
-        { name: 'Juniors', href: '/tournaments/juniors' },
         { name: 'All Tournaments', href: '/calendar' },
-        { name: 'Mens 40 +', href: '/tournaments/mens40' },
+        { name: 'Broll Pro Tour', href: '/tournaments/broll' },
       ]
     },
     { name: 'Contact', href: '/contact' },
@@ -104,8 +101,8 @@ const Navbar = ({ isDark = false }) => {
         animate={{ y: 0 }}
         transition={{ duration: 0.4 }}
         className={`fixed top-0 left-0 right-0 z-[999] transition-all duration-300 ${isScrolled
-            ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10'
-            : 'py-6 bg-gradient-to-b from-black/80 to-transparent md:bg-gradient-to-b max-md:bg-black/80 max-md:backdrop-blur-xl max-md:py-4 max-md:border-b max-md:border-white/10'
+          ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10'
+          : 'py-6 bg-gradient-to-b from-black/80 to-transparent md:bg-gradient-to-b max-md:bg-black/80 max-md:backdrop-blur-xl max-md:py-4 max-md:border-b max-md:border-white/10'
           }`}
       >
         {/* Impersonation Banner */}
