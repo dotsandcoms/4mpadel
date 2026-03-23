@@ -686,18 +686,7 @@ const PlayerProfile = () => {
                                     {loadingReset ? 'Sending Email...' : 'Reset Password'}
                                 </button>
 
-                                {coachApplication && (
-                                    <>
-                                        <div className="border-t border-white/10 my-4"></div>
-                                        <button
-                                            onClick={() => setShowCoachModal(true)}
-                                            className="w-full bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/30 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <Briefcase size={14} className="text-padel-green" />
-                                            Coach Profile
-                                        </button>
-                                    </>
-                                )}
+
                             </div>
                         </div>
 
