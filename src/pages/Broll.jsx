@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import brollLogo from '../assets/BrollLogo.png';
@@ -56,10 +56,17 @@ const Broll = () => {
                             <h1 className="text-5xl md:text-8xl font-black mb-6 tracking-tighter text-slate-900 leading-[0.9]">
                                 <span className="text-[#F40020]">BROLL</span> PRO TOUR
                             </h1>
-                            <p className="text-lg md:text-2xl text-slate-600 max-w-xl font-medium mb-10 leading-relaxed">
-                                Premier property trading meets elite padel competition.
-                                Experience the pinnacle of South African sport and commerce.
-                            </p>
+                            <h2 className="text-2xl md:text-4xl font-bold text-slate-900 mb-6 tracking-tight">
+                                South Africa’s Elite Padel Circuit
+                            </h2>
+                            <div className="space-y-6 max-w-2xl mb-10">
+                                <p className="text-base md:text-xl text-slate-700 leading-relaxed">
+                                    The <strong className="font-extrabold text-slate-900">Broll Pro Tour</strong> is a premium series of <strong className="font-extrabold text-slate-900">12 top-tier events</strong> showcasing the highest level of men’s professional padel in South Africa.
+                                </p>
+                                <p className="text-base md:text-xl text-slate-700 leading-relaxed">
+                                    Backed by <strong className="font-extrabold text-slate-900">Broll Auctions and Sales</strong>, an official SAPA partner, the tour brings together the country’s best players to compete across the national calendar.
+                                </p>
+                            </div>
                             <div className="flex flex-col sm:flex-row gap-4">
                                 <a
                                     href="https://www.brollauctions.com"
@@ -140,6 +147,94 @@ const Broll = () => {
                             <h3 className="text-lg md:text-xl font-bold text-slate-900">Industry Leaders</h3>
                             <p className="text-slate-500 text-sm md:text-base leading-relaxed">
                                 Committed to excellence and transparency, bringing the same standard of professionalism to the South African Padel scene.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            {/* Tour Format & Details Section */}
+            <section className="py-16 md:py-24 px-6 bg-slate-50 border-b border-slate-100 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-1/3 h-full bg-[#F40020]/5 skew-x-12 transform translate-x-1/2"></div>
+
+                <div className="max-w-7xl mx-auto relative z-10">
+                    <div className="text-center md:text-left mb-16">
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 tracking-tight flex flex-col md:flex-row md:items-center gap-2 md:gap-4 mb-4">
+                            TOUR <span className="text-[#F40020]">FORMAT & RULES</span>
+                        </h2>
+                        <div className="h-1 w-24 bg-[#F40020] mx-auto md:mx-0"></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-12">
+                        {/* 1. Tour Structure */}
+                        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 hover:border-[#F40020]/30 transition-all duration-300 group hover:shadow-2xl">
+                            <div className="w-12 h-12 bg-[#F40020]/10 rounded-2xl flex items-center justify-center text-[#F40020] mb-6 group-hover:scale-110 transition-transform">
+                                <Target className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Tour Structure</h3>
+                            <ul className="space-y-4">
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg"><strong className="text-slate-900 font-extrabold">12 Premium Events</strong> nationwide</span>
+                                </li>
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg">Exclusive to the <strong className="text-slate-900 font-extrabold">Men’s Pro Division</strong></span>
+                                </li>
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg">Officially sanctioned by SAPA</span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* 2. Points & Rankings */}
+                        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 hover:border-[#F40020]/30 transition-all duration-300 group hover:shadow-2xl">
+                            <div className="w-12 h-12 bg-[#F40020]/10 rounded-2xl flex items-center justify-center text-[#F40020] mb-6 group-hover:scale-110 transition-transform">
+                                <BarChart3 className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-4 tracking-tight">Points & Rankings</h3>
+                            <p className="text-slate-600 mb-6 leading-relaxed text-lg">
+                                Players earn <strong className="text-slate-900 font-extrabold">Broll Ranking Points</strong> at each event, contributing to the <strong className="text-slate-900 font-extrabold">Broll Leaderboard</strong>.
+                            </p>
+                            <ul className="space-y-4">
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg">A player’s <strong className="text-slate-900 font-extrabold">best 8 results</strong> count towards their Broll ranking</span>
+                                </li>
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg"><strong className="text-slate-900 font-extrabold">Broll rankings are separate</strong> from SAPA rankings</span>
+                                </li>
+                                <li className="flex items-start gap-3 text-slate-600">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-[#F40020] mt-2.5 shrink-0"></div>
+                                    <span className="leading-relaxed text-lg">Each event contributes to <strong className="text-slate-900 font-extrabold">both Broll and SAPA ranking systems</strong></span>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* 3. Season Prize */}
+                        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 hover:border-[#F40020]/30 transition-all duration-300 group hover:shadow-2xl">
+                            <div className="w-12 h-12 bg-[#F40020]/10 rounded-2xl flex items-center justify-center text-[#F40020] mb-6 group-hover:scale-110 transition-transform">
+                                <Trophy className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-6 tracking-tight">Season Prize</h3>
+                            <div className="bg-[#F40020]/5 border border-[#F40020]/10 rounded-2xl p-6 flex gap-5 items-start">
+                                <span className="text-4xl shrink-0 leading-none">🏆</span>
+                                <p className="text-slate-800 text-lg leading-relaxed">
+                                    The No.1 player on the Broll Leaderboard at the end of the season will win <strong className="text-[#F40020] font-black block mt-1 text-xl">a massive cash bonus prize</strong>
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* 4. The Standard */}
+                        <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-slate-100 hover:border-[#F40020]/30 transition-all duration-300 group hover:shadow-2xl">
+                            <div className="w-12 h-12 bg-[#F40020]/10 rounded-2xl flex items-center justify-center text-[#F40020] mb-6 group-hover:scale-110 transition-transform">
+                                <Medal className="w-6 h-6" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-900 mb-6 tracking-tight">The Standard</h3>
+                            <p className="text-slate-600 text-lg leading-relaxed">
+                                The Broll Pro Tour sets the benchmark for professional padel in South Africa — where performance, consistency, and competition define the best in the country.
                             </p>
                         </div>
                     </div>
