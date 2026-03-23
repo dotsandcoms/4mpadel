@@ -7,7 +7,7 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Mail, LogOut, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -225,6 +225,27 @@ const PlayerProfile = () => {
                 const filtered = (events || [])
                     .filter(e => new Date(e.start_date) >= now)
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+                if (filtered.length > 0) {
+                    const { data: dbEvents } = await supabase
+                        .from('calendar')
+                        .select('rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url')
+                        .gte('start_date', new Date(now.getTime() - 86400000).toISOString().split('T')[0]);
+                        
+                    if (dbEvents) {
+                        filtered.forEach(e => {
+                            const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
+                            if (match) {
+                                e.city = match.city;
+                                e.venue = match.venue;
+                                e.registered_players = match.registered_players;
+                                e.organizer_name = match.organizer_name;
+                                e.sapa_status = match.sapa_status; 
+                            }
+                        });
+                    }
+                }
+
                 setUpcomingEvents(filtered);
             };
             fetchEvents();
@@ -1192,10 +1213,10 @@ const PlayerProfile = () => {
                                                 }
 
                                                 return (
-                                                    <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden`}>
+                                                    <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
                                                         <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
 
-                                                        <div className="relative z-10">
+                                                        <div className="relative z-10 flex-1">
                                                             <div className="flex justify-between items-start mb-4">
                                                                 <div className="flex flex-col">
                                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
@@ -1216,12 +1237,42 @@ const PlayerProfile = () => {
                                                             <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
                                                                 {event.event_name}
                                                             </h4>
+                                                        </div>
 
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="text-[10px] font-black text-white/30 uppercase tracking-[0.2em]">Status</span>
-                                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border ${badgeColor}`}>
+                                                        {/* Bottom Section */}
+                                                        <div className="relative z-10 mt-4 border-t border-white/5 pt-4">
+                                                            <div className="flex flex-wrap gap-2 mb-3">
+                                                                <span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
                                                                     {event.sapa_status !== 'None' ? event.sapa_status : 'Upcoming'}
                                                                 </span>
+                                                                {event.city && (
+                                                                    <span className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
+                                                                        {event.city}
+                                                                    </span>
+                                                                )}
+                                                                {event.registered_players > 0 && (
+                                                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-1 rounded-md">
+                                                                        <Users className="w-3 h-3 text-padel-green" />
+                                                                        <span className="text-white font-bold text-[10px] leading-none">{event.registered_players}</span>
+                                                                        <span className="text-[9px] uppercase tracking-tighter text-gray-400 font-bold leading-none">Registered</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {/* Location and Org */}
+                                                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-xs font-medium">
+                                                                <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                                                    <MapPin className="w-3.5 h-3.5 text-padel-green/50 shrink-0" />
+                                                                    <span className="truncate" title={event.venue || 'Location to be confirmed'}>
+                                                                        {event.venue || 'Location to be confirmed'}
+                                                                    </span>
+                                                                </div>
+                                                                {event.organizer_name && (
+                                                                    <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0">
+                                                                        <User className="w-3 h-3 text-gray-400" />
+                                                                        <span className="text-[9px] uppercase tracking-tighter text-gray-400 font-bold">Org:</span>
+                                                                        <span className="text-white font-bold text-[10px]">{event.organizer_name}</span>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
