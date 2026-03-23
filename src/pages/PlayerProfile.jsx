@@ -229,8 +229,7 @@ const PlayerProfile = () => {
                 if (filtered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url')
-                        .gte('start_date', new Date(now.getTime() - 86400000).toISOString().split('T')[0]);
+                        .select('rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url');
                         
                     if (dbEvents) {
                         filtered.forEach(e => {
