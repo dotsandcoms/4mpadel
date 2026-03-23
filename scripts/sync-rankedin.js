@@ -270,7 +270,10 @@ async function syncRankedin() {
                     registered_players: richDetails.registered_players || 0,
                     address: richDetails.address || '',
                     sponsor_logos: richDetails.sponsor_logos || [],
-                    is_league: isLeague
+                    is_league: isLeague,
+                    featured_live: false,
+                    live_youtube_url: '',
+                    youtube_playlist_url: ''
                 }]);
 
                 if (error) {
