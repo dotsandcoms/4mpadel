@@ -229,6 +229,99 @@ export const useRankedin = () => {
         }
     }, []);
 
+    /**
+     * Fetches matches for a tournament, optionally filtered by class, stage, etc.
+     * @param {Object} params { tournamentId, tournamentClassId, drawStage, drawStrength, isFinished }
+     * @returns {Promise<Array>} Array of match objects
+     */
+    const getTournamentMatches = useCallback(async ({ tournamentId, tournamentClassId, drawStage, drawStrength, isFinished }) => {
+        setLoading(true);
+        setError(null);
+        try {
+            let url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${tournamentId}&LanguageCode=en&IsReadonly=true`;
+            if (tournamentClassId) url += `&tournamentClassId=${tournamentClassId}`;
+            if (drawStage !== undefined) url += `&drawStage=${drawStage}`;
+            if (drawStrength !== undefined) url += `&drawStrength=${drawStrength}`;
+            if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+
+            const data = await response.json();
+            return data.Matches || [];
+        } catch (err) {
+            console.error('Error fetching tournament matches:', err);
+            setError(err.message);
+            return [];
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
+     * Attempts to find winners for all classes in a tournament.
+     * @param {string|number} tournamentId 
+     * @returns {Promise<Array>} Array of objects { className, winners }
+     */
+    const getTournamentWinners = useCallback(async (tournamentId) => {
+        try {
+            const classes = await getTournamentClasses(tournamentId);
+            const winnersList = [];
+
+            // We use a simple loop, but ideally we'd limit this if there are too many classes
+            // For Padel tournaments, usually 4-8 classes.
+            for (const cls of classes.slice(0, 10)) {
+                if (!cls.TournamentDraws || cls.TournamentDraws.length === 0) continue;
+                
+                // Get the last draw (usually the Final or Knockout)
+                const lastDraw = cls.TournamentDraws[cls.TournamentDraws.length - 1];
+                const drawData = await getDrawsForClass(cls.Id, lastDraw.Stage, lastDraw.Strength);
+                
+                if (!drawData) continue;
+
+                // Look for Elimination draw winners
+                const elimination = drawData.find(d => d.BaseType === 'Elimination')?.Elimination;
+                if (elimination && elimination.DrawData) {
+                    const allMatches = elimination.DrawData.flat().filter(cell => cell && (cell.MatchCell || cell.MatchViewModel));
+                    const finalMatchCell = allMatches.sort((a,b) => (b.MatchCell || b).Round - (a.MatchCell || a).Round)[0];
+                    
+                    if (finalMatchCell) {
+                        const m = finalMatchCell.MatchCell || finalMatchCell;
+                        const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
+                        const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                        
+                        if (hasScore) {
+                            const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                            
+                            const winningParticipant = isFirstWinner 
+                                ? (finalMatchCell.ChallengerParticipant || m.ChallengerParticipant) 
+                                : (finalMatchCell.ChallengedParticipant || m.ChallengedParticipant);
+                            
+                            if (winningParticipant) {
+                                let winnerNames = winningParticipant.Name;
+                                if (!winnerNames && winningParticipant.FirstPlayer) {
+                                    winnerNames = winningParticipant.FirstPlayer.Name;
+                                    if (winningParticipant.SecondPlayer) winnerNames += ` & ${winningParticipant.SecondPlayer.Name}`;
+                                }
+
+                                if (winnerNames) {
+                                    winnersList.push({
+                                        className: cls.Name,
+                                        winners: winnerNames
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return winnersList;
+        } catch (err) {
+            console.error('Error fetching winners:', err);
+            return [];
+        }
+    }, [getTournamentClasses, getDrawsForClass]);
+
     return {
         loading,
         error,
@@ -238,6 +331,8 @@ export const useRankedin = () => {
         getDrawsForClass,
         getTournamentDetails,
         getOrganisationRankings,
-        getPlayerEventsAsync
+        getPlayerEventsAsync,
+        getTournamentWinners,
+        getTournamentMatches
     };
 };
