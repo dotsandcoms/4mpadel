@@ -529,8 +529,13 @@ const PlayerProfile = () => {
                                             </span>
                                         )}
                                     </div>
-                                    <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.85] mb-2 drop-shadow-2xl">
-                                        {player.name}
+                                    <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[0.85] mb-2 drop-shadow-2xl flex items-center flex-wrap gap-4">
+                                        <span>{player.name}</span>
+                                        {player.rank_label && player.rank_label !== 'Unranked' && (
+                                            <span className="text-2xl md:text-3xl text-yellow-500 flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-1.5 rounded-2xl drop-shadow-none">
+                                                <Trophy className="w-6 h-6 md:w-8 md:h-8" /> #{player.rank_label}
+                                            </span>
+                                        )}
                                     </h1>
                                     <div className="flex items-center gap-4 text-gray-400 font-bold uppercase tracking-widest text-xs">
                                         <div className="flex items-center gap-1.5 text-padel-green">
