@@ -385,7 +385,13 @@ const CalendarManager = () => {
 
                     if (infoRes.ok) {
                         const infoData = await infoRes.json();
-                        richDetails.description = regRes.ok ? await regRes.json() : '';
+                        try {
+                            let regText = regRes.ok ? await regRes.text() : '';
+                            if (regText.startsWith('"')) regText = JSON.parse(regText);
+                            richDetails.description = regText;
+                        } catch (e) {
+                            richDetails.description = '';
+                        }
 
                         // Handle different key naming in different API types
                         const sidebar = infoData.TournamentSidebarModel || infoData.ClubleagueSidebarModel || infoData;
@@ -462,12 +468,16 @@ const CalendarManager = () => {
                         updates.registered_players = richDetails.registered_players;
                         needsUpdate = true;
                     }
-                    if (richDetails.address && !existingEvent.address) {
+                    if (richDetails.address !== undefined && existingEvent.address !== richDetails.address) {
                         updates.address = richDetails.address;
                         needsUpdate = true;
                     }
-                    if (richDetails.venue && !existingEvent.venue) {
+                    if (richDetails.venue !== undefined && existingEvent.venue !== richDetails.venue) {
                         updates.venue = richDetails.venue;
+                        needsUpdate = true;
+                    }
+                    if (re.city !== undefined && existingEvent.city !== (re.city || '').trim()) {
+                        updates.city = (re.city || '').trim();
                         needsUpdate = true;
                     }
                     if (richDetails.sponsor_logos && richDetails.sponsor_logos.length > 0) {

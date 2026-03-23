@@ -78,7 +78,7 @@ const CalendarEventItem = ({ event, index }) => {
 
                         {/* Info */}
                         <div className="flex-1">
-                            <div className="flex flex-wrap gap-2 mb-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
                                 <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
                                     {event.sapa_status}
                                 </span>
@@ -86,6 +86,18 @@ const CalendarEventItem = ({ event, index }) => {
                                     <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
                                         League
                                     </span>
+                                )}
+                                {event.city && (
+                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
+                                        {event.city}
+                                    </span>
+                                )}
+                                {event.registered_players > 0 && (
+                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-3 py-1 rounded-full">
+                                        <Users className="w-3.5 h-3.5 text-padel-green" />
+                                        <span className="text-white font-bold text-xs leading-none">{event.registered_players}</span>
+                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold leading-none">Registered</span>
+                                    </div>
                                 )}
                             </div>
                             <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
@@ -102,24 +114,11 @@ const CalendarEventItem = ({ event, index }) => {
                             <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
                                 <div className="flex items-center gap-2 truncate">
                                     <MapPin className="w-4 h-4 text-padel-green/50 shrink-0" />
-                                    <span className="truncate" title={[event.venue || event.clubName, event.city].filter(Boolean).join(', ')}>
-                                        {[event.venue || event.clubName, event.city]
-                                            .filter(Boolean)
-                                            .filter((v, i, a) => {
-                                                if (i === 1 && a[0].toLowerCase().includes(v.toLowerCase())) return false;
-                                                return a.indexOf(v) === i;
-                                            })
-                                            .join(', ')}
+                                    <span className="truncate" title={event.venue || event.clubName}>
+                                        {event.venue || event.clubName || 'Location to be confirmed'}
                                     </span>
                                 </div>
-                                {event.registered_players > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2.5 py-1 rounded-full">
-                                        <Users className="w-3.5 h-3.5 text-padel-green" />
-                                        <span className="text-white font-bold">{event.registered_players}</span>
-                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Registered</span>
-                                    </div>
-                                )}
-                                {event.organizer_name && event.organizer_name !== 'SAPA' && (
+                                {event.organizer_name && (
                                     <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
                                         <User className="w-3.5 h-3.5 text-gray-400" />
                                         <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Org:</span>
