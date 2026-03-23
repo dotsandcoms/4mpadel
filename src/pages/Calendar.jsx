@@ -166,8 +166,8 @@ const Calendar = () => {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
-    const [timingFilter, setTimingFilter] = useState('All');
-    const [leagueFilter, setLeagueFilter] = useState('All'); // 'All' | 'League' | 'Tournaments'
+    const [timingFilter, setTimingFilter] = useState('Upcoming');
+    const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
