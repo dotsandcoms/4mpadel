@@ -130,7 +130,7 @@ const CalendarEventItem = ({ event, index }) => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-end">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-start md:justify-end">
                         {hasDraw && (
                             <Link
                                 to={drawPath}

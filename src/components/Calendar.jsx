@@ -133,7 +133,7 @@ const CalendarEventItem = ({ event, index }) => {
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-end">
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-start md:justify-end">
                         {hasDraw && (
                              <Link
                                 to={drawPath}
@@ -191,7 +191,7 @@ const Calendar = () => {
             </div>
 
             <div className="container mx-auto px-6 md:px-20 relative z-10">
-                <div className="flex flex-col md:flex-row justify-between items-end mb-12">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12">
                     <div>
                         <span className="text-padel-green font-bold tracking-widest uppercase text-sm">Upcoming Events</span>
                         <h2 className="text-4xl md:text-5xl font-bold text-white mt-4">Calendar</h2>
