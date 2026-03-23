@@ -53,14 +53,15 @@ const CalendarEventItem = ({ event, index }) => {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: index * 0.1 }}
+            className="w-full min-w-0 max-w-full"
         >
             <div
-                className={`group block backdrop-blur-md border ${tierColor} rounded-[2rem] p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}
+                className={`group block backdrop-blur-md border ${tierColor} rounded-[2rem] p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative w-full`}
             >
                 {/* Background Gradient */}
                 <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
 
-                <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between relative z-10">
+                <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between relative z-10 w-full min-w-0">
                     <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
                         {/* Poster Image Box */}
                         <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-24 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
@@ -102,8 +103,8 @@ const CalendarEventItem = ({ event, index }) => {
                                     </div>
                                 )}
                             </div>
-                            <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
-                                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
+                            <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2 min-w-0">
+                                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight break-words min-w-0 whitespace-normal">
                                     {event.event_name || event.eventName}
                                 </h3>
                                 <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap w-fit">
