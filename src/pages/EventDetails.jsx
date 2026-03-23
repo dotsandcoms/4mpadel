@@ -92,8 +92,10 @@ const EventDetails = () => {
     const [loading, setLoading] = useState(true);
     const [weather, setWeather] = useState(null);
     const [hasDraw, setHasDraw] = useState(false);
+    const [hasResults, setHasResults] = useState(false);
+    const [winners, setWinners] = useState([]);
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
-    const { getTournamentClasses } = useRankedin();
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
 
     const stripHtml = (html) => {
         if (!html) return '';
@@ -200,10 +202,11 @@ const EventDetails = () => {
     }, [slug]);
 
     useEffect(() => {
-        const checkDrawAvailable = async () => {
+        const checkRankedinStatus = async () => {
             if (!event) return;
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
             if (rId) {
+                // Check Draws
                 const classes = await getTournamentClasses(rId);
                 const drawAvailable = classes && classes.some(c =>
                     c.IsPublished &&
@@ -211,12 +214,26 @@ const EventDetails = () => {
                     c.TournamentDraws.length > 0
                 );
                 setHasDraw(drawAvailable);
+
+                // Check Results/Winners
+                const tournamentWinners = await getTournamentWinners(rId);
+                if (tournamentWinners && tournamentWinners.length > 0) {
+                    setWinners(tournamentWinners);
+                    setHasResults(true);
+                } else {
+                    // Try matches to be sure
+                    const tournamentMatches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                    if (tournamentMatches && tournamentMatches.length > 0) {
+                        setHasResults(true);
+                    }
+                }
             } else if (event.slug) {
                 setHasDraw(false);
+                setHasResults(false);
             }
         };
-        checkDrawAvailable();
-    }, [event, getTournamentClasses]);
+        checkRankedinStatus();
+    }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches]);
 
     useEffect(() => {
         const fetchWeather = async () => {
@@ -499,6 +516,31 @@ const EventDetails = () => {
                                         </div>
                                     )}
 
+                                    {/* Tournament Champions Section */}
+                                    {hasResults && winners.length > 0 && (
+                                        <motion.div 
+                                            initial={{ opacity: 0, x: -20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            className="mb-8 p-6 bg-slate-900 rounded-2xl border border-padel-green/20 relative overflow-hidden"
+                                        >
+                                            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                                <CheckCircle size={80} className="text-padel-green" />
+                                            </div>
+                                            <h4 className="text-padel-green font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
+                                                Tournament Champions
+                                            </h4>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {winners.map((w, idx) => (
+                                                    <div key={idx} className="flex flex-col">
+                                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{w.className}</span>
+                                                        <span className="text-white font-bold text-lg leading-tight">{w.winners}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+
                                     {/* Social Share */}
                                     <div className="pt-2 flex gap-4">
                                         <button className="text-gray-400 hover:text-slate-900 transition-colors"><Share2 className="w-5 h-5" /></button>
@@ -543,15 +585,29 @@ const EventDetails = () => {
 
                                     {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                        if (!hasDraw || (!rId && !event.slug)) return null;
+                                        if ((!hasDraw && !hasResults) || (!rId && !event.slug)) return null;
+                                        
                                         return (
-                                            <Link
-                                                to={`/draws/${event.slug || rId}`}
-                                                className="w-full flex items-center justify-center gap-2 bg-slate-900 !text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-widest text-sm"
-                                            >
-                                                <GitBranch className="w-4 h-4" />
-                                                View Draw
-                                            </Link>
+                                            <div className="w-full space-y-3">
+                                                {hasDraw && (
+                                                    <Link
+                                                        to={`/draws/${event.slug || rId}`}
+                                                        className="w-full flex items-center justify-center gap-2 bg-slate-900 !text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-widest text-sm"
+                                                    >
+                                                        <GitBranch className="w-4 h-4" />
+                                                        View Draw
+                                                    </Link>
+                                                )}
+                                                {hasResults && (
+                                                    <Link
+                                                        to={`/results/${event.slug || rId}`}
+                                                        className="w-full flex items-center justify-center gap-2 bg-padel-green !text-black font-black py-4 rounded-xl shadow-lg hover:bg-slate-900 hover:!text-padel-green transition-all duration-300 uppercase tracking-widest text-sm"
+                                                    >
+                                                        <CheckCircle className="w-4 h-4" />
+                                                        View Results
+                                                    </Link>
+                                                )}
+                                            </div>
                                         );
                                     })()}
                                 </div>
@@ -590,6 +646,7 @@ const EventDetails = () => {
                                     </div>
 
                                     <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
+
                                         <div
                                             className="text-slate-600 leading-relaxed text-lg mb-8 event-rich-description"
                                             dangerouslySetInnerHTML={{
