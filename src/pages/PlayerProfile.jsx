@@ -728,6 +728,14 @@ const PlayerProfile = () => {
                                 >
                                     <CalendarIcon size={16} /> Upcoming Events
                                 </button>
+                                {coachApplication && (
+                                    <button
+                                        onClick={() => setShowCoachModal(true)}
+                                        className="whitespace-nowrap px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-[11px] transition-all flex items-center gap-3 bg-padel-green text-black shadow-xl shadow-padel-green/20 hover:bg-white hover:scale-105"
+                                    >
+                                        <Briefcase size={16} /> Coach Profile
+                                    </button>
+                                )}
                             </motion.div>
 
                             <AnimatePresence mode="wait">

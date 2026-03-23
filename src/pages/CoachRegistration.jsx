@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { UploadCloud, CheckCircle2, ChevronRight, ChevronLeft, Loader2, User, Mail, Phone, MapPin, Instagram, Youtube, FileText } from 'lucide-react';
+import { UploadCloud, CheckCircle2, ChevronRight, ChevronLeft, Loader2, User, Mail, Phone, MapPin, Instagram, Youtube, FileText, ExternalLink } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { toast } from 'sonner';
 
@@ -19,7 +19,9 @@ const CoachRegistration = () => {
         email: '',
         contact_number: '',
         bio: '',
+        city: '',
         coaching_location: '',
+        website_link: '',
         instagram_link: '',
         youtube_link: '',
     });
@@ -131,7 +133,9 @@ const CoachRegistration = () => {
                     contact_number: formData.contact_number,
                     bio: formData.bio,
                     profile_pic_url: profilePicUrl,
+                    city: formData.city,
                     coaching_location: formData.coaching_location,
+                    website_link: formData.website_link,
                     instagram_link: formData.instagram_link,
                     youtube_link: formData.youtube_link,
                     status: 'pending'
@@ -352,45 +356,74 @@ const CoachRegistration = () => {
                                     </div>
 
                                     <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
-                                                <MapPin size={16} className="text-padel-green" /> Where do you coach? *
-                                            </label>
-                                            <input
-                                                type="text"
-                                                name="coaching_location"
-                                                required
-                                                value={formData.coaching_location}
-                                                onChange={handleInputChange}
-                                                placeholder="e.g. Wanderers Club, Illovo"
-                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
-                                            />
-                                        </div>
-
                                         <div className="grid md:grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
-                                                    <Instagram size={16} className="text-pink-500" /> Instagram Link
+                                                    <MapPin size={16} className="text-padel-green" /> City *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="city"
+                                                    required
+                                                    value={formData.city}
+                                                    onChange={handleInputChange}
+                                                    placeholder="e.g. Johannesburg"
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                    <MapPin size={16} className="text-padel-green" /> Coaching Club/Location *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="coaching_location"
+                                                    required
+                                                    value={formData.coaching_location}
+                                                    onChange={handleInputChange}
+                                                    placeholder="e.g. Wanderers Club, Illovo"
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid md:grid-cols-3 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                    <ExternalLink size={16} className="text-blue-400" /> Website
+                                                </label>
+                                                <input
+                                                    type="url"
+                                                    name="website_link"
+                                                    value={formData.website_link}
+                                                    onChange={handleInputChange}
+                                                    placeholder="https://yoursite.com"
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                    <Instagram size={16} className="text-pink-500" /> Instagram
                                                 </label>
                                                 <input
                                                     type="url"
                                                     name="instagram_link"
                                                     value={formData.instagram_link}
                                                     onChange={handleInputChange}
-                                                    placeholder="https://instagram.com/username"
+                                                    placeholder="https://instagram.com/..."
                                                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
                                                 />
                                             </div>
                                             <div>
                                                 <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
-                                                    <Youtube size={16} className="text-red-500" /> YouTube Link
+                                                    <Youtube size={16} className="text-red-500" /> YouTube
                                                 </label>
                                                 <input
                                                     type="url"
                                                     name="youtube_link"
                                                     value={formData.youtube_link}
                                                     onChange={handleInputChange}
-                                                    placeholder="https://youtube.com/@channel"
+                                                    placeholder="https://youtube.com/..."
                                                     className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
                                                 />
                                             </div>

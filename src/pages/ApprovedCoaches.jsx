@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2 } from 'lucide-react';
+import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2, ExternalLink, Search, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 
@@ -46,7 +46,9 @@ const CoachCard = ({ coach, index }) => {
                         <ShieldCheck className="w-4 h-4" /> Certified Instructor
                     </p>
                     <p className="text-gray-400 text-sm mt-1 flex items-center gap-1">
-                        <MapPin className="w-4 h-4" /> {coach.coaching_location}
+                        <MapPin className="w-4 h-4" /> 
+                        {coach.city && `${coach.city}${coach.coaching_location ? ', ' : ''}`}
+                        {coach.coaching_location}
                     </p>
                 </div>
 
@@ -57,6 +59,11 @@ const CoachCard = ({ coach, index }) => {
                 <div className="mt-auto">
                     {/* Social Links as tags */}
                     <div className="flex flex-wrap gap-2 mb-8">
+                        {coach.website_link && (
+                            <a href={coach.website_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-300 uppercase tracking-wider hover:bg-white/10 transition-colors">
+                                <ExternalLink size={12} className="text-blue-400" /> Website
+                            </a>
+                        )}
                         {coach.instagram_link && (
                             <a href={coach.instagram_link} target="_blank" rel="noreferrer" className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] font-bold text-gray-300 uppercase tracking-wider hover:bg-white/10 transition-colors">
                                 <Instagram size={12} className="text-pink-500" /> Instagram
@@ -87,6 +94,19 @@ const CoachCard = ({ coach, index }) => {
 const ApprovedCoaches = () => {
     const [coaches, setCoaches] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [cityFilter, setCityFilter] = useState('All');
+
+    // Get unique cities from coaches
+    const cities = ['All', ...new Set(coaches.map(coach => coach.city).filter(Boolean))];
+
+    const filteredCoaches = coaches.filter(coach => {
+        const matchesSearch = coach.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                             coach.bio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                             coach.coaching_location?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCity = cityFilter === 'All' || coach.city === cityFilter;
+        return matchesSearch && matchesCity;
+    });
 
     useEffect(() => {
         const fetchCoaches = async () => {
@@ -156,20 +176,76 @@ const ApprovedCoaches = () => {
                     </motion.p>
                 </div>
 
+                {/* Filters */}
+                {!loading && coaches.length > 0 && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-12 flex flex-col md:flex-row gap-4"
+                    >
+                        <div className="relative flex-grow">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
+                            <input
+                                type="text"
+                                placeholder="Search coaches by name, bio, or club..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                            />
+                            {searchTerm && (
+                                <button 
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                                >
+                                    <X size={18} />
+                                </button>
+                            )}
+                        </div>
+                        <div className="relative min-w-[200px]">
+                            <select
+                                value={cityFilter}
+                                onChange={(e) => setCityFilter(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-padel-green appearance-none cursor-pointer"
+                            >
+                                {cities.map(city => (
+                                    <option key={city} value={city} className="bg-[#0F172A]">{city}</option>
+                                ))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                <MapPin size={18} />
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
                 {/* Coaches Grid */}
                 {loading ? (
                     <div className="flex justify-center items-center py-20">
                         <Loader2 className="w-12 h-12 text-padel-green animate-spin" />
                     </div>
-                ) : coaches.length === 0 ? (
+                ) : filteredCoaches.length === 0 ? (
                     <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/10">
                         <UserX className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                        <h3 className="text-2xl font-bold text-white mb-2">No Coaches Found</h3>
-                        <p className="text-gray-400">There are currently no approved coaches to display.</p>
+                        <h3 className="text-2xl font-bold text-white mb-2">
+                            {searchTerm || cityFilter !== 'All' ? 'No Matching Coaches' : 'No Coaches Found'}
+                        </h3>
+                        <p className="text-gray-400">
+                            {searchTerm || cityFilter !== 'All' 
+                                ? 'Try adjusting your search or filter to find what you are looking for.' 
+                                : 'There are currently no approved coaches to display.'}
+                        </p>
+                        {(searchTerm || cityFilter !== 'All') && (
+                            <button 
+                                onClick={() => { setSearchTerm(''); setCityFilter('All'); }}
+                                className="mt-6 text-padel-green font-bold hover:underline"
+                            >
+                                Clear all filters
+                            </button>
+                        )}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {coaches.map((coach, index) => (
+                        {filteredCoaches.map((coach, index) => (
                             <CoachCard key={coach.id} coach={coach} index={index} />
                         ))}
                     </div>

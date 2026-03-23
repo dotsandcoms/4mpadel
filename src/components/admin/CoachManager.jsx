@@ -416,6 +416,7 @@ const CoachManager = () => {
                         <thead>
                             <tr className="bg-black/50 text-gray-400 border-b border-white/10">
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Applicant</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[120px]">City</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[150px]">Location</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Applied Date</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
@@ -456,6 +457,9 @@ const CoachManager = () => {
                                             </div>
                                         </td>
                                         <td className="py-3 px-4 text-sm text-gray-300">
+                                            {app.city || '—'}
+                                        </td>
+                                        <td className="py-3 px-4 text-sm text-gray-400">
                                             {app.coaching_location}
                                         </td>
                                         <td className="py-3 px-4 text-sm text-gray-400">

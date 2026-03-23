@@ -38,6 +38,8 @@ const CoachProfileModal = ({
             contact_number: app.contact_number,
             instagram_link: app.instagram_link || '',
             youtube_link: app.youtube_link || '',
+            website_link: app.website_link || '',
+            city: app.city || '',
             bio: app.bio
         });
         setNewProfilePic(null);
@@ -222,7 +224,10 @@ const CoachProfileModal = ({
                                     Status: {app.status}
                                 </div>
                                 <h2 className="text-3xl font-bold text-white mb-2">{app.full_name}</h2>
-                                <p className="text-gray-400">{app.coaching_location}</p>
+                                <p className="text-gray-400">
+                                    {app.city && `${app.city}${app.coaching_location ? ', ' : ''}`}
+                                    {app.coaching_location}
+                                </p>
                             </div>
 
                             <div className="space-y-3 mt-auto">
@@ -306,12 +311,22 @@ const CoachProfileModal = ({
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-400 mb-2">Coaching Location</label>
-                                        <input type="text" name="coaching_location" value={editFormData.coaching_location} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">City</label>
+                                            <input type="text" name="city" value={editFormData.city} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">Coaching Club/Location</label>
+                                            <input type="text" name="coaching_location" value={editFormData.coaching_location} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                        </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">Website Link</label>
+                                            <input type="url" name="website_link" value={editFormData.website_link} onChange={handleEditChange} placeholder="Optional" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                        </div>
                                         <div>
                                             <label className="block text-sm font-bold text-gray-400 mb-2">Instagram Link</label>
                                             <input type="url" name="instagram_link" value={editFormData.instagram_link} onChange={handleEditChange} placeholder="Optional" className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
@@ -347,22 +362,28 @@ const CoachProfileModal = ({
                                         </div>
                                     </div>
 
-                                    <h3 className="text-xl font-bold text-padel-green mb-6 border-b border-white/10 pb-4">Social Links</h3>
+                                    <h3 className="text-xl font-bold text-padel-green mb-6 border-b border-white/10 pb-4">Social & Web Links</h3>
                                     <div className="flex flex-wrap gap-4 mb-10">
-                                        {app.instagram_link ? (
+                                        {app.website_link && (
+                                            <a href={app.website_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
+                                                <ExternalLink className="text-blue-400" size={18} /> Website <ExternalLink size={14} className="text-gray-500" />
+                                            </a>
+                                        )}
+
+                                        {app.instagram_link && (
                                             <a href={app.instagram_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
                                                 <Instagram className="text-pink-500" size={18} /> Instagram <ExternalLink size={14} className="text-gray-500" />
                                             </a>
-                                        ) : (
-                                            <span className="text-gray-500 text-sm italic py-2">No Instagram provided</span>
                                         )}
 
-                                        {app.youtube_link ? (
+                                        {app.youtube_link && (
                                             <a href={app.youtube_link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-[#1E293B] hover:bg-white/10 px-4 py-2 rounded-lg text-white transition-colors border border-white/10">
                                                 <Youtube className="text-red-500" size={18} /> YouTube <ExternalLink size={14} className="text-gray-500" />
                                             </a>
-                                        ) : (
-                                            <span className="text-gray-500 text-sm italic py-2">No YouTube provided</span>
+                                        )}
+
+                                        {!app.website_link && !app.instagram_link && !app.youtube_link && (
+                                            <span className="text-gray-500 text-sm italic py-2">No links provided</span>
                                         )}
                                     </div>
 
