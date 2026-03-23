@@ -1250,6 +1250,7 @@ const PlayerProfile = () => {
                     isOpen={showPaymentModal}
                     onClose={() => setShowPaymentModal(false)}
                     userEmail={player?.email}
+                    userName={player?.name}
                     onPaymentSuccess={refetchPlayer}
                 />
 

@@ -161,8 +161,18 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'error', text: 'Please enter a valid email address.' });
                 return;
             }
-            if (password.length < 6) {
-                setMessage({ type: 'error', text: 'Password must be at least 6 characters long.' });
+            const passwordErrors = [];
+            if (password.length < 6) passwordErrors.push("6+ characters");
+            if (!/[a-z]/.test(password)) passwordErrors.push("one lowercase letter");
+            if (!/[A-Z]/.test(password)) passwordErrors.push("one uppercase letter");
+            if (!/[0-9]/.test(password)) passwordErrors.push("one number");
+            if (!/[@#$%^&*\-+=|<>?/,.'~]/.test(password)) passwordErrors.push("one special character (@#$%^&*-+-=)");
+
+            if (passwordErrors.length > 0) {
+                setMessage({ 
+                    type: 'error', 
+                    text: `Password must contain: ${passwordErrors.join(', ')}.` 
+                });
                 return;
             }
             if (password !== confirmPassword) {
@@ -216,65 +226,97 @@ const AuthModal = ({ isOpen, onClose }) => {
 
             setLoading(true);
 
-            if (paymentOption === 'pay_later') {
-                handlePayLaterRegistration();
+            const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
+            if (!hasSupabase) {
+                showMessage('Supabase is not configured. Add VITE_SUPABASE_URL to your .env file.', 'error');
+                setLoading(false);
                 return;
             }
 
-            console.log(`Initializing Paystack for ${formatCurrency(FEES.FULL_LICENSE)} Registration...`);
-            handlePaystackPayment({ onSuccess, onClose: onClosePayment });
+            // 1. Always try to sign up the account first
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password,
+            });
+
+            if (authError) {
+                showMessage('Registration failed: ' + authError.message, 'error');
+                setLoading(false);
+                return;
+            }
+
+            // 2. Create the initial profile (unpaid)
+            const baseParams = {
+                p_email: email,
+                p_name: `${firstName} ${lastName}`.trim(),
+                p_contact: contactNumber,
+                p_category: category || 'Unranked',
+                p_gender: gender,
+                p_nationality: nationality,
+                p_id_number: idNumber,
+                p_bio: bio,
+                p_home_club: homeClub,
+                p_sponsors: sponsors,
+            };
+
+            const { error: insertError } = await supabase.rpc('create_player_profile', {
+                ...baseParams,
+                p_instagram_link: instagramLink || null,
+                p_paid_registration: false,
+                p_license_type: 'none',
+            });
+
+            if (insertError) {
+                showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
+                setLoading(false);
+                return;
+            }
+
+            // 3. Handle Payment or Finish
+            if (paymentOption === 'pay_later') {
+                showMessage('Registration successful! Your profile is created. Pay for a license to make it visible on the Players page.', 'success');
+                setLoading(false);
+            } else {
+                console.log(`Initializing Paystack for ${formatCurrency(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE)} Registration...`);
+                handlePaystackPayment({ 
+                    onSuccess: async (reference) => {
+                        console.log('Payment successful. Reference:', reference);
+                        
+                        const { error: rpcError } = await supabase.rpc('mark_player_paid', { 
+                            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full' 
+                        });
+
+                        if (rpcError) {
+                            showMessage('Payment successful, but failed to update profile status. Please contact support.', 'error');
+                            setLoading(false);
+                            return;
+                        }
+
+                        if (paymentOption === 'temporary' && selectedEventId) {
+                            const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
+                            if (eventDetails) {
+                                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
+                                if (pData?.id) {
+                                    await supabase.from('temporary_licenses').insert({
+                                        player_id: pData.id,
+                                        event_id: eventDetails.id,
+                                        event_name: eventDetails.event_name || 'Calendar Event',
+                                        event_date: eventDetails.start_date
+                                    });
+                                }
+                            }
+                        }
+
+                        showMessage('Payment and Registration successful! Welcome to 4m Padel.', 'success');
+                        setLoading(false);
+                    }, 
+                    onClose: () => {
+                        showMessage('Registration successful, but payment was cancelled. You can pay later from your profile.', 'error');
+                        setLoading(false);
+                    } 
+                });
+            }
         }
-    };
-
-    const handlePayLaterRegistration = async () => {
-        const hasSupabase = Boolean(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-        if (!hasSupabase) {
-            showMessage('Supabase is not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env file.', 'error');
-            setLoading(false);
-            return;
-        }
-        const { error: authError } = await supabase.auth.signUp({
-            email,
-            password,
-        });
-
-        if (authError) {
-            showMessage(authError.message, 'error');
-            setLoading(false);
-            return;
-        }
-
-        const baseParams = {
-            p_email: email,
-            p_name: `${firstName} ${lastName}`.trim(),
-            p_contact: contactNumber,
-            p_category: category || 'Unranked',
-            p_gender: gender,
-            p_nationality: nationality,
-            p_id_number: idNumber,
-            p_bio: bio,
-            p_home_club: homeClub,
-            p_sponsors: sponsors,
-        };
-
-        let insertError = (await supabase.rpc('create_player_profile_pay_later', {
-            ...baseParams,
-            p_instagram_link: instagramLink || null,
-        })).error;
-
-        if (insertError) {
-            const fallback = await supabase.rpc('create_player_profile_pay_later', baseParams);
-            insertError = fallback.error;
-        }
-
-        if (insertError) {
-            showMessage('Account created, but failed to setup profile: ' + (insertError.message || insertError.code || 'Unknown error'), 'error');
-            setLoading(false);
-            return;
-        }
-
-        showMessage('Registration successful! Your profile is created. Pay for a license to make it visible on the Players page.', 'success');
-        setLoading(false);
     };
 
     const paystackConfig = {
@@ -283,71 +325,11 @@ const AuthModal = ({ isOpen, onClose }) => {
         amount: toPaystackAmount(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE),
         publicKey: PAYSTACK_PUBLIC_KEY,
         currency: 'ZAR',
+        firstname: firstName,
+        lastname: lastName,
     };
 
     const handlePaystackPayment = usePaystackPayment(paystackConfig);
-
-    const onSuccess = async (reference) => {
-        console.log('Payment successful. Reference:', reference);
-
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email,
-            password,
-        });
-
-        if (authError) {
-            showMessage('Payment successful but auth failed: ' + authError.message, 'error');
-            setLoading(false);
-            return;
-        }
-
-        const { data: rpcData, error: insertError } = await supabase.rpc('create_player_profile', {
-            p_email: email,
-            p_name: `${firstName} ${lastName}`.trim(),
-            p_contact: contactNumber,
-            p_category: category || 'Unranked',
-            p_gender: gender,
-            p_nationality: nationality,
-            p_id_number: idNumber,
-            p_bio: bio,
-            p_home_club: homeClub,
-            p_sponsors: sponsors,
-            p_instagram_link: instagramLink || null,
-            p_paid_registration: true,
-            p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full',
-        });
-
-
-        if (insertError) {
-            showMessage('Account created, but failed to setup profile: ' + insertError.message, 'error');
-            setLoading(false);
-            return;
-        }
-
-        // Output Temporary License row if applicable
-        if (paymentOption === 'temporary' && selectedEventId) {
-            const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
-            if (eventDetails) {
-                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
-                if (pData?.id) {
-                    await supabase.from('temporary_licenses').insert({
-                        player_id: pData.id,
-                        event_id: eventDetails.id,
-                        event_name: eventDetails.event_name || 'Calendar Event',
-                        event_date: eventDetails.start_date
-                    });
-                }
-            }
-        }
-
-        showMessage('Payment and Registration successful! Please check your email for confirmation.', 'success');
-        setLoading(false);
-    };
-
-    const onClosePayment = () => {
-        showMessage('Registration cancelled.', 'error');
-        setLoading(false);
-    };
 
     if (!isOpen) return null;
 

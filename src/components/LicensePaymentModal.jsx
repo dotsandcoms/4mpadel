@@ -31,7 +31,7 @@ const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeM
     onDone();
 };
 
-const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) => {
+const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [showTempOptions, setShowTempOptions] = useState(false);
@@ -66,13 +66,25 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, onPaymentSuccess }) =
     }, [isOpen, upcomingEvents.length]);
 
 
-    const getConfig = (amountInRands) => ({
-        reference: `${(new Date()).getTime()}-${amountInRands}`,
-        email: userEmail || '',
-        amount: toPaystackAmount(amountInRands),
-        publicKey: PAYSTACK_PUBLIC_KEY,
-        currency: 'ZAR',
-    });
+    const getConfig = (amountInRands) => {
+        let nameParams = {};
+        if (userName) {
+            const parts = userName.trim().split(' ');
+            nameParams.firstname = parts[0];
+            if (parts.length > 1) {
+                nameParams.lastname = parts.slice(1).join(' ');
+            }
+        }
+
+        return {
+            reference: `${(new Date()).getTime()}-${amountInRands}`,
+            email: userEmail || '',
+            amount: toPaystackAmount(amountInRands),
+            publicKey: PAYSTACK_PUBLIC_KEY,
+            currency: 'ZAR',
+            ...nameParams
+        };
+    };
 
     const handleFullLicensePay = usePaystackPayment(getConfig(FEES.FULL_LICENSE));
     const handleTemporaryLicensePay = usePaystackPayment(getConfig(FEES.TEMPORARY_LICENSE));

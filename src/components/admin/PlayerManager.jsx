@@ -500,7 +500,7 @@ const PlayerManager = () => {
                                         </td>
 
                                         <td className="py-3 px-4">
-                                            {player.approved !== false && player.paid_registration ? (
+                                            {player.approved !== false && player.paid_registration && player.license_type === 'full' ? (
                                                 <span className="flex items-center gap-1 text-green-400 text-xs"><Eye size={12} /> Visible</span>
                                             ) : (
                                                 <span className="flex items-center gap-1 text-gray-500 text-xs"><EyeOff size={12} /> Hidden</span>
