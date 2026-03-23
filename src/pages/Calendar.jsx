@@ -100,9 +100,17 @@ const CalendarEventItem = ({ event, index }) => {
                                 </div>
                             </div>
                             <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="w-4 h-4 text-padel-green/50" />
-                                    {event.venue || event.clubName}
+                                <div className="flex items-center gap-2 truncate">
+                                    <MapPin className="w-4 h-4 text-padel-green/50 shrink-0" />
+                                    <span className="truncate" title={[event.venue || event.clubName, event.city].filter(Boolean).join(', ')}>
+                                        {[event.venue || event.clubName, event.city]
+                                            .filter(Boolean)
+                                            .filter((v, i, a) => {
+                                                if (i === 1 && a[0].toLowerCase().includes(v.toLowerCase())) return false;
+                                                return a.indexOf(v) === i;
+                                            })
+                                            .join(', ')}
+                                    </span>
                                 </div>
                                 {event.registered_players > 0 && (
                                     <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2.5 py-1 rounded-full">
