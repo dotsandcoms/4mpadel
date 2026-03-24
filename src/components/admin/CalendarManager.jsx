@@ -484,8 +484,10 @@ const CalendarManager = () => {
                         updates.sponsor_logos = richDetails.sponsor_logos;
                         needsUpdate = true;
                     }
-                    if (existingEvent.is_league !== isLeague) {
-                        updates.is_league = isLeague;
+                    // Only update is_league if it's true on RankedIn
+                    // We don't want to overwrite a local 'true' with 'false'
+                    if (isLeague && !existingEvent.is_league) {
+                        updates.is_league = true;
                         needsUpdate = true;
                     }
 
