@@ -157,12 +157,12 @@ const AlbumDetails = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
+                        className="fixed inset-0 z-[1100] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8"
                         onClick={() => setSelectedImageIndex(null)}
                     >
                         {/* Close Button */}
                         <button
-                            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-50"
+                            className="absolute top-6 right-6 p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors z-[1110]"
                             onClick={() => setSelectedImageIndex(null)}
                         >
                             <X size={24} />
@@ -170,7 +170,7 @@ const AlbumDetails = () => {
 
                         {/* Prev Button */}
                         <button
-                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full text-white transition-colors z-50 hidden sm:block"
+                            className="absolute left-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full text-white transition-colors z-[1110] hidden sm:block"
                             onClick={(e) => { e.stopPropagation(); prevImage(); }}
                         >
                             <ArrowLeft size={32} />
@@ -178,7 +178,7 @@ const AlbumDetails = () => {
 
                         {/* Next Button */}
                         <button
-                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full text-white transition-colors z-50 hidden sm:block rotate-180"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full text-white transition-colors z-[1110] hidden sm:block rotate-180"
                             onClick={(e) => { e.stopPropagation(); nextImage(); }}
                         >
                             <ArrowLeft size={32} />

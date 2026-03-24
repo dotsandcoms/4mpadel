@@ -373,7 +373,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <span>{data.highlight}</span>
                 </div>
 
-                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-4xl xl:text-[42px]' : 'text-5xl lg:text-[56px] xl:text-[64px]'}`}>
+                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-3xl xl:text-[36px]' : 'text-4xl lg:text-[48px] xl:text-[56px]'}`}>
                     {data.title.split(' ')[0]} <br className={isGridSection ? 'hidden lg:block' : ''} />
                     <span className={isFeatured ? 'text-black/70' : 'text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600'}>
                         {data.title.split(' ').slice(1).join(' ')}
@@ -526,7 +526,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <p className={`text-[10px] font-bold ${statusColors.text} uppercase tracking-widest`}>{data.cardLabel}</p>
                 </div>
 
-                <h3 className={`text-xl md:text-2xl lg:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
+                <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
 
                 {data.registeredPlayers > 0 && (
                     <div className="flex items-center gap-1.5 mb-6 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">

@@ -195,7 +195,7 @@ const TournamentResults = () => {
                         </motion.h1>
                     </div>
 
-                    <div className="absolute top-24 left-4 md:left-6 z-50">
+                    <div className="absolute top-24 left-4 md:left-6 z-10">
                         <Link
                             to="/calendar"
                             className="bg-white/10 backdrop-blur-md text-padel-green p-2 rounded-full hover:bg-padel-green hover:text-black transition-colors"

@@ -374,9 +374,9 @@ const Players = () => {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => handleSetSelectedPlayer(null)}
-                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 cursor-pointer"
+                className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100] cursor-pointer"
               />
-              <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4">
+              <div className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-4">
                 <motion.div
                   layoutId={`card-${selectedPlayer.id}`}
                   ref={cardRef}

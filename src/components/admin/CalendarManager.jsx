@@ -904,14 +904,14 @@ const CalendarManager = () => {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50"
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[1100]"
                             onClick={() => setIsModalOpen(false)}
                         />
                         <motion.div
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none p-4"
+                            className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-4"
                         >
                             <div className="bg-[#1E293B] w-full max-w-4xl rounded-2xl border border-white/10 shadow-2xl pointer-events-auto p-6 max-h-[90vh] overflow-y-auto">
                                 <div className="flex justify-between items-center mb-6">

@@ -171,7 +171,7 @@ const TournamentManager = () => {
     return (
         <div className="bg-[#0F172A] p-6 rounded-2xl border border-white/10 relative">
             {/* Toast Container */}
-            <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
+            <div className="fixed bottom-6 right-6 z-[1100] flex flex-col gap-2 pointer-events-none">
                 <AnimatePresence>
                     {toasts.map(toast => (
                         <motion.div
@@ -335,7 +335,7 @@ const TournamentManager = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                        className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                     >
                         <motion.div
                             initial={{ scale: 0.95, opacity: 0, y: 20 }}
