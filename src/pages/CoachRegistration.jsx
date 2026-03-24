@@ -24,6 +24,7 @@ const CoachRegistration = () => {
         website_link: '',
         instagram_link: '',
         youtube_link: '',
+        gender: '',
     });
 
     const [profilePic, setProfilePic] = useState(null);
@@ -138,6 +139,7 @@ const CoachRegistration = () => {
                     website_link: formData.website_link,
                     instagram_link: formData.instagram_link,
                     youtube_link: formData.youtube_link,
+                    gender: formData.gender,
                     status: 'pending'
                 }]);
 
@@ -285,6 +287,23 @@ const CoachRegistration = () => {
                                                 placeholder="+27 82 123 4567"
                                                 className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-white focus:border-padel-green focus:outline-none transition-colors"
                                             />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                <User size={16} className="text-padel-green" /> Gender *
+                                            </label>
+                                            <select
+                                                name="gender"
+                                                required
+                                                value={formData.gender}
+                                                onChange={handleInputChange}
+                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none cursor-pointer"
+                                            >
+                                                <option value="" disabled className="bg-[#1E293B]">Select Gender</option>
+                                                <option value="Male" className="bg-[#1E293B]">Male</option>
+                                                <option value="Female" className="bg-[#1E293B]">Female</option>
+                                            </select>
                                         </div>
                                     </div>
 

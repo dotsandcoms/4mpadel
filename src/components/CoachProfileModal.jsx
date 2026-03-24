@@ -40,7 +40,8 @@ const CoachProfileModal = ({
             youtube_link: app.youtube_link || '',
             website_link: app.website_link || '',
             city: app.city || '',
-            bio: app.bio
+            bio: app.bio,
+            gender: app.gender || ''
         });
         setNewProfilePic(null);
         setNewProfilePicPreview(null);
@@ -167,7 +168,7 @@ const CoachProfileModal = ({
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
                 onClick={handleClose}
             >
                 <motion.div
@@ -224,10 +225,11 @@ const CoachProfileModal = ({
                                     Status: {app.status}
                                 </div>
                                 <h2 className="text-3xl font-bold text-white mb-2">{app.full_name}</h2>
-                                <p className="text-gray-400">
-                                    {app.city && `${app.city}${app.coaching_location ? ', ' : ''}`}
-                                    {app.coaching_location}
-                                </p>
+                                    <p className="text-gray-400">
+                                        {app.gender && `${app.gender} • `}
+                                        {app.city && `${app.city}${app.coaching_location ? ', ' : ''}`}
+                                        {app.coaching_location}
+                                    </p>
                             </div>
 
                             <div className="space-y-3 mt-auto">
@@ -251,13 +253,15 @@ const CoachProfileModal = ({
                                                 <XCircle size={18} /> Reject Application
                                             </button>
                                         )}
-                                        <button
-                                            onClick={startEditing}
-                                            disabled={isUpdating}
-                                            className="w-full flex items-center justify-center gap-2 bg-blue-500/20 text-blue-500 font-bold py-3 border border-blue-500/50 rounded-xl hover:bg-blue-500 hover:text-white transition-colors"
-                                        >
-                                            <Edit2 size={18} /> Edit Information
-                                        </button>
+                                        {isAdmin && (
+                                            <button
+                                                onClick={startEditing}
+                                                disabled={isUpdating}
+                                                className="w-full flex items-center justify-center gap-2 bg-blue-500/20 text-blue-500 font-bold py-3 border border-blue-500/50 rounded-xl hover:bg-blue-500 hover:text-white transition-colors"
+                                            >
+                                                <Edit2 size={18} /> Edit Information
+                                            </button>
+                                        )}
                                         {isAdmin && (
                                             <button
                                                 onClick={() => { setIsUpdating(true); onDelete(app.id, app.profile_pic_url).finally(() => setIsUpdating(false)); }}
@@ -317,9 +321,17 @@ const CoachProfileModal = ({
                                             <input type="text" name="city" value={editFormData.city} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-bold text-gray-400 mb-2">Coaching Club/Location</label>
-                                            <input type="text" name="coaching_location" value={editFormData.coaching_location} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">Gender</label>
+                                            <select name="gender" value={editFormData.gender} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none cursor-pointer">
+                                                <option value="">Select Gender</option>
+                                                <option value="Male">Male</option>
+                                                <option value="Female">Female</option>
+                                            </select>
                                         </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-400 mb-2">Coaching Club/Location</label>
+                                        <input type="text" name="coaching_location" value={editFormData.coaching_location} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

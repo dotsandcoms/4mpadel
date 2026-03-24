@@ -54,7 +54,7 @@ const PlayerManager = () => {
     const [filterActive, setFilterActive] = useState('all'); // all | visible | hidden
     const [filterCategory, setFilterCategory] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 12;
+    const itemsPerPage = 50;
 
     // Form State
     const [formData, setFormData] = useState({

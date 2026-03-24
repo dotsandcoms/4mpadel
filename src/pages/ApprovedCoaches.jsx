@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2, ExternalLink, Search, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import CoachProfileModal from '../components/CoachProfileModal';
 
-const CoachCard = ({ coach, index }) => {
+const CoachCard = ({ coach, index, onSelect }) => {
     // We create a dummy "specialties" array from bio or location to simulate tags for now
     const specialties = [coach.coaching_location];
 
@@ -13,7 +14,8 @@ const CoachCard = ({ coach, index }) => {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden hover:bg-white/10 transition-all duration-500 flex flex-col h-full"
+            onClick={() => onSelect(coach)}
+            className="group relative bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden hover:bg-white/10 transition-all duration-500 flex flex-col h-full cursor-pointer"
         >
             {/* Image Container */}
             <div className="relative h-80 overflow-hidden shrink-0">
@@ -95,6 +97,8 @@ const ApprovedCoaches = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [cityFilter, setCityFilter] = useState('All');
+    const [genderFilter, setGenderFilter] = useState('All');
+    const [selectedCoach, setSelectedCoach] = useState(null);
 
     // Get unique cities from coaches
     const cities = ['All', ...new Set(coaches.map(coach => coach.city).filter(Boolean))];
@@ -104,7 +108,8 @@ const ApprovedCoaches = () => {
                              coach.bio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                              coach.coaching_location?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCity = cityFilter === 'All' || coach.city === cityFilter;
-        return matchesSearch && matchesCity;
+        const matchesGender = genderFilter === 'All' || coach.gender === genderFilter;
+        return matchesSearch && matchesCity && matchesGender;
     });
 
     useEffect(() => {
@@ -214,6 +219,20 @@ const ApprovedCoaches = () => {
                                 <MapPin size={18} />
                             </div>
                         </div>
+                        <div className="relative min-w-[150px]">
+                            <select
+                                value={genderFilter}
+                                onChange={(e) => setGenderFilter(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-padel-green appearance-none cursor-pointer"
+                            >
+                                <option value="All" className="bg-[#0F172A]">All Genders</option>
+                                <option value="Male" className="bg-[#0F172A]">Male</option>
+                                <option value="Female" className="bg-[#0F172A]">Female</option>
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+                                <Award size={18} />
+                            </div>
+                        </div>
                     </motion.div>
                 )}
 
@@ -233,9 +252,9 @@ const ApprovedCoaches = () => {
                                 ? 'Try adjusting your search or filter to find what you are looking for.' 
                                 : 'There are currently no approved coaches to display.'}
                         </p>
-                        {(searchTerm || cityFilter !== 'All') && (
+                        {(searchTerm || cityFilter !== 'All' || genderFilter !== 'All') && (
                             <button 
-                                onClick={() => { setSearchTerm(''); setCityFilter('All'); }}
+                                onClick={() => { setSearchTerm(''); setCityFilter('All'); setGenderFilter('All'); }}
                                 className="mt-6 text-padel-green font-bold hover:underline"
                             >
                                 Clear all filters
@@ -245,7 +264,7 @@ const ApprovedCoaches = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {filteredCoaches.map((coach, index) => (
-                            <CoachCard key={coach.id} coach={coach} index={index} />
+                            <CoachCard key={coach.id} coach={coach} index={index} onSelect={setSelectedCoach} />
                         ))}
                     </div>
                 )}
@@ -266,7 +285,15 @@ const ApprovedCoaches = () => {
                         Apply Now
                     </Link>
                 </motion.div>
+
             </div>
+
+            {/* Coach Details Modal */}
+            <CoachProfileModal 
+                app={selectedCoach} 
+                onClose={() => setSelectedCoach(null)} 
+                isAdmin={false}
+            />
         </div>
     );
 };

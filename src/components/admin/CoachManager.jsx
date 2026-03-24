@@ -47,6 +47,7 @@ const CoachManager = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
+    const [genderFilter, setGenderFilter] = useState('all');
     const [selectedApp, setSelectedApp] = useState(null);
     const [isUpdating, setIsUpdating] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
@@ -142,7 +143,8 @@ const CoachManager = () => {
             contact_number: selectedApp.contact_number,
             instagram_link: selectedApp.instagram_link || '',
             youtube_link: selectedApp.youtube_link || '',
-            bio: selectedApp.bio
+            bio: selectedApp.bio,
+            gender: selectedApp.gender || ''
         });
         setNewProfilePic(null);
         setNewProfilePicPreview(null);
@@ -294,9 +296,10 @@ const CoachManager = () => {
             const matchesSearch = app.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 app.email.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            const matchesGender = genderFilter === 'all' || app.gender === genderFilter;
+            return matchesSearch && matchesStatus && matchesGender;
         });
-    }, [applications, searchTerm, statusFilter]);
+    }, [applications, searchTerm, statusFilter, genderFilter]);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -407,6 +410,15 @@ const CoachManager = () => {
                     <option value="approved">Approved</option>
                     <option value="rejected">Rejected</option>
                 </select>
+                <select
+                    value={genderFilter}
+                    onChange={(e) => setGenderFilter(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
+                >
+                    <option value="all">All Genders</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                </select>
             </div>
 
             {/* Applications Table */}
@@ -416,6 +428,7 @@ const CoachManager = () => {
                         <thead>
                             <tr className="bg-black/50 text-gray-400 border-b border-white/10">
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Applicant</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase">Gender</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[120px]">City</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[150px]">Location</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Applied Date</th>
@@ -455,6 +468,9 @@ const CoachManager = () => {
                                                     <div className="text-[10px] text-gray-400">{app.email}</div>
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-sm text-gray-400">
+                                            {app.gender || '—'}
                                         </td>
                                         <td className="py-3 px-4 text-sm text-gray-300">
                                             {app.city || '—'}

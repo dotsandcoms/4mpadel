@@ -18,7 +18,7 @@ const TournamentManager = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterCity, setFilterCity] = useState('All');
     const [filterCategory, setFilterCategory] = useState('All');
-    const ITEMS_PER_PAGE = 10;
+    const ITEMS_PER_PAGE = 50;
 
     // Form State
     const [formData, setFormData] = useState({
