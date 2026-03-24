@@ -615,7 +615,7 @@ const CalendarManager = () => {
     }, [events, searchTerm, statusFilter, timeFilter, today]);
 
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
-    
+
     const paginatedEvents = useMemo(() => {
         const startIndex = (currentPage - 1) * itemsPerPage;
         return filteredEvents.slice(startIndex, startIndex + itemsPerPage);
@@ -863,7 +863,7 @@ const CalendarManager = () => {
                         >
                             <ChevronLeft size={18} />
                         </button>
-                        
+
                         <div className="flex items-center gap-1 mx-1">
                             {Array.from({ length: totalPages }, (_, i) => i + 1)
                                 .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
@@ -872,11 +872,10 @@ const CalendarManager = () => {
                                         {i > 0 && arr[i - 1] !== p - 1 && <span className="text-gray-500 px-1">...</span>}
                                         <button
                                             onClick={() => setCurrentPage(p)}
-                                            className={`min-w-[32px] h-8 px-2 rounded-lg text-sm font-bold flex items-center justify-center transition-colors ${
-                                                currentPage === p 
-                                                    ? 'bg-padel-green text-black' 
-                                                    : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
-                                            }`}
+                                            className={`min-w-[32px] h-8 px-2 rounded-lg text-sm font-bold flex items-center justify-center transition-colors ${currentPage === p
+                                                ? 'bg-padel-green text-black'
+                                                : 'bg-white/5 border border-white/10 text-white hover:bg-white/10'
+                                                }`}
                                         >
                                             {p}
                                         </button>
@@ -1034,6 +1033,9 @@ const CalendarManager = () => {
                                         >
                                             <option value="None">None</option>
                                             <option value="Broll">Broll</option>
+                                            <option value="360 Padel">360 Padel</option>
+                                            <option value="SA Grand">SA Grand</option>
+
                                         </select>
                                     </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers, User, PlayCircle, Video, Trophy } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers, User, PlayCircle, Video, Trophy, Shield } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
@@ -120,8 +120,7 @@ const CalendarEventItem = ({ event, index }) => {
                                 </div>
                                 {event.organizer_name && (
                                     <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                                        <User className="w-3.5 h-3.5 text-gray-400" />
-                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold">Org:</span>
+                                        <Shield className="w-3.5 h-3.5 text-gray-400" />
                                         <span className="text-white font-bold text-xs">{event.organizer_name}</span>
                                     </div>
                                 )}
