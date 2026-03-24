@@ -246,7 +246,7 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative w-full h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border border-white/5 ${colors.hover} transition-all duration-500 bg-[#060913]`}
+            className={`relative w-full h-[180px] md:h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border border-white/5 ${colors.hover} transition-all duration-500 bg-[#060913]`}
             onClick={() => navigate(linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
@@ -280,7 +280,7 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                         </div>
                     )}
                 </div>
-                <h3 className={`text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-5 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
+                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-3 md:mb-5 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
 
                 <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-3">
@@ -495,7 +495,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full aspect-[4/3] sm:aspect-video lg:aspect-square max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border border-white/10 ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
+            className={`relative w-full h-[220px] sm:aspect-video lg:aspect-square max-h-[300px] md:max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border border-white/10 ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000">
@@ -516,7 +516,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 </div>
             )}
 
-            <div className="absolute inset-x-0 bottom-0 p-6 md:p-8 z-20 flex flex-col justify-end pointer-events-none">
+            <div className="absolute inset-x-0 bottom-0 p-5 md:p-6 lg:p-8 z-20 flex flex-col justify-end pointer-events-none">
                 <div className="flex items-center gap-2 mb-2">
                     {data.id === 'live-events' ? (
                         <PlayCircle className={`w-3.5 h-3.5 ${statusColors.text}`} />
@@ -526,7 +526,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <p className={`text-[10px] font-bold ${statusColors.text} uppercase tracking-widest`}>{data.cardLabel}</p>
                 </div>
 
-                <h3 className={`text-2xl md:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
+                <h3 className={`text-xl md:text-2xl lg:text-4xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
 
                 {data.registeredPlayers > 0 && (
                     <div className="flex items-center gap-1.5 mb-6 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
