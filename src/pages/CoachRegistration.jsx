@@ -15,7 +15,8 @@ const CoachRegistration = () => {
     const [isSuccess, setIsSuccess] = useState(false);
 
     const [formData, setFormData] = useState({
-        full_name: '',
+        firstName: '',
+        lastName: '',
         email: '',
         contact_number: '',
         bio: '',
@@ -81,7 +82,7 @@ const CoachRegistration = () => {
 
     const handleNext = () => {
         // Basic Validation for Step 1
-        if (!formData.full_name || !formData.email || !formData.contact_number) {
+        if (!formData.firstName || !formData.lastName || !formData.email || !formData.contact_number) {
             toast.error('Please fill in all required fields in Step 1.');
             return;
         }
@@ -129,7 +130,7 @@ const CoachRegistration = () => {
             const { error: dbError } = await supabase
                 .from('coach_applications')
                 .insert([{
-                    full_name: formData.full_name,
+                    full_name: `${formData.firstName} ${formData.lastName}`.trim(),
                     email: formData.email,
                     contact_number: formData.contact_number,
                     bio: formData.bio,
@@ -244,19 +245,35 @@ const CoachRegistration = () => {
                                     className="space-y-6"
                                 >
                                     <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
-                                                <User size={16} className="text-padel-green" /> Full Name *
-                                            </label>
-                                            <input
-                                                type="text"
-                                                name="full_name"
-                                                required
-                                                value={formData.full_name}
-                                                onChange={handleInputChange}
-                                                placeholder="John Doe"
-                                                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-white focus:border-padel-green focus:outline-none transition-colors"
-                                            />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                    <User size={16} className="text-padel-green" /> Name *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="firstName"
+                                                    required
+                                                    value={formData.firstName}
+                                                    onChange={handleInputChange}
+                                                    placeholder="John"
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-bold text-gray-300 mb-2 flex items-center gap-2">
+                                                    <User size={16} className="text-padel-green" /> Surname *
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    name="lastName"
+                                                    required
+                                                    value={formData.lastName}
+                                                    onChange={handleInputChange}
+                                                    placeholder="Doe"
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-4 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
                                         </div>
 
                                         <div>

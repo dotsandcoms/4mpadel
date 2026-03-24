@@ -31,8 +31,15 @@ const CoachProfileModal = ({
 
     const startEditing = () => {
         if (!app) return;
+        
+        // Split full_name into firstName and lastName
+        const nameParts = (app.full_name || '').trim().split(/\s+/);
+        const firstName = nameParts[0] || '';
+        const lastName = nameParts.slice(1).join(' ') || '';
+
         setEditFormData({
-            full_name: app.full_name,
+            firstName,
+            lastName,
             coaching_location: app.coaching_location,
             email: app.email,
             contact_number: app.contact_number,
@@ -101,6 +108,8 @@ const CoachProfileModal = ({
         try {
             let updatedProfilePicUrl = app.profile_pic_url;
 
+            const combinedName = `${editFormData.firstName} ${editFormData.lastName}`.trim();
+
             if (newProfilePic) {
                 // Delete old image if it exists
                 if (app.profile_pic_url) {
@@ -111,7 +120,7 @@ const CoachProfileModal = ({
                 // Upload new image
                 const resizedFile = await resizeImage(newProfilePic);
                 const fileExt = 'jpg';
-                const fileName = `${editFormData.full_name.replace(/\s+/g, '-').toLowerCase()}_${Date.now()}.${fileExt}`;
+                const fileName = `${combinedName.replace(/\s+/g, '-').toLowerCase()}_${Date.now()}.${fileExt}`;
 
                 const { error: uploadError } = await supabase.storage
                     .from('coach-profiles')
@@ -128,8 +137,13 @@ const CoachProfileModal = ({
 
             const dataToUpdate = {
                 ...editFormData,
+                full_name: combinedName,
                 profile_pic_url: updatedProfilePicUrl
             };
+
+            // Remove temporary split fields before saving
+            delete dataToUpdate.firstName;
+            delete dataToUpdate.lastName;
 
             const { error } = await supabase
                 .from('coach_applications')
@@ -299,9 +313,15 @@ const CoachProfileModal = ({
                                 <div className="space-y-5">
                                     <h3 className="text-xl font-bold text-white mb-6 border-b border-white/10 pb-4">Edit Coach Information</h3>
 
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-400 mb-2">Full Name</label>
-                                        <input type="text" name="full_name" value={editFormData.full_name} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">Name</label>
+                                            <input type="text" name="firstName" value={editFormData.firstName} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 mb-2">Surname</label>
+                                            <input type="text" name="lastName" value={editFormData.lastName} onChange={handleEditChange} className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors" />
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
