@@ -82,6 +82,10 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             amount: toPaystackAmount(amountInRands),
             publicKey: PAYSTACK_PUBLIC_KEY,
             currency: 'ZAR',
+            metadata: {
+                license_type: amountInRands >= 450 ? 'full' : 'temporary',
+                source: 'web_license_modal'
+            },
             ...nameParams
         };
     };

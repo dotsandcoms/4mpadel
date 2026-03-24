@@ -10,6 +10,9 @@ const FinanceManager = () => {
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('all'); // 'all', 'full', 'temp'
     const [searchQuery, setSearchQuery] = useState('');
+    const [players, setPlayers] = useState([]);
+    const [reconciling, setReconciling] = useState(false);
+    const [syncingId, setSyncingId] = useState(null);
 
 
 
@@ -23,6 +26,15 @@ const FinanceManager = () => {
         const matchesLicense = filter === 'all' || 
             (filter === 'full' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) >= 450) ||
             (filter === 'temp' && parseFloat(trx.amount.replace('R ', '').replace(',', '')) === 120);
+
+        // Reconciliation Filter (paid on Paystack but not marked as paid in DB)
+        if (filter === 'reconcile') {
+            if (trx.status !== 'Success') return false;
+            const player = players.find(p => p.email?.toLowerCase() === trx.user?.toLowerCase());
+            // If player doesn't exist or is not marked as paid, they need reconciliation
+            const needsSync = !player || !player.paid_registration;
+            if (!needsSync) return false;
+        }
 
         // Search Filter
         const matchesSearch = !searchQuery || 
@@ -40,11 +52,57 @@ const FinanceManager = () => {
     const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
 
 
-    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+    const handleSyncPlayer = async (trx) => {
+        try {
+            setSyncingId(trx.id);
+            const email = trx.user.toLowerCase();
+            const amount = parseFloat(trx.amount.replace('R ', '').replace(',', ''));
+            const licenseType = amount >= 450 ? 'full' : 'temporary';
+
+            // 1. Find the player
+            const { data: player, error: fetchError } = await supabase
+                .from('players')
+                .select('id, name')
+                .eq('email', email)
+                .maybeSingle();
+
+            if (fetchError) throw fetchError;
+            if (!player) throw new Error(`Player with email ${email} not found in database.`);
+
+            // 2. Mark as paid
+            const { error: updateError } = await supabase
+                .from('players')
+                .update({ 
+                    paid_registration: true, 
+                    license_type: licenseType,
+                    approved: true 
+                })
+                .eq('id', player.id);
+
+            if (updateError) throw updateError;
+
+            alert(`Successfully synced ${player.name} (${email})!`);
+            // Refresh data
+            await fetchTransactions();
+        } catch (err) {
+            console.error("Sync error:", err);
+            alert("Sync failed: " + err.message);
+        } finally {
+            setSyncingId(null);
+        }
+    };
+
+    const fetchPlayers = async () => {
+        const { data, error } = await supabase
+            .from('players')
+            .select('id, name, email, paid_registration, license_type');
+        if (!error) setPlayers(data);
+    };
 
     const fetchTransactions = async () => {
         try {
             setLoading(true);
+            await fetchPlayers(); // Fetch players first for reconciliation
 
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -200,6 +258,12 @@ const FinanceManager = () => {
                             >
                                 Temp Licenses (R120)
                             </button>
+                            <button
+                                onClick={() => { setFilter('reconcile'); setCurrentPage(1); }}
+                                className={`px-4 py-2 rounded-xl text-xs font-medium transition-all ${filter === 'reconcile' ? 'bg-orange-500 text-white' : 'bg-orange-500/10 text-orange-400 hover:bg-orange-500/20'}`}
+                            >
+                                Reconciliation Needed
+                            </button>
                         </div>
                     </div>
                     <div className="flex items-center gap-4 shrink-0">
@@ -254,7 +318,29 @@ const FinanceManager = () => {
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="text-gray-400 hover:text-white"><ArrowUpRight size={16} /></button>
+                                        {trx.status === 'Success' && (
+                                            (() => {
+                                                const p = players.find(pl => pl.email?.toLowerCase() === trx.user?.toLowerCase());
+                                                const isPaid = p?.paid_registration;
+                                                
+                                                if (!p) return <span className="text-gray-500 text-[10px]">No Player Found</span>;
+                                                if (isPaid) return <CheckCircle className="text-padel-green w-4 h-4 ml-auto" />;
+                                                
+                                                return (
+                                                    <button 
+                                                        onClick={() => handleSyncPlayer(trx)}
+                                                        disabled={syncingId === trx.id}
+                                                        className="flex items-center gap-1 text-[10px] font-bold bg-orange-500 hover:bg-orange-600 text-white px-2 py-1 rounded transition-colors"
+                                                    >
+                                                        {syncingId === trx.id ? 'Syncing...' : 'Sync Now'}
+                                                        <RefreshCcw size={10} className={syncingId === trx.id ? 'animate-spin' : ''} />
+                                                    </button>
+                                                );
+                                            })()
+                                        )}
+                                        {trx.status !== 'Success' && (
+                                            <button className="text-gray-400 hover:text-white"><ArrowUpRight size={16} /></button>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
