@@ -51,6 +51,8 @@ const FinanceManager = () => {
     const currentTransactions = filteredTransactions.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
 
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
 
     const handleSyncPlayer = async (trx) => {
         try {
