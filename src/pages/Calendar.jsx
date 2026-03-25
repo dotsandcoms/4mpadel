@@ -104,14 +104,14 @@ const CalendarEventItem = ({ event, index }) => {
                                 <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
                                     {event.event_name || event.eventName}
                                 </h3>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
                                 <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap w-fit">
                                     <CalendarIcon size={12} />
                                     {event.event_dates ||
                                         (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
                                         (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
                                 </div>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
                                 <div className="flex items-center gap-2 truncate">
                                     <MapPin className="w-4 h-4 text-padel-green/50 shrink-0" />
                                     <span className="truncate" title={event.venue || event.clubName}>
