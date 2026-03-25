@@ -114,6 +114,8 @@ const CalendarManager = () => {
         featured_live: false,
         live_youtube_url: '',
         youtube_playlist_url: '',
+        live_players: '',
+        next_match: '',
         sponsor_logos: [],
         is_visible: true
     });
@@ -222,7 +224,7 @@ const CalendarManager = () => {
                 .eq('id', event.id);
 
             if (error) throw error;
-            
+
             // Optimistic update
             setEvents(prev => prev.map(e => e.id === event.id ? { ...e, is_visible: newVisibility } : e));
             toast.success(`Event is now ${newVisibility ? 'visible' : 'hidden'}`);
@@ -260,6 +262,8 @@ const CalendarManager = () => {
             featured_live: false,
             live_youtube_url: '',
             youtube_playlist_url: '',
+            live_players: '',
+            next_match: '',
             sponsor_logos: [],
             is_visible: true
         });
@@ -294,6 +298,8 @@ const CalendarManager = () => {
             featured_live: event.featured_live || false,
             live_youtube_url: event.live_youtube_url || '',
             youtube_playlist_url: event.youtube_playlist_url || '',
+            live_players: event.live_players || '',
+            next_match: event.next_match || '',
             sponsor_logos: event.sponsor_logos || [],
             is_visible: event.is_visible !== false // Default to true if undefined
         });
@@ -1152,15 +1158,42 @@ const CalendarManager = () => {
                                             animate={{ opacity: 1, height: 'auto' }}
                                             className="space-y-4"
                                         >
-                                            <label className="block text-xs font-bold text-purple-400 mb-1 uppercase italic">YouTube Live Stream URL (For "Watch Live" Button)</label>
-                                            <input
-                                                type="url"
-                                                name="live_youtube_url"
-                                                value={formData.live_youtube_url}
-                                                onChange={handleInputChange}
-                                                placeholder="https://www.youtube.com/watch?v=..."
-                                                className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
-                                            />
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-bold text-purple-400 mb-1 uppercase italic">Current Players / Match</label>
+                                                    <input
+                                                        type="text"
+                                                        name="live_players"
+                                                        value={formData.live_players}
+                                                        onChange={handleInputChange}
+                                                        placeholder="e.g. Player 1 vs Player 2"
+                                                        className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none placeholder:text-gray-600"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs font-bold text-purple-400 mb-1 uppercase italic">Up Next / Following Match</label>
+                                                    <input
+                                                        type="text"
+                                                        name="next_match"
+                                                        value={formData.next_match}
+                                                        onChange={handleInputChange}
+                                                        placeholder="e.g. Player 3 vs Player 4"
+                                                        className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none placeholder:text-gray-600"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-xs font-bold text-purple-400 mb-1 uppercase italic">YouTube Live Stream URL (For "Watch Live" Button)</label>
+                                                <input
+                                                    type="url"
+                                                    name="live_youtube_url"
+                                                    value={formData.live_youtube_url}
+                                                    onChange={handleInputChange}
+                                                    placeholder="https://www.youtube.com/watch?v=..."
+                                                    className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-4 py-3 text-white focus:border-purple-500 focus:outline-none"
+                                                />
+                                            </div>
                                         </motion.div>
                                     )}
 

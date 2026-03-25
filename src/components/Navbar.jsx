@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
@@ -126,18 +126,29 @@ const Navbar = ({ isDark = false }) => {
             <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
             <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
             {session && player && (
-              <div className={`hidden sm:flex items-center gap-3 ml-2 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
+              <div className={`hidden sm:flex items-center gap-4 ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
-                  {(player.rank_label || player.points) && (
-                    <span className={`text-[10px] font-bold uppercase tracking-widest leading-none mt-0.5 ${isDark ? 'text-slate-400' : 'text-white/60'}`}>
-                      {player.rank_label ? `Rank: ${player.rank_label}` : `${player.points} Points`}
+                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
+                  {player.rankedin_id && (
+                    <span className={`text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
+                      ID: {player.rankedin_id}
                     </span>
                   )}
                 </div>
-                {player.rankedin_id && (
-                  <span className={`font-mono text-[11px] shrink-0 border-l pl-3 ml-1 ${isDark ? 'text-slate-300 border-slate-200' : 'text-white/40 border-white/10'}`}>{player.rankedin_id}</span>
-                )}
+
+                <div className="flex items-center gap-2 border-l border-white/10 pl-4 ml-1">
+                  {player.rank_label && player.rank_label !== 'Unranked' && (
+                    <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-full shadow-lg shadow-yellow-500/5">
+                      <Trophy className="w-3.5 h-3.5 text-yellow-500" />
+                      <span className="text-yellow-500 font-black text-[11px]">#{player.rank_label}</span>
+                    </div>
+                  )}
+                  {player.points !== undefined && (
+                    <div className="bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full">
+                      <span className="text-padel-green font-black text-[10px] uppercase tracking-wider">{player.points} PTS</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -215,19 +226,23 @@ const Navbar = ({ isDark = false }) => {
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center mb-4 pb-6 border-b border-white/10 w-full max-w-[280px]"
+                className="flex flex-col items-center mb-4 pb-8 border-b border-white/10 w-full max-w-[280px]"
               >
-                <span className="text-padel-green font-black text-2xl tracking-tighter uppercase">{player.name}</span>
-                <div className="flex gap-3 mt-2">
-                  {player.rank_label && (
-                    <span className="text-white/40 text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">
-                      Rank: {player.rank_label}
-                    </span>
+                <span className="text-padel-green font-black text-3xl tracking-tighter uppercase mb-1">{player.name}</span>
+                {player.rankedin_id && (
+                  <span className="text-white/30 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">ID: {player.rankedin_id}</span>
+                )}
+                <div className="flex items-center gap-3">
+                  {player.rank_label && player.rank_label !== 'Unranked' && (
+                    <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-1.5 rounded-full">
+                      <Trophy className="w-4 h-4 text-yellow-500" />
+                      <span className="text-yellow-500 font-black text-sm">#{player.rank_label}</span>
+                    </div>
                   )}
                   {player.points !== undefined && (
-                    <span className="text-white/40 text-[10px] font-black uppercase tracking-widest border border-white/10 px-2 py-0.5 rounded">
-                      {player.points} Points
-                    </span>
+                    <div className="bg-padel-green/10 border border-padel-green/20 px-4 py-1.5 rounded-full">
+                      <span className="text-padel-green font-black text-xs uppercase tracking-wider">{player.points} POINTS</span>
+                    </div>
                   )}
                 </div>
               </motion.div>

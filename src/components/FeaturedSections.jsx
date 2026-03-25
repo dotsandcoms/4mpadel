@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
+import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
@@ -75,7 +76,7 @@ const getStatusColors = (status) => {
 const featuredDataTemplate = [
     {
         id: 'featured-live',
-        title: 'Featured Live Event',
+        title: 'Featured Live Match',
         highlight: 'Starting Soon',
         description: 'Experience the thrill of the game as it happens. Watch top-tier Padel action streamed live from our courts.',
         cardLabel: 'Live Stream',
@@ -146,77 +147,35 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
-const getYoutubeEmbedUrl = (url) => {
-    if (!url) return null;
-    let videoId = null;
+const formatTournamentDate = (startDate, endDate) => {
+    if (!startDate) return null;
 
-    if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1].split(/[?#]/)[0];
-    } else if (url.includes('youtube.com/watch')) {
-        videoId = url.split('v=')[1].split(/[&#]/)[0];
-    } else if (url.includes('youtube.com/live/')) {
-        videoId = url.split('live/')[1].split(/[?#]/)[0];
-    } else if (url.includes('youtube.com/embed/')) {
-        return url;
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : null;
+
+    const dayFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric' });
+    const monthFormatter = new Intl.DateTimeFormat('en-GB', { month: 'short' });
+
+    const startDay = dayFormatter.format(start);
+    const startMonth = monthFormatter.format(start);
+
+    if (!end || startDate === endDate) {
+        return `${startDay} ${startMonth}`;
     }
 
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+    const endDay = dayFormatter.format(end);
+    const endMonth = monthFormatter.format(end);
+
+    if (startMonth === endMonth) {
+        return `${startDay}-${endDay} ${startMonth}`;
+    }
+
+    return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
 };
 
-const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
-    if (!isOpen) return null;
+// VideoModal is now shared from ./VideoModal.jsx
 
-    const embedUrl = getYoutubeEmbedUrl(videoUrl);
-
-    return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                onClick={onClose}
-                className="absolute inset-0 bg-black/90 backdrop-blur-sm shadow-2xl"
-            />
-            <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                className="relative w-full max-w-5xl aspect-video bg-black rounded-3xl overflow-hidden border border-white/10 shadow-2xl z-10"
-            >
-                <div className="absolute top-4 right-4 z-20">
-                    <button
-                        onClick={onClose}
-                        className="p-2 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-md transition-colors border border-white/10"
-                    >
-                        <X className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {embedUrl ? (
-                    <iframe
-                        src={embedUrl}
-                        title={title || "YouTube video player"}
-                        className="w-full h-full border-0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                    />
-                ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-white p-8">
-                        <PlayCircle className="w-16 h-16 text-padel-green/20 mb-4" />
-                        <p className="text-xl font-bold">Unable to load live stream</p>
-                        <p className="text-gray-400 mt-2">Invalid YouTube URL or stream information.</p>
-                        <button
-                            onClick={() => window.open(videoUrl, '_blank')}
-                            className="mt-6 px-6 py-2 bg-white text-black font-bold rounded-full hover:bg-padel-green transition-colors"
-                        >
-                            Open on YouTube
-                        </button>
-                    </div>
-                )}
-            </motion.div>
-        </div>
-    );
-};
-
-const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
+const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -274,13 +233,42 @@ const TournamentCard = ({ index, title, label, image, linkPath, drawPath = null,
                         <p className={`text-[9px] font-bold ${colors.text} uppercase tracking-widest truncate`}>{label}</p>
                     </div>
                     {registeredPlayers > 0 && (
-                        <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
-                            <GitBranch className={`w-2.5 h-2.5 ${colors.text}`} />
-                            <span className="text-[8px] font-bold text-white uppercase tracking-wider">{registeredPlayers} <span className="opacity-60">Players</span></span>
+                        <div className="flex items-center gap-1.5">
+                            {date && (
+                                <div className="flex items-center gap-1 bg-[#CCFF00]/10 px-2 py-0.5 rounded-full border border-[#CCFF00]/20">
+                                    <Calendar className={`w-2.5 h-2.5 text-[#CCFF00]`} />
+                                    <span className="text-[8px] font-bold text-[#CCFF00] uppercase tracking-wider">{date}</span>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
+                                <GitBranch className={`w-2.5 h-2.5 ${colors.text}`} />
+                                <span className="text-[8px] font-bold text-white uppercase tracking-wider">{registeredPlayers} <span className="opacity-60">Players</span></span>
+                            </div>
                         </div>
                     )}
                 </div>
-                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-3 md:mb-5 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
+                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
+
+                {isLive && (livePlayers || nextMatch) && (
+                    <div className="mb-4 space-y-2">
+                        {livePlayers && (
+                            <div className="flex items-center gap-2">
+                                <div className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">
+                                    <span className="text-[7px] font-black text-red-500 uppercase tracking-tighter">NOW</span>
+                                </div>
+                                <span className="text-[10px] font-bold text-white line-clamp-1">{livePlayers}</span>
+                            </div>
+                        )}
+                        {nextMatch && (
+                            <div className="flex items-center gap-2 opacity-60">
+                                <div className="px-1.5 py-0.5 rounded bg-white/10 border border-white/20">
+                                    <span className="text-[7px] font-black text-white uppercase tracking-tighter">NEXT</span>
+                                </div>
+                                <span className="text-[10px] font-bold text-white line-clamp-1">{nextMatch}</span>
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 <div className="flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-3">
@@ -379,38 +367,40 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
-                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-8 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
+                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
                     {data.description}
                 </p>
 
-                {isLiveSection && data.linkPath ? (
-                    <button
-                        onClick={() => {
-                            if (data.youtubeUrl) {
-                                if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
-                                else window.open(data.youtubeUrl, '_blank');
-                            } else {
-                                navigate(data.linkPath || '/calendar');
-                            }
-                        }}
-                        className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] text-white bg-red-600 hover:bg-black px-6 py-3 rounded-full transition-all duration-300`}
-                    >
-                        {data.youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
-                        <div className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center transition-colors flex-shrink-0 group-hover:border-white text-white`}>
-                            <PlayCircle className={`w-3.5 h-3.5`} />
-                        </div>
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => navigate(data.linkPath || '/calendar')}
-                        className={`group inline-flex items-center gap-3 font-bold transition-colors uppercase text-[10px] tracking-[0.2em] ${isFeatured ? 'text-black hover:text-black/60' : 'text-white hover:text-padel-green'}`}
-                    >
-                        EXPLORE ALL
-                        <div className={`w-7 h-7 rounded-full border flex items-center justify-center transition-colors flex-shrink-0 ${isFeatured ? 'border-black/20 group-hover:border-black' : 'border-white/20 group-hover:border-padel-green'}`}>
-                            <ChevronRight className={`w-3.5 h-3.5 ${isFeatured ? 'text-black/60 group-hover:text-black' : 'text-gray-400 group-hover:text-padel-green'}`} />
-                        </div>
-                    </button>
+                {isLiveSection && data.cardTitle && (
+                    <div className="mb-6">
+                        <span className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] block mb-1">EVENT</span>
+                        <h4 className="text-white font-black text-lg md:text-xl uppercase tracking-tighter leading-none">{data.cardTitle}</h4>
+                    </div>
                 )}
+
+                {isLiveSection && (data.livePlayers || data.nextMatch) && (
+                    <div className="mb-8 space-y-3 max-w-sm">
+                        {data.livePlayers && (
+                            <div className="p-3 rounded-2xl bg-red-500/5 border border-red-500/10 backdrop-blur-sm">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE NOW</span>
+                                </div>
+                                <p className="text-white font-bold text-sm tracking-tight">{data.livePlayers}</p>
+                            </div>
+                        )}
+                        {data.nextMatch && (
+                            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm opacity-60">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">UP NEXT</span>
+                                </div>
+                                <p className="text-white/80 font-bold text-sm tracking-tight">{data.nextMatch}</p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* EXPLORE ALL button removed as requested */}
             </motion.div>
         </div>
     );
@@ -425,6 +415,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             index={i}
                             title={t.eventName}
                             label={t.city || 'Tournament'}
+                            date={t.date}
                             image={t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
                             linkPath={t.customLink || `/results/${t.eventId}`}
                             buttonLabel="VIEW RESULTS"
@@ -450,10 +441,13 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             index={i}
                             title={t.event_name}
                             label={t.sapa_status || 'Live Event'}
+                            date={formatTournamentDate(t.start_date, t.end_date)}
                             image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
                             linkPath={`/calendar/${t.slug || t.id}`}
                             drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
                             youtubeUrl={t.live_youtube_url}
+                            livePlayers={t.live_players}
+                            nextMatch={t.next_match}
                             onWatchLive={onWatchLive}
                             isLive={true}
                             status={t.sapa_status || 'Gold'}
@@ -474,6 +468,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             index={i}
                             title={t.event_name}
                             label={t.sapa_status || 'Major Event'}
+                            date={formatTournamentDate(t.start_date, t.end_date)}
                             image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
                             linkPath={`/calendar/${t.slug || t.id}`}
                             drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
@@ -528,10 +523,20 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
                 <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
 
-                {data.registeredPlayers > 0 && (
-                    <div className="flex items-center gap-1.5 mb-6 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                        <Users className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                        <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Registered Players</span>
+                {(data.registeredPlayers > 0 || data.date) && (
+                    <div className="flex items-center gap-2 mb-6">
+                        {data.date && (
+                            <div className="flex items-center gap-1.5 py-1 px-3 bg-[#CCFF00]/10 rounded-full border border-[#CCFF00]/20 w-fit">
+                                <Calendar className="w-3.5 h-3.5 text-[#CCFF00]" />
+                                <span className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">{data.date}</span>
+                            </div>
+                        )}
+                        {data.registeredPlayers > 0 && (
+                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
+                                <Users className={`w-3.5 h-3.5 ${statusColors.text}`} />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Registered Players</span>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -642,8 +647,9 @@ const FeaturedSections = () => {
                 // First try to fetch results marked as featured_result in our calendar table
                 const { data: featuredResults, error } = await supabase
                     .from('calendar')
-                    .select('*, registered_players')
+                    .select('*, registered_players, start_date, end_date')
                     .eq('featured_result', true)
+                    .neq('is_visible', false)
                     .order('start_date', { ascending: false })
                     .limit(3);
 
@@ -653,6 +659,7 @@ const FeaturedSections = () => {
                         eventId: t.id,
                         eventName: t.event_name,
                         city: t.city || 'Tournament',
+                        date: formatTournamentDate(t.start_date, t.end_date),
                         image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
                         customLink: `/results/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
@@ -676,8 +683,9 @@ const FeaturedSections = () => {
             try {
                 const { data, error } = await supabase
                     .from('calendar')
-                    .select('*, registered_players')
+                    .select('*, registered_players, start_date, end_date')
                     .eq('featured_event', true)
+                    .neq('is_visible', false)
                     .order('start_date', { ascending: true })
                     .limit(3);
 
@@ -695,6 +703,7 @@ const FeaturedSections = () => {
                                     ...newData[featuredIndex],
                                     cardTitle: singleEvent.event_name,
                                     cardLabel: singleEvent.sapa_status || 'Major Event',
+                                    date: formatTournamentDate(singleEvent.start_date, singleEvent.end_date),
                                     image: singleEvent.image_url || newData[featuredIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     rankedin_url: singleEvent.rankedin_url,
@@ -717,8 +726,9 @@ const FeaturedSections = () => {
             try {
                 const { data, error } = await supabase
                     .from('calendar')
-                    .select('*, registered_players')
+                    .select('*, registered_players, start_date, end_date')
                     .eq('featured_live', true)
+                    .neq('is_visible', false)
                     .order('start_date', { ascending: true })
                     .limit(3);
 
@@ -735,9 +745,13 @@ const FeaturedSections = () => {
                                     ...newData[liveIndex],
                                     cardTitle: singleEvent.event_name,
                                     cardLabel: singleEvent.sapa_status || 'Live Event',
+                                    highlight: singleEvent.live_youtube_url ? 'Streaming Now' : 'Starting Soon',
+                                    date: formatTournamentDate(singleEvent.start_date, singleEvent.end_date),
                                     image: singleEvent.image_url || newData[liveIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     youtubeUrl: singleEvent.live_youtube_url,
+                                    livePlayers: singleEvent.live_players,
+                                    nextMatch: singleEvent.next_match,
                                     rankedin_url: singleEvent.rankedin_url,
                                     registeredPlayers: singleEvent.registered_players,
                                     rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)

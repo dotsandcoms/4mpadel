@@ -3,6 +3,10 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/hero_bg.png';
 import AuthModal from './AuthModal';
+import { supabase } from '../supabaseClient';
+import { PlayCircle } from 'lucide-react';
+import VideoModal from './VideoModal';
+import { useEffect } from 'react';
 
 const Hero = () => {
     const { scrollY } = useScroll();
@@ -10,6 +14,40 @@ const Hero = () => {
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
     const navigate = useNavigate();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+    const [liveEvent, setLiveEvent] = useState(null);
+    const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
+    const [session, setSession] = useState(null);
+
+    useEffect(() => {
+        // Get initial session
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        const fetchLiveEvent = async () => {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('*')
+                .eq('featured_live', true)
+                .neq('is_visible', false)
+                .order('start_date', { ascending: true })
+                .limit(1)
+                .single();
+            
+            if (data && !error) {
+                setLiveEvent(data);
+            }
+        };
+
+        fetchLiveEvent();
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-6 bg-black">
@@ -88,16 +126,60 @@ const Hero = () => {
                             </span>
                         </button>
 
-                        <button
-                            onClick={() => setIsAuthModalOpen(true)}
-                            className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors w-full sm:w-auto flex justify-center items-center"
-                        >
-                            Register
-                        </button>
+                        {!session && (
+                            <button
+                                onClick={() => setIsAuthModalOpen(true)}
+                                className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors w-full sm:w-auto flex justify-center items-center"
+                            >
+                                Register
+                            </button>
+                        )}
+
+                        {liveEvent && (
+                            <motion.button
+                                initial={{ opacity: 0, scale: 0.9 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                whileHover={{ scale: 1.05 }}
+                                onClick={() => {
+                                    if (liveEvent.live_youtube_url) {
+                                        setVideoModal({ 
+                                            isOpen: true, 
+                                            url: liveEvent.live_youtube_url, 
+                                            title: liveEvent.event_name 
+                                        });
+                                    } else {
+                                        navigate(`/calendar/${liveEvent.slug || liveEvent.id}`);
+                                    }
+                                }}
+                                className="group px-8 py-4 bg-red-600 rounded-full font-bold text-white border border-red-500/50 shadow-[0_0_20px_rgba(220,38,38,0.4)] hover:bg-red-700 transition-all w-full sm:w-auto flex justify-center items-center gap-3 relative overflow-hidden"
+                            >
+                                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
+                                {liveEvent.live_youtube_url ? (
+                                    <>
+                                        <div className="relative">
+                                            <PlayCircle className="w-5 h-5 animate-pulse" />
+                                            <span className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-ping" />
+                                        </div>
+                                        WATCH LIVE NOW
+                                    </>
+                                ) : (
+                                    <>
+                                        <PlayCircle className="w-5 h-5 opacity-50" />
+                                        WATCH LIVE SOON
+                                    </>
+                                )}
+                            </motion.button>
+                        )}
                     </motion.div>
                 </motion.div>
             </div >
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+            <VideoModal 
+                isOpen={videoModal.isOpen} 
+                onClose={() => setVideoModal({ ...videoModal, isOpen: false })} 
+                videoUrl={videoModal.url} 
+                title={videoModal.title} 
+            />
         </div >
     );
 };
