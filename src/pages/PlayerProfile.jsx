@@ -38,7 +38,7 @@ const PlayerProfile = () => {
     const [isActivationRequired, setIsActivationRequired] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
-    const [matchHistory, setMatchHistory] = useState([]);
+    const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
     const [formData, setFormData] = useState({
@@ -258,7 +258,7 @@ const PlayerProfile = () => {
     }, [player?.rankedin_id, getPlayerEventsAsync]);
 
     useEffect(() => {
-        if (player?.rankedin_id && activeTab === 'matches' && matchHistory.length === 0) {
+        if (player?.rankedin_id && activeTab === 'matches' && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
             const fetchMatches = async () => {
                 setLoadingMatches(true);
                 try {
@@ -275,19 +275,23 @@ const PlayerProfile = () => {
                         getPlayerMatches(player.rankedin_id, true)
                     ]);
 
-                    console.log('RANKEDIN DEBUG - Upcoming:', upcoming);
-                    console.log('RANKEDIN DEBUG - History:', history);
+                    const filterValid = (matches) => {
+                        return (matches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
+                    };
 
-                    const combined = [...(upcoming || []), ...(history || [])];
+                    const validUpcoming = filterValid(upcoming);
+                    const validHistory = filterValid(history);
 
-                    // Sort by date descending
-                    combined.sort((a, b) => {
+                    const sorter = (a, b) => {
                         const dateA = parseDate(a.Info?.Date);
                         const dateB = parseDate(b.Info?.Date);
                         return dateB - dateA;
-                    });
+                    };
 
-                    setMatchHistory(combined);
+                    validUpcoming.sort(sorter);
+                    validHistory.sort(sorter);
+
+                    setMatchHistory({ upcoming: validUpcoming, history: validHistory });
                 } catch (err) {
                     console.error("Match fetch error:", err);
                 } finally {
@@ -296,7 +300,7 @@ const PlayerProfile = () => {
             };
             fetchMatches();
         }
-    }, [player?.rankedin_id, activeTab, getPlayerMatches, matchHistory.length]);
+    }, [player?.rankedin_id, activeTab, getPlayerMatches, matchHistory.upcoming.length, matchHistory.history.length]);
 
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;
@@ -1501,66 +1505,141 @@ const PlayerProfile = () => {
                                                             <div className="flex items-center justify-center py-12">
                                                                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
                                                             </div>
-                                                        ) : matchHistory && matchHistory.length > 0 ? (
-                                                            <div className="space-y-4">
-                                                                {matchHistory.map((match, idx) => {
-                                                                    const info = match.Info || {};
-                                                                    const isWinner = info.Challenger?.IsWinner;
-                                                                    const date = info.Date || 'Unknown Date';
-                                                                    const hasResult = match.Score?.Score && match.Score.Score.length > 0;
-
-                                                                    return (
-                                                                        <div key={idx} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
-                                                                            <div className="flex flex-col md:flex-row justify-between gap-4">
-                                                                                <div className="flex-1">
-                                                                                    <div className="flex items-center gap-3 mb-2">
-                                                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{date}</span>
-                                                                                        <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">•</span>
-                                                                                        <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px] whitespace-nowrap overflow-hidden">{info.EventName}</span>
-                                                                                    </div>
-
-                                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                        <div className={`p-3 rounded-xl border ${hasResult && isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
-                                                                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
-                                                                                            <p className="text-sm font-bold text-white truncate">
-                                                                                                {info.Challenger?.Name || 'TBD'}
-                                                                                                {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                        <div className={`p-3 rounded-xl border ${hasResult && !isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
-                                                                                            <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
-                                                                                            <p className="text-sm font-bold text-white truncate">
-                                                                                                {info.Challenged?.Name || 'TBD'}
-                                                                                                {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
-                                                                                            </p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <div className="flex flex-col items-end justify-center min-w-[120px]">
-                                                                                    {hasResult ? (
-                                                                                        <>
-                                                                                            <div className="flex gap-1 mb-2">
-                                                                                                {match.Score?.Score?.map((set, sIdx) => (
-                                                                                                    <div key={sIdx} className="bg-white/5 px-2 py-1 rounded text-xs font-black text-white border border-white/5">
-                                                                                                        {set.Score1}-{set.Score2}
-                                                                                                    </div>
-                                                                                                ))}
+                                                        ) : (matchHistory.upcoming.length > 0 || matchHistory.history.length > 0) ? (
+                                                            <div className="space-y-8">
+                                                                
+                                                                {/* Upcoming Matches Section */}
+                                                                {matchHistory.upcoming.length > 0 && (
+                                                                    <div className="space-y-4">
+                                                                        <h4 className="text-white/50 font-black uppercase tracking-widest text-xs border-b border-white/10 pb-2">Upcoming</h4>
+                                                                        {matchHistory.upcoming.map((match, idx) => {
+                                                                            const info = match.Info || {};
+                                                                            const date = info.Date;
+                                                                            
+                                                                            return (
+                                                                                <div key={`upcoming-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
+                                                                                    <div className="flex flex-col md:flex-row justify-between gap-4">
+                                                                                        <div className="flex-1">
+                                                                                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                                                                {date && (
+                                                                                                    <>
+                                                                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{date}</span>
+                                                                                                        <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">•</span>
+                                                                                                    </>
+                                                                                                )}
+                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px] whitespace-nowrap overflow-hidden">{info.EventName}</span>
                                                                                             </div>
-                                                                                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${isWinner ? 'bg-padel-green text-black' : 'bg-red-500/20 text-red-500 border border-red-500/20'}`}>
-                                                                                                {isWinner ? 'Victory' : 'Defeat'}
+
+                                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                                                <div className="p-3 rounded-xl border bg-white/5 border-white/5">
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
+                                                                                                    <p className="text-sm font-bold text-white truncate">
+                                                                                                        {info.Challenger?.Name || 'TBD'}
+                                                                                                        {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                                <div className="p-3 rounded-xl border bg-white/5 border-white/5">
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
+                                                                                                    <p className="text-sm font-bold text-white truncate">
+                                                                                                        {info.Challenged?.Name || 'TBD'}
+                                                                                                        {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            
+                                                                                            {(info.Court || info.Location) && (
+                                                                                                <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
+                                                                                                    <MapPin size={12} className="text-padel-green" />
+                                                                                                    <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || 'TBD'} {info.Court ? `- ${info.Court}` : ''}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <div className="flex flex-col items-end justify-start min-w-[120px]">
+                                                                                            <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
+                                                                                                Upcoming
                                                                                             </span>
-                                                                                        </>
-                                                                                    ) : (
-                                                                                        <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
-                                                                                            Upcoming
-                                                                                        </span>
-                                                                                    )}
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+
+                                                                {/* History Matches Section */}
+                                                                {matchHistory.history.length > 0 && (
+                                                                    <div className="space-y-4">
+                                                                        <h4 className="text-white/50 font-black uppercase tracking-widest text-xs border-b border-white/10 pb-2">History</h4>
+                                                                        {matchHistory.history.map((match, idx) => {
+                                                                            const info = match.Info || {};
+                                                                            const isWinner = info.Challenger?.IsWinner;
+                                                                            const date = info.Date;
+                                                                            const hasResult = match.Score?.Score && match.Score.Score.length > 0;
+
+                                                                            return (
+                                                                                <div key={`history-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
+                                                                                    <div className="flex flex-col md:flex-row justify-between gap-4">
+                                                                                        <div className="flex-1">
+                                                                                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                                                                {date && (
+                                                                                                    <>
+                                                                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{date}</span>
+                                                                                                        <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">•</span>
+                                                                                                    </>
+                                                                                                )}
+                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px] whitespace-nowrap overflow-hidden">{info.EventName}</span>
+                                                                                            </div>
+
+                                                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                                                <div className={`p-3 rounded-xl border ${hasResult && isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
+                                                                                                    <p className="text-sm font-bold text-white truncate">
+                                                                                                        {info.Challenger?.Name || 'TBD'}
+                                                                                                        {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                                <div className={`p-3 rounded-xl border ${hasResult && !isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
+                                                                                                    <p className="text-sm font-bold text-white truncate">
+                                                                                                        {info.Challenged?.Name || 'TBD'}
+                                                                                                        {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
+                                                                                                    </p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            
+                                                                                            {(info.Court || info.Location) && (
+                                                                                                <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
+                                                                                                    <MapPin size={12} className="text-padel-green" />
+                                                                                                    <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || 'TBD'} {info.Court ? `- ${info.Court}` : ''}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        <div className="flex flex-col items-end justify-center min-w-[120px]">
+                                                                                            {hasResult ? (
+                                                                                                <>
+                                                                                                    <div className="flex gap-1 mb-2">
+                                                                                                        {match.Score?.Score?.map((set, sIdx) => (
+                                                                                                            <div key={sIdx} className="bg-white/5 px-2 py-1 rounded text-xs font-black text-white border border-white/5">
+                                                                                                                {set.Score1}-{set.Score2}
+                                                                                                            </div>
+                                                                                                        ))}
+                                                                                                    </div>
+                                                                                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${isWinner ? 'bg-padel-green text-black' : 'bg-red-500/20 text-red-500 border border-red-500/20'}`}>
+                                                                                                        {isWinner ? 'Victory' : 'Defeat'}
+                                                                                                    </span>
+                                                                                                </>
+                                                                                            ) : (
+                                                                                                <span className="text-[10px] font-black text-gray-500 uppercase">Played</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         ) : (
                                                             <div className="text-center py-16 bg-black/20 rounded-3xl border border-white/5">

@@ -1,0 +1,332 @@
+[
+  {
+    "url": "https://api.rankedin.com/v1/player/GetPlayerMatchesAsync?playerid=2750433&takehistory=false&skip=0&take=10&language=en",
+    "json": {
+      "Payload": [
+        {
+          "ChallengeId": 6149513,
+          "MatchId": 6149581,
+          "Info": {
+            "EventName": "BROLL KCC CUP 🏆 - SAPA 2000 MAJOR JHB",
+            "EventType": 4,
+            "EventUrl": "/en/tournament/64466/broll-kcc-cup-sapa-2000-major-jhb",
+            "SportIcon": "icon-rin-sports-padel",
+            "Challenger": {
+              "Id": 2866585,
+              "RankedinId": "R000341868",
+              "Name": "Justin Brivik",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000341868/justin-brivik",
+              "ShortName": "J. Brivik",
+              "IsWinner": true
+            },
+            "Challenged": {
+              "Id": 2750433,
+              "RankedinId": "R000328907",
+              "Name": "Mark Stillerman",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000328907/mark-stillerman",
+              "ShortName": "M. Stillerman",
+              "IsWinner": false
+            },
+            "Challenger1": {
+              "Id": 2866147,
+              "RankedinId": "R000341826",
+              "Name": "Greg Hahn",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000341826/greg-hahn",
+              "ShortName": "G. Hahn",
+              "IsWinner": true
+            },
+            "Challenged1": {
+              "Id": 2825661,
+              "RankedinId": "R000336892",
+              "Name": "Charl Vos",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000336892/charl-vos",
+              "ShortName": "C. Vos",
+              "IsWinner": false
+            },
+            "TeamModel": null,
+            "ParticipantTypes": 4,
+            "RefereeCode": "hx720d",
+            "Ranking": null,
+            "Date": null,
+            "Location": "Killarney Country Club, 5th Street, Houghton Estate, Johannesburg, South Africa - 60 5th St, Houghton Estate, Johannesburg, 2198, South Africa",
+            "Court": "Indoor 2",
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": true
+          },
+          "Score": {
+            "Score": []
+          },
+          "Message": {
+            "ShowMessageButton": true,
+            "ButtonUrl": "/en/messages/match/6149513"
+          },
+          "Buttons": {
+            "ChallengeId": 6149513,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": true
+        }
+      ],
+      "HasMore": false
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/GetPlayerMatchesAsync?playerid=2750433&takehistory=true&skip=0&take=10&language=en",
+    "json": {
+      "Payload": [
+        {
+          "ChallengeId": 0,
+          "MatchId": 1,
+          "Info": {
+            "EventName": "EventName",
+            "EventType": 4,
+            "EventUrl": "www.test.com",
+            "SportIcon": "icon-rin-sports-squash",
+            "Challenger": {
+              "Id": 0,
+              "RankedinId": "Challenger",
+              "Name": "Challenger",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenger",
+              "IsWinner": false
+            },
+            "Challenged": {
+              "Id": 0,
+              "RankedinId": "Challenged",
+              "Name": "Challenged",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenged",
+              "IsWinner": false
+            },
+            "Challenger1": null,
+            "Challenged1": null,
+            "TeamModel": null,
+            "ParticipantTypes": 1,
+            "RefereeCode": null,
+            "Ranking": null,
+            "Date": "03/25/2026 10:13:06",
+            "Location": "Location",
+            "Court": null,
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": null
+          },
+          "Score": {
+            "Score": [
+              {
+                "Score1": 3,
+                "Score2": 1
+              }
+            ]
+          },
+          "Message": {
+            "ShowMessageButton": false,
+            "ButtonUrl": "www.test.com"
+          },
+          "Buttons": {
+            "ChallengeId": 0,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": false
+        },
+        {
+          "ChallengeId": 0,
+          "MatchId": 2,
+          "Info": {
+            "EventName": "EventName",
+            "EventType": 4,
+            "EventUrl": "www.test.com",
+            "SportIcon": "icon-rin-sports-squash",
+            "Challenger": {
+              "Id": 0,
+              "RankedinId": "Challenger",
+              "Name": "Challenger",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenger",
+              "IsWinner": false
+            },
+            "Challenged": {
+              "Id": 0,
+              "RankedinId": "Challenged",
+              "Name": "Challenged",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenged",
+              "IsWinner": false
+            },
+            "Challenger1": null,
+            "Challenged1": null,
+            "TeamModel": null,
+            "ParticipantTypes": 1,
+            "RefereeCode": null,
+            "Ranking": null,
+            "Date": "03/25/2026 10:13:06",
+            "Location": "Location",
+            "Court": null,
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": null
+          },
+          "Score": {
+            "Score": [
+              {
+                "Score1": 3,
+                "Score2": 1
+              }
+            ]
+          },
+          "Message": {
+            "ShowMessageButton": false,
+            "ButtonUrl": "www.test.com"
+          },
+          "Buttons": {
+            "ChallengeId": 0,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": false
+        }
+      ],
+      "HasMore": true
+    }
+  }
+]
