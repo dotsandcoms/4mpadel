@@ -500,7 +500,7 @@ const PlayerProfile = () => {
                 </AnimatePresence>
 
                 {/* Hero Section */}
-                <div className="relative h-[40vh] min-h-[400px] overflow-hidden">
+                <div className="relative h-[25vh] md:h-[40vh] min-h-[280px] md:min-h-[400px] overflow-hidden">
                     <div className="absolute inset-0">
                         <img
                             src={heroBg}
@@ -510,7 +510,7 @@ const PlayerProfile = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                     </div>
 
-                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-12 relative z-10">
+                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-6 md:pb-12 relative z-10">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -574,11 +574,6 @@ const PlayerProfile = () => {
                                                 Points: {player.points}
                                             </span>
                                         )}
-                                        {player.age && (
-                                            <span className="bg-white/5 backdrop-blur-md border border-white/10 text-white/40 px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-wider">
-                                                Age: {player.age}
-                                            </span>
-                                        )}
                                     </div>
                                     <div className="flex flex-col md:block overflow-hidden">
                                         <h1 className="text-2xl md:text-7xl font-black uppercase tracking-tighter leading-tight md:leading-[0.85] mb-1 md:mb-2 drop-shadow-2xl truncate">
@@ -588,17 +583,22 @@ const PlayerProfile = () => {
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
                                                 <span className="text-sm md:text-4xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0">
                                                     <Trophy className="w-4 h-4 md:w-10 md:h-10 text-yellow-500" /> #{player.rank_label}
+                                                    {player.age && (
+                                                        <span className="ml-2 text-[10px] md:text-sm font-bold opacity-60 bg-white/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                                                            Age: {player.age}
+                                                        </span>
+                                                    )}
                                                 </span>
                                             )}
                                             <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs">
                                                 <MapPin size={14} className="md:w-4 md:h-4" />
                                                 {player.home_club || 'Set Location'}
                                             </div>
-                                            <div className="hidden md:flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer font-bold uppercase tracking-widest text-xs" onClick={async () => {
+                                            <div className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer font-bold uppercase tracking-widest text-[10px] md:text-xs" onClick={async () => {
                                                 await supabase.auth.signOut();
                                                 navigate('/');
                                             }}>
-                                                <LogOut size={14} />
+                                                <LogOut size={14} className="md:w-4 md:h-4 text-padel-green" />
                                                 Log Out
                                             </div>
                                         </div>
