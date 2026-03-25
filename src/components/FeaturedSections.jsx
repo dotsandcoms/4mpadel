@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronRight, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
+import { Calendar, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 
 const getStatusColors = (status) => {
@@ -381,12 +381,29 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 {isLiveSection && (data.livePlayers || data.nextMatch) && (
                     <div className="mb-8 space-y-3 max-w-sm">
                         {data.livePlayers && (
-                            <div className="p-3 rounded-2xl bg-red-500/5 border border-red-500/10 backdrop-blur-sm">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                    <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE NOW</span>
+                            <div className="group/live-card relative p-3 rounded-2xl bg-red-500/5 border border-red-500/10 backdrop-blur-sm transition-all duration-300 hover:bg-red-500/10 hover:border-red-500/20">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                            <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE NOW</span>
+                                        </div>
+                                        <p className="text-white font-bold text-sm tracking-tight">{data.livePlayers}</p>
+                                    </div>
+                                    
+                                    {data.youtubeUrl && (
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onWatchLive(data.youtubeUrl, data.cardTitle);
+                                            }}
+                                            className="relative flex items-center justify-center w-10 h-10 rounded-full bg-red-600 text-white hover:bg-white hover:text-red-600 transition-all duration-300 shadow-lg shadow-red-600/20 group/play"
+                                        >
+                                            <div className="absolute inset-0 rounded-full bg-red-600 animate-ping opacity-20 group-hover/play:hidden" />
+                                            <Play className="w-4 h-4 relative z-10 ml-0.5" fill="currentColor" stroke="currentColor" />
+                                        </button>
+                                    )}
                                 </div>
-                                <p className="text-white font-bold text-sm tracking-tight">{data.livePlayers}</p>
                             </div>
                         )}
                         {data.nextMatch && (

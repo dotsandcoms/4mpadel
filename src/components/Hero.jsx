@@ -38,7 +38,7 @@ const Hero = () => {
                 .order('start_date', { ascending: true })
                 .limit(1)
                 .single();
-            
+
             if (data && !error) {
                 setLiveEvent(data);
             }
@@ -142,10 +142,10 @@ const Hero = () => {
                                 whileHover={{ scale: 1.05 }}
                                 onClick={() => {
                                     if (liveEvent.live_youtube_url) {
-                                        setVideoModal({ 
-                                            isOpen: true, 
-                                            url: liveEvent.live_youtube_url, 
-                                            title: liveEvent.event_name 
+                                        setVideoModal({
+                                            isOpen: true,
+                                            url: liveEvent.live_youtube_url,
+                                            title: liveEvent.event_name
                                         });
                                     } else {
                                         navigate(`/calendar/${liveEvent.slug || liveEvent.id}`);
@@ -174,11 +174,11 @@ const Hero = () => {
                 </motion.div>
             </div >
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-            <VideoModal 
-                isOpen={videoModal.isOpen} 
-                onClose={() => setVideoModal({ ...videoModal, isOpen: false })} 
-                videoUrl={videoModal.url} 
-                title={videoModal.title} 
+            <VideoModal
+                isOpen={videoModal.isOpen}
+                onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
+                videoUrl={videoModal.url}
+                title={videoModal.title}
             />
         </div >
     );
