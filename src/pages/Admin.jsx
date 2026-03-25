@@ -9,9 +9,11 @@ import GalleryManager from '../components/admin/GalleryManager';
 import FinanceManager from '../components/admin/FinanceManager';
 import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
+import AdminManager from '../components/admin/AdminManager';
+import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Menu } from 'lucide-react';
+import { Menu, ShieldAlert } from 'lucide-react';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -21,6 +23,8 @@ const Admin = () => {
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(session?.user?.email);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -54,7 +58,13 @@ const Admin = () => {
         window.location.href = '/';
     };
 
-    if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
+    useEffect(() => {
+        if (!permissionsLoading && !hasPermission(activeTab)) {
+            setActiveTab('dashboard');
+        }
+    }, [activeTab, permissions, permissionsLoading]);
+
+    if (loading || (session && permissionsLoading)) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
 
     if (!session) {
         return (
@@ -128,6 +138,7 @@ const Admin = () => {
                 onLogout={handleLogout}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
+                permissions={permissions}
             />
 
             <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
@@ -140,19 +151,33 @@ const Admin = () => {
                             exit={{ opacity: 0, x: -20 }}
                             transition={{ duration: 0.3 }}
                         >
-                            {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
-                            {activeTab === 'players' && <PlayerManager />}
-                            {activeTab === 'blog' && <BlogManager />}
-                            {activeTab === 'calendar' && <CalendarManager />}
-                            {activeTab === 'gallery' && (
-                                <GalleryManager />
+                            {!hasPermission(activeTab) ? (
+                                <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+                                    <ShieldAlert className="w-16 h-16 text-red-500 mb-4 opacity-50" />
+                                    <h2 className="text-2xl font-bold mb-2">Access Restricted</h2>
+                                    <p className="text-gray-400">You don't have permission to view this module.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
+                                    {activeTab === 'players' && <PlayerManager />}
+                                    {activeTab === 'blog' && <BlogManager />}
+                                    {activeTab === 'calendar' && <CalendarManager />}
+                                    {activeTab === 'gallery' && (
+                                        <GalleryManager />
+                                    )}
+                                    {activeTab === 'coaches' && (
+                                        <CoachManager />
+                                    )}
+                                    {activeTab === 'finance' && (
+                                        <FinanceManager />
+                                    )}
+                                    {activeTab === 'admin-mgmt' && (
+                                        <AdminManager />
+                                    )}
+                                    {activeTab === 'settings' && <SettingsManager />}
+                                </>
                             )}
-                            {activeTab === 'coaches' && (
-                                <CoachManager />
-                            )}
-                            {activeTab === 'finance' && (
-                                <FinanceManager />
-                            )}    {activeTab === 'settings' && <SettingsManager />}
                         </motion.div>
                     </AnimatePresence>
                 </div>

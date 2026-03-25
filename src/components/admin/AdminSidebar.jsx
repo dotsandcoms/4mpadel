@@ -1,10 +1,10 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
-const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) => {
-    const menuItems = [
+const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, permissions }) => {
+    const allMenuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
@@ -13,7 +13,16 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose }) =>
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'settings', label: 'Settings', icon: Settings },
+        { id: 'admin-mgmt', label: 'Permissions', icon: Shield, superAdminOnly: true },
     ];
+
+    const menuItems = allMenuItems.filter(item => {
+        if (!permissions) return item.id === 'dashboard'; // Default to only dashboard if loading
+        if (permissions.role === 'super_admin') return true;
+        if (item.superAdminOnly) return false;
+        if (item.id === 'dashboard') return true;
+        return permissions.allowed_tabs && permissions.allowed_tabs.includes(item.id);
+    });
 
     return (
         <>
