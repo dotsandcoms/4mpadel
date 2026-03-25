@@ -589,7 +589,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     return (
         <section className={`relative py-12 lg:py-16 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
-            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-8 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-10 lg:gap-16 items-center'}`}>
+            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-6 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-8 lg:gap-16 items-center'}`}>
                 {isGridSection ? (
                     <>
                         {/* Text takes 1 column on the left */}

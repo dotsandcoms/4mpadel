@@ -219,7 +219,7 @@ const Navbar = ({ isDark = false }) => {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: '100%' }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto py-20"
+            className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto pt-32 pb-20"
           >
             {/* Mobile Player Info */}
             {session && player && (
@@ -228,7 +228,7 @@ const Navbar = ({ isDark = false }) => {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex flex-col items-center mb-4 pb-8 border-b border-white/10 w-full max-w-[280px]"
               >
-                <span className="text-padel-green font-black text-3xl tracking-tighter uppercase mb-1">{player.name}</span>
+                <span className="text-padel-green font-black text-3xl tracking-tighter uppercase mb-1 text-center leading-none">{player.name}</span>
                 {player.rankedin_id && (
                   <span className="text-white/30 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">ID: {player.rankedin_id}</span>
                 )}
@@ -264,7 +264,7 @@ const Navbar = ({ isDark = false }) => {
                       setIsMobileMenuOpen(false);
                     }
                   }}
-                  className="flex items-center gap-2 text-2xl font-bold text-white hover:text-padel-green px-4 py-2"
+                  className="flex items-center gap-2 text-xl font-bold text-white hover:text-padel-green px-4 py-2"
                 >
                   {link.name}
                   {link.dropdown && (
