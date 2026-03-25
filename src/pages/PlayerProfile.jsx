@@ -11,8 +11,8 @@ import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefc
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
-    const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(true);
-    const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(true);
+    const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
+    const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [message, setMessage] = useState(null);
@@ -500,7 +500,7 @@ const PlayerProfile = () => {
                 </AnimatePresence>
 
                 {/* Hero Section */}
-                <div className="relative h-[25vh] md:h-[40vh] min-h-[280px] md:min-h-[400px] overflow-hidden">
+                <div className="relative h-[18vh] md:h-[40vh] min-h-[220px] md:min-h-[400px] overflow-hidden">
                     <div className="absolute inset-0">
                         <img
                             src={heroBg}
@@ -510,7 +510,7 @@ const PlayerProfile = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                     </div>
 
-                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-6 md:pb-12 relative z-10">
+                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-4 md:pb-12 relative z-10">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -581,13 +581,13 @@ const PlayerProfile = () => {
                                         </h1>
                                         <div className="flex flex-wrap items-center gap-3">
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
-                                                <span className="text-sm md:text-4xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0">
-                                                    <Trophy className="w-4 h-4 md:w-10 md:h-10 text-yellow-500" /> #{player.rank_label}
-                                                    {player.age && (
-                                                        <span className="ml-2 text-[10px] md:text-sm font-bold opacity-60 bg-white/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                                                            Age: {player.age}
-                                                        </span>
-                                                    )}
+                                                <span className="text-sm md:text-3xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0">
+                                                    <Trophy className="w-4 h-4 md:w-8 md:h-8 text-yellow-500" /> #{player.rank_label}
+                                                </span>
+                                            )}
+                                            {player.age && (
+                                                <span className="text-[10px] md:text-xl text-white/50 font-black flex items-center bg-white/5 border border-white/10 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0 uppercase tracking-wider">
+                                                    Age: {player.age}
                                                 </span>
                                             )}
                                             <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs">
