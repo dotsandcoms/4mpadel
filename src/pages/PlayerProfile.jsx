@@ -787,7 +787,7 @@ const PlayerProfile = () => {
                                     onClick={() => setActiveTab('events')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
-                                    <CalendarIcon size={16} /> Upcoming Events
+                                    <CalendarIcon size={16} /> Upcoming Matches
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('matches')}
@@ -1316,7 +1316,7 @@ const PlayerProfile = () => {
                                                             <CalendarIcon className="text-padel-green" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
+                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Matches</h3>
                                                             <p className="text-gray-500 text-sm uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
@@ -1447,7 +1447,7 @@ const PlayerProfile = () => {
                                                                 <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
                                                                 <div className="relative z-10">
                                                                     <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
-                                                                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">No upcoming events listed</p>
+                                                                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">No upcoming matches listed</p>
                                                                     <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
                                                                 </div>
                                                             </div>
@@ -1507,7 +1507,7 @@ const PlayerProfile = () => {
                                                             </div>
                                                         ) : (matchHistory.upcoming.length > 0 || matchHistory.history.length > 0) ? (
                                                             <div className="space-y-8">
-                                                                
+
                                                                 {/* Upcoming Matches Section */}
                                                                 {matchHistory.upcoming.length > 0 && (
                                                                     <div className="space-y-4">
@@ -1515,7 +1515,7 @@ const PlayerProfile = () => {
                                                                         {matchHistory.upcoming.map((match, idx) => {
                                                                             const info = match.Info || {};
                                                                             const date = info.Date;
-                                                                            
+
                                                                             return (
                                                                                 <div key={`upcoming-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
                                                                                     <div className="flex flex-col md:flex-row justify-between gap-4">
@@ -1546,7 +1546,7 @@ const PlayerProfile = () => {
                                                                                                     </p>
                                                                                                 </div>
                                                                                             </div>
-                                                                                            
+
                                                                                             {(info.Court || info.Location) && (
                                                                                                 <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
                                                                                                     <MapPin size={12} className="text-padel-green" />
@@ -1607,7 +1607,7 @@ const PlayerProfile = () => {
                                                                                                     </p>
                                                                                                 </div>
                                                                                             </div>
-                                                                                            
+
                                                                                             {(info.Court || info.Location) && (
                                                                                                 <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
                                                                                                     <MapPin size={12} className="text-padel-green" />
