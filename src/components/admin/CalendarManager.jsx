@@ -114,7 +114,8 @@ const CalendarManager = () => {
         featured_live: false,
         live_youtube_url: '',
         youtube_playlist_url: '',
-        sponsor_logos: []
+        sponsor_logos: [],
+        is_visible: true
     });
 
     useEffect(() => {
@@ -212,6 +213,25 @@ const CalendarManager = () => {
         }
     };
 
+    const toggleVisibility = async (event) => {
+        try {
+            const newVisibility = !event.is_visible;
+            const { error } = await supabase
+                .from('calendar')
+                .update({ is_visible: newVisibility })
+                .eq('id', event.id);
+
+            if (error) throw error;
+            
+            // Optimistic update
+            setEvents(prev => prev.map(e => e.id === event.id ? { ...e, is_visible: newVisibility } : e));
+            toast.success(`Event is now ${newVisibility ? 'visible' : 'hidden'}`);
+        } catch (error) {
+            console.error('Error toggling visibility:', error);
+            toast.error('Failed to update visibility');
+        }
+    };
+
     const resetForm = () => {
         setFormData({
             event_dates: '',
@@ -240,7 +260,8 @@ const CalendarManager = () => {
             featured_live: false,
             live_youtube_url: '',
             youtube_playlist_url: '',
-            sponsor_logos: []
+            sponsor_logos: [],
+            is_visible: true
         });
     }
 
@@ -273,7 +294,8 @@ const CalendarManager = () => {
             featured_live: event.featured_live || false,
             live_youtube_url: event.live_youtube_url || '',
             youtube_playlist_url: event.youtube_playlist_url || '',
-            sponsor_logos: event.sponsor_logos || []
+            sponsor_logos: event.sponsor_logos || [],
+            is_visible: event.is_visible !== false // Default to true if undefined
         });
         setIsModalOpen(true);
     };
@@ -442,12 +464,15 @@ const CalendarManager = () => {
                         updates.rankedin_url = fullUrl;
                         needsUpdate = true;
                     }
-                    if (!existingEvent.start_date && sDate) {
-                        updates.start_date = sDate.substring(0, 10);
+                    const newSDate = sDate ? sDate.substring(0, 10) : null;
+                    const newEDate = eDate ? eDate.substring(0, 10) : newSDate;
+
+                    if (newSDate && existingEvent.start_date !== newSDate) {
+                        updates.start_date = newSDate;
                         needsUpdate = true;
                     }
-                    if (!existingEvent.end_date && eDate) {
-                        updates.end_date = eDate.substring(0, 10);
+                    if (newEDate && existingEvent.end_date !== newEDate) {
+                        updates.end_date = newEDate;
                         needsUpdate = true;
                     }
                     if (existingEvent.event_dates !== formattedDates && formattedDates !== '') {
@@ -456,11 +481,11 @@ const CalendarManager = () => {
                     }
 
                     // Update rich details if available
-                    if (richDetails.description && !existingEvent.description) {
+                    if (richDetails.description && (existingEvent.description !== richDetails.description)) {
                         updates.description = richDetails.description;
                         needsUpdate = true;
                     }
-                    if (richDetails.image_url && !existingEvent.image_url) {
+                    if (richDetails.image_url && existingEvent.image_url !== richDetails.image_url) {
                         updates.image_url = richDetails.image_url;
                         needsUpdate = true;
                     }
@@ -484,10 +509,28 @@ const CalendarManager = () => {
                         updates.sponsor_logos = richDetails.sponsor_logos;
                         needsUpdate = true;
                     }
+                    // SMART UPDATES for manual fields:
+
                     // Only update is_league if it's true on RankedIn
-                    // We don't want to overwrite a local 'true' with 'false'
+                    // We don't want to overwrite a local manual 'true' with 'false'
                     if (isLeague && !existingEvent.is_league) {
                         updates.is_league = true;
+                        needsUpdate = true;
+                    }
+
+                    // Inferred status based on name for suggestions
+                    const nLower = evName.toLowerCase();
+                    let inferredStatus = 'None';
+                    if (nLower.includes('fip')) inferredStatus = 'FIP event';
+                    else if (nLower.includes('super gold') || nLower.includes('s gold') || nLower.includes('sgold')) inferredStatus = 'Super Gold';
+                    else if (nLower.includes('major')) inferredStatus = 'Major';
+                    else if (nLower.includes('gold')) inferredStatus = 'Gold';
+                    else if (nLower.includes('bronze')) inferredStatus = 'Bronze';
+                    else if (nLower.includes('key')) inferredStatus = 'Key Event';
+
+                    // Only update sapa_status if it's currently None, null, or empty
+                    if ((!existingEvent.sapa_status || existingEvent.sapa_status === 'None' || existingEvent.sapa_status === '') && inferredStatus !== 'None') {
+                        updates.sapa_status = inferredStatus;
                         needsUpdate = true;
                     }
 
@@ -500,7 +543,7 @@ const CalendarManager = () => {
                     const nLower = evName.toLowerCase();
                     let inferredStatus = 'Silver';
                     if (nLower.includes('fip')) inferredStatus = 'FIP event';
-                    else if (nLower.includes('super gold') || nLower.includes('s gold') || nLower.includes('sgold')) inferredStatus = 'S Gold';
+                    else if (nLower.includes('super gold') || nLower.includes('s gold') || nLower.includes('sgold')) inferredStatus = 'Super Gold';
                     else if (nLower.includes('major')) inferredStatus = 'Major';
                     else if (nLower.includes('gold')) inferredStatus = 'Gold';
                     else if (nLower.includes('key')) inferredStatus = 'Key Event';
@@ -526,7 +569,8 @@ const CalendarManager = () => {
                         is_league: isLeague,
                         featured_live: false,
                         live_youtube_url: '',
-                        youtube_playlist_url: ''
+                        youtube_playlist_url: '',
+                        is_visible: true
                     }]);
                     addedCount++;
                 }
@@ -760,6 +804,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Homepage Featured">★</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Live Event Featured">📺</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Recent Results Featured">🏆</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Visible on Website">👁️</th>
                                 <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
                             </tr>
                         </thead>
@@ -821,6 +866,19 @@ const CalendarManager = () => {
                                             ) : (
                                                 <Trophy className="w-4 h-4 text-gray-600 mx-auto" />
                                             )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            <button
+                                                onClick={() => toggleVisibility(event)}
+                                                className={`p-1 rounded-md transition-colors ${event.is_visible !== false ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
+                                                title={event.is_visible !== false ? 'Visible - click to hide' : 'Hidden - click to show'}
+                                            >
+                                                {event.is_visible !== false ? (
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                ) : (
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.046m4.596-4.596A9.964 9.964 0 0112 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3l18 18" /></svg>
+                                                )}
+                                            </button>
                                         </td>
                                         <td className="py-3 px-4 align-middle text-right">
                                             <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
@@ -980,6 +1038,20 @@ const CalendarManager = () => {
                                             />
                                             <label htmlFor="featured_event" className="text-sm font-bold text-white uppercase cursor-pointer">
                                                 Feature Event
+                                            </label>
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="is_visible"
+                                                name="is_visible"
+                                                checked={formData.is_visible}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
+                                            />
+                                            <label htmlFor="is_visible" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Visible on Website
                                             </label>
                                         </div>
                                         <div className="flex items-center gap-2">

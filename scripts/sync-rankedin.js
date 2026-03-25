@@ -55,7 +55,7 @@ async function syncRankedin() {
         const SAPA_ORG_ID = '11331';
 
         // 1. Fetch from database first to check for matches
-        const { data: events, error: dbError } = await supabase.from('calendar').select('id, event_name, slug, rankedin_url, start_date, end_date, event_dates, description, image_url, registered_players, address, venue, sponsor_logos');
+        const { data: events, error: dbError } = await supabase.from('calendar').select('*');
         if (dbError) throw dbError;
 
         console.log(`Found ${events.length} existing events in database.`);
@@ -183,76 +183,7 @@ async function syncRankedin() {
             // Dates
             const formattedDates = formatEventDates(sDate, eDate);
 
-            if (existingEvent) {
-                // Update missing or outdated fields safely
-                let updates = {};
-                let needsUpdate = false;
-
-                if (!existingEvent.rankedin_url || (existingEvent.rankedin_url !== fullUrl && !existingEvent.rankedin_url.includes(rankedinIdStr))) {
-                    updates.rankedin_url = fullUrl;
-                    needsUpdate = true;
-                }
-                if ((!existingEvent.start_date || existingEvent.start_date === '') && sDate) {
-                    updates.start_date = sDate.substring(0, 10);
-                    needsUpdate = true;
-                }
-                if ((!existingEvent.end_date || existingEvent.end_date === '') && eDate) {
-                    updates.end_date = eDate.substring(0, 10);
-                    needsUpdate = true;
-                }
-                if (existingEvent.event_dates !== formattedDates && formattedDates !== '') {
-                    updates.event_dates = formattedDates;
-                    needsUpdate = true;
-                }
-
-                // Update rich details
-                if (richDetails.description && (!existingEvent.description || existingEvent.description.includes('Весняний'))) {
-                    updates.description = richDetails.description;
-                    needsUpdate = true;
-                }
-                if (richDetails.image_url && !existingEvent.image_url) {
-                    updates.image_url = richDetails.image_url;
-                    needsUpdate = true;
-                }
-                if (richDetails.registered_players !== undefined && (existingEvent.registered_players !== richDetails.registered_players)) {
-                    updates.registered_players = richDetails.registered_players;
-                    needsUpdate = true;
-                }
-                if (richDetails.address !== undefined && existingEvent.address !== richDetails.address) {
-                    updates.address = richDetails.address;
-                    needsUpdate = true;
-                }
-                if (richDetails.venue !== undefined && existingEvent.venue !== richDetails.venue) {
-                    updates.venue = richDetails.venue;
-                    needsUpdate = true;
-                }
-                if (re.city !== undefined && existingEvent.city !== (re.city || '').trim()) {
-                    updates.city = (re.city || '').trim();
-                    needsUpdate = true;
-                }
-                if (richDetails.organizer_name && existingEvent.organizer_name !== richDetails.organizer_name) {
-                    updates.organizer_name = richDetails.organizer_name;
-                    needsUpdate = true;
-                }
-                if (richDetails.sponsor_logos && richDetails.sponsor_logos.length > 0) {
-                    updates.sponsor_logos = richDetails.sponsor_logos;
-                    needsUpdate = true;
-                }
-                if (existingEvent.is_league !== isLeague) {
-                    updates.is_league = isLeague;
-                    needsUpdate = true;
-                }
-
-                if (needsUpdate) {
-                    const { error } = await supabase.from('calendar').update(updates).eq('id', existingEvent.id);
-                    if (error) {
-                        console.error(`Error updating event ${existingEvent.id}:`, error);
-                    } else {
-                        updatedCount++;
-                    }
-                }
-            } else {
-                // Insert new
+                // Inferred status based on name
                 const nLower = evName.toLowerCase();
                 let inferredStatus = 'None';
                 if (nLower.includes('fip')) inferredStatus = 'FIP event';
@@ -262,29 +193,115 @@ async function syncRankedin() {
                 else if (nLower.includes('bronze')) inferredStatus = 'Bronze';
                 else if (nLower.includes('key')) inferredStatus = 'Key Event';
 
-                const slugVal = nLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+                if (existingEvent) {
+                    // Update missing or outdated fields safely
+                    let updates = {};
+                    let needsUpdate = false;
 
-                const { error } = await supabase.from('calendar').insert([{
-                    event_name: evName,
-                    slug: slugVal,
-                    event_dates: formattedDates,
-                    start_date: sDate ? sDate.substring(0, 10) : null,
-                    end_date: eDate ? eDate.substring(0, 10) : null,
-                    sapa_status: inferredStatus,
-                    organizer_name: richDetails.organizer_name || 'SAPA',
-                    rankedin_url: fullUrl,
-                    city: (re.city || '').trim(),
-                    venue: richDetails.venue || re.club || '',
-                    description: richDetails.description || '',
-                    image_url: richDetails.image_url || '',
-                    registered_players: richDetails.registered_players || 0,
-                    address: richDetails.address || '',
-                    sponsor_logos: richDetails.sponsor_logos || [],
-                    is_league: isLeague,
-                    featured_live: false,
-                    live_youtube_url: '',
-                    youtube_playlist_url: ''
-                }]);
+                    if (!existingEvent.rankedin_url || (existingEvent.rankedin_url !== fullUrl && !existingEvent.rankedin_url.includes(rankedinIdStr))) {
+                        updates.rankedin_url = fullUrl;
+                        needsUpdate = true;
+                    }
+                    const newSDate = sDate ? sDate.substring(0, 10) : null;
+                    const newEDate = eDate ? eDate.substring(0, 10) : newSDate;
+
+                    if (newSDate && existingEvent.start_date !== newSDate) {
+                        updates.start_date = newSDate;
+                        needsUpdate = true;
+                    }
+                    if (newEDate && existingEvent.end_date !== newEDate) {
+                        updates.end_date = newEDate;
+                        needsUpdate = true;
+                    }
+                    if (existingEvent.event_dates !== formattedDates && formattedDates !== '') {
+                        updates.event_dates = formattedDates;
+                        needsUpdate = true;
+                    }
+
+                    // Update rich details
+                    if (richDetails.description && (existingEvent.description !== richDetails.description)) {
+                        // Special case: if Rankedin is basic and we have content, maybe don't overwrite?
+                        // But user wants TO SYNC. So we sync.
+                        updates.description = richDetails.description;
+                        needsUpdate = true;
+                    }
+                    if (richDetails.image_url && existingEvent.image_url !== richDetails.image_url) {
+                        updates.image_url = richDetails.image_url;
+                        needsUpdate = true;
+                    }
+                    if (richDetails.registered_players !== undefined && (existingEvent.registered_players !== richDetails.registered_players)) {
+                        updates.registered_players = richDetails.registered_players;
+                        needsUpdate = true;
+                    }
+                    if (richDetails.address !== undefined && existingEvent.address !== richDetails.address) {
+                        updates.address = richDetails.address;
+                        needsUpdate = true;
+                    }
+                    if (richDetails.venue !== undefined && existingEvent.venue !== richDetails.venue) {
+                        updates.venue = richDetails.venue;
+                        needsUpdate = true;
+                    }
+                    if (re.city !== undefined && existingEvent.city !== (re.city || '').trim()) {
+                        updates.city = (re.city || '').trim();
+                        needsUpdate = true;
+                    }
+                    if (richDetails.organizer_name && existingEvent.organizer_name !== richDetails.organizer_name) {
+                        updates.organizer_name = richDetails.organizer_name;
+                        needsUpdate = true;
+                    }
+                    if (richDetails.sponsor_logos && richDetails.sponsor_logos.length > 0) {
+                        updates.sponsor_logos = richDetails.sponsor_logos;
+                        needsUpdate = true;
+                    }
+                    
+                    // SMART UPDATES for manual fields:
+                    
+                    // Only update is_league if it's true on RankedIn
+                    // We don't want to overwrite a local manual 'true' with 'false'
+                    if (isLeague && !existingEvent.is_league) {
+                        updates.is_league = true;
+                        needsUpdate = true;
+                    }
+                    
+                    // Only update sapa_status if it's currently None, null, or empty
+                    if ((!existingEvent.sapa_status || existingEvent.sapa_status === 'None' || existingEvent.sapa_status === '') && inferredStatus !== 'None') {
+                        updates.sapa_status = inferredStatus;
+                        needsUpdate = true;
+                    }
+
+                    if (needsUpdate) {
+                        const { error } = await supabase.from('calendar').update(updates).eq('id', existingEvent.id);
+                        if (error) {
+                            console.error(`Error updating event ${existingEvent.id}:`, error);
+                        } else {
+                            updatedCount++;
+                        }
+                    }
+                } else {
+                    // Insert new
+                    const slugVal = nLower.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+
+                    const { error } = await supabase.from('calendar').insert([{
+                        event_name: evName,
+                        slug: slugVal,
+                        event_dates: formattedDates,
+                        start_date: sDate ? sDate.substring(0, 10) : null,
+                        end_date: eDate ? eDate.substring(0, 10) : null,
+                        sapa_status: inferredStatus,
+                        organizer_name: richDetails.organizer_name || 'SAPA',
+                        rankedin_url: fullUrl,
+                        city: (re.city || '').trim(),
+                        venue: richDetails.venue || re.club || '',
+                        description: richDetails.description || '',
+                        image_url: richDetails.image_url || '',
+                        registered_players: richDetails.registered_players || 0,
+                        address: richDetails.address || '',
+                        sponsor_logos: richDetails.sponsor_logos || [],
+                        is_league: isLeague,
+                        featured_live: false,
+                        live_youtube_url: '',
+                        youtube_playlist_url: ''
+                    }]);
 
                 if (error) {
                     console.error(`Error inserting event ${evName}:`, error);

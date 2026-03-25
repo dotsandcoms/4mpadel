@@ -279,6 +279,7 @@ const Calendar = () => {
             const { data, error } = await supabase
                 .from('calendar')
                 .select('*')
+                .neq('is_visible', false)
                 .order('start_date', { ascending: true })
                 .order('id', { ascending: true });
 

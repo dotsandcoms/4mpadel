@@ -187,7 +187,9 @@ const EventDetails = () => {
                     query = query.eq('slug', slug);
                 }
 
-                const { data, error } = await query.single();
+                const { data, error } = await query
+                    .neq('is_visible', false)
+                    .single();
 
                 if (error) throw error;
                 setEvent(data);

@@ -322,6 +322,44 @@ export const useRankedin = () => {
         }
     }, [getTournamentClasses, getDrawsForClass]);
 
+    /**
+     * Fetches match history for a specific player by their Rankedin ID.
+     * @param {string} rankedinId Rankedin Player ID (e.g. R000328907)
+     * @param {boolean} takeHistory Whether to fetch past matches (true) or upcoming (false)
+     * @param {number} take Number of matches to fetch
+     * @returns {Promise<Array>} Array of matches
+     */
+    const getPlayerMatches = useCallback(async (rankedinId, takeHistory = true, take = 20) => {
+        if (!rankedinId) return [];
+        setLoading(true);
+        setError(null);
+        try {
+            // Step 1: Get internal PlayerId
+            const profileRes = await fetch(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`);
+            if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
+            const profileData = await profileRes.json();
+            const internalId = profileData.Id || profileData.Header?.PlayerId;
+
+            if (!internalId) throw new Error("Could not extract internal PlayerId");
+
+            // Step 2: Fetch matches
+            const response = await fetch(
+                `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`
+            );
+
+            if (!response.ok) throw new Error(`Rankedin Matches API Error: ${response.status}`);
+
+            const data = await response.json();
+            return data.Payload || [];
+        } catch (err) {
+            console.error('Error fetching player matches:', err);
+            setError(err.message);
+            return [];
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     return {
         loading,
         error,
@@ -333,6 +371,7 @@ export const useRankedin = () => {
         getOrganisationRankings,
         getPlayerEventsAsync,
         getTournamentWinners,
-        getTournamentMatches
+        getTournamentMatches,
+        getPlayerMatches
     };
 };
