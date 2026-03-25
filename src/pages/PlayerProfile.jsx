@@ -500,7 +500,7 @@ const PlayerProfile = () => {
                 </AnimatePresence>
 
                 {/* Hero Section */}
-                <div className="relative h-[18vh] md:h-[40vh] min-h-[220px] md:min-h-[400px] overflow-hidden">
+                <div className="relative h-[12vh] md:h-[40vh] min-h-[140px] md:min-h-[400px] overflow-hidden">
                     <div className="absolute inset-0">
                         <img
                             src={heroBg}
@@ -510,7 +510,7 @@ const PlayerProfile = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                     </div>
 
-                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-4 md:pb-12 relative z-10">
+                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-1 md:pb-12 relative z-10">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -581,12 +581,12 @@ const PlayerProfile = () => {
                                         </h1>
                                         <div className="flex flex-wrap items-center gap-3">
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
-                                                <span className="text-sm md:text-3xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0">
-                                                    <Trophy className="w-4 h-4 md:w-8 md:h-8 text-yellow-500" /> #{player.rank_label}
+                                                <span className="text-sm md:text-xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0">
+                                                    <Trophy className="w-4 h-4 md:w-6 md:h-6 text-yellow-500" /> #{player.rank_label}
                                                 </span>
                                             )}
                                             {player.age && (
-                                                <span className="text-[10px] md:text-xl text-white/50 font-black flex items-center bg-white/5 border border-white/10 px-3 py-1 md:px-5 md:py-2 rounded-full md:rounded-3xl shrink-0 uppercase tracking-wider">
+                                                <span className="text-[10px] md:text-base text-white/50 font-black flex items-center bg-white/5 border border-white/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0 uppercase tracking-wider">
                                                     Age: {player.age}
                                                 </span>
                                             )}
@@ -610,7 +610,7 @@ const PlayerProfile = () => {
                 </div>
 
                 {/* Main Content Area */}
-                <div className="container mx-auto px-6 -mt-10 pb-24 relative z-20">
+                <div className="container mx-auto px-6 mt-16 md:-mt-10 pb-24 relative z-20">
                     {/* Payment Required Banner - shown when profile is not visible (none or temporary) */}
                     {player && (player.license_type !== 'full') && (
                         <motion.div
@@ -843,7 +843,7 @@ const PlayerProfile = () => {
                                             <div className="flex items-center justify-between w-full">
                                                 <div>
                                                     <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
-                                                    <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Complete your profile to unlock premium player features</p>
+                                                    <p className="text-gray-500 text-sm uppercase tracking-widest">Complete your profile to unlock premium player features</p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1187,7 +1187,7 @@ const PlayerProfile = () => {
                                                     </div>
                                                     <div>
                                                         <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
-                                                        <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Your financial history with SAPA</p>
+                                                        <p className="text-gray-500 text-sm uppercase tracking-widest">Your financial history with SAPA</p>
                                                     </div>
                                                 </div>
                                                 <div className="md:hidden">
@@ -1313,7 +1313,7 @@ const PlayerProfile = () => {
                                                         </div>
                                                         <div>
                                                             <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
-                                                            <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
+                                                            <p className="text-gray-500 text-sm uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
                                                     <div className="md:hidden">
@@ -1480,7 +1480,7 @@ const PlayerProfile = () => {
                                                         </div>
                                                         <div>
                                                             <h3 className="text-2xl font-black uppercase tracking-tighter">Match History</h3>
-                                                            <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">Your recent performance from Rankedin</p>
+                                                            <p className="text-gray-500 text-sm uppercase tracking-widest">Your recent performance from Rankedin</p>
                                                         </div>
                                                     </div>
                                                     <div className="md:hidden">
