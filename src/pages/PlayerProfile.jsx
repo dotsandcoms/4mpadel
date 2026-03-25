@@ -787,13 +787,13 @@ const PlayerProfile = () => {
                                     onClick={() => setActiveTab('events')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
-                                    <CalendarIcon size={16} /> Upcoming Matches
+                                    <CalendarIcon size={16} /> My Tournaments
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('matches')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
-                                    <Trophy size={16} /> Matches History
+                                    <Trophy size={16} /> My Matches
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('payments')}
