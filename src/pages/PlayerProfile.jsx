@@ -1316,7 +1316,7 @@ const PlayerProfile = () => {
                                                             <CalendarIcon className="text-padel-green" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Matches</h3>
+                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
                                                             <p className="text-gray-500 text-sm uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
