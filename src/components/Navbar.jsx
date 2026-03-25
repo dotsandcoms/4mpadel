@@ -123,29 +123,33 @@ const Navbar = ({ isDark = false }) => {
         <div className="container mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
-            <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
-            <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
+            {!isMobileMenuOpen && (
+              <>
+                <img src={logo} alt="4M Padel Logo" className="h-12 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
+                <img src={saFlag} alt="South Africa Flag" className="h-5 w-auto mt-0.5 object-contain" />
+              </>
+            )}
             {session && player && (
-              <div className={`hidden sm:flex items-center gap-4 ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
+              <div className={`${isMobileMenuOpen ? 'flex' : 'hidden sm:flex'} items-center gap-3 sm:gap-4 ml-0 sm:ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className={`truncate max-w-[120px] leading-tight font-black text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
+                  <span className={`truncate max-w-[120px] leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
                   {player.rankedin_id && (
-                    <span className={`text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
+                    <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
                       ID: {player.rankedin_id}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 border-l border-white/10 pl-4 ml-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-3 sm:pl-4 ml-0.5 sm:ml-1">
                   {player.rank_label && player.rank_label !== 'Unranked' && (
-                    <div className="flex items-center gap-1.5 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-1 rounded-full shadow-lg shadow-yellow-500/5">
-                      <Trophy className="w-3.5 h-3.5 text-yellow-500" />
-                      <span className="text-yellow-500 font-black text-[11px]">#{player.rank_label}</span>
+                    <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-yellow-500/5">
+                      <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-500" />
+                      <span className="text-yellow-500 font-black text-[10px] sm:text-[11px]">#{player.rank_label}</span>
                     </div>
                   )}
                   {player.points !== undefined && (
-                    <div className="bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full">
-                      <span className="text-padel-green font-black text-[10px] uppercase tracking-wider">{player.points} PTS</span>
+                    <div className="bg-padel-green/10 border border-padel-green/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
+                      <span className="text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-wider">{player.points} PTS</span>
                     </div>
                   )}
                 </div>
@@ -221,32 +225,6 @@ const Navbar = ({ isDark = false }) => {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto pt-32 pb-20"
           >
-            {/* Mobile Player Info */}
-            {session && player && (
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col items-center mb-4 pb-8 border-b border-white/10 w-full max-w-[280px]"
-              >
-                <span className="text-padel-green font-black text-3xl tracking-tighter uppercase mb-1 text-center leading-none">{player.name}</span>
-                {player.rankedin_id && (
-                  <span className="text-white/30 text-[10px] font-bold uppercase tracking-[0.2em] mb-4">ID: {player.rankedin_id}</span>
-                )}
-                <div className="flex items-center gap-3">
-                  {player.rank_label && player.rank_label !== 'Unranked' && (
-                    <div className="flex items-center gap-2 bg-yellow-500/10 border border-yellow-500/20 px-4 py-1.5 rounded-full">
-                      <Trophy className="w-4 h-4 text-yellow-500" />
-                      <span className="text-yellow-500 font-black text-sm">#{player.rank_label}</span>
-                    </div>
-                  )}
-                  {player.points !== undefined && (
-                    <div className="bg-padel-green/10 border border-padel-green/20 px-4 py-1.5 rounded-full">
-                      <span className="text-padel-green font-black text-xs uppercase tracking-wider">{player.points} POINTS</span>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            )}
             {navLinks.map((link, index) => (
               <div key={link.name} className="flex flex-col items-center w-full">
                 <motion.a
