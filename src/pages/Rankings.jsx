@@ -1,8 +1,17 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight, X, MapPin, Download, Share2 } from 'lucide-react';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
+import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
+
+const getInitials = (name) => {
+  if (!name) return '';
+  const parts = name.split(' ');
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+};
 
 const RankingExplanation = () => (
   <div className="grid md:grid-cols-3 gap-6 mb-20 relative z-10">
@@ -40,7 +49,7 @@ const RankingExplanation = () => (
   </div>
 );
 
-const RankingSlider = ({ title, playersData }) => {
+const RankingSlider = ({ title, playersData, onPlayerClick }) => {
   const scrollRef = useRef(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
@@ -58,11 +67,10 @@ const RankingSlider = ({ title, playersData }) => {
     el.scrollBy({ left: dir * 260, behavior: 'smooth' });
   };
 
-  const getInitials = (name) => {
-    if (!name) return '';
-    const parts = name.split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.substring(0, 2).toUpperCase();
+  const handleCardClick = (player) => {
+    if (player.hasLocalProfile && player.playerRecord) {
+      onPlayerClick(player.playerRecord);
+    }
   };
 
   if (!playersData || playersData.length === 0) return null;
@@ -104,7 +112,8 @@ const RankingSlider = ({ title, playersData }) => {
               whileInView={{ opacity: 1, x: 0 }}
               viewport={{ once: true }}
               transition={{ delay: Math.min(index * 0.1, 0.5) }}
-              className="w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40 flex-shrink-0"
+              className={`w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-xl border border-white/5 bg-black/40 flex-shrink-0 ${player.hasLocalProfile ? 'cursor-pointer hover:border-padel-green/50' : ''}`}
+              onClick={() => handleCardClick(player)}
             >
               <div className="slider-card-media h-[280px] md:h-[320px] w-full relative bg-gradient-to-br from-[#1E293B] to-[#0F172A] flex items-center justify-center">
                 {player.image && !player._imgError ? (
@@ -125,11 +134,20 @@ const RankingSlider = ({ title, playersData }) => {
                   </div>
                 </div>
                 {player.hasLocalProfile && (
-                  <div className="absolute top-3 left-3 bg-padel-green/90 backdrop-blur-sm text-black text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full shadow-lg">
+                  <div className="absolute top-3 left-3 bg-padel-green/90 backdrop-blur-sm text-black text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full shadow-lg z-10">
                     4M Profile
                   </div>
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
+                
+                {/* View Profile Overlay */}
+                {player.hasLocalProfile && (
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                    <span className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
+                      View Profile
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="absolute bottom-0 left-0 right-0 p-4">
                 <p className="text-padel-green font-black mb-1 text-[9px] tracking-widest uppercase">{player.rank}</p>
@@ -139,14 +157,6 @@ const RankingSlider = ({ title, playersData }) => {
                     <p className="text-[8px] text-gray-400 uppercase font-bold tracking-widest leading-none mb-1">Points</p>
                     <p className="text-sm font-black text-white">{player.points.toLocaleString()}</p>
                   </div>
-                  <a
-                    href={player.rankedinProfile}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-padel-green hover:text-black transition-colors"
-                  >
-                    <Users className="w-3 h-3" />
-                  </a>
                 </div>
               </div>
             </motion.div>
@@ -264,15 +274,24 @@ const Rankings = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
+  const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [userEmail, setUserEmail] = useState(null);
+  const cardRef = useRef(null);
+  const printRef = useRef(null);
+
   useEffect(() => {
     const fetchRankings = async () => {
       try {
-        const [mensData, ladiesData] = await Promise.all([
+        const [mensData, ladiesData, { data: { session } }] = await Promise.all([
           getOrganisationRankings(3, 82, 1000),
           getOrganisationRankings(4, 83, 1000),
+          supabase.auth.getSession()
         ]);
         setMensDataRaw(mensData || []);
         setLadiesDataRaw(ladiesData || []);
+        if (session?.user?.email) {
+          setUserEmail(session.user.email);
+        }
       } catch (err) {
         console.error('Error fetching rankings:', err);
       } finally {
@@ -282,19 +301,33 @@ const Rankings = () => {
     fetchRankings();
   }, [getOrganisationRankings]);
 
-  // Fetch local player profiles (name → image_url) once rankings load
+  // Fetch local player profiles once rankings load
   useEffect(() => {
     const fetchLocalProfiles = async () => {
       const { data } = await supabase
         .from('players')
-        .select('name, image_url')
-        .not('image_url', 'is', null)
-        .neq('image_url', '');
+        .select('*')
+        .eq('approved', true);
+      
       if (data) {
         const map = {};
         data.forEach(p => {
-          if (p.name && p.image_url) {
-            map[p.name.trim().toLowerCase()] = p.image_url;
+          if (p.name) {
+            // Process sponsors as in Players.jsx
+            let sponsorsList = [];
+            if (p.sponsors) {
+              try {
+                sponsorsList = JSON.parse(p.sponsors);
+                if (!Array.isArray(sponsorsList)) sponsorsList = [p.sponsors];
+              } catch {
+                sponsorsList = p.sponsors.split(',').map(s => s.trim()).filter(Boolean);
+              }
+            }
+
+            map[p.name.trim().toLowerCase()] = {
+              ...p,
+              sponsors: sponsorsList
+            };
           }
         });
         setLocalProfileMap(map);
@@ -307,7 +340,9 @@ const Rankings = () => {
   const formatRankings = (data, profileMap) => {
     if (!data) return [];
     return data.map(item => {
-      const localImage = profileMap[item.Name?.trim().toLowerCase()];
+      const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
+      const localImage = playerRecord?.image_url;
+      
       return {
         id: item.Participant?.Id || item.RankedinId,
         name: item.Name,
@@ -315,6 +350,7 @@ const Rankings = () => {
         rank: `Rank #${item.Standing}`,
         image: localImage || null,
         hasLocalProfile: !!localImage,
+        playerRecord: playerRecord || null,
         points: item.ParticipantPoints?.Points || 0,
         rankedinProfile: `https://www.rankedin.com${item.ParticipantUrl}`,
       };
@@ -412,6 +448,52 @@ const Rankings = () => {
     );
   }, [filteredData, currentPage]);
 
+  const downloadCard = async () => {
+    if (!printRef.current || !selectedPlayer) return;
+    try {
+      const dataUrl = await htmlToImage.toPng(printRef.current, {
+        quality: 1.0,
+        backgroundColor: '#0F172A',
+        cacheBust: true,
+        pixelRatio: 4,
+      });
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const targetWidth = pdfWidth - (margin * 2);
+      const targetHeight = (imgProps.height * targetWidth) / imgProps.width;
+      const xPos = (pdfWidth - targetWidth) / 2;
+      const yPos = (pdfHeight - targetHeight) / 2;
+
+      pdf.addImage(dataUrl, 'PNG', xPos, yPos > 15 ? yPos : 15, targetWidth, targetHeight);
+      pdf.save(`${selectedPlayer.name.replace(/\s+/g, '_')}_Profile_Card.pdf`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+    }
+  };
+
+  const shareCard = async () => {
+    if (!selectedPlayer) return;
+    try {
+      const shareUrl = `${window.location.origin}/players?id=${selectedPlayer.id}`;
+      if (navigator.share) {
+        await navigator.share({
+          title: `${selectedPlayer.name}'s Player Profile`,
+          text: `Check out ${selectedPlayer.name}'s player profile on 4M Padel!`,
+          url: shareUrl,
+        });
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        alert('Profile link copied to clipboard!');
+      }
+    } catch (err) {
+      console.error('Error sharing:', err);
+    }
+  };
+
   return (
     <div className="bg-[#0F172A] min-h-screen pt-32 pb-20 font-sans selection:bg-padel-green selection:text-black">
       {/* Background elements */}
@@ -478,8 +560,8 @@ const Rankings = () => {
             <h2 className="text-3xl font-bold text-white mb-2">Live Rankings Highlights</h2>
             <p className="text-gray-400">The latest Top 10 straight from Rankedin.</p>
           </div>
-          <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} />
-          <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} />
+          <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+          <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
 
           {/* Full Searchable Table Section */}
           <div className="max-w-7xl mx-auto px-6 mt-32 mb-12 relative z-10">
@@ -553,7 +635,16 @@ const Rankings = () => {
                             {player.rawRank}
                           </td>
                           <td className="py-3 px-3 md:py-4 md:px-6">
-                            <a href={player.rankedinProfile} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 md:gap-4 group/link">
+                            <div 
+                              onClick={() => {
+                                if (player.hasLocalProfile && player.playerRecord) {
+                                  setSelectedPlayer(player.playerRecord);
+                                } else {
+                                  window.open(player.rankedinProfile, '_blank');
+                                }
+                              }}
+                              className="flex items-center gap-3 md:gap-4 group/link cursor-pointer"
+                            >
                               <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
                                 {!imageErrors[player.id] ? (
                                   <img
@@ -566,8 +657,13 @@ const Rankings = () => {
                                   <span className="text-xs md:text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
                                 )}
                               </div>
-                              <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">{player.name}</span>
-                            </a>
+                              <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
+                                {player.name}
+                                {player.hasLocalProfile && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-padel-green/10 text-padel-green text-[8px] font-black uppercase tracking-widest border border-padel-green/20">4M</span>
+                                )}
+                              </span>
+                            </div>
                           </td>
                           <td className="py-3 px-3 md:py-4 md:px-6 text-right">
                             <span className="inline-block bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-base md:text-lg font-black text-white group-hover:bg-padel-green group-hover:text-black transition-colors">
@@ -642,6 +738,306 @@ const Rankings = () => {
         </div>
       )}
 
+      {/* Player Modal */}
+      <AnimatePresence>
+      {selectedPlayer && (
+        <>
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedPlayer(null)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] cursor-pointer"
+          />
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none p-4">
+            <motion.div
+              layoutId={`card-${selectedPlayer.id}`}
+              ref={cardRef}
+              className="w-full max-w-lg bg-[#0F172A] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] flex flex-col"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setSelectedPlayer(null)}
+                className="absolute top-6 right-6 z-20 w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Image Section */}
+              <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
+                {selectedPlayer.image_url ? (
+                  <motion.img
+                    layoutId={`image-${selectedPlayer.id}`}
+                    src={selectedPlayer.image_url}
+                    alt={selectedPlayer.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <motion.div
+                    layoutId={`image-${selectedPlayer.id}`}
+                    className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-white/10"
+                  >
+                    <Trophy className="w-48 h-48 opacity-10" />
+                  </motion.div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+
+                {/* Big Stats Overlays on Image */}
+                <motion.div layoutId={`level-${selectedPlayer.id}`} className="absolute top-4 left-4 bg-padel-green text-black font-black w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-black shadow-xl z-20">
+                  <span className="text-xs uppercase font-bold opacity-60">SKILL</span>
+                  <span className="text-2xl leading-none">{selectedPlayer.skill_rating ? Number(selectedPlayer.skill_rating).toFixed(1) : selectedPlayer.skill_rating || '-'}</span>
+                </motion.div>
+
+                {selectedPlayer.rankedin_id && (
+                  <div className="absolute top-4 right-16 bg-black/40 backdrop-blur-md border border-white/10 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
+                    <span className="text-[10px] uppercase font-black text-padel-green mb-1">Rankedin ID</span>
+                    <span className="text-xs opacity-70 font-mono tracking-tight">{selectedPlayer.rankedin_id}</span>
+                  </div>
+                )}
+
+                {/* Name Overlay */}
+                <div className="absolute bottom-0 left-0 w-full p-8 pl-24 pt-20 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/40 to-transparent">
+                  <motion.h2 layoutId={`name-${selectedPlayer.id}`} className="text-4xl md:text-5xl font-black text-white leading-[0.85] tracking-tighter uppercase mb-2 drop-shadow-lg">
+                    {selectedPlayer.name.split(' ').map((n, i) => (
+                      <span key={i} className="block">{n}</span>
+                    ))}
+                  </motion.h2>
+                  <div className="flex items-center gap-2 text-gray-300 font-medium">
+                    <MapPin className="w-4 h-4 text-padel-green" />
+                    {selectedPlayer.home_club}, {selectedPlayer.nationality}
+                    {selectedPlayer.age && <span className="ml-2 px-2 py-0.5 bg-white/10 rounded text-xs font-bold uppercase">AGE: {selectedPlayer.age}</span>}
+                  </div>
+
+                  <motion.div layoutId={`category-${selectedPlayer.id}`} className="mt-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 py-2 rounded-xl inline-flex flex-col items-start shadow-xl">
+                    <span className="text-[10px] uppercase font-bold text-padel-green mb-0.5 tracking-wider">Category</span>
+                    <span className="text-sm">{selectedPlayer.category}</span>
+                  </motion.div>
+                </div>
+              </div>
+
+              {/* Content Section (Scrollable) */}
+              <div className="p-8 pb-12 space-y-8 overflow-y-auto flex-1 bg-[#0F172A] border-t border-white/5">
+                {/* Bio */}
+                <div>
+                  <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Player Bio</h4>
+                  <p className="text-gray-300 leading-relaxed text-lg">
+                    {selectedPlayer.bio}
+                  </p>
+                </div>
+
+                {/* Skill Rating Widget */}
+                {selectedPlayer.skill_rating && (
+                  <div className="bg-white/5 rounded-3xl p-6 border border-white/10 flex items-center gap-6 relative overflow-hidden group/skill">
+                    <div className="absolute inset-0 bg-padel-green/5 opacity-0 group-hover/skill:opacity-100 transition-opacity" />
+                    <div className="relative w-24 h-24">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                        <motion.circle
+                          initial={{ strokeDashoffset: 283 }}
+                          animate={{ strokeDashoffset: 283 - (283 * Math.min(selectedPlayer.skill_rating, 30) / 30) }}
+                          transition={{ duration: 1.5, ease: "easeOut" }}
+                          cx="50" cy="50" r="45" fill="none" stroke="#beff00" strokeWidth="8"
+                          strokeDasharray="283"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-2xl font-black text-white">{selectedPlayer.skill_rating}</span>
+                        <span className="text-[8px] uppercase font-black text-padel-green">Rating</span>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-black text-white uppercase tracking-tight mb-1">Rankedin Skill Level</h4>
+                      <p className="text-xs text-gray-400 leading-relaxed font-bold uppercase tracking-wider opacity-60">
+                        Live performance index based on match intensity and win quality.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Recent Form */}
+                {selectedPlayer.match_form && (
+                  <div className="flex items-center justify-between p-6 bg-white/5 border border-white/10 rounded-2xl">
+                    <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Recent Form</h4>
+                    <div className="flex gap-2">
+                      {String(selectedPlayer.match_form).split(/\s+/).filter(Boolean).map((f, i) => (
+                        <div key={i} className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black shadow-lg ${f === 'W' ? 'bg-padel-green text-black' : 'bg-red-500 text-white'}`}>
+                          {f}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Organizational Rankings */}
+                {selectedPlayer.rankings && selectedPlayer.rankings.length > 0 && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Organizational Rankings</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                      {selectedPlayer.rankings.map((r, i) => (
+                        <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors group">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[10px] font-black text-padel-green uppercase tracking-widest">{r.org || 'Ranking'}</p>
+                                <span className="text-[10px] text-gray-600 font-bold">•</span>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{r.match_type || 'Doubles'}</p>
+                              </div>
+                              <p className="text-lg font-bold text-white tracking-tight leading-tight mb-1">{r.age_group || r.division || 'Open'}</p>
+                            </div>
+                            <div className="flex gap-4">
+                              <div className="text-right">
+                                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Rank</p>
+                                <div className="flex items-baseline gap-0.5 justify-end">
+                                  <span className="text-padel-green text-[10px] font-black">#</span>
+                                  <span className="text-xl font-black text-white tracking-tighter">{r.rank}</span>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Points</p>
+                                <p className="text-xl font-black text-white tracking-tighter">{r.points}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sponsors */}
+                {selectedPlayer.sponsors && selectedPlayer.sponsors.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Sponsors</h4>
+                    <div className="flex gap-4">
+                      {selectedPlayer.sponsors.map(sponsor => (
+                        <div key={sponsor} className="px-4 py-2 border border-white/10 rounded-lg text-sm font-bold text-gray-400 bg-white/5">
+                          {sponsor}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Download & Share Section for Owners */}
+                {userEmail === selectedPlayer.email && (
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      onClick={downloadCard}
+                      className="flex-1 bg-padel-green text-black font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 hover:bg-white transition-all pointer-events-auto"
+                    >
+                      <Download size={18} />
+                      Download Card
+                    </button>
+                    <button
+                      onClick={shareCard}
+                      className="bg-white/10 hover:bg-white text-white hover:text-black transition-all p-3 rounded-xl flex items-center justify-center pointer-events-auto"
+                    >
+                      <Share2 size={20} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* Hidden Print Template */}
+          <div className="fixed -left-[2000px] top-0 pointer-events-none">
+            <div
+              ref={printRef}
+              className="w-[600px] bg-[#0F172A] text-white rounded-[40px] overflow-hidden"
+              style={{ fontFamily: "'Inter', sans-serif" }}
+            >
+              {/* Header Image Area */}
+              <div className="relative h-[450px] w-full">
+                {selectedPlayer.image_url ? (
+                  <img src={selectedPlayer.image_url} crossOrigin="anonymous" className="w-full h-full object-cover" alt="" />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
+                    <Trophy size={140} className="text-white/10" />
+                  </div>
+                )}
+                {/* Overlays */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+
+                {/* Badges */}
+                <div className="absolute top-10 left-10 bg-padel-green text-black font-black w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-[6px] border-black shadow-2xl">
+                  <span className="text-sm uppercase font-extrabold opacity-60">SKILL</span>
+                  <span className="text-4xl leading-none">{selectedPlayer.skill_rating ? Number(selectedPlayer.skill_rating).toFixed(1) : selectedPlayer.skill_rating || '-'}</span>
+                </div>
+
+                {/* Name Overlay */}
+                <div className="absolute bottom-12 left-12 right-12">
+                  <h1 className="text-6xl font-black uppercase tracking-tighter leading-[0.82] mb-4 drop-shadow-2xl">
+                    {selectedPlayer.name.split(' ').map((n, i) => (
+                      <span key={i} className="block">{n}</span>
+                    ))}
+                  </h1>
+                  <div className="flex items-center gap-3 text-padel-green text-2xl font-bold uppercase tracking-[0.15em] drop-shadow-lg">
+                    <MapPin size={28} />
+                    {selectedPlayer.home_club}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats and Info Area */}
+              <div className="p-12 space-y-12 border-t border-white/5 bg-[#0F172A]">
+                {/* Bio Section */}
+                <div>
+                  <h4 className="text-sm font-black text-gray-500 uppercase tracking-[0.3em] mb-6">Player Bio</h4>
+                  <p className="text-2xl text-gray-300 leading-relaxed font-medium py-2">
+                    {selectedPlayer.bio || "Pro player at 4M Padel Community."}
+                  </p>
+                </div>
+
+                {/* Rankings in Print Template */}
+                {selectedPlayer.rankings && selectedPlayer.rankings.length > 0 && (
+                  <div className="bg-white/5 rounded-[32px] p-8 border border-white/10">
+                    <h4 className="text-sm font-black text-gray-500 uppercase tracking-[0.3em] mb-8">Official Rankings</h4>
+                    <div className="space-y-4">
+                      {selectedPlayer.rankings.map((r, i) => (
+                        <div key={i} className="flex items-center justify-between border-b border-white/5 pb-4 last:border-0 last:pb-0">
+                          <div>
+                            <p className="text-padel-green text-xs font-black uppercase tracking-widest mb-1">{r.org}</p>
+                            <p className="text-xl font-bold text-white">{r.age_group || 'Open'}</p>
+                            <p className="text-sm text-gray-500 font-bold uppercase">{r.match_type}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest mb-1">Rank</p>
+                            <p className="text-3xl font-black text-white">#{r.rank}</p>
+                            <p className="text-sm text-padel-green font-bold">{r.points} PTS</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Sponsors Section */}
+                {selectedPlayer.sponsors && selectedPlayer.sponsors.length > 0 && (
+                  <div>
+                    <h4 className="text-sm font-black text-gray-500 uppercase tracking-[0.3em] mb-8">Official Sponsors</h4>
+                    <div className="flex flex-wrap gap-4">
+                      {selectedPlayer.sponsors.map(sponsor => (
+                        <div key={sponsor} className="px-8 py-4 border border-white/10 rounded-2xl text-xl font-black text-gray-300 bg-white/5 uppercase tracking-wide">
+                          {sponsor}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Bottom Footer */}
+                <div className="pt-12 mt-4 border-t border-white/5 flex items-center justify-between opacity-30">
+                  <span className="text-xs font-black uppercase tracking-[0.5em]">4M Padel Community</span>
+                  <span className="text-xs font-bold font-mono uppercase tracking-widest">PRO-CARD | 2026</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </AnimatePresence>
     </div>
   );
 };
