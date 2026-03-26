@@ -671,7 +671,7 @@ const PlayerProfile = () => {
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: 0.3 }}
-                                className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8"
+                                className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isCareerAccordionOpen ? 'p-8' : 'p-5'} lg:p-8 transition-all relative overflow-hidden`}
                             >
                                 <div
                                     onClick={() => {

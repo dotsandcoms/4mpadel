@@ -1,0 +1,3568 @@
+[
+  {
+    "url": "https://api.rankedin.com/v1/nomenclature/GetLayoutNomenclatures",
+    "json": {
+      "config": {
+        "isGoogleAdsEnabled": true
+      },
+      "CurrenciesEnum": {
+        "AFN": 1,
+        "EUR": 2,
+        "USD": 3,
+        "NOK": 4,
+        "COP": 5,
+        "PEN": 6,
+        "AOA": 7,
+        "ARS": 8,
+        "AUD": 9,
+        "AZN": 11,
+        "BAM": 12,
+        "BBD": 13,
+        "BDT": 14,
+        "BGN": 15,
+        "BIF": 16,
+        "BND": 18,
+        "BOB": 19,
+        "BRL": 20,
+        "BSD": 21,
+        "BWP": 22,
+        "BZD": 23,
+        "CAD": 24,
+        "CDF": 25,
+        "CHF": 26,
+        "CLP": 27,
+        "CNY": 28,
+        "AMD": 29,
+        "CRC": 30,
+        "CVE": 31,
+        "DJF": 33,
+        "DKK": 34,
+        "DOP": 35,
+        "DZD": 36,
+        "EGP": 37,
+        "ETB": 38,
+        "AED": 39,
+        "FJD": 40,
+        "GBP": 42,
+        "GEL": 43,
+        "GMD": 45,
+        "GNF": 46,
+        "GTQ": 47,
+        "GYD": 48,
+        "HKD": 49,
+        "HNL": 50,
+        "HRK": 51,
+        "HTG": 52,
+        "HUF": 53,
+        "IDR": 54,
+        "ILS": 55,
+        "INR": 56,
+        "ISK": 57,
+        "JMD": 58,
+        "JPY": 59,
+        "KES": 60,
+        "KGS": 61,
+        "KHR": 62,
+        "KMF": 63,
+        "KRW": 64,
+        "KZT": 66,
+        "LAK": 67,
+        "LBP": 68,
+        "LKR": 69,
+        "LRD": 70,
+        "LSL": 71,
+        "MAD": 72,
+        "MDL": 73,
+        "MGA": 74,
+        "MKD": 75,
+        "MMK": 76,
+        "MNT": 77,
+        "MRO": 79,
+        "MUR": 80,
+        "MVR": 81,
+        "MWK": 82,
+        "MXN": 83,
+        "MYR": 84,
+        "MZN": 85,
+        "NAD": 86,
+        "NGN": 87,
+        "NIO": 88,
+        "ALL": 89,
+        "NPR": 90,
+        "NZD": 91,
+        "PAB": 92,
+        "PGK": 94,
+        "PHP": 95,
+        "PKR": 96,
+        "PLN": 97,
+        "PYG": 98,
+        "QAR": 99,
+        "RON": 100,
+        "RSD": 101,
+        "RUB": 102,
+        "RWF": 103,
+        "SAR": 104,
+        "SBD": 105,
+        "SEK": 107,
+        "SGD": 108,
+        "SLL": 110,
+        "SOS": 111,
+        "SRD": 112,
+        "STD": 113,
+        "SZL": 115,
+        "THB": 116,
+        "TJS": 117,
+        "TOP": 118,
+        "TRY": 119,
+        "TTD": 120,
+        "TWD": 121,
+        "TZS": 122,
+        "UAH": 123,
+        "UGX": 124,
+        "UYU": 125,
+        "UZS": 126,
+        "VND": 127,
+        "VUV": 128,
+        "WST": 129,
+        "XAF": 130,
+        "XCD": 131,
+        "XOF": 132,
+        "YER": 134,
+        "ZAR": 135,
+        "ZMW": 136,
+        "TND": 137,
+        "CZK": 138,
+        "OMR": 139
+      },
+      "MatchTypesDescriptions": {
+        "1": "Men-Singles",
+        "2": "Women-Singles",
+        "3": "Men-Doubles",
+        "4": "Women-Doubles",
+        "5": "Mixed-Doubles",
+        "6": "Team-Event"
+      },
+      "EventStates": {
+        "Upcoming": 1,
+        "Canceled": 2,
+        "Active": 3,
+        "Finished": 4,
+        "SignupClosed": 5,
+        "GeneratingMatches": 6,
+        "MatchesGenerated": 7
+      },
+      "TeamMatchesScoringTypesNoDescription": {
+        "SumOfGamesWon": 1,
+        "PointsPerMatch": 2
+      },
+      "EventStatesReversed": {
+        "1": "Upcoming",
+        "2": "Canceled",
+        "3": "Active",
+        "4": "Finished",
+        "5": "SignupClosed",
+        "6": "GeneratingMatches",
+        "7": "MatchesGenerated"
+      },
+      "EventTypes": {
+        "Unknown": 0,
+        "ClubLeague": 2,
+        "TeamLeague": 3,
+        "Tournament": 4,
+        "ScandinavianClubLeague": 6
+      },
+      "EventTypesReversed": {
+        "0": "Unknown",
+        "2": "ClubLeague",
+        "3": "TeamLeague",
+        "4": "Tournament",
+        "6": "ScandinavianClubLeague"
+      },
+      "VideoApiUrl": "https://video.rankedin.com//api/v1/",
+      "VideoBaseUrl": "https://video.rankedin.com/",
+      "SupportedLanguages": {
+        "en": 1,
+        "fr": 3,
+        "de": 4,
+        "nl": 5,
+        "it": 6,
+        "es": 7,
+        "pt": 8,
+        "ru": 10,
+        "pl": 11,
+        "ua": 13,
+        "se": 15,
+        "hr": 16,
+        "si": 17,
+        "dk": 18,
+        "sr": 19,
+        "tr": 21
+      },
+      "SupportedLanguagesReversed": {
+        "1": "en",
+        "3": "fr",
+        "4": "de",
+        "5": "nl",
+        "6": "it",
+        "7": "es",
+        "8": "pt",
+        "10": "ru",
+        "11": "pl",
+        "13": "ua",
+        "15": "se",
+        "16": "hr",
+        "17": "si",
+        "18": "dk",
+        "19": "sr",
+        "21": "tr"
+      },
+      "SupportedLanguagesArray": [
+        "en",
+        "fr",
+        "de",
+        "nl",
+        "it",
+        "es",
+        "pt",
+        "ru",
+        "pl",
+        "ua",
+        "se",
+        "hr",
+        "si",
+        "dk",
+        "sr",
+        "tr"
+      ],
+      "Languages": {
+        "en": 1,
+        "no": 2,
+        "fr": 3,
+        "de": 4,
+        "nl": 5,
+        "it": 6,
+        "es": 7,
+        "pt": 8,
+        "ru": 10,
+        "pl": 11,
+        "bg": 12,
+        "ua": 13,
+        "fa": 14,
+        "se": 15,
+        "hr": 16,
+        "si": 17,
+        "dk": 18,
+        "sr": 19,
+        "lt": 20,
+        "tr": 21
+      },
+      "ParticipantType": {
+        "Player": 1,
+        "Team": 2,
+        "Club": 3,
+        "Doubles": 4,
+        "Bye": 5,
+        "Pending": 6,
+        "Link": 7
+      },
+      "ParticipantTypeDescriptions": {
+        "1": {
+          "name": "Player",
+          "description": "Player"
+        },
+        "2": {
+          "name": "Team",
+          "description": "Team"
+        },
+        "3": {
+          "name": "Club",
+          "description": "Club"
+        },
+        "4": {
+          "name": "Doubles",
+          "description": "Double"
+        },
+        "5": {
+          "name": "Bye",
+          "description": "Bye"
+        },
+        "6": {
+          "name": "Pending",
+          "description": "Pending"
+        },
+        "7": {
+          "name": "Link",
+          "description": "Link"
+        }
+      },
+      "TeamMatchesScoringTypes": {
+        "1": {
+          "name": "SumOfGamesWon",
+          "description": "Sum of games won"
+        },
+        "2": {
+          "name": "PointsPerMatch",
+          "description": "Points per match outcome"
+        }
+      },
+      "RoundRobinRules": {
+        "1": "MatchPoints",
+        "2": "SetsDifference",
+        "3": "MatchesWon",
+        "4": "HeadToHead",
+        "5": "PointDifference",
+        "6": "WinnerOfFirstMatch",
+        "7": "TeamGamesWon",
+        "8": "MatchesDifference",
+        "9": "IndividualMatchesWon"
+      },
+      "RankingTypes": {
+        "1": {
+          "name": "MenSingles",
+          "description": "Men-Singles"
+        },
+        "2": {
+          "name": "WomenSingles",
+          "description": "Women-Singles"
+        },
+        "3": {
+          "name": "MenDoubles",
+          "description": "Men-Doubles"
+        },
+        "4": {
+          "name": "WomenDoubles",
+          "description": "Women-Doubles"
+        },
+        "5": {
+          "name": "MixedDoubles",
+          "description": "Mixed-Doubles"
+        },
+        "6": {
+          "name": "Teams",
+          "description": "Team-Event"
+        }
+      },
+      "AgeGroups": {
+        "1": {
+          "name": "MenMain",
+          "description": "Men-Main"
+        },
+        "2": {
+          "name": "MenOver35",
+          "description": "Men Over 35"
+        },
+        "3": {
+          "name": "MenOver40",
+          "description": "Men Over 40"
+        },
+        "4": {
+          "name": "MenOver45",
+          "description": "Men Over 45"
+        },
+        "5": {
+          "name": "MenOver50",
+          "description": "Men Over 50"
+        },
+        "6": {
+          "name": "MenOver55",
+          "description": "Men Over 55"
+        },
+        "7": {
+          "name": "MenOver60",
+          "description": "Men Over 60"
+        },
+        "8": {
+          "name": "MenOver65",
+          "description": "Men Over 65"
+        },
+        "9": {
+          "name": "MenOver70",
+          "description": "Men Over 70"
+        },
+        "10": {
+          "name": "MenOver75",
+          "description": "Men Over 75"
+        },
+        "11": {
+          "name": "MenOver80",
+          "description": "Men Over 80"
+        },
+        "12": {
+          "name": "MenOver85",
+          "description": "Men Over 85"
+        },
+        "13": {
+          "name": "LadiesMain",
+          "description": "Women-Main"
+        },
+        "14": {
+          "name": "LadiesOver35",
+          "description": "Women Over 35"
+        },
+        "15": {
+          "name": "LadiesOver40",
+          "description": "Women Over 40"
+        },
+        "16": {
+          "name": "LadiesOver45",
+          "description": "Women Over 45"
+        },
+        "17": {
+          "name": "LadiesOver50",
+          "description": "Women Over 50"
+        },
+        "18": {
+          "name": "LadiesOver55",
+          "description": "Women Over 55"
+        },
+        "19": {
+          "name": "LadiesOver60",
+          "description": "Women Over 60"
+        },
+        "20": {
+          "name": "LadiesOver65",
+          "description": "Women Over 65"
+        },
+        "21": {
+          "name": "LadiesOver70",
+          "description": "Women Over 70"
+        },
+        "22": {
+          "name": "LadiesOver75",
+          "description": "Women Over 75"
+        },
+        "23": {
+          "name": "LadiesOver80",
+          "description": "Women Over 80"
+        },
+        "24": {
+          "name": "LadiesOver85",
+          "description": "Women Over 85"
+        },
+        "25": {
+          "name": "BoysUnder7",
+          "description": "Boys Under 7"
+        },
+        "26": {
+          "name": "BoysUnder9",
+          "description": "Boys Under 9"
+        },
+        "27": {
+          "name": "BoysUnder11",
+          "description": "Boys Under 11"
+        },
+        "28": {
+          "name": "BoysUnder13",
+          "description": "Boys Under 13"
+        },
+        "29": {
+          "name": "BoysUnder15",
+          "description": "Boys Under 15"
+        },
+        "30": {
+          "name": "BoysUnder17",
+          "description": "Boys Under 17"
+        },
+        "31": {
+          "name": "BoysUnder19",
+          "description": "Boys Under 19"
+        },
+        "32": {
+          "name": "BoysUnder21",
+          "description": "Boys Under 21"
+        },
+        "33": {
+          "name": "BoysUnder23",
+          "description": "Boys Under 23"
+        },
+        "34": {
+          "name": "GirlsUnder7",
+          "description": "Girls Under 7"
+        },
+        "35": {
+          "name": "GirlsUnder9",
+          "description": "Girls Under 9"
+        },
+        "36": {
+          "name": "GirlsUnder11",
+          "description": "Girls Under 11"
+        },
+        "37": {
+          "name": "GirlsUnder13",
+          "description": "Girls Under 13"
+        },
+        "38": {
+          "name": "GirlsUnder15",
+          "description": "Girls Under 15"
+        },
+        "39": {
+          "name": "GirlsUnder17",
+          "description": "Girls Under 17"
+        },
+        "40": {
+          "name": "GirlsUnder19",
+          "description": "Girls Under 19"
+        },
+        "41": {
+          "name": "GirlsUnder21",
+          "description": "Girls Under 21"
+        },
+        "42": {
+          "name": "GirlsUnder23",
+          "description": "Girls Under 23"
+        },
+        "43": {
+          "name": "MixedMain",
+          "description": "Mixed-Main"
+        },
+        "44": {
+          "name": "MixedOver35",
+          "description": "Mixed Over 35"
+        },
+        "45": {
+          "name": "MixedOver40",
+          "description": "Mixed Over 40"
+        },
+        "46": {
+          "name": "MixedOver45",
+          "description": "Mixed Over 45"
+        },
+        "47": {
+          "name": "MixedOver50",
+          "description": "Mixed Over 50"
+        },
+        "48": {
+          "name": "MixedOver55",
+          "description": "Mixed Over 55"
+        },
+        "49": {
+          "name": "MixedOver60",
+          "description": "Mixed Over 60"
+        },
+        "50": {
+          "name": "MixedOver65",
+          "description": "Mixed Over 65"
+        },
+        "51": {
+          "name": "MixedOver70",
+          "description": "Mixed Over 70"
+        },
+        "52": {
+          "name": "MixedOver75",
+          "description": "Mixed Over 75"
+        },
+        "53": {
+          "name": "MixedOver80",
+          "description": "Mixed Over 80"
+        },
+        "54": {
+          "name": "MixedOver85",
+          "description": "Mixed Over 85"
+        },
+        "55": {
+          "name": "MixedUnder7",
+          "description": "Mixed Under 7"
+        },
+        "56": {
+          "name": "MixedUnder9",
+          "description": "Mixed Under 9"
+        },
+        "57": {
+          "name": "MixedUnder11",
+          "description": "Mixed Under 11"
+        },
+        "58": {
+          "name": "MixedUnder13",
+          "description": "Mixed Under 13"
+        },
+        "59": {
+          "name": "MixedUnder15",
+          "description": "Mixed Under 15"
+        },
+        "60": {
+          "name": "MixedUnder17",
+          "description": "Mixed Under 17"
+        },
+        "61": {
+          "name": "MixedUnder19",
+          "description": "Mixed Under 19"
+        },
+        "62": {
+          "name": "MixedUnder21",
+          "description": "Mixed Under 21"
+        },
+        "63": {
+          "name": "MixedUnder23",
+          "description": "Mixed Under 23"
+        },
+        "64": {
+          "name": "BoysUnder10",
+          "description": "Boys Under 10"
+        },
+        "65": {
+          "name": "BoysUnder12",
+          "description": "Boys Under 12"
+        },
+        "66": {
+          "name": "BoysUnder14",
+          "description": "Boys Under 14"
+        },
+        "67": {
+          "name": "BoysUnder16",
+          "description": "Boys Under 16"
+        },
+        "68": {
+          "name": "BoysUnder18",
+          "description": "Boys Under 18"
+        },
+        "69": {
+          "name": "BoysUnder20",
+          "description": "Boys Under 20"
+        },
+        "70": {
+          "name": "GirlsUnder10",
+          "description": "Girls Under 10"
+        },
+        "71": {
+          "name": "GirlsUnder12",
+          "description": "Girls Under 12"
+        },
+        "72": {
+          "name": "GirlsUnder14",
+          "description": "Girls Under 14"
+        },
+        "73": {
+          "name": "GirlsUnder16",
+          "description": "Girls Under 16"
+        },
+        "74": {
+          "name": "GirlsUnder18",
+          "description": "Girls Under 18"
+        },
+        "75": {
+          "name": "GirlsUnder20",
+          "description": "Girls Under 20"
+        },
+        "76": {
+          "name": "MixedUnder10",
+          "description": "Mixed Under 10"
+        },
+        "77": {
+          "name": "MixedUnder12",
+          "description": "Mixed Under 12"
+        },
+        "78": {
+          "name": "MixedUnder14",
+          "description": "Mixed Under 14"
+        },
+        "79": {
+          "name": "MixedUnder16",
+          "description": "Mixed Under 16"
+        },
+        "80": {
+          "name": "MixedUnder18",
+          "description": "Mixed Under 18"
+        },
+        "81": {
+          "name": "MixedUnder20",
+          "description": "Mixed Under 20"
+        },
+        "82": {
+          "name": "MenMainPadelTennisPickleball",
+          "description": "Men-Main"
+        },
+        "83": {
+          "name": "LadiesMainPadelTennisPickleball",
+          "description": "Women-Main"
+        },
+        "84": {
+          "name": "MixedMainPadelTennisPickleball",
+          "description": "Mixed-Main"
+        }
+      },
+      "LanguagesDescriptions": {
+        "1": {
+          "name": "en",
+          "description": "English"
+        },
+        "2": {
+          "name": "no",
+          "description": "Norwegian"
+        },
+        "3": {
+          "name": "fr",
+          "description": "French"
+        },
+        "4": {
+          "name": "de",
+          "description": "German"
+        },
+        "5": {
+          "name": "nl",
+          "description": "Dutch"
+        },
+        "6": {
+          "name": "it",
+          "description": "Italian"
+        },
+        "7": {
+          "name": "es",
+          "description": "Spanish"
+        },
+        "8": {
+          "name": "pt",
+          "description": "Portuguese"
+        },
+        "10": {
+          "name": "ru",
+          "description": "Russian"
+        },
+        "11": {
+          "name": "pl",
+          "description": "Polish"
+        },
+        "12": {
+          "name": "bg",
+          "description": "Bulgarian"
+        },
+        "13": {
+          "name": "ua",
+          "description": "Ukrainian"
+        },
+        "14": {
+          "name": "fa",
+          "description": "Persian"
+        },
+        "15": {
+          "name": "se",
+          "description": "Swedish"
+        },
+        "16": {
+          "name": "hr",
+          "description": "Croatian"
+        },
+        "17": {
+          "name": "si",
+          "description": "Slovenian"
+        },
+        "18": {
+          "name": "dk",
+          "description": "Danish"
+        },
+        "19": {
+          "name": "sr",
+          "description": "Serbian"
+        },
+        "20": {
+          "name": "lt",
+          "description": "Lithuanian"
+        },
+        "21": {
+          "name": "tr",
+          "description": "Turkish"
+        }
+      },
+      "LanguagesReversed": {
+        "1": "en",
+        "2": "no",
+        "3": "fr",
+        "4": "de",
+        "5": "nl",
+        "6": "it",
+        "7": "es",
+        "8": "pt",
+        "10": "ru",
+        "11": "pl",
+        "12": "bg",
+        "13": "ua",
+        "14": "fa",
+        "15": "se",
+        "16": "hr",
+        "17": "si",
+        "18": "dk",
+        "19": "sr",
+        "20": "lt",
+        "21": "tr"
+      },
+      "LanguagesArray": [
+        "en",
+        "no",
+        "fr",
+        "de",
+        "nl",
+        "it",
+        "es",
+        "pt",
+        "ru",
+        "pl",
+        "bg",
+        "ua",
+        "fa",
+        "se",
+        "hr",
+        "si",
+        "dk",
+        "sr",
+        "lt",
+        "tr"
+      ],
+      "MatchCancellationEventType": {
+        "Bye": 1,
+        "Walkover": 2,
+        "Disqualified": 3,
+        "Retired": 4,
+        "NotPlayed": 5
+      },
+      "TournamentStartErrors": {
+        "TournamentFinished": 1,
+        "MatchesNotFinished": 2,
+        "StandingsAlreadyGenerated": 3,
+        "StandingsNotPublished": 4,
+        "RankingsNotApproved": 5,
+        "LevelsNotSelected": 6
+      },
+      "MatchTypesArray": {
+        "MenSingles": 1,
+        "WomenSingles": 2,
+        "MenDoubles": 3,
+        "WomenDoubles": 4,
+        "MixedDoubles": 5,
+        "Teams": 6
+      },
+      "SportsArray": {
+        "Squash": 1,
+        "Badminton": 2,
+        "TableTennis": 3,
+        "Tennis": 4,
+        "Padel": 5,
+        "Racquetball": 6,
+        "SoccerSquash": 7,
+        "Fronton": 8,
+        "TeqBall": 9,
+        "Crossminton": 10,
+        "Pickleball": 11,
+        "Roundnet": 12,
+        "Bowls": 13,
+        "FootballTennis": 14
+      },
+      "Sports": {
+        "1": {
+          "name": "Squash",
+          "description": "Squash"
+        },
+        "2": {
+          "name": "Badminton",
+          "description": "Badminton"
+        },
+        "3": {
+          "name": "TableTennis",
+          "description": "Table Tennis"
+        },
+        "4": {
+          "name": "Tennis",
+          "description": "Tennis"
+        },
+        "5": {
+          "name": "Padel",
+          "description": "Padel"
+        },
+        "6": {
+          "name": "Racquetball",
+          "description": "Racquetball"
+        },
+        "7": {
+          "name": "SoccerSquash",
+          "description": "SoccerSquash"
+        },
+        "8": {
+          "name": "Fronton",
+          "description": "Paleta Frontón"
+        },
+        "9": {
+          "name": "TeqBall",
+          "description": "TeqBall"
+        },
+        "10": {
+          "name": "Crossminton",
+          "description": "Crossminton"
+        },
+        "11": {
+          "name": "Pickleball",
+          "description": "Pickleball"
+        },
+        "12": {
+          "name": "Roundnet",
+          "description": "Roundnet"
+        },
+        "13": {
+          "name": "Bowls",
+          "description": "Bowls"
+        },
+        "14": {
+          "name": "FootballTennis",
+          "description": "Football tennis"
+        }
+      },
+      "EventParticipantTypes": {
+        "Real": 1,
+        "Bye": 5,
+        "Pending": 6
+      },
+      "ChallengeStates": {
+        "Requested": 1,
+        "Accepted": 2,
+        "Rejected": 3,
+        "Played": 4,
+        "AwaitingConfirmation": 5,
+        "WinnerConfirmed": 6,
+        "UpcompingTournamentMatch": 7,
+        "Escalated": 8
+      },
+      "TournamentDraws": {
+        "Undefined": 0,
+        "RoundRobin": 1,
+        "Monrad": 2,
+        "Elimination": 3,
+        "Qualifying": 8,
+        "Playoffs": 9,
+        "RRPlayoffsQualification": 10,
+        "QualificationDraw": 11,
+        "MultiRoundRobin": 12,
+        "Americano": 13,
+        "PrivateMatch": 14
+      },
+      "LiveServiceHost": "https://live.rankedin.com/",
+      "Domain": "https://rankedin.com",
+      "Environment": "prod",
+      "FederationLicensesStatus": {
+        "Unknown": 0,
+        "Active": 1,
+        "Suspended": 2,
+        "Canceled": 3,
+        "NoMembership": 4
+      },
+      "PaymentStatuses": {
+        "Undefined": 0,
+        "Created": 1,
+        "Initiated": 2,
+        "Failed": 3,
+        "Completed": 4,
+        "Deleted": 5
+      },
+      "ProductTypes": {
+        "0": "Undefined",
+        "1": "Fee",
+        "2": "Product",
+        "3": "TeamFee"
+      },
+      "PaymentProviders": {
+        "0": "Undefined",
+        "1": "Internal",
+        "2": "Stripe"
+      },
+      "PaymentMethods": {
+        "0": "Undefined",
+        "1": "Cash",
+        "2": "Bank",
+        "3": "Card"
+      },
+      "BookmarkTypes": {
+        "0": "Undefined",
+        "1": "Ranking",
+        "2": "Organization",
+        "3": "Tournament",
+        "4": "ClubLeague",
+        "5": "TeamLeague",
+        "6": "PlayerProfile",
+        "7": "Team",
+        "8": "Rating"
+      },
+      "PaymentTypes": {
+        "1": "PayPal",
+        "2": "Cash",
+        "3": "BankTransfer",
+        "4": "Stripe"
+      },
+      "Countries": [
+        {
+          "code": 0,
+          "short": "rin",
+          "name": "Unknown"
+        },
+        {
+          "code": 1,
+          "short": "no",
+          "name": "Norway"
+        },
+        {
+          "code": 2,
+          "short": "ad",
+          "name": "Andorra"
+        },
+        {
+          "code": 3,
+          "short": "ae",
+          "name": "United Arab Emirates"
+        },
+        {
+          "code": 4,
+          "short": "af",
+          "name": "Afghanistan"
+        },
+        {
+          "code": 5,
+          "short": "ag",
+          "name": "Antigua and Barbuda"
+        },
+        {
+          "code": 6,
+          "short": "ao",
+          "name": "Angola"
+        },
+        {
+          "code": 7,
+          "short": "ar",
+          "name": "Argentina"
+        },
+        {
+          "code": 8,
+          "short": "at",
+          "name": "Austria"
+        },
+        {
+          "code": 9,
+          "short": "au",
+          "name": "Australia"
+        },
+        {
+          "code": 10,
+          "short": "az",
+          "name": "Azerbaijan"
+        },
+        {
+          "code": 11,
+          "short": "ba",
+          "name": "Bosnia and Herzegovina"
+        },
+        {
+          "code": 12,
+          "short": "bb",
+          "name": "Barbados"
+        },
+        {
+          "code": 13,
+          "short": "bd",
+          "name": "Bangladesh"
+        },
+        {
+          "code": 14,
+          "short": "be",
+          "name": "Belgium"
+        },
+        {
+          "code": 15,
+          "short": "bf",
+          "name": "Burkina Faso"
+        },
+        {
+          "code": 16,
+          "short": "bg",
+          "name": "Bulgaria"
+        },
+        {
+          "code": 17,
+          "short": "bh",
+          "name": "Bahrain"
+        },
+        {
+          "code": 18,
+          "short": "bi",
+          "name": "Burundi"
+        },
+        {
+          "code": 19,
+          "short": "bj",
+          "name": "Benin"
+        },
+        {
+          "code": 20,
+          "short": "bn",
+          "name": "Brunei Darussalam"
+        },
+        {
+          "code": 21,
+          "short": "bo",
+          "name": "Bolivia"
+        },
+        {
+          "code": 22,
+          "short": "br",
+          "name": "Brazil"
+        },
+        {
+          "code": 23,
+          "short": "bs",
+          "name": "Bahamas"
+        },
+        {
+          "code": 24,
+          "short": "bt",
+          "name": "Bhutan"
+        },
+        {
+          "code": 25,
+          "short": "bw",
+          "name": "Botswana"
+        },
+        {
+          "code": 26,
+          "short": "by",
+          "name": "Belarus"
+        },
+        {
+          "code": 27,
+          "short": "bz",
+          "name": "Belize"
+        },
+        {
+          "code": 28,
+          "short": "ca",
+          "name": "Canada"
+        },
+        {
+          "code": 29,
+          "short": "cd",
+          "name": "Democratic Republic of the Congo"
+        },
+        {
+          "code": 30,
+          "short": "cf",
+          "name": "Central African Republic"
+        },
+        {
+          "code": 31,
+          "short": "cg",
+          "name": "Congo"
+        },
+        {
+          "code": 32,
+          "short": "ch",
+          "name": "Switzerland"
+        },
+        {
+          "code": 33,
+          "short": "ci",
+          "name": "Côte d\\'Ivoire"
+        },
+        {
+          "code": 34,
+          "short": "cl",
+          "name": "Chile"
+        },
+        {
+          "code": 35,
+          "short": "cm",
+          "name": "Cameroon"
+        },
+        {
+          "code": 36,
+          "short": "cn",
+          "name": "China"
+        },
+        {
+          "code": 37,
+          "short": "co",
+          "name": "Colombia"
+        },
+        {
+          "code": 38,
+          "short": "cr",
+          "name": "Costa Rica"
+        },
+        {
+          "code": 39,
+          "short": "cu",
+          "name": "Cuba"
+        },
+        {
+          "code": 40,
+          "short": "cv",
+          "name": "Cape Verde"
+        },
+        {
+          "code": 41,
+          "short": "cy",
+          "name": "Cyprus"
+        },
+        {
+          "code": 42,
+          "short": "cz",
+          "name": "Czech Republic"
+        },
+        {
+          "code": 43,
+          "short": "de",
+          "name": "Germany"
+        },
+        {
+          "code": 44,
+          "short": "dj",
+          "name": "Djibouti"
+        },
+        {
+          "code": 45,
+          "short": "dk",
+          "name": "Denmark"
+        },
+        {
+          "code": 46,
+          "short": "dm",
+          "name": "Dominica"
+        },
+        {
+          "code": 47,
+          "short": "do",
+          "name": "Dominican Republic"
+        },
+        {
+          "code": 48,
+          "short": "dz",
+          "name": "Algeria"
+        },
+        {
+          "code": 49,
+          "short": "ec",
+          "name": "Ecuador"
+        },
+        {
+          "code": 50,
+          "short": "ee",
+          "name": "Estonia"
+        },
+        {
+          "code": 51,
+          "short": "eg",
+          "name": "Egypt"
+        },
+        {
+          "code": 52,
+          "short": "er",
+          "name": "Eritrea"
+        },
+        {
+          "code": 53,
+          "short": "es",
+          "name": "Spain"
+        },
+        {
+          "code": 54,
+          "short": "et",
+          "name": "Ethiopia"
+        },
+        {
+          "code": 55,
+          "short": "fi",
+          "name": "Finland"
+        },
+        {
+          "code": 56,
+          "short": "fj",
+          "name": "Fiji"
+        },
+        {
+          "code": 57,
+          "short": "fm",
+          "name": "Micronesia"
+        },
+        {
+          "code": 58,
+          "short": "fr",
+          "name": "France"
+        },
+        {
+          "code": 59,
+          "short": "ga",
+          "name": "Gabon"
+        },
+        {
+          "code": 60,
+          "short": "gb",
+          "name": "Great Britain"
+        },
+        {
+          "code": 61,
+          "short": "gd",
+          "name": "Grenada"
+        },
+        {
+          "code": 62,
+          "short": "ge",
+          "name": "Georgia"
+        },
+        {
+          "code": 63,
+          "short": "gh",
+          "name": "Ghana"
+        },
+        {
+          "code": 64,
+          "short": "gm",
+          "name": "Gambia"
+        },
+        {
+          "code": 65,
+          "short": "gn",
+          "name": "Guinea"
+        },
+        {
+          "code": 66,
+          "short": "gq",
+          "name": "Equatorial Guinea"
+        },
+        {
+          "code": 67,
+          "short": "gr",
+          "name": "Greece"
+        },
+        {
+          "code": 68,
+          "short": "gt",
+          "name": "Guatemala"
+        },
+        {
+          "code": 69,
+          "short": "gw",
+          "name": "Guinea-Bissau"
+        },
+        {
+          "code": 70,
+          "short": "gy",
+          "name": "Guyana"
+        },
+        {
+          "code": 71,
+          "short": "hn",
+          "name": "Honduras"
+        },
+        {
+          "code": 72,
+          "short": "hr",
+          "name": "Croatia"
+        },
+        {
+          "code": 73,
+          "short": "ht",
+          "name": "Haiti"
+        },
+        {
+          "code": 74,
+          "short": "hu",
+          "name": "Hungary"
+        },
+        {
+          "code": 75,
+          "short": "id",
+          "name": "Indonesia"
+        },
+        {
+          "code": 76,
+          "short": "ie",
+          "name": "Ireland"
+        },
+        {
+          "code": 77,
+          "short": "il",
+          "name": "Israel"
+        },
+        {
+          "code": 78,
+          "short": "in",
+          "name": "India"
+        },
+        {
+          "code": 79,
+          "short": "iq",
+          "name": "Iraq"
+        },
+        {
+          "code": 80,
+          "short": "ir",
+          "name": "Iran"
+        },
+        {
+          "code": 81,
+          "short": "is",
+          "name": "Iceland"
+        },
+        {
+          "code": 82,
+          "short": "it",
+          "name": "Italy"
+        },
+        {
+          "code": 83,
+          "short": "jm",
+          "name": "Jamaica"
+        },
+        {
+          "code": 84,
+          "short": "jo",
+          "name": "Jordan"
+        },
+        {
+          "code": 85,
+          "short": "jp",
+          "name": "Japan"
+        },
+        {
+          "code": 86,
+          "short": "ke",
+          "name": "Kenya"
+        },
+        {
+          "code": 87,
+          "short": "kg",
+          "name": "Kyrgyzstan"
+        },
+        {
+          "code": 88,
+          "short": "kh",
+          "name": "Cambodia"
+        },
+        {
+          "code": 89,
+          "short": "ki",
+          "name": "Kiribati"
+        },
+        {
+          "code": 90,
+          "short": "km",
+          "name": "Comoros"
+        },
+        {
+          "code": 91,
+          "short": "kn",
+          "name": "Saint Kitts and Nevis"
+        },
+        {
+          "code": 92,
+          "short": "kp",
+          "name": "Democratic People\\'s Republic of Korea"
+        },
+        {
+          "code": 93,
+          "short": "kr",
+          "name": "Republic of Korea"
+        },
+        {
+          "code": 94,
+          "short": "kw",
+          "name": "Kuwait"
+        },
+        {
+          "code": 95,
+          "short": "kz",
+          "name": "Kazakhstan"
+        },
+        {
+          "code": 96,
+          "short": "la",
+          "name": "Lao People\\'s Democratic Republic"
+        },
+        {
+          "code": 97,
+          "short": "lb",
+          "name": "Lebanon"
+        },
+        {
+          "code": 98,
+          "short": "lc",
+          "name": "Saint Lucia"
+        },
+        {
+          "code": 99,
+          "short": "li",
+          "name": "Liechtenstein"
+        },
+        {
+          "code": 100,
+          "short": "lk",
+          "name": "Sri Lanka"
+        },
+        {
+          "code": 101,
+          "short": "lr",
+          "name": "Liberia"
+        },
+        {
+          "code": 102,
+          "short": "ls",
+          "name": "Lesotho"
+        },
+        {
+          "code": 103,
+          "short": "lt",
+          "name": "Lithuania"
+        },
+        {
+          "code": 104,
+          "short": "lu",
+          "name": "Luxembourg"
+        },
+        {
+          "code": 105,
+          "short": "lv",
+          "name": "Latvia"
+        },
+        {
+          "code": 106,
+          "short": "ly",
+          "name": "Libyan Arab Jamahiriya"
+        },
+        {
+          "code": 107,
+          "short": "ma",
+          "name": "Morocco"
+        },
+        {
+          "code": 108,
+          "short": "mc",
+          "name": "Monaco"
+        },
+        {
+          "code": 109,
+          "short": "md",
+          "name": "Republic of Moldova"
+        },
+        {
+          "code": 110,
+          "short": "me",
+          "name": "Montenegro"
+        },
+        {
+          "code": 111,
+          "short": "mg",
+          "name": "Madagascar"
+        },
+        {
+          "code": 112,
+          "short": "mh",
+          "name": "Marshall Islands"
+        },
+        {
+          "code": 113,
+          "short": "mk",
+          "name": "Macedonia"
+        },
+        {
+          "code": 114,
+          "short": "ml",
+          "name": "Mali"
+        },
+        {
+          "code": 115,
+          "short": "mm",
+          "name": "Myanmar"
+        },
+        {
+          "code": 116,
+          "short": "mn",
+          "name": "Mongolia"
+        },
+        {
+          "code": 117,
+          "short": "mr",
+          "name": "Mauritania"
+        },
+        {
+          "code": 118,
+          "short": "mt",
+          "name": "Malta"
+        },
+        {
+          "code": 119,
+          "short": "mu",
+          "name": "Mauritius"
+        },
+        {
+          "code": 120,
+          "short": "mv",
+          "name": "Maldives"
+        },
+        {
+          "code": 121,
+          "short": "mw",
+          "name": "Malawi"
+        },
+        {
+          "code": 122,
+          "short": "mx",
+          "name": "Mexico"
+        },
+        {
+          "code": 123,
+          "short": "my",
+          "name": "Malaysia"
+        },
+        {
+          "code": 124,
+          "short": "mz",
+          "name": "Mozambique"
+        },
+        {
+          "code": 125,
+          "short": "na",
+          "name": "Namibia"
+        },
+        {
+          "code": 126,
+          "short": "ne",
+          "name": "Niger"
+        },
+        {
+          "code": 127,
+          "short": "ng",
+          "name": "Nigeria"
+        },
+        {
+          "code": 128,
+          "short": "ni",
+          "name": "Nicaragua"
+        },
+        {
+          "code": 129,
+          "short": "nl",
+          "name": "Netherlands"
+        },
+        {
+          "code": 130,
+          "short": "np",
+          "name": "Nepal"
+        },
+        {
+          "code": 131,
+          "short": "nr",
+          "name": "Nauru"
+        },
+        {
+          "code": 132,
+          "short": "nz",
+          "name": "New Zealand"
+        },
+        {
+          "code": 133,
+          "short": "om",
+          "name": "Oman"
+        },
+        {
+          "code": 134,
+          "short": "pa",
+          "name": "Panama"
+        },
+        {
+          "code": 135,
+          "short": "pe",
+          "name": "Peru"
+        },
+        {
+          "code": 136,
+          "short": "pg",
+          "name": "Papua New Guinea"
+        },
+        {
+          "code": 137,
+          "short": "ph",
+          "name": "Philippines"
+        },
+        {
+          "code": 138,
+          "short": "pk",
+          "name": "Pakistan"
+        },
+        {
+          "code": 139,
+          "short": "pl",
+          "name": "Poland"
+        },
+        {
+          "code": 140,
+          "short": "pt",
+          "name": "Portugal"
+        },
+        {
+          "code": 141,
+          "short": "pw",
+          "name": "Palau"
+        },
+        {
+          "code": 142,
+          "short": "py",
+          "name": "Paraguay"
+        },
+        {
+          "code": 143,
+          "short": "qa",
+          "name": "Qatar"
+        },
+        {
+          "code": 144,
+          "short": "ro",
+          "name": "Romania"
+        },
+        {
+          "code": 145,
+          "short": "rs",
+          "name": "Serbia"
+        },
+        {
+          "code": 146,
+          "short": "ru",
+          "name": "Russia"
+        },
+        {
+          "code": 147,
+          "short": "rw",
+          "name": "Rwanda"
+        },
+        {
+          "code": 148,
+          "short": "sa",
+          "name": "Saudi Arabia"
+        },
+        {
+          "code": 149,
+          "short": "sb",
+          "name": "Solomon Islands"
+        },
+        {
+          "code": 150,
+          "short": "sc",
+          "name": "Seychelles"
+        },
+        {
+          "code": 151,
+          "short": "sd",
+          "name": "Sudan"
+        },
+        {
+          "code": 152,
+          "short": "se",
+          "name": "Sweden"
+        },
+        {
+          "code": 153,
+          "short": "sg",
+          "name": "Singapore"
+        },
+        {
+          "code": 154,
+          "short": "si",
+          "name": "Slovenia"
+        },
+        {
+          "code": 155,
+          "short": "sk",
+          "name": "Slovakia"
+        },
+        {
+          "code": 156,
+          "short": "sl",
+          "name": "Sierra Leone"
+        },
+        {
+          "code": 157,
+          "short": "sm",
+          "name": "San Marino"
+        },
+        {
+          "code": 158,
+          "short": "sn",
+          "name": "Senegal"
+        },
+        {
+          "code": 159,
+          "short": "so",
+          "name": "Somalia"
+        },
+        {
+          "code": 160,
+          "short": "sr",
+          "name": "Suriname"
+        },
+        {
+          "code": 161,
+          "short": "ss",
+          "name": "South Sudan"
+        },
+        {
+          "code": 162,
+          "short": "st",
+          "name": "Sao Tome and Principe"
+        },
+        {
+          "code": 163,
+          "short": "sv",
+          "name": "El Salvador"
+        },
+        {
+          "code": 164,
+          "short": "sy",
+          "name": "Syria"
+        },
+        {
+          "code": 165,
+          "short": "sz",
+          "name": "Swaziland"
+        },
+        {
+          "code": 166,
+          "short": "td",
+          "name": "Chad"
+        },
+        {
+          "code": 167,
+          "short": "tg",
+          "name": "Togo"
+        },
+        {
+          "code": 168,
+          "short": "th",
+          "name": "Thailand"
+        },
+        {
+          "code": 169,
+          "short": "tj",
+          "name": "Tajikistan"
+        },
+        {
+          "code": 170,
+          "short": "tl",
+          "name": "Timor-Leste"
+        },
+        {
+          "code": 171,
+          "short": "tm",
+          "name": "Turkmenistan"
+        },
+        {
+          "code": 172,
+          "short": "tn",
+          "name": "Tunisia"
+        },
+        {
+          "code": 173,
+          "short": "to",
+          "name": "Tonga"
+        },
+        {
+          "code": 174,
+          "short": "tr",
+          "name": "Turkey"
+        },
+        {
+          "code": 175,
+          "short": "tt",
+          "name": "Trinidad and Tobago"
+        },
+        {
+          "code": 176,
+          "short": "tv",
+          "name": "Tuvalu"
+        },
+        {
+          "code": 177,
+          "short": "tz",
+          "name": "Tanzania"
+        },
+        {
+          "code": 178,
+          "short": "ua",
+          "name": "Ukraine"
+        },
+        {
+          "code": 179,
+          "short": "ug",
+          "name": "Uganda"
+        },
+        {
+          "code": 180,
+          "short": "us",
+          "name": "United States of America"
+        },
+        {
+          "code": 181,
+          "short": "uy",
+          "name": "Uruguay"
+        },
+        {
+          "code": 182,
+          "short": "uz",
+          "name": "Uzbekistan"
+        },
+        {
+          "code": 183,
+          "short": "vc",
+          "name": "Saint Vincent and the Grenadines"
+        },
+        {
+          "code": 184,
+          "short": "ve",
+          "name": "Venezuela"
+        },
+        {
+          "code": 185,
+          "short": "vn",
+          "name": "Vietnam"
+        },
+        {
+          "code": 186,
+          "short": "vu",
+          "name": "Vanuatu"
+        },
+        {
+          "code": 187,
+          "short": "ws",
+          "name": "Samoa"
+        },
+        {
+          "code": 188,
+          "short": "ye",
+          "name": "Yemen"
+        },
+        {
+          "code": 189,
+          "short": "za",
+          "name": "South Africa"
+        },
+        {
+          "code": 190,
+          "short": "zm",
+          "name": "Zambia"
+        },
+        {
+          "code": 191,
+          "short": "zw",
+          "name": "Zimbabwe"
+        },
+        {
+          "code": 193,
+          "short": "ax",
+          "name": "Aland Islands"
+        },
+        {
+          "code": 194,
+          "short": "al",
+          "name": "Albania"
+        },
+        {
+          "code": 196,
+          "short": "as",
+          "name": "American Samoa"
+        },
+        {
+          "code": 199,
+          "short": "ai",
+          "name": "Anguilla"
+        },
+        {
+          "code": 202,
+          "short": "am",
+          "name": "Armenia"
+        },
+        {
+          "code": 203,
+          "short": "aw",
+          "name": "Aruba"
+        },
+        {
+          "code": 215,
+          "short": "bm",
+          "name": "Bermuda"
+        },
+        {
+          "code": 222,
+          "short": "io",
+          "name": "British Indian Ocean Territory"
+        },
+        {
+          "code": 231,
+          "short": "ky",
+          "name": "Cayman Islands"
+        },
+        {
+          "code": 236,
+          "short": "cx",
+          "name": "Christmas Island"
+        },
+        {
+          "code": 237,
+          "short": "cc",
+          "name": "Cocos (Keeling) Islands"
+        },
+        {
+          "code": 240,
+          "short": "ck",
+          "name": "Cook Islands"
+        },
+        {
+          "code": 244,
+          "short": "cw",
+          "name": "Curaçao"
+        },
+        {
+          "code": 260,
+          "short": "fk",
+          "name": "Falkland Islands"
+        },
+        {
+          "code": 261,
+          "short": "fo",
+          "name": "Faroe Islands"
+        },
+        {
+          "code": 267,
+          "short": "gf",
+          "name": "French Guiana"
+        },
+        {
+          "code": 268,
+          "short": "pf",
+          "name": "French Polynesia"
+        },
+        {
+          "code": 269,
+          "short": "tf",
+          "name": "French Southern Territories"
+        },
+        {
+          "code": 275,
+          "short": "gi",
+          "name": "Gibraltar"
+        },
+        {
+          "code": 277,
+          "short": "gl",
+          "name": "Greenland"
+        },
+        {
+          "code": 279,
+          "short": "gp",
+          "name": "Guadeloupe"
+        },
+        {
+          "code": 280,
+          "short": "gu",
+          "name": "Guam"
+        },
+        {
+          "code": 282,
+          "short": "gg",
+          "name": "Guernsey"
+        },
+        {
+          "code": 287,
+          "short": "va",
+          "name": "Holy See"
+        },
+        {
+          "code": 289,
+          "short": "hk",
+          "name": "Hong Kong"
+        },
+        {
+          "code": 297,
+          "short": "im",
+          "name": "Isle of Man"
+        },
+        {
+          "code": 302,
+          "short": "je",
+          "name": "Jersey"
+        },
+        {
+          "code": 318,
+          "short": "mo",
+          "name": "Macau"
+        },
+        {
+          "code": 326,
+          "short": "mq",
+          "name": "Martinique"
+        },
+        {
+          "code": 329,
+          "short": "yt",
+          "name": "Mayotte"
+        },
+        {
+          "code": 335,
+          "short": "ms",
+          "name": "Montserrat"
+        },
+        {
+          "code": 343,
+          "short": "nc",
+          "name": "New Caledonia"
+        },
+        {
+          "code": 348,
+          "short": "nu",
+          "name": "Niue"
+        },
+        {
+          "code": 349,
+          "short": "nf",
+          "name": "Norfolk Island"
+        },
+        {
+          "code": 351,
+          "short": "mp",
+          "name": "Northern Mariana Islands"
+        },
+        {
+          "code": 361,
+          "short": "pn",
+          "name": "Pitcairn"
+        },
+        {
+          "code": 364,
+          "short": "pr",
+          "name": "Puerto Rico"
+        },
+        {
+          "code": 370,
+          "short": "re",
+          "name": "Réunion"
+        },
+        {
+          "code": 371,
+          "short": "bl",
+          "name": "Saint Barthélemy"
+        },
+        {
+          "code": 375,
+          "short": "mf",
+          "name": "Saint Martin"
+        },
+        {
+          "code": 376,
+          "short": "pm",
+          "name": "Saint Pierre and Miquelon"
+        },
+        {
+          "code": 387,
+          "short": "sx",
+          "name": "Sint Maarten"
+        },
+        {
+          "code": 393,
+          "short": "gs",
+          "name": "South Georgia and the South Sandwich Islands"
+        },
+        {
+          "code": 398,
+          "short": "ps",
+          "name": "State of Palestine"
+        },
+        {
+          "code": 401,
+          "short": "sj",
+          "name": "Svalbard and Jan Mayen"
+        },
+        {
+          "code": 406,
+          "short": "tw",
+          "name": "Taiwan"
+        },
+        {
+          "code": 412,
+          "short": "tk",
+          "name": "Tokelau"
+        },
+        {
+          "code": 418,
+          "short": "tc",
+          "name": "Turks and Caicos Islands"
+        },
+        {
+          "code": 424,
+          "short": "um",
+          "name": "United States Minor Outlying Islands"
+        },
+        {
+          "code": 431,
+          "short": "vg",
+          "name": "Virgin Islands (British)"
+        },
+        {
+          "code": 432,
+          "short": "vi",
+          "name": "Virgin Islands (US)"
+        },
+        {
+          "code": 433,
+          "short": "wf",
+          "name": "Wallis and Futuna"
+        },
+        {
+          "code": 434,
+          "short": "eh",
+          "name": "Western Sahara"
+        },
+        {
+          "code": 435,
+          "short": "gbeng",
+          "name": "England"
+        },
+        {
+          "code": 436,
+          "short": "gbnir",
+          "name": "Northern Ireland"
+        },
+        {
+          "code": 437,
+          "short": "gbsct",
+          "name": "Scotland"
+        },
+        {
+          "code": 438,
+          "short": "gbwls",
+          "name": "Wales"
+        },
+        {
+          "code": 439,
+          "short": "gbork",
+          "name": "Orkney"
+        },
+        {
+          "code": 440,
+          "short": "gbiow",
+          "name": "Isle of Wight"
+        },
+        {
+          "code": 441,
+          "short": "segot",
+          "name": "Gotland"
+        },
+        {
+          "code": 442,
+          "short": "eesrm",
+          "name": "Saaremaa"
+        },
+        {
+          "code": 443,
+          "short": "xk",
+          "name": "Kosovo"
+        }
+      ],
+      "TeamMatchStates": {
+        "1": "New",
+        "2": "InPlay",
+        "3": "AllMatchesConfirmed"
+      },
+      "FrontEndEventTypeEnum": {
+        "Unknown": 0,
+        "Americano": 1,
+        "ClubLeague": 2,
+        "TeamLeague": 3,
+        "Tournament": 4,
+        "PrivateMatch": 5
+      },
+      "FrontEndEventTypeEnumReversed": {
+        "0": "Unknown",
+        "1": "Americano",
+        "2": "ClubLeague",
+        "3": "TeamLeague",
+        "4": "Tournament",
+        "5": "PrivateMatch"
+      },
+      "ParticipantStatuses": {
+        "Unknown": 0,
+        "Regular": 1,
+        "FirstRoundWalkOver": 2,
+        "Walkover": 3,
+        "Disqualified": 4,
+        "Retired": 5,
+        "NotPlayed": 6
+      },
+      "GendersReversed": {
+        "0": "Mixed",
+        "1": "Male",
+        "2": "Female"
+      },
+      "Genders": {
+        "Mixed": 0,
+        "Male": 1,
+        "Female": 2
+      },
+      "TeamParticipantType": {
+        "Player": 1,
+        "ReservePlayer": 2,
+        "Captain": 3,
+        "Coach": 4,
+        "Manager": 5
+      },
+      "EventInvitationStatus": {
+        "Pending": 1,
+        "Accepted": 2,
+        "Rejected": 3,
+        "Outdated": 4
+      },
+      "OrganisationTypes": {
+        "1": "Club",
+        "2": "Federations",
+        "3": "Associations",
+        "4": "Companies",
+        "5": "FriendGroup"
+      },
+      "TeamMatchStatesStringInt": {
+        "New": 1,
+        "InPlay": 2,
+        "AllMatchesConfirmed": 3
+      },
+      "ApiDomain": "https://api.rankedin.com/v1",
+      "ExceptionsEnum": {
+        "NoError": 0,
+        "UnhandledError": 1,
+        "InvalidPermissions": 2,
+        "InvalidState": 3,
+        "InvalidData": 4,
+        "InvalidType": 5,
+        "InvalidConfiguration": 6,
+        "StripeAccountError": 7,
+        "NotAuthenticated": 8,
+        "ConfigNotFound": 500,
+        "EntityNotFound": 501,
+        "NotFound_Tournament": 502,
+        "Tournament_NoClasses": 503,
+        "Tournament_NoDraws": 504,
+        "Tournament_NoMatches": 505,
+        "Tournament_NoRankingLevel": 506,
+        "Tournament_NoRanking": 507,
+        "Payment_NoCurrency": 508,
+        "Rating_NoAlgorithm": 509,
+        "AccountIsNotConfirmed": 510,
+        "InvalidCredentials": 511,
+        "AccountExists": 512,
+        "PasswordNotMatch": 513,
+        "NoMembership": 514,
+        "PlayerNotExists": 515,
+        "AccountNotExists": 516,
+        "TournamentPlanNotExists": 517,
+        "OrganisationNotExists": 518,
+        "AccountDeleted": 519,
+        "Forbidden": 1000,
+        "Conflict": 1101,
+        "Tournament_State_Active": 1102,
+        "Tournament_NotEnoughPlayers": 1103,
+        "Tournament_IsLocked": 1104,
+        "Tournament_NoWinnerMatches": 1105,
+        "Tournament_InvalidMatches": 1106,
+        "Tournament_NotApprovedRanking": 1107,
+        "Tournament_NotGeneratePoints": 1108,
+        "Tournament_NotGenerateStandings": 1109,
+        "Tournament_State_Finished": 1110,
+        "Tournament_NoDrawParticipantsForChallengeIds": 1111,
+        "Tournament_MatchesScheduledOnCourt": 1112,
+        "Event_HasOrders": 1113,
+        "Payment_AccountExists": 1114,
+        "Payment_NoActiveAccount": 1115,
+        "Payment_DiffAmount": 1116,
+        "Payment_InProgress_DiffAmount": 1117,
+        "Payment_NoActivePaymentMethods": 1118,
+        "Payment_Provider_NoDelete": 1119,
+        "Player_Not_Valid_License": 1120,
+        "Player_Not_Allow_PrivateMatch": 1121,
+        "Tournament_CanNotBeEdited": 1122,
+        "Tournament_NotEditCourts": 1123,
+        "Subscription_NotEligible_ForCancel": 1124,
+        "Tournament_Cannot_Start": 1125,
+        "Tournament_Cannot_Be_Deleted": 1126,
+        "Organisation_Is_Already_Premium": 1127,
+        "Organisation_Is_Not_Premium": 1128,
+        "Organisation_Is_Already_Pro": 1129,
+        "Organisation_Is_Not_Pro": 1130,
+        "Player_No_License_Found": 1131,
+        "NotImplemented": 1201,
+        "ValidationError": 1301,
+        "InvalidArgument": 1302,
+        "Organisation_NoLicenseRequired": 1303,
+        "DonationLowerThanMinimum": 1304,
+        "CommMaxRequeueCountExceeded": 1305,
+        "Payment_ProviderNotSupported": 1306,
+        "Payment_InvalidAmount": 1307,
+        "SubscriptionAlreadyCreated": 1308,
+        "TournamentPlanAlreadyExists": 1309,
+        "NoTournamentPlanCoupons": 1310,
+        "NoCouponForUpgrade": 1311,
+        "NoStripeAccount": 1312,
+        "PremiumPlanIsNotAllowed": 1313,
+        "Americano_PlayerDisconnectedAlready": 1314,
+        "Event_AlreadyJoined": 1315,
+        "Event_JoinNotAllowed": 1316,
+        "TeamLeagueTeam_NotEnoughMalePlayers": 1317,
+        "TeamLeagueTeam_NotEnoughFemalePlayers": 1318,
+        "TeamLeagueTeam_OneCaptainReqired": 1319,
+        "RequiredDataNotFound": 1320,
+        "ConfirmedResultCannotBeChanged": 1321,
+        "Tournament_MovementErrorSameClassSelected": 1322,
+        "Tournament_MovementErrorPlayersInDraws": 1323,
+        "Tournament_CourtsRequired": 1324,
+        "Event_AlreadyFinished": 1325,
+        "Tournament_AllowedDatesNotSet": 1326,
+        "Tournament_TooLateToUncloseSignIn": 1327,
+        "Tournament_SchedulingMatches": 1328,
+        "Tournament_PlayerInDrawAndMatches": 1329,
+        "Tournament_RefereeAlreadyAdded": 1330,
+        "Tournament_Cannot_Remove_Last_Admin": 1331,
+        "TeamLeague_CantChangeDivisionLevelDescription": 1332,
+        "TeamLeague_NoRankingLevel": 1333,
+        "TeamLeague_CannotCloseSignIn": 1334,
+        "TeamLeague_NotApprovedRanking": 1335,
+        "TeamLeague_CannotOpenSignIn": 1336,
+        "TeamLeague_CannotDeleteDraws": 1337,
+        "TeamLeague_CannotUndoStart": 1338,
+        "TeamLeague_CannotChangeRankings": 1339,
+        "Tournament_MovementErrorIncompatibleClassTypes": 1340,
+        "TeamLeague_NotEnoughRankingPositions": 1341,
+        "Player_Invalid_License_TeamLeague": 1342,
+        "ClubLeague_Cannot_Remove_Last_Admin": 1343,
+        "ClubLeague_AlreadyCanceled": 1344,
+        "ClubLeague_StillHasPlayers": 1345,
+        "ClubLeague_CannotCloseSignInBeforePreviousRoundFinish": 1346,
+        "InvalidOperation": 1347
+      },
+      "CampaignEnum": {
+        "Undefined": 0,
+        "Betsson": 1,
+        "PrivateMatch": 2,
+        "Newsletter": 3,
+        "Americano": 4,
+        "PrivateMatchWizzard": 5,
+        "ProPlayer": 6,
+        "Freemium": 7,
+        "EndedTrial": 8,
+        "PwaInstallAdvertOnTimeInterval": 9,
+        "PwaInstallAdvertUntilIgnored": 10,
+        "NordicChampionships": 11
+      },
+      "CampaignPeriodTypeEnum": {
+        "Undefined": 0,
+        "OneTime": 1,
+        "Days": 2,
+        "Weeks": 3,
+        "Months": 4
+      },
+      "TournamentMenuStep": {
+        "Create": 0,
+        "Logos": 1,
+        "Classes": 2,
+        "Players": 3,
+        "CloseSignIn": 4,
+        "Draws": 5,
+        "Times": 6,
+        "Matches": 7,
+        "Start": 8
+      },
+      "Currencies": {
+        "1": {
+          "name": "AFN",
+          "description": "Afghan afghani"
+        },
+        "2": {
+          "name": "EUR",
+          "description": "Euro"
+        },
+        "3": {
+          "name": "USD",
+          "description": "US Dollar"
+        },
+        "4": {
+          "name": "NOK",
+          "description": "Norwegian krone"
+        },
+        "5": {
+          "name": "COP",
+          "description": "Colombian peso"
+        },
+        "6": {
+          "name": "PEN",
+          "description": "Peruvian sol"
+        },
+        "7": {
+          "name": "AOA",
+          "description": "Angolan kwanza"
+        },
+        "8": {
+          "name": "ARS",
+          "description": "Argentine peso"
+        },
+        "9": {
+          "name": "AUD",
+          "description": "Australian dollar"
+        },
+        "11": {
+          "name": "AZN",
+          "description": "Azerbaijani manat"
+        },
+        "12": {
+          "name": "BAM",
+          "description": "Bosnia and Herzegovina convertible mark"
+        },
+        "13": {
+          "name": "BBD",
+          "description": "Barbadian dollar"
+        },
+        "14": {
+          "name": "BDT",
+          "description": "Bangladeshi taka"
+        },
+        "15": {
+          "name": "BGN",
+          "description": "Bulgarian lev"
+        },
+        "16": {
+          "name": "BIF",
+          "description": "Burundian franc"
+        },
+        "18": {
+          "name": "BND",
+          "description": "Brunei dollar"
+        },
+        "19": {
+          "name": "BOB",
+          "description": "Bolivian boliviano"
+        },
+        "20": {
+          "name": "BRL",
+          "description": "Brazilian real"
+        },
+        "21": {
+          "name": "BSD",
+          "description": "Bahamian dollar"
+        },
+        "22": {
+          "name": "BWP",
+          "description": "Botswana pula"
+        },
+        "23": {
+          "name": "BZD",
+          "description": "Belize dollar"
+        },
+        "24": {
+          "name": "CAD",
+          "description": "Canadian dollar"
+        },
+        "25": {
+          "name": "CDF",
+          "description": "Congolese franc"
+        },
+        "26": {
+          "name": "CHF",
+          "description": "Swiss franc"
+        },
+        "27": {
+          "name": "CLP",
+          "description": "Chilean peso"
+        },
+        "28": {
+          "name": "CNY",
+          "description": "Chinese yuan"
+        },
+        "29": {
+          "name": "AMD",
+          "description": "Armenian dram"
+        },
+        "30": {
+          "name": "CRC",
+          "description": "Costa Rican col�n"
+        },
+        "31": {
+          "name": "CVE",
+          "description": "Cape Verdean escudo"
+        },
+        "33": {
+          "name": "DJF",
+          "description": "Djiboutian franc"
+        },
+        "34": {
+          "name": "DKK",
+          "description": "Danish krone"
+        },
+        "35": {
+          "name": "DOP",
+          "description": "Dominican peso"
+        },
+        "36": {
+          "name": "DZD",
+          "description": "Algerian dinar"
+        },
+        "37": {
+          "name": "EGP",
+          "description": "Egyptian pound"
+        },
+        "38": {
+          "name": "ETB",
+          "description": "Ethiopian birr"
+        },
+        "39": {
+          "name": "AED",
+          "description": "United Arab Emirates dirham"
+        },
+        "40": {
+          "name": "FJD",
+          "description": "Fijian dollar"
+        },
+        "42": {
+          "name": "GBP",
+          "description": "British pound"
+        },
+        "43": {
+          "name": "GEL",
+          "description": "Georgian lari"
+        },
+        "45": {
+          "name": "GMD",
+          "description": "Gambian dalasi"
+        },
+        "46": {
+          "name": "GNF",
+          "description": "Guinean franc"
+        },
+        "47": {
+          "name": "GTQ",
+          "description": "Guatemalan quetzal"
+        },
+        "48": {
+          "name": "GYD",
+          "description": "Guyanese dollar"
+        },
+        "49": {
+          "name": "HKD",
+          "description": "Hong Kong dollar"
+        },
+        "50": {
+          "name": "HNL",
+          "description": "Honduran lempira"
+        },
+        "51": {
+          "name": "HRK",
+          "description": "Croatian kuna"
+        },
+        "52": {
+          "name": "HTG",
+          "description": "Haitian gourde"
+        },
+        "53": {
+          "name": "HUF",
+          "description": "Hungarian forint"
+        },
+        "54": {
+          "name": "IDR",
+          "description": "Indonesian rupiah"
+        },
+        "55": {
+          "name": "ILS",
+          "description": "Israeli new shekel"
+        },
+        "56": {
+          "name": "INR",
+          "description": "Indian rupee"
+        },
+        "57": {
+          "name": "ISK",
+          "description": "Icelandic kr�na"
+        },
+        "58": {
+          "name": "JMD",
+          "description": "Jamaican dollar"
+        },
+        "59": {
+          "name": "JPY",
+          "description": "Japanese yen"
+        },
+        "60": {
+          "name": "KES",
+          "description": "Kenyan shilling"
+        },
+        "61": {
+          "name": "KGS",
+          "description": "Kyrgyzstani som"
+        },
+        "62": {
+          "name": "KHR",
+          "description": "Cambodian riel"
+        },
+        "63": {
+          "name": "KMF",
+          "description": "Comorian franc"
+        },
+        "64": {
+          "name": "KRW",
+          "description": "South Korean won"
+        },
+        "66": {
+          "name": "KZT",
+          "description": "Kazakhstani tenge"
+        },
+        "67": {
+          "name": "LAK",
+          "description": "Lao kip"
+        },
+        "68": {
+          "name": "LBP",
+          "description": "Lebanese pound"
+        },
+        "69": {
+          "name": "LKR",
+          "description": "Sri Lankan rupee"
+        },
+        "70": {
+          "name": "LRD",
+          "description": "Liberian dollar"
+        },
+        "71": {
+          "name": "LSL",
+          "description": "Lesotho loti"
+        },
+        "72": {
+          "name": "MAD",
+          "description": "Moroccan dirham"
+        },
+        "73": {
+          "name": "MDL",
+          "description": "Moldovan leu"
+        },
+        "74": {
+          "name": "MGA",
+          "description": "Malagasy ariary"
+        },
+        "75": {
+          "name": "MKD",
+          "description": "Macedonian denar"
+        },
+        "76": {
+          "name": "MMK",
+          "description": "Burmese kyat"
+        },
+        "77": {
+          "name": "MNT",
+          "description": "Mongolian t�gr�g"
+        },
+        "79": {
+          "name": "MRO",
+          "description": "Mauritanian ouguiya"
+        },
+        "80": {
+          "name": "MUR",
+          "description": "Mauritian rupee"
+        },
+        "81": {
+          "name": "MVR",
+          "description": "Maldivian rufiyaa"
+        },
+        "82": {
+          "name": "MWK",
+          "description": "Malawian kwacha"
+        },
+        "83": {
+          "name": "MXN",
+          "description": "Mexican peso"
+        },
+        "84": {
+          "name": "MYR",
+          "description": "Malaysian ringgit"
+        },
+        "85": {
+          "name": "MZN",
+          "description": "Mozambican metical"
+        },
+        "86": {
+          "name": "NAD",
+          "description": "Namibian dollar"
+        },
+        "87": {
+          "name": "NGN",
+          "description": "Nigerian naira"
+        },
+        "88": {
+          "name": "NIO",
+          "description": "Nicaraguan c�rdoba"
+        },
+        "89": {
+          "name": "ALL",
+          "description": "Albanian lek"
+        },
+        "90": {
+          "name": "NPR",
+          "description": "Nepalese rupee"
+        },
+        "91": {
+          "name": "NZD",
+          "description": "New Zealand dollar"
+        },
+        "92": {
+          "name": "PAB",
+          "description": "Panamanian balboa"
+        },
+        "94": {
+          "name": "PGK",
+          "description": "Papua New Guinean kina"
+        },
+        "95": {
+          "name": "PHP",
+          "description": "Philippine peso"
+        },
+        "96": {
+          "name": "PKR",
+          "description": "Pakistani rupee"
+        },
+        "97": {
+          "name": "PLN",
+          "description": "Polish zloty"
+        },
+        "98": {
+          "name": "PYG",
+          "description": "Paraguayan guaran�"
+        },
+        "99": {
+          "name": "QAR",
+          "description": "Qatari riyal"
+        },
+        "100": {
+          "name": "RON",
+          "description": "Romanian leu"
+        },
+        "101": {
+          "name": "RSD",
+          "description": "Serbian dinar"
+        },
+        "102": {
+          "name": "RUB",
+          "description": "Russian ruble"
+        },
+        "103": {
+          "name": "RWF",
+          "description": "Rwandan franc"
+        },
+        "104": {
+          "name": "SAR",
+          "description": "Saudi riyal"
+        },
+        "105": {
+          "name": "SBD",
+          "description": "Solomon Islands dollar"
+        },
+        "107": {
+          "name": "SEK",
+          "description": "Swedish krona"
+        },
+        "108": {
+          "name": "SGD",
+          "description": "Singapore dollar"
+        },
+        "110": {
+          "name": "SLL",
+          "description": "Sierra Leonean leone"
+        },
+        "111": {
+          "name": "SOS",
+          "description": "Somali shilling"
+        },
+        "112": {
+          "name": "SRD",
+          "description": "Surinamese dollar"
+        },
+        "113": {
+          "name": "STD",
+          "description": "Sao Tome and Principe dobra"
+        },
+        "115": {
+          "name": "SZL",
+          "description": "Swazi lilangeni"
+        },
+        "116": {
+          "name": "THB",
+          "description": "Thai baht"
+        },
+        "117": {
+          "name": "TJS",
+          "description": "Tajikistani somoni"
+        },
+        "118": {
+          "name": "TOP",
+          "description": "Tongan pa'anga"
+        },
+        "119": {
+          "name": "TRY",
+          "description": "Turkish lira"
+        },
+        "120": {
+          "name": "TTD",
+          "description": "Trinidad and Tobago dollar"
+        },
+        "121": {
+          "name": "TWD",
+          "description": "New Taiwan dollar"
+        },
+        "122": {
+          "name": "TZS",
+          "description": "Tanzanian shilling"
+        },
+        "123": {
+          "name": "UAH",
+          "description": "Ukrainian hryvnia"
+        },
+        "124": {
+          "name": "UGX",
+          "description": "Ugandan shilling"
+        },
+        "125": {
+          "name": "UYU",
+          "description": "Uruguayan peso"
+        },
+        "126": {
+          "name": "UZS",
+          "description": "Uzbekistani som"
+        },
+        "127": {
+          "name": "VND",
+          "description": "Vietnamese dong"
+        },
+        "128": {
+          "name": "VUV",
+          "description": "Vanuatu vatu"
+        },
+        "129": {
+          "name": "WST",
+          "description": "Samoan tala"
+        },
+        "130": {
+          "name": "XAF",
+          "description": "Central African CFA franc"
+        },
+        "131": {
+          "name": "XCD",
+          "description": "East Caribbean dollar"
+        },
+        "132": {
+          "name": "XOF",
+          "description": "West African CFA franc"
+        },
+        "134": {
+          "name": "YER",
+          "description": "Yemeni rial"
+        },
+        "135": {
+          "name": "ZAR",
+          "description": "South African rand"
+        },
+        "136": {
+          "name": "ZMW",
+          "description": "Zambian kwacha"
+        },
+        "137": {
+          "name": "TND",
+          "description": "Tunisian Dinar"
+        },
+        "138": {
+          "name": "CZK",
+          "description": "Czech koruna"
+        },
+        "139": {
+          "name": "OMR",
+          "description": "Omani rial"
+        }
+      },
+      "PlayerSubscriptionPeriodTypesEnum": {
+        "Unknown": 0,
+        "Daily": 1,
+        "Weekly": 2,
+        "Monthly": 3,
+        "Yearly": 4,
+        "OneTime": 5
+      },
+      "IsPremiumAllowed": true,
+      "CampaignTypeEnum": {
+        "Undefined": 0,
+        "Advert": 1,
+        "Informative": 2,
+        "System": 3
+      },
+      "EventRoles": {
+        "Undefined": 0,
+        "Editor": 1,
+        "Admin": 2,
+        "Initiator": 3,
+        "OrgAdmin": 4
+      },
+      "CdnDomain": "https://cdn.rankedin.com/",
+      "BlobDomain": "https://rankedin.blob.core.windows.net/",
+      "ApplicationInsightsConnectionString": "InstrumentationKey=50a1dcb2-daa3-4462-bfca-b3d25adfb495;IngestionEndpoint=https://northeurope-0.in.applicationinsights.azure.com/;LiveEndpoint=https://northeurope.livediagnostics.monitor.azure.com/",
+      "GoogleAnalyticsMeasurementId": "G-WGJFJPXRJX",
+      "CalendarAgeGroupsFilter": {
+        "0": {
+          "m_Item1": "All",
+          "m_Item2": "All age categories"
+        },
+        "1": {
+          "m_Item1": "Junior",
+          "m_Item2": "Junior"
+        },
+        "2": {
+          "m_Item1": "Men",
+          "m_Item2": "Men-Main"
+        },
+        "3": {
+          "m_Item1": "Women",
+          "m_Item2": "Women-Main"
+        },
+        "4": {
+          "m_Item1": "Mixed",
+          "m_Item2": "Mixed-Main"
+        },
+        "5": {
+          "m_Item1": "Senior",
+          "m_Item2": "Senior"
+        }
+      },
+      "CalendarOrganizationsFilter": {
+        "0": {
+          "m_Item1": "Any",
+          "m_Item2": "Any organization"
+        },
+        "1": {
+          "m_Item1": "Federation",
+          "m_Item2": "Federation"
+        }
+      },
+      "CalendarDateFilter": {
+        "0": "All",
+        "1": "Upcoming",
+        "2": "Current",
+        "3": "Past"
+      },
+      "TeamLeagueMenuStep": {
+        "Edit": 0,
+        "Logos": 1,
+        "Teams": 2,
+        "CloseSignIn": 3,
+        "Divisions": 4,
+        "NonPlayingDates": 5,
+        "Draws": 6,
+        "Actions": 7
+      },
+      "SignalRFunctionDomain": "https://signalr.rankedin.com",
+      "TournamentJoinResponseStatus": {
+        "Success": 0,
+        "SignInDatePassed": 1,
+        "LimitReached": 2,
+        "RequiresExternalPayment": 3,
+        "RedirectToJoinPageAndAskToJoin": 4,
+        "ParticipantsLimitReached": 5,
+        "PlayerIsSignedInClass": 6,
+        "PlayerIsSignedInClassAndDoubleNotExists": 7
+      },
+      "TeamMatchChangeInvitationStatus": {
+        "None": 0,
+        "Pending": 1,
+        "Accepted": 2,
+        "RejectedOrCancelled": 3
+      },
+      "OrganizationAdminRoles": {
+        "Undefined": 0,
+        "ClubAdmin": 1,
+        "FederationAdmin": 2
+      },
+      "ClubLeagueJoinResponseStatus": {
+        "Undefined": 0,
+        "Success": 1,
+        "RedirectToJoinPageAndAskToJoin": 2,
+        "AlreadyJoined": 3,
+        "JoinNotAllowed": 4
+      },
+      "SuperAdminUrl": "https://admin.rankedin.com",
+      "SuperAdminSpaUrl": "https://superadmin.rankedin.com"
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/getlayoutinfoasync",
+    "json": {
+      "RankingId": null,
+      "CurrentPlayerId": null,
+      "IsAuthenticated": false,
+      "SportId": 1,
+      "CountryId": 1,
+      "RankedinId": null,
+      "FirstName": null,
+      "LastName": null,
+      "IsEventOrganizer": false,
+      "IsSuperAdmin": false,
+      "IsTranslator": false,
+      "PlayerImageUrl": null,
+      "UrlName": null,
+      "HomeClubId": null,
+      "IsProPlayer": false,
+      "UnreadNotifications": 0,
+      "UnreadMessages": 0,
+      "HasUsedFreeTrial": false,
+      "IsJoinedInPremiumEvent": false,
+      "AnonymousToken": "AQAx_1vyPX9YlWA"
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/metadata/GetFeatureMetadataAsync?feature=PlayerProfile&id=0&rankedinId=R000328907&language=en",
+    "json": {
+      "name": "Mark Stillerman",
+      "id": 2750433,
+      "featureTitle": "Mark Stillerman",
+      "featureDescription": "Mark Stillerman",
+      "featureUrl": "/en/player/R000328907/mark-stillerman",
+      "featureImage": "https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/player/2750433thumb.png",
+      "sport": 5,
+      "country": 189
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/playerprofileinfoasync?rankedinId=R000328907&language=en",
+    "json": {
+      "Header": {
+        "PlayerId": 2750433,
+        "ImageId": 126277,
+        "ImageThumbnailUrl": "https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/player/126277thumb.png",
+        "ImageOriginalUrl": "https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/player/126277.png",
+        "FirstName": "Mark",
+        "LastName": "Stillerman",
+        "CountryShort": "za",
+        "RankedinId": "R000328907",
+        "IsInOwnProfile": false,
+        "HomeClubName": "10BY20 KCC",
+        "HomeClubUrl": "/en/organisation/11332/10by20-kcc",
+        "Form": [
+          "L",
+          "W",
+          "L",
+          "W",
+          "L"
+        ],
+        "Age": "41",
+        "FavouriteSport": 5,
+        "CountryId": 189,
+        "IsProPlayer": true
+      },
+      "Statistics": {
+        "WinLossSinglesCurrentYear": "0-0",
+        "EventsParticipatedSinglesCurrentYear": "0",
+        "CareerWinLossSingles": "0-0",
+        "CareerEventsParticipatedSingles": "0",
+        "WinLossDoublesCurrentYear": "10-13",
+        "EventsParticipatedDoublesCurrentYear": "4",
+        "CareerWinLossDoubles": "10-13",
+        "CareerEventsParticipatedDoubles": "4",
+        "IsInOwnProfile": false
+      },
+      "Sidebar": {
+        "ShowUpcomming": false,
+        "ShowHistory": true,
+        "PlayerId": 2750433
+      },
+      "Id": 2750433,
+      "CurrentPlayerId": 0,
+      "FullName": "Mark Stillerman",
+      "NameForRouting": "markstillerman",
+      "IsAdmin": false,
+      "HasAmericanoEvents": false,
+      "IsFake": false
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/rating/GetPlayerRatingAsync?id=2750433",
+    "json": [
+      {
+        "RatingId": 27928,
+        "Name": "Skill Rating Padel",
+        "RatingValue": 14.03,
+        "IsLastUpdated": true,
+        "OrganisationId": 0
+      }
+    ]
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/GetEventInvitationsAsync?playerid=2750433&language=en",
+    "json": []
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/GetPlayerMatchesAsync?playerid=2750433&takehistory=false&skip=0&take=10&language=en",
+    "json": {
+      "Payload": [
+        {
+          "ChallengeId": 6149513,
+          "MatchId": 6149581,
+          "Info": {
+            "EventName": "BROLL KCC CUP 🏆 - SAPA 2000 MAJOR JHB",
+            "EventType": 4,
+            "EventUrl": "/en/tournament/64466/broll-kcc-cup-sapa-2000-major-jhb",
+            "SportIcon": "icon-rin-sports-padel",
+            "Challenger": {
+              "Id": 2866585,
+              "RankedinId": "R000341868",
+              "Name": "Justin Brivik",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000341868/justin-brivik",
+              "ShortName": "J. Brivik",
+              "IsWinner": true
+            },
+            "Challenged": {
+              "Id": 2750433,
+              "RankedinId": "R000328907",
+              "Name": "Mark Stillerman",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000328907/mark-stillerman",
+              "ShortName": "M. Stillerman",
+              "IsWinner": false
+            },
+            "Challenger1": {
+              "Id": 2866147,
+              "RankedinId": "R000341826",
+              "Name": "Greg Hahn",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000341826/greg-hahn",
+              "ShortName": "G. Hahn",
+              "IsWinner": true
+            },
+            "Challenged1": {
+              "Id": 2825661,
+              "RankedinId": "R000336892",
+              "Name": "Charl Vos",
+              "CountryShort": "ZA",
+              "PlayerUrl": "/en/player/R000336892/charl-vos",
+              "ShortName": "C. Vos",
+              "IsWinner": false
+            },
+            "TeamModel": null,
+            "ParticipantTypes": 4,
+            "RefereeCode": "hx720d",
+            "Ranking": null,
+            "Date": null,
+            "Location": "Killarney Country Club, 5th Street, Houghton Estate, Johannesburg, South Africa - 60 5th St, Houghton Estate, Johannesburg, 2198, South Africa",
+            "Court": "Indoor 2",
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": true
+          },
+          "Score": {
+            "Score": []
+          },
+          "Message": {
+            "ShowMessageButton": true,
+            "ButtonUrl": "/en/messages/match/6149513"
+          },
+          "Buttons": {
+            "ChallengeId": 6149513,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": true
+        }
+      ],
+      "HasMore": false
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/player/GetPlayerMatchesAsync?playerid=2750433&takehistory=true&skip=0&take=10&language=en",
+    "json": {
+      "Payload": [
+        {
+          "ChallengeId": 0,
+          "MatchId": 1,
+          "Info": {
+            "EventName": "EventName",
+            "EventType": 4,
+            "EventUrl": "www.test.com",
+            "SportIcon": "icon-rin-sports-squash",
+            "Challenger": {
+              "Id": 0,
+              "RankedinId": "Challenger",
+              "Name": "Challenger",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenger",
+              "IsWinner": false
+            },
+            "Challenged": {
+              "Id": 0,
+              "RankedinId": "Challenged",
+              "Name": "Challenged",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenged",
+              "IsWinner": false
+            },
+            "Challenger1": null,
+            "Challenged1": null,
+            "TeamModel": null,
+            "ParticipantTypes": 1,
+            "RefereeCode": null,
+            "Ranking": null,
+            "Date": "03/25/2026 10:35:31",
+            "Location": "Location",
+            "Court": null,
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": null
+          },
+          "Score": {
+            "Score": [
+              {
+                "Score1": 3,
+                "Score2": 1
+              }
+            ]
+          },
+          "Message": {
+            "ShowMessageButton": false,
+            "ButtonUrl": "www.test.com"
+          },
+          "Buttons": {
+            "ChallengeId": 0,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": false
+        },
+        {
+          "ChallengeId": 0,
+          "MatchId": 2,
+          "Info": {
+            "EventName": "EventName",
+            "EventType": 4,
+            "EventUrl": "www.test.com",
+            "SportIcon": "icon-rin-sports-squash",
+            "Challenger": {
+              "Id": 0,
+              "RankedinId": "Challenger",
+              "Name": "Challenger",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenger",
+              "IsWinner": false
+            },
+            "Challenged": {
+              "Id": 0,
+              "RankedinId": "Challenged",
+              "Name": "Challenged",
+              "CountryShort": "bg",
+              "PlayerUrl": "www.test.com",
+              "ShortName": "Challenged",
+              "IsWinner": false
+            },
+            "Challenger1": null,
+            "Challenged1": null,
+            "TeamModel": null,
+            "ParticipantTypes": 1,
+            "RefereeCode": null,
+            "Ranking": null,
+            "Date": "03/25/2026 10:35:31",
+            "Location": "Location",
+            "Court": null,
+            "Participant1Status": 1,
+            "Participant2Status": 1,
+            "IsPremium": null
+          },
+          "Score": {
+            "Score": [
+              {
+                "Score1": 3,
+                "Score2": 1
+              }
+            ]
+          },
+          "Message": {
+            "ShowMessageButton": false,
+            "ButtonUrl": "www.test.com"
+          },
+          "Buttons": {
+            "ChallengeId": 0,
+            "SetDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AcceptDate": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EnterResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "EditResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "ConfirmResult": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingResultConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "AwaitingDateConfirmation": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            },
+            "DeletePrivateChallenge": {
+              "IsActive": false,
+              "Url": null,
+              "AlertMessageKey": null
+            }
+          },
+          "IsProPlayer": false
+        }
+      ],
+      "HasMore": true
+    }
+  },
+  {
+    "url": "https://api.rankedin.com/v1/campaign/GetCampaignsForNotLoggedUsersAsync",
+    "json": {
+      "campaigns": [
+        {
+          "campaign": 4,
+          "priority": 5,
+          "beginDate": "2022-01-01T00:00:00",
+          "endDate": null,
+          "periodicType": 4,
+          "periodicQuantity": 1,
+          "adType": 1
+        },
+        {
+          "campaign": 6,
+          "priority": 6,
+          "beginDate": "2022-06-01T00:00:00",
+          "endDate": null,
+          "periodicType": 2,
+          "periodicQuantity": 1,
+          "adType": 1
+        },
+        {
+          "campaign": 9,
+          "priority": 1,
+          "beginDate": "2023-03-01T00:00:00",
+          "endDate": null,
+          "periodicType": 3,
+          "periodicQuantity": 2,
+          "adType": 2
+        },
+        {
+          "campaign": 10,
+          "priority": 2,
+          "beginDate": "2023-03-01T00:00:00",
+          "endDate": null,
+          "periodicType": 1,
+          "periodicQuantity": null,
+          "adType": 2
+        }
+      ],
+      "frequencyInDays": 1
+    }
+  }
+]

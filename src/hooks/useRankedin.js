@@ -4,6 +4,9 @@ import { useState, useCallback } from 'react';
 const API_BASE = 'https://api.rankedin.com/v1';
 const SAPA_ORG_ID = '11331';
 
+// Global cache for the anonymous token to avoid redundant fetches
+let cachedAnonymousToken = null;
+
 export const useRankedin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -323,6 +326,26 @@ export const useRankedin = () => {
     }, [getTournamentClasses, getDrawsForClass]);
 
     /**
+     * Internal helper to fetch an anonymous token if not cached.
+     */
+    const getAnonymousToken = useCallback(async () => {
+        if (cachedAnonymousToken) return cachedAnonymousToken;
+        try {
+            const res = await fetch(`${API_BASE}/player/getlayoutinfoasync?language=en`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.AnonymousToken) {
+                    cachedAnonymousToken = data.AnonymousToken;
+                    return cachedAnonymousToken;
+                }
+            }
+        } catch (err) {
+            console.error('Failed to fetch anonymous token:', err);
+        }
+        return null;
+    }, []);
+
+    /**
      * Fetches match history for a specific player by their Rankedin ID.
      * @param {string} rankedinId Rankedin Player ID (e.g. R000328907)
      * @param {boolean} takeHistory Whether to fetch past matches (true) or upcoming (false)
@@ -342,9 +365,18 @@ export const useRankedin = () => {
 
             if (!internalId) throw new Error("Could not extract internal PlayerId");
 
-            // Step 2: Fetch matches
+            // Step 2: Get token for real data
+            const token = await getAnonymousToken();
+
+            // Step 3: Fetch matches
             const response = await fetch(
-                `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`
+                `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`,
+                {
+                    headers: {
+                        ...(token ? { 'x-anonymous-token': token } : {}),
+                        'Accept': 'application/json'
+                    }
+                }
             );
 
             if (!response.ok) throw new Error(`Rankedin Matches API Error: ${response.status}`);
@@ -358,7 +390,7 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [getAnonymousToken]);
 
     return {
         loading,
