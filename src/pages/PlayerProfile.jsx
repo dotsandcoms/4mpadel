@@ -574,9 +574,9 @@ const PlayerProfile = () => {
                                                 ID: {player.rankedin_id}
                                             </span>
                                         )}
-                                        {player.points !== undefined && (
-                                            <span className="bg-padel-green/10 backdrop-blur-md border border-padel-green/20 text-padel-green px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-wider">
-                                                Points: {player.points}
+                                        {player.age && (
+                                            <span className="bg-black/40 backdrop-blur-md border border-white/10 text-white/50 px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-bold uppercase tracking-wider">
+                                                Age: {player.age}
                                             </span>
                                         )}
                                     </div>
@@ -590,9 +590,9 @@ const PlayerProfile = () => {
                                                     <Trophy className="w-4 h-4 md:w-6 md:h-6 text-yellow-500" /> #{player.rank_label}
                                                 </span>
                                             )}
-                                            {player.age && (
-                                                <span className="text-[10px] md:text-base text-white/50 font-black flex items-center bg-white/5 border border-white/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0 uppercase tracking-wider">
-                                                    Age: {player.age}
+                                            {player.points !== undefined && (
+                                                <span className="text-[10px] md:text-base text-padel-green font-black flex items-center bg-padel-green/5 border border-padel-green/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0 uppercase tracking-wider">
+                                                    Points: {player.points}
                                                 </span>
                                             )}
                                             <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs">
