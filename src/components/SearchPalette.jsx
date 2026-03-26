@@ -10,7 +10,8 @@ import {
   Command,
   ChevronRight,
   User,
-  Star
+  Star,
+  Award
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
 import { supabase } from '../supabaseClient';
@@ -23,6 +24,7 @@ const SearchPalette = () => {
     players: [],
     events: [],
     blogs: [],
+    coaches: [],
     navigation: []
   });
   const [loading, setLoading] = useState(false);
@@ -43,7 +45,7 @@ const SearchPalette = () => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 100);
       setQuery('');
-      setResults({ players: [], events: [], blogs: [], navigation: [] });
+      setResults({ players: [], events: [], blogs: [], coaches: [], navigation: [] });
       setSelectedIndex(0);
     }
   }, [isOpen]);
@@ -51,19 +53,7 @@ const SearchPalette = () => {
   useEffect(() => {
     const searchData = async () => {
       if (query.trim() === '') {
-        setResults({ players: [], events: [], blogs: [], navigation: [] });
-        return;
-      }
-
-      if (query.length < 2) {
-        setResults({ 
-          players: [], 
-          events: [], 
-          blogs: [], 
-          navigation: staticNav.filter(item => 
-            item.name.toLowerCase().includes(query.toLowerCase())
-          ) 
-        });
+        setResults({ players: [], events: [], blogs: [], coaches: [], navigation: [] });
         return;
       }
 
@@ -76,6 +66,7 @@ const SearchPalette = () => {
         let playersQuery = supabase.from('players').select('name, rankedin_id, id, image_url').limit(5);
         let eventsQuery = supabase.from('calendar').select('event_name, venue, slug, image_url, start_date').limit(5);
         let blogsQuery = supabase.from('blogs').select('title, slug, category, image_url').ilike('title', `%${query}%`).limit(5);
+        let coachesQuery = supabase.from('coach_applications').select('full_name, city, id, profile_pic_url').eq('status', 'approved').ilike('full_name', `%${query}%`).limit(5);
 
         // Apply smart filters
         if (isUpcomingSearch) {
@@ -90,17 +81,19 @@ const SearchPalette = () => {
           playersQuery = playersQuery.ilike('name', `%${query}%`);
         }
 
-        const [playersRes, eventsRes, blogsRes] = await Promise.all([
+        const [playersRes, eventsRes, blogsRes, coachesRes] = await Promise.all([
           playersQuery,
           eventsQuery,
-          blogsQuery
+          blogsQuery,
+          coachesQuery
         ]);
 
         setResults({
           players: playersRes.data || [],
           events: (eventsRes.data || []).map(e => ({ ...e, name: e.event_name, subtitle: e.venue })),
           blogs: (blogsRes.data || []).map(b => ({ ...b, name: b.title, subtitle: b.category })),
-          navigation: staticNav.filter(item => 
+          coaches: (coachesRes.data || []).map(c => ({ ...c, name: c.full_name, subtitle: c.city, image_url: c.profile_pic_url })),
+          navigation: staticNav.filter(item =>
             item.name.toLowerCase().includes(query.toLowerCase())
           )
         });
@@ -116,10 +109,11 @@ const SearchPalette = () => {
   }, [query, isOpen]);
 
   const allResults = [
-    ...results.navigation.map(item => ({ ...item, type: 'nav' })),
-    ...results.players.map(item => ({ ...item, type: 'player' })),
-    ...results.events.map(item => ({ ...item, type: 'event' })),
-    ...results.blogs.map(item => ({ ...item, type: 'blog' }))
+    ...(results.navigation || []).map(item => ({ ...item, type: 'nav' })),
+    ...(results.players || []).map(item => ({ ...item, type: 'player' })),
+    ...(results.coaches || []).map(item => ({ ...item, type: 'coach' })),
+    ...(results.events || []).map(item => ({ ...item, type: 'event' })),
+    ...(results.blogs || []).map(item => ({ ...item, type: 'blog' }))
   ];
 
   const handleKeyDown = (e) => {
@@ -136,6 +130,7 @@ const SearchPalette = () => {
     closeSearch();
     if (item.type === 'nav') navigate(item.href);
     if (item.type === 'player') navigate(`/players?id=${item.id}`);
+    if (item.type === 'coach') navigate(`/academy/coaches?id=${item.id}`);
     if (item.type === 'event') navigate(`/calendar/${item.slug}`);
     if (item.type === 'blog') navigate(`/blog/${item.slug}`);
   };
@@ -196,7 +191,7 @@ const SearchPalette = () => {
                 {results.navigation.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Quick Links</div>
-                    {results.navigation.map((item, idx) => (
+                    {(results.navigation || []).map((item, idx) => (
                       <ResultItem 
                         key={item.href} 
                         item={{ ...item, type: 'nav' }} 
@@ -211,7 +206,7 @@ const SearchPalette = () => {
                 {results.players.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Players</div>
-                    {results.players.map((item, idx) => (
+                    {(results.players || []).map((item, idx) => (
                       <ResultItem 
                         key={item.rankedin_id} 
                         item={{ ...item, name: item.name, icon: User, type: 'player' }} 
@@ -222,15 +217,30 @@ const SearchPalette = () => {
                   </div>
                 )}
 
+                {/* Coach Results */}
+                {results.coaches.length > 0 && (
+                  <div>
+                    <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Coaches</div>
+                    {(results.coaches || []).map((item, idx) => (
+                      <ResultItem 
+                        key={item.id} 
+                        item={{ ...item, name: item.name, icon: Award, type: 'coach' }} 
+                        active={selectedIndex === results.navigation.length + results.players.length + idx}
+                        onClick={() => handleSelect({ ...item, type: 'coach' })}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {/* Event Results */}
                 {results.events.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Tournaments</div>
-                    {results.events.map((item, idx) => (
+                    {(results.events || []).map((item, idx) => (
                       <ResultItem 
                         key={item.slug} 
                         item={{ ...item, name: item.name, subtitle: item.location, icon: Calendar, type: 'event' }} 
-                        active={selectedIndex === results.navigation.length + results.players.length + idx}
+                        active={selectedIndex === results.navigation.length + results.players.length + results.coaches.length + idx}
                         onClick={() => handleSelect({ ...item, type: 'event' })}
                       />
                     ))}
@@ -241,11 +251,11 @@ const SearchPalette = () => {
                 {results.blogs.length > 0 && (
                   <div>
                     <div className="px-3 py-1.5 text-[10px] font-bold text-gray-500 uppercase tracking-widest pl-4">Articles</div>
-                    {results.blogs.map((item, idx) => (
+                    {(results.blogs || []).map((item, idx) => (
                       <ResultItem 
                         key={item.slug} 
                         item={{ ...item, icon: BookOpen, type: 'blog' }} 
-                        active={selectedIndex === results.navigation.length + results.players.length + results.events.length + idx}
+                        active={selectedIndex === results.navigation.length + results.players.length + results.coaches.length + results.events.length + idx}
                         onClick={() => handleSelect({ ...item, type: 'blog' })}
                       />
                     ))}

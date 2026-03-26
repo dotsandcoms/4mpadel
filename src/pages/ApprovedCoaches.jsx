@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2, ExternalLink, Search, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import CoachProfileModal from '../components/CoachProfileModal';
 
 const CoachCard = ({ coach, index, onSelect }) => {
@@ -99,10 +99,11 @@ const ApprovedCoaches = () => {
     const [cityFilter, setCityFilter] = useState('All');
     const [genderFilter, setGenderFilter] = useState('All');
     const [selectedCoach, setSelectedCoach] = useState(null);
-
+    const [searchParams, setSearchParams] = useSearchParams();
+ 
     // Get unique cities from coaches
     const cities = ['All', ...new Set(coaches.map(coach => coach.city).filter(Boolean))];
-
+ 
     const filteredCoaches = coaches.filter(coach => {
         const matchesSearch = coach.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
                              coach.bio?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -112,6 +113,15 @@ const ApprovedCoaches = () => {
         return matchesSearch && matchesCity && matchesGender;
     });
 
+    const handleSelectCoach = (coach) => {
+        setSelectedCoach(coach);
+        if (coach) {
+            setSearchParams({ id: coach.id });
+        } else {
+            setSearchParams({});
+        }
+    };
+ 
     useEffect(() => {
         const fetchCoaches = async () => {
             try {
@@ -120,27 +130,30 @@ const ApprovedCoaches = () => {
                     .from('coach_applications')
                     .select('*')
                     .eq('status', 'approved');
-
+ 
                 if (error) {
                     console.error('[ApprovedCoaches] Error fetching coaches:', error);
                     throw error;
                 }
-
+ 
                 console.log(`[ApprovedCoaches] Successfully fetched ${data?.length || 0} approved coaches.`);
-                if (data && data.length > 0) {
-                    console.log('[ApprovedCoaches] Coach IDs:', data.map(c => c.id));
-                }
-
                 setCoaches(data || []);
+
+                // Handle deep-linking from URL (?id=...)
+                const coachId = searchParams.get('id');
+                if (coachId && data) {
+                    const linkedCoach = data.find(c => c.id.toString() === coachId);
+                    if (linkedCoach) setSelectedCoach(linkedCoach);
+                }
             } catch (error) {
                 console.error('[ApprovedCoaches] Unexpected error:', error);
             } finally {
                 setLoading(false);
             }
         };
-
+ 
         fetchCoaches();
-    }, []);
+    }, [searchParams]);
 
     return (
         <div className="bg-[#0F172A] min-h-screen pt-32 pb-12 font-sans">
@@ -264,7 +277,7 @@ const ApprovedCoaches = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {filteredCoaches.map((coach, index) => (
-                            <CoachCard key={coach.id} coach={coach} index={index} onSelect={setSelectedCoach} />
+                            <CoachCard key={coach.id} coach={coach} index={index} onSelect={handleSelectCoach} />
                         ))}
                     </div>
                 )}
@@ -291,7 +304,7 @@ const ApprovedCoaches = () => {
             {/* Coach Details Modal */}
             <CoachProfileModal 
                 app={selectedCoach} 
-                onClose={() => setSelectedCoach(null)} 
+                onClose={() => handleSelectCoach(null)} 
                 isAdmin={false}
             />
         </div>
