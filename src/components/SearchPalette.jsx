@@ -44,11 +44,17 @@ const SearchPalette = () => {
       setTimeout(() => inputRef.current?.focus(), 100);
       setQuery('');
       setResults({ players: [], events: [], blogs: [], navigation: [] });
+      setSelectedIndex(0);
     }
   }, [isOpen]);
 
   useEffect(() => {
     const searchData = async () => {
+      if (query.trim() === '') {
+        setResults({ players: [], events: [], blogs: [], navigation: [] });
+        return;
+      }
+
       if (query.length < 2) {
         setResults({ 
           players: [], 
@@ -63,10 +69,31 @@ const SearchPalette = () => {
 
       setLoading(true);
       try {
+        const lowerQuery = query.toLowerCase();
+        const isUpcomingSearch = ['upcoming', 'tournaments', 'events', 'calendar'].some(k => lowerQuery.includes(k));
+        const isPlayerSearch = ['players', 'pro', 'coach'].some(k => lowerQuery.includes(k));
+
+        let playersQuery = supabase.from('players').select('name, rankedin_id, id, image_url').limit(5);
+        let eventsQuery = supabase.from('calendar').select('event_name, venue, slug, image_url, start_date').limit(5);
+        let blogsQuery = supabase.from('blogs').select('title, slug, category, image_url').ilike('title', `%${query}%`).limit(5);
+
+        // Apply smart filters
+        if (isUpcomingSearch) {
+          eventsQuery = eventsQuery.gte('start_date', new Date().toISOString()).order('start_date', { ascending: true });
+        } else {
+          eventsQuery = eventsQuery.ilike('event_name', `%${query}%`);
+        }
+
+        if (isPlayerSearch && !lowerQuery.includes(' ')) {
+          playersQuery = playersQuery.order('points', { ascending: false });
+        } else {
+          playersQuery = playersQuery.ilike('name', `%${query}%`);
+        }
+
         const [playersRes, eventsRes, blogsRes] = await Promise.all([
-          supabase.from('players').select('name, rankedin_id, id, image_url').ilike('name', `%${query}%`).limit(5),
-          supabase.from('calendar').select('event_name, venue, slug, image_url').ilike('event_name', `%${query}%`).limit(5),
-          supabase.from('blogs').select('title, slug, category, image_url').ilike('title', `%${query}%`).limit(5)
+          playersQuery,
+          eventsQuery,
+          blogsQuery
         ]);
 
         setResults({
@@ -86,7 +113,7 @@ const SearchPalette = () => {
 
     const timer = setTimeout(searchData, 300);
     return () => clearTimeout(timer);
-  }, [query]);
+  }, [query, isOpen]);
 
   const allResults = [
     ...results.navigation.map(item => ({ ...item, type: 'nav' })),
@@ -172,9 +199,9 @@ const SearchPalette = () => {
                     {results.navigation.map((item, idx) => (
                       <ResultItem 
                         key={item.href} 
-                        item={item} 
+                        item={{ ...item, type: 'nav' }} 
                         active={selectedIndex === idx}
-                        onClick={() => handleSelect(item)}
+                        onClick={() => handleSelect({ ...item, type: 'nav' })}
                       />
                     ))}
                   </div>
@@ -240,9 +267,9 @@ const SearchPalette = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
                     { label: 'Latest Rankings', href: '/rankings' },
-                    { label: 'Upcoming Tournaments', href: '/calendar' },
+                    { label: 'Upcoming Tournaments', query: 'Upcoming' },
                     { label: 'Broll Pro Tour', query: 'Broll' },
-                    { label: 'Player Profiles', href: '/players' }
+                    { label: 'Player Profiles', query: 'Players' }
                   ].map((suggest) => (
                     <button
                       key={suggest.label}
