@@ -851,7 +851,7 @@ const PlayerProfile = () => {
                                             )}
                                         </AnimatePresence>
 
-                                         <div
+                                        <div
                                             onClick={() => {
                                                 if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                             }}
@@ -863,7 +863,7 @@ const PlayerProfile = () => {
                                                         <User className="text-padel-green" size={24} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
+                                                        <h3 className="text-xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
                                                         <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
                                                     </div>
                                                 </div>
@@ -1235,7 +1235,7 @@ const PlayerProfile = () => {
                                                         <CreditCard size={24} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
+                                                        <h3 className="text-xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
                                                         <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
                                                     </div>
                                                 </div>
@@ -1361,7 +1361,7 @@ const PlayerProfile = () => {
                                                             <CalendarIcon className="text-purple-400" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
+                                                            <h3 className="text-xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
                                                             <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
@@ -1528,7 +1528,7 @@ const PlayerProfile = () => {
                                                             <Trophy className="text-orange-500" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-2xl font-black uppercase tracking-tighter">Match History</h3>
+                                                            <h3 className="text-xl font-black uppercase tracking-tighter">Match History</h3>
                                                             <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
                                                         </div>
                                                     </div>
