@@ -225,7 +225,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative w-full h-[180px] md:h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border border-white/5 ${colors.hover} transition-all duration-500 bg-[#060913]`}
+            className={`relative w-full h-[180px] md:h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
             onClick={() => navigate(linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
@@ -527,7 +527,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full h-[220px] sm:aspect-video lg:aspect-square max-h-[300px] md:max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border border-white/10 ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
+            className={`relative w-full h-[220px] sm:aspect-video lg:aspect-square max-h-[300px] md:max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(data.tournament_tag?.toLowerCase() === 'broll' || data.cardTitle?.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/10'} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
             <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000">
