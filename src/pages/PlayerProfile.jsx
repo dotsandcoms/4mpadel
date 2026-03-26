@@ -677,9 +677,9 @@ const PlayerProfile = () => {
                                     onClick={() => {
                                         if (window.innerWidth < 1024) setIsCareerAccordionOpen(!isCareerAccordionOpen);
                                     }}
-                                    className={`flex items-center justify-between w-full cursor-pointer lg:cursor-default ${isCareerAccordionOpen ? 'mb-6' : 'mb-0'}`}
+                                    className={`flex items-center justify-between w-full cursor-pointer lg:cursor-default ${isCareerAccordionOpen ? 'mb-6' : 'mb-0 lg:mb-6'}`}
                                 >
-                                    <h4 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
+                                    <h4 className="font-bold text-white flex items-center gap-3">
                                         <Trophy className="text-padel-green" size={24} />
                                         Career Overview
                                     </h4>
@@ -858,14 +858,12 @@ const PlayerProfile = () => {
                                             className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 rounded-xl bg-padel-green/10 flex items-center justify-center">
+                                                <div className="flex flex-col gap-1">
+                                                    <h4 className="font-bold text-white flex items-center gap-3">
                                                         <User className="text-padel-green" size={24} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-xl font-black uppercase tracking-tighter mb-2">Personal Management</h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
-                                                    </div>
+                                                        Personal Management
+                                                    </h4>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1230,14 +1228,12 @@ const PlayerProfile = () => {
                                             className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="bg-blue-500/10 text-blue-400 p-3 rounded-2xl">
-                                                        <CreditCard size={24} />
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="text-xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
-                                                    </div>
+                                                <div className="flex flex-col gap-1">
+                                                    <h4 className="font-bold text-white flex items-center gap-3">
+                                                        <CreditCard className="text-blue-400" size={24} />
+                                                        Payment Transactions
+                                                    </h4>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-blue-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1356,14 +1352,12 @@ const PlayerProfile = () => {
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                    <div className="flex flex-col gap-1">
+                                                        <h4 className="font-bold text-white flex items-center gap-3">
                                                             <CalendarIcon className="text-purple-400" size={24} />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-xl font-black uppercase tracking-tighter">My Upcoming Events</h4>
-                                                            <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
-                                                        </div>
+                                                            My Upcoming Events
+                                                        </h4>
+                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1523,14 +1517,12 @@ const PlayerProfile = () => {
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl bg-orange-500/10 flex items-center justify-center">
+                                                    <div className="flex flex-col gap-1">
+                                                        <h4 className="font-bold text-white flex items-center gap-3">
                                                             <Trophy className="text-orange-500" size={24} />
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-xl font-black uppercase tracking-tighter">Match History</h4>
-                                                            <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
-                                                        </div>
+                                                            Match History
+                                                        </h4>
+                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
