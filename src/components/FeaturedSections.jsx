@@ -173,6 +173,26 @@ const formatTournamentDate = (startDate, endDate) => {
     return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
 };
 
+const renderBrollTitle = (title, tag) => {
+    if (!title) return null;
+    
+    // Split by "BROLL" (case-insensitive) but only if tag is 'broll' or title contains BROLL
+    const isBroll = tag?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL');
+    
+    if (!isBroll) return title;
+
+    const parts = title.split(/(BROLL)/i);
+    return (
+        <>
+            {parts.map((part, i) => 
+                part.toUpperCase() === 'BROLL' 
+                    ? <span key={i} className="text-[#F40020]">{part}</span> 
+                    : part
+            )}
+        </>
+    );
+};
+
 // VideoModal is now shared from ./VideoModal.jsx
 
 const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
@@ -247,7 +267,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                         </div>
                     )}
                 </div>
-                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{title}</h3>
+                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{renderBrollTitle(title, status)}</h3>
 
                 {isLive && (livePlayers || nextMatch) && (
                     <div className="mb-4 space-y-2">
@@ -374,7 +394,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 {isLiveSection && data.cardTitle && (
                     <div className="mb-6">
                         <span className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] block mb-1">EVENT</span>
-                        <h4 className="text-white font-black text-lg md:text-xl uppercase tracking-tighter leading-none">{data.cardTitle}</h4>
+                        <h4 className="text-white font-black text-lg md:text-xl uppercase tracking-tighter leading-none">{renderBrollTitle(data.cardTitle, data.tournament_tag || data.cardLabel)}</h4>
                     </div>
                 )}
 
@@ -538,7 +558,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <p className={`text-[10px] font-bold ${statusColors.text} uppercase tracking-widest`}>{data.cardLabel}</p>
                 </div>
 
-                <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{data.cardTitle}</h3>
+                <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{renderBrollTitle(data.cardTitle, data.tournament_tag || data.cardLabel)}</h3>
 
                 {(data.registeredPlayers > 0 || data.date) && (
                     <div className="flex items-center gap-2 mb-6">
@@ -769,6 +789,7 @@ const FeaturedSections = () => {
                                     youtubeUrl: singleEvent.live_youtube_url,
                                     livePlayers: singleEvent.live_players,
                                     nextMatch: singleEvent.next_match,
+                                    tournament_tag: singleEvent.tournament_tag,
                                     rankedin_url: singleEvent.rankedin_url,
                                     registeredPlayers: singleEvent.registered_players,
                                     rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)
