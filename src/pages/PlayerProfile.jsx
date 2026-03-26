@@ -679,10 +679,10 @@ const PlayerProfile = () => {
                                     }}
                                     className={`flex items-center justify-between w-full cursor-pointer lg:cursor-default ${isCareerAccordionOpen ? 'mb-6' : 'mb-0'}`}
                                 >
-                                    <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
+                                    <h4 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
                                         <Trophy className="text-padel-green" size={24} />
                                         Career Overview
-                                    </h3>
+                                    </h4>
                                     <div className="lg:hidden">
                                         <ChevronDown className={`text-padel-green transition-transform duration-300 ${isCareerAccordionOpen ? 'rotate-180' : ''}`} />
                                     </div>
@@ -863,7 +863,7 @@ const PlayerProfile = () => {
                                                         <User className="text-padel-green" size={24} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
+                                                        <h4 className="text-xl font-black uppercase tracking-tighter mb-2">Personal Management</h4>
                                                         <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
                                                     </div>
                                                 </div>
@@ -1235,7 +1235,7 @@ const PlayerProfile = () => {
                                                         <CreditCard size={24} />
                                                     </div>
                                                     <div>
-                                                        <h3 className="text-xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
+                                                        <h4 className="text-xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h4>
                                                         <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
                                                     </div>
                                                 </div>
@@ -1361,7 +1361,7 @@ const PlayerProfile = () => {
                                                             <CalendarIcon className="text-purple-400" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
+                                                            <h4 className="text-xl font-black uppercase tracking-tighter">My Upcoming Events</h4>
                                                             <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
@@ -1528,7 +1528,7 @@ const PlayerProfile = () => {
                                                             <Trophy className="text-orange-500" size={24} />
                                                         </div>
                                                         <div>
-                                                            <h3 className="text-xl font-black uppercase tracking-tighter">Match History</h3>
+                                                            <h4 className="text-xl font-black uppercase tracking-tighter">Match History</h4>
                                                             <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
                                                         </div>
                                                     </div>
