@@ -352,6 +352,13 @@ export const useRankedin = () => {
      * @param {number} take Number of matches to fetch
      * @returns {Promise<Array>} Array of matches
      */
+    /**
+     * Fetches match history for a specific player by their Rankedin ID.
+     * @param {string} rankedinId Rankedin Player ID (e.g. R000328907)
+     * @param {boolean} takeHistory Whether to fetch past matches (true) or upcoming (false)
+     * @param {number} take Number of matches to fetch
+     * @returns {Promise<Array>} Array of matches
+     */
     const getPlayerMatches = useCallback(async (rankedinId, takeHistory = true, take = 20) => {
         if (!rankedinId) return [];
         setLoading(true);
@@ -369,6 +376,8 @@ export const useRankedin = () => {
             const token = await getAnonymousToken();
 
             // Step 3: Fetch matches
+            // NOTE: takehistory=true often returns placeholders for anonymous users.
+            // We use this for "Upcoming" (false) as it works well, but we'll try it for history too.
             const response = await fetch(
                 `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`,
                 {
@@ -382,7 +391,97 @@ export const useRankedin = () => {
             if (!response.ok) throw new Error(`Rankedin Matches API Error: ${response.status}`);
 
             const data = await response.json();
-            return data.Payload || [];
+            const payload = data.Payload || [];
+
+            // If we're fetching history and only got placeholders, use the tournament fallback
+            const isPlaceholder = payload.length > 0 && payload.every(m => m.Info?.EventName === 'EventName');
+            
+            if (takeHistory && (payload.length === 0 || isPlaceholder)) {
+                // FALLBACK: Fetch events and then their matches
+                const events = await getPlayerEventsAsync(rankedinId);
+                const now = new Date();
+                const pastEvents = events
+                    .filter(e => new Date(e.start_date) < now)
+                    .sort((a,b) => new Date(b.start_date) - new Date(a.start_date))
+                    .slice(0, 5); // Limit to last 5 tournaments to avoid too many requests
+
+                const historyMatches = [];
+                for (const event of pastEvents) {
+                    try {
+                        const url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${event.id}&LanguageCode=en&IsReadonly=true`;
+                        const res = await fetch(url);
+                        if (!res.ok) continue;
+                        const mData = await res.json();
+                        const matches = mData.Matches || [];
+                        
+                        // Filter matches for THIS player AND only those already played
+                        const filtered = matches.filter(m => {
+                            const pId = internalId;
+                            const isThisPlayer = (m.Challenger?.Player1Id === pId || m.Challenger?.Player2Id === pId ||
+                                                m.Challenged?.Player1Id === pId || m.Challenged?.Player2Id === pId);
+                            // Only include in history if strictly played
+                            return isThisPlayer && m.MatchResult?.IsPlayed;
+                        });
+
+                        // Normalize to match structure
+                        filtered.forEach(m => {
+                            // Format ISO date to DD/MM/YYYY HH:MM
+                            let formattedDate = m.Date;
+                            try {
+                                const d = new Date(m.Date);
+                                const day = String(d.getDate()).padStart(2, '0');
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const year = d.getFullYear();
+                                const hours = String(d.getHours()).padStart(2, '0');
+                                const mins = String(d.getMinutes()).padStart(2, '0');
+                                formattedDate = `${day}/${month}/${year} ${hours}:${mins}`;
+                            } catch (e) {}
+
+                            // Determine if Team 1 (Challenger) won
+                            const firstWon = m.MatchResult?.IsFirstParticipantWinner || m.MatchResult?.Score?.IsFirstParticipantWinner;
+                            const pId = internalId;
+                            
+                            // Check if the current player is on Team 1 or Team 2 and if their team won
+                            const isOnTeam1 = (m.Challenger?.Player1Id === pId || m.Challenger?.Player2Id === pId);
+                            const playerIsWinner = isOnTeam1 ? firstWon : !firstWon;
+
+                            historyMatches.push({
+                                Info: {
+                                    EventName: event.event_name,
+                                    Date: formattedDate,
+                                    Challenger: { 
+                                        Name: m.Challenger?.Name, 
+                                        Id: m.Challenger?.Player1Id,
+                                        IsWinner: firstWon 
+                                    },
+                                    Challenger1: { Name: m.Challenger?.Player2Name, Id: m.Challenger?.Player2Id },
+                                    Challenged: { 
+                                        Name: m.Challenged?.Name, 
+                                        Id: m.Challenged?.Player1Id,
+                                        IsWinner: !firstWon
+                                    },
+                                    Challenged1: { Name: m.Challenged?.Player2Name, Id: m.Challenged?.Player2Id },
+                                    Court: m.Court,
+                                    Location: null,
+                                    Venue: null,
+                                    IsWinner: playerIsWinner // Add helper level winner flag
+                                },
+                                Score: {
+                                    Score: (m.MatchResult?.Score?.DetailedScoring || []).map(ds => ({
+                                        Score1: ds.FirstParticipantScore,
+                                        Score2: ds.SecondParticipantScore
+                                    }))
+                                }
+                            });
+                        });
+                    } catch (e) {
+                        console.error(`Error fetching matches for event ${event.id}:`, e);
+                    }
+                }
+                return historyMatches;
+            }
+
+            return payload;
         } catch (err) {
             console.error('Error fetching player matches:', err);
             setError(err.message);
@@ -390,7 +489,7 @@ export const useRankedin = () => {
         } finally {
             setLoading(false);
         }
-    }, [getAnonymousToken]);
+    }, [getAnonymousToken, getPlayerEventsAsync]);
 
     return {
         loading,

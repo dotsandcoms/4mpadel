@@ -7,7 +7,7 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -266,6 +266,11 @@ const PlayerProfile = () => {
                     // Helper to parse "DD/MM/YYYY HH:MM" date format
                     const parseDate = (dateStr) => {
                         if (!dateStr) return new Date(0);
+                        // Handle ISO format (2026-03-13T10:00:00)
+                        if (dateStr.includes('T') || dateStr.includes('-')) {
+                            return new Date(dateStr);
+                        }
+                        // Handle Rankedin custom format (DD/MM/YYYY HH:MM)
                         const [datePart, timePart] = dateStr.split(' ');
                         const [day, month, year] = datePart.split('/');
                         return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
@@ -1555,28 +1560,28 @@ const PlayerProfile = () => {
 
                                                                             return (
                                                                                 <div key={`upcoming-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
-                                                                                    <div className="flex flex-col md:flex-row justify-between gap-4">
-                                                                                        <div className="flex-1">
-                                                                                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                                                    <div className="flex flex-col lg:flex-row justify-between gap-6">
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="flex items-center gap-3 mb-3 flex-wrap">
                                                                                                 {date && (
                                                                                                     <>
                                                                                                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{date}</span>
                                                                                                         <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">•</span>
                                                                                                     </>
                                                                                                 )}
-                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px] whitespace-nowrap overflow-hidden">{info.EventName}</span>
+                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px]">{info.EventName}</span>
                                                                                             </div>
 
                                                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                <div className="p-3 rounded-xl border bg-white/5 border-white/5">
-                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
+                                                                                                <div className="p-3.5 rounded-xl border bg-white/5 border-white/5 transition-colors group-hover:bg-white/10">
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Team 1</p>
                                                                                                     <p className="text-sm font-bold text-white truncate">
                                                                                                         {info.Challenger?.Name || 'TBD'}
                                                                                                         {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                                                     </p>
                                                                                                 </div>
-                                                                                                <div className="p-3 rounded-xl border bg-white/5 border-white/5">
-                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
+                                                                                                <div className="p-3.5 rounded-xl border bg-white/5 border-white/5 transition-colors group-hover:bg-white/10">
+                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Team 2</p>
                                                                                                     <p className="text-sm font-bold text-white truncate">
                                                                                                         {info.Challenged?.Name || 'TBD'}
                                                                                                         {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
@@ -1601,10 +1606,10 @@ const PlayerProfile = () => {
                                                                                             )}
                                                                                         </div>
 
-                                                                                        <div className="flex flex-col items-end justify-start min-w-[120px]">
-                                                                                            <span className="px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-orange-500/10 text-orange-500 border border-orange-500/20">
+                                                                                        <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/5">
+                                                                                            <div className="px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-orange-500/10 text-orange-500 border border-orange-500/20 shadow-lg">
                                                                                                 Upcoming
-                                                                                            </span>
+                                                                                            </div>
                                                                                         </div>
                                                                                     </div>
                                                                                 </div>
@@ -1619,34 +1624,43 @@ const PlayerProfile = () => {
                                                                         <h4 className="text-white/50 font-black uppercase tracking-widest text-xs border-b border-white/10 pb-2">History</h4>
                                                                         {matchHistory.history.map((match, idx) => {
                                                                             const info = match.Info || {};
-                                                                            const isWinner = info.Challenger?.IsWinner;
+                                                                            // Use player-level IsWinner flag from hook, or fallback to Team 1 flag
+                                                                            const isWinner = info.IsWinner !== undefined 
+                                                                                ? info.IsWinner 
+                                                                                : info.Challenger?.IsWinner;
                                                                             const date = info.Date;
                                                                             const hasResult = match.Score?.Score && match.Score.Score.length > 0;
 
                                                                             return (
                                                                                 <div key={`history-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
-                                                                                    <div className="flex flex-col md:flex-row justify-between gap-4">
-                                                                                        <div className="flex-1">
-                                                                                            <div className="flex items-center gap-3 mb-2 flex-wrap">
+                                                                                    <div className="flex flex-col lg:flex-row justify-between gap-6">
+                                                                                        <div className="flex-1 min-w-0">
+                                                                                            <div className="flex items-center gap-3 mb-3 flex-wrap">
                                                                                                 {date && (
                                                                                                     <>
                                                                                                         <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest">{date}</span>
                                                                                                         <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">•</span>
                                                                                                     </>
                                                                                                 )}
-                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px] whitespace-nowrap overflow-hidden">{info.EventName}</span>
+                                                                                                <span className="text-[10px] font-black text-orange-500 uppercase tracking-widest truncate max-w-[400px]">{info.EventName}</span>
                                                                                             </div>
 
                                                                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                <div className={`p-3 rounded-xl border ${hasResult && isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
-                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
+                                                                                                <div className={`p-3.5 rounded-xl border transition-colors ${hasResult && isWinner ? 'bg-padel-green/5 border-padel-green/20 ring-1 ring-padel-green/10' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <div className="flex justify-between items-center mb-1.5">
+                                                                                                        <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 1</p>
+                                                                                                        {hasResult && isWinner && <Trophy size={10} className="text-padel-green" />}
+                                                                                                    </div>
                                                                                                     <p className="text-sm font-bold text-white truncate">
                                                                                                         {info.Challenger?.Name || 'TBD'}
                                                                                                         {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                                                     </p>
                                                                                                 </div>
-                                                                                                <div className={`p-3 rounded-xl border ${hasResult && !isWinner ? 'bg-padel-green/5 border-padel-green/20' : 'bg-white/5 border-white/5'}`}>
-                                                                                                    <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
+                                                                                                <div className={`p-3.5 rounded-xl border transition-colors ${hasResult && !isWinner ? 'bg-padel-green/5 border-padel-green/20 ring-1 ring-padel-green/10' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <div className="flex justify-between items-center mb-1.5">
+                                                                                                        <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 2</p>
+                                                                                                        {hasResult && !isWinner && <Trophy size={10} className="text-padel-green" />}
+                                                                                                    </div>
                                                                                                     <p className="text-sm font-bold text-white truncate">
                                                                                                         {info.Challenged?.Name || 'TBD'}
                                                                                                         {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
@@ -1671,22 +1685,31 @@ const PlayerProfile = () => {
                                                                                             )}
                                                                                         </div>
 
-                                                                                        <div className="flex flex-col items-end justify-center min-w-[120px]">
+                                                                                        <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/5">
                                                                                             {hasResult ? (
-                                                                                                <>
-                                                                                                    <div className="flex gap-1 mb-2">
+                                                                                                <div className="flex flex-col items-center lg:items-end w-full gap-3">
+                                                                                                    <div className="flex items-center gap-1.5">
                                                                                                         {match.Score?.Score?.map((set, sIdx) => (
-                                                                                                            <div key={sIdx} className="bg-white/5 px-2 py-1 rounded text-xs font-black text-white border border-white/5">
-                                                                                                                {set.Score1}-{set.Score2}
+                                                                                                            <div key={sIdx} className="bg-white/10 px-2.5 py-1.5 rounded-lg text-xs font-black text-white border border-white/10 shadow-inner flex flex-col items-center min-w-[32px]">
+                                                                                                                <span className={set.Score1 > set.Score2 ? 'text-padel-green' : 'text-white/60'}>{set.Score1}</span>
+                                                                                                                <div className="w-full h-[1px] bg-white/10 my-0.5" />
+                                                                                                                <span className={set.Score2 > set.Score1 ? 'text-padel-green' : 'text-white/60'}>{set.Score2}</span>
                                                                                                             </div>
                                                                                                         ))}
                                                                                                     </div>
-                                                                                                    <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${isWinner ? 'bg-padel-green text-black' : 'bg-red-500/20 text-red-500 border border-red-500/20'}`}>
+                                                                                                    <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] shadow-lg ${
+                                                                                                        isWinner 
+                                                                                                            ? 'bg-padel-green text-black ring-1 ring-white/20' 
+                                                                                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                                                                    }`}>
                                                                                                         {isWinner ? 'Victory' : 'Defeat'}
-                                                                                                    </span>
-                                                                                                </>
+                                                                                                    </div>
+                                                                                                </div>
                                                                                             ) : (
-                                                                                                <span className="text-[10px] font-black text-gray-500 uppercase">Played</span>
+                                                                                                <div className="flex items-center gap-2 text-gray-500 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                                                                                                    <CheckCircle2 size={12} />
+                                                                                                    <span className="text-[10px] font-black uppercase tracking-widest">Played</span>
+                                                                                                </div>
                                                                                             )}
                                                                                         </div>
                                                                                     </div>
