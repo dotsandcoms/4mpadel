@@ -7,12 +7,13 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
-import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, LogOut, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
     const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
     const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(false);
+    const [isSecurityAccordionOpen, setIsSecurityAccordionOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [message, setMessage] = useState(null);
@@ -598,13 +599,7 @@ const PlayerProfile = () => {
                                                 <MapPin size={14} className="md:w-4 md:h-4" />
                                                 {player.home_club || 'Set Location'}
                                             </div>
-                                            <div className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer font-bold uppercase tracking-widest text-[10px] md:text-xs" onClick={async () => {
-                                                await supabase.auth.signOut();
-                                                navigate('/');
-                                            }}>
-                                                <LogOut size={14} className="md:w-4 md:h-4 text-padel-green" />
-                                                Log Out
-                                            </div>
+
                                         </div>
                                     </div>
                                 </motion.div>
@@ -682,7 +677,7 @@ const PlayerProfile = () => {
                                     onClick={() => {
                                         if (window.innerWidth < 1024) setIsCareerAccordionOpen(!isCareerAccordionOpen);
                                     }}
-                                    className="flex items-center justify-between w-full cursor-pointer lg:cursor-default mb-6"
+                                    className={`flex items-center justify-between w-full cursor-pointer lg:cursor-default ${isCareerAccordionOpen ? 'mb-6' : 'mb-0'}`}
                                 >
                                     <h3 className="text-xl font-black uppercase tracking-tighter flex items-center gap-3">
                                         <Trophy className="text-padel-green" size={24} />
@@ -749,22 +744,40 @@ const PlayerProfile = () => {
                                 </AnimatePresence>
                             </motion.div>
 
-                            <div className="bg-padel-green/5 border border-padel-green/20 rounded-[2.5rem] p-8">
-                                <ShieldCheck className="text-padel-green mb-4" size={32} />
-                                <h4 className="font-bold text-white mb-2">Account Security</h4>
-                                <p className="text-xs text-white/50 leading-relaxed uppercase tracking-wider font-bold mb-6">
-                                    To Reset your password, click the button below and follow the instructions on the email.
-                                </p>
-                                <button
-                                    onClick={handleInitiatePasswordReset}
-                                    disabled={loadingReset}
-                                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2 mb-4"
+                            <div className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isSecurityAccordionOpen ? 'p-8' : 'p-5'} transition-all relative overflow-hidden`}>
+                                <div
+                                    onClick={() => setIsSecurityAccordionOpen(!isSecurityAccordionOpen)}
+                                    className={`flex items-center justify-between w-full cursor-pointer ${isSecurityAccordionOpen ? 'mb-6' : 'mb-0'}`}
                                 >
-                                    <Lock size={14} className="text-padel-green" />
-                                    {loadingReset ? 'Sending Email...' : 'Reset Password'}
-                                </button>
+                                    <h4 className="font-bold text-white flex items-center gap-3">
+                                        <ShieldCheck className="text-padel-green" size={24} />
+                                        Account Security
+                                    </h4>
+                                    <ChevronDown className={`text-padel-green transition-transform duration-300 ${isSecurityAccordionOpen ? 'rotate-180' : ''}`} size={20} />
+                                </div>
 
-
+                                <AnimatePresence>
+                                    {isSecurityAccordionOpen && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: "auto", opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <p className="text-xs text-white/50 leading-relaxed uppercase tracking-wider font-bold mb-6">
+                                                To Reset your password, click the button below and follow the instructions on the email.
+                                            </p>
+                                            <button
+                                                onClick={handleInitiatePasswordReset}
+                                                disabled={loadingReset}
+                                                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-widest py-3 rounded-xl transition-all flex items-center justify-center gap-2"
+                                            >
+                                                <Lock size={14} className="text-padel-green" />
+                                                {loadingReset ? 'Sending Email...' : 'Reset Password'}
+                                            </button>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
                             </div>
                         </div>
 
@@ -819,7 +832,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -838,32 +851,26 @@ const PlayerProfile = () => {
                                             )}
                                         </AnimatePresence>
 
-                                        <div
+                                         <div
                                             onClick={() => {
                                                 if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                             }}
-                                            className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default"
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div>
-                                                    <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
-                                                    <p className="text-gray-500 text-sm uppercase tracking-widest">Complete your profile to unlock premium player features</p>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-xl bg-padel-green/10 flex items-center justify-center">
+                                                        <User className="text-padel-green" size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Personal Management</h3>
+                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
+                                                    </div>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </div>
-                                            {!isEditing && (
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setIsEditing(true);
-                                                    }}
-                                                    className="bg-padel-green text-black font-black uppercase tracking-widest px-6 py-3 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20 text-xs"
-                                                >
-                                                    Edit Profile
-                                                </button>
-                                            )}
                                         </div>
 
                                         <AnimatePresence mode="wait">
@@ -882,23 +889,49 @@ const PlayerProfile = () => {
                                                             exit={{ opacity: 0, y: -10 }}
                                                             className="space-y-8"
                                                         >
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Full Name</p>
-                                                                    <p className="text-xl font-bold text-white">{player.name || 'Not set'}</p>
+                                                                    <p className="text-lg font-bold text-white">{player.name || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Email Address</p>
+                                                                    <p className="text-lg font-bold text-white truncate">{player.email}</p>
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Gender</p>
-                                                                    <p className="text-xl font-bold text-white">{player.gender || 'Not set'}</p>
+                                                                    <p className="text-lg font-bold text-white">{player.gender || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Age</p>
+                                                                    <p className="text-lg font-bold text-white">{player.age || 'Not set'}</p>
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Nationality</p>
-                                                                    <p className="text-xl font-bold text-white">{player.nationality || 'Not set'}</p>
+                                                                    <p className="text-lg font-bold text-white">{player.nationality || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">ID Number</p>
+                                                                    <p className="text-lg font-bold text-white">{player.id_number || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Phone Number</p>
+                                                                    <p className="text-lg font-bold text-white">{player.contact_number || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Home Club</p>
+                                                                    <p className="text-lg font-bold text-white">{player.home_club || 'Not set'}</p>
                                                                 </div>
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
-                                                                    <p className="text-xl font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
+                                                                    <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
                                                                 </div>
+                                                                {player.sponsors && (
+                                                                    <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Sponsors</p>
+                                                                        <p className="text-lg font-bold text-white">{player.sponsors}</p>
+                                                                    </div>
+                                                                )}
                                                             </div>
 
                                                             {player.bio && (
@@ -930,6 +963,18 @@ const PlayerProfile = () => {
                                                                         </a>
                                                                     )}
                                                                 </div>
+                                                            </div>
+
+                                                            <div className="pt-8 flex justify-end">
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        setIsEditing(true);
+                                                                    }}
+                                                                    className="w-full md:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-8 py-4 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20 text-xs"
+                                                                >
+                                                                    Edit Profile
+                                                                </button>
                                                             </div>
                                                         </motion.div>
                                                     ) : (
@@ -1174,7 +1219,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1182,7 +1227,7 @@ const PlayerProfile = () => {
                                             onClick={() => {
                                                 if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                             }}
-                                            className="mb-10 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default"
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
                                                 <div className="flex items-center gap-4">
@@ -1191,7 +1236,7 @@ const PlayerProfile = () => {
                                                     </div>
                                                     <div>
                                                         <h3 className="text-2xl font-black uppercase tracking-tighter mb-2">Payment Transactions</h3>
-                                                        <p className="text-gray-500 text-sm uppercase tracking-widest">Your financial history with SAPA</p>
+                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
                                                     </div>
                                                 </div>
                                                 <div className="md:hidden">
@@ -1299,7 +1344,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1308,20 +1353,20 @@ const PlayerProfile = () => {
                                                 onClick={() => {
                                                     if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }}
-                                                className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default"
+                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl bg-padel-green/10 flex items-center justify-center">
-                                                            <CalendarIcon className="text-padel-green" size={24} />
+                                                        <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                                                            <CalendarIcon className="text-purple-400" size={24} />
                                                         </div>
                                                         <div>
                                                             <h3 className="text-2xl font-black uppercase tracking-tighter">My Upcoming Events</h3>
-                                                            <p className="text-gray-500 text-sm uppercase tracking-widest">Scheduled tournaments from Rankedin</p>
+                                                            <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
                                                         </div>
                                                     </div>
                                                     <div className="md:hidden">
-                                                        <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                        <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
                                                     </div>
                                                 </div>
                                             </div>
@@ -1466,7 +1511,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className="bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 relative overflow-hidden"
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1475,7 +1520,7 @@ const PlayerProfile = () => {
                                                 onClick={() => {
                                                     if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }}
-                                                className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default"
+                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex items-center gap-4">
@@ -1484,7 +1529,7 @@ const PlayerProfile = () => {
                                                         </div>
                                                         <div>
                                                             <h3 className="text-2xl font-black uppercase tracking-tighter">Match History</h3>
-                                                            <p className="text-gray-500 text-sm uppercase tracking-widest">Your recent performance from Rankedin</p>
+                                                            <p className={`text-gray-500 text-sm uppercase tracking-widest ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
                                                         </div>
                                                     </div>
                                                     <div className="md:hidden">
