@@ -32,6 +32,8 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { SEOAdminPanel, GoogleAnalytics } from '@burkcorp/reactmath';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
+import { SearchProvider } from './context/SearchContext';
+import SearchPalette from './components/SearchPalette';
 
 function AppContent() {
   const location = useLocation();
@@ -118,7 +120,12 @@ function AppContent() {
 }
 
 function App() {
-  return <AppContent />;
+  return (
+    <SearchProvider>
+      <AppContent />
+      <SearchPalette />
+    </SearchProvider>
+  );
 }
 
 export default App;

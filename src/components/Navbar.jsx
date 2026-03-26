@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Trophy } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Search } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
+import { useSearch } from '../context/SearchContext';
 import AuthModal from './AuthModal';
 
 const Navbar = ({ isDark = false }) => {
@@ -14,6 +15,7 @@ const Navbar = ({ isDark = false }) => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [player, setPlayer] = useState(null);
+  const { toggleSearch } = useSearch();
   const location = useLocation();
 
   useEffect(() => {
@@ -158,7 +160,7 @@ const Navbar = ({ isDark = false }) => {
           </div>
 
           {/* Desktop Links */}
-          <div className={`hidden md:flex items-center gap-8 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
+          <div className={`hidden md:flex items-center gap-6 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
             {navLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
@@ -185,6 +187,16 @@ const Navbar = ({ isDark = false }) => {
                 )}
               </div>
             ))}
+
+            {/* Desktop Search Trigger */}
+            <button
+              onClick={toggleSearch}
+              className={`p-2 rounded-full transition-all duration-300 group ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
+              title="Search (Cmd+K)"
+            >
+              <Search className={`w-4 h-4 group-hover:scale-110 transition-transform ${isDark ? 'group-hover:text-[#F40020]' : 'group-hover:text-padel-green'}`} />
+            </button>
+
             {session ? (
               <div className="flex items-center gap-4 ml-2">
                 <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900 hover:!text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
@@ -205,13 +217,21 @@ const Navbar = ({ isDark = false }) => {
             )}
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className={`md:hidden p-2 ${isDark ? 'text-slate-900' : 'text-white'}`}
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X /> : <Menu />}
-          </button>
+          {/* Mobile Search & Menu Button */}
+          <div className="flex items-center gap-2 md:hidden">
+            <button
+              onClick={toggleSearch}
+              className={`p-2 rounded-full ${isDark ? 'text-slate-900' : 'text-white'}`}
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <button
+              className={`p-2 ${isDark ? 'text-slate-900' : 'text-white'}`}
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            >
+              {isMobileMenuOpen ? <X /> : <Menu />}
+            </button>
+          </div>
         </div>
       </motion.nav >
 
