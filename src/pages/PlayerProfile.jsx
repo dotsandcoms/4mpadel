@@ -1584,10 +1584,19 @@ const PlayerProfile = () => {
                                                                                                 </div>
                                                                                             </div>
 
-                                                                                            {(info.Court || info.Location) && (
-                                                                                                <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
-                                                                                                    <MapPin size={12} className="text-padel-green" />
-                                                                                                    <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || 'TBD'} {info.Court ? `- ${info.Court}` : ''}</span>
+                                                                                            {(info.Court || info.Location || info.Venue) && (
+                                                                                                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-gray-400">
+                                                                                                    {(info.Location || info.Venue) && (
+                                                                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                                                            <MapPin size={12} className="text-padel-green shrink-0" />
+                                                                                                            <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || info.Venue || 'Location TBD'}</span>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {info.Court && (
+                                                                                                        <div className="flex items-center gap-1.5 bg-orange-500/10 text-orange-500 px-2.5 py-1 rounded-lg border border-orange-500/20 shadow-lg shadow-orange-500/5">
+                                                                                                            <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{info.Court}</span>
+                                                                                                        </div>
+                                                                                                    )}
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
@@ -1645,10 +1654,19 @@ const PlayerProfile = () => {
                                                                                                 </div>
                                                                                             </div>
 
-                                                                                            {(info.Court || info.Location) && (
-                                                                                                <div className="mt-4 flex items-center gap-2 text-xs font-bold text-gray-400">
-                                                                                                    <MapPin size={12} className="text-padel-green" />
-                                                                                                    <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || 'TBD'} {info.Court ? `- ${info.Court}` : ''}</span>
+                                                                                            {(info.Court || info.Location || info.Venue) && (
+                                                                                                <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-bold text-gray-400">
+                                                                                                    {(info.Location || info.Venue) && (
+                                                                                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                                                                                            <MapPin size={12} className="text-padel-green shrink-0" />
+                                                                                                            <span className="truncate max-w-[500px] uppercase tracking-wider">{info.Location || info.Venue || 'Location TBD'}</span>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                    {info.Court && (
+                                                                                                        <div className="flex items-center gap-1.5 bg-white/10 text-gray-300 px-2.5 py-1 rounded-lg border border-white/10">
+                                                                                                            <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{info.Court}</span>
+                                                                                                        </div>
+                                                                                                    )}
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
