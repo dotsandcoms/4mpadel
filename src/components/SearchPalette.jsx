@@ -238,13 +238,25 @@ const SearchPalette = () => {
                   <span className="text-xs font-bold uppercase tracking-widest">Suggested Searches</span>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {['Latest Rankings', 'Upcoming Tournaments', 'Broll Pro Tour', 'Player Profiles'].map((suggest) => (
+                  {[
+                    { label: 'Latest Rankings', href: '/rankings' },
+                    { label: 'Upcoming Tournaments', href: '/calendar' },
+                    { label: 'Broll Pro Tour', query: 'Broll' },
+                    { label: 'Player Profiles', href: '/players' }
+                  ].map((suggest) => (
                     <button
-                      key={suggest}
-                      onClick={() => setQuery(suggest)}
+                      key={suggest.label}
+                      onClick={() => {
+                        if (suggest.href) {
+                          closeSearch();
+                          navigate(suggest.href);
+                        } else {
+                          setQuery(suggest.query);
+                        }
+                      }}
                       className="flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 hover:border-[#CCFF00]/30 hover:bg-[#CCFF00]/5 transition-all text-left group"
                     >
-                      <span className="text-sm text-gray-400 group-hover:text-white transition-colors">{suggest}</span>
+                      <span className="text-sm text-gray-400 group-hover:text-white transition-colors">{suggest.label}</span>
                       <ChevronRight className="w-4 h-4 text-gray-600 group-hover:text-[#CCFF00]" />
                     </button>
                   ))}
