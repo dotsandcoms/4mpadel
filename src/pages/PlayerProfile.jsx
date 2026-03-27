@@ -1525,9 +1525,8 @@ const PlayerProfile = () => {
                                                     <div className="flex flex-col gap-1">
                                                         <h4 className="font-bold text-white flex items-center gap-3">
                                                             <Trophy className="text-orange-500" size={24} />
-                                                            Match History
+                                                            Upcoming and Past Matches
                                                         </h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your recent performance from Rankedin</p>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1625,8 +1624,8 @@ const PlayerProfile = () => {
                                                                         {matchHistory.history.map((match, idx) => {
                                                                             const info = match.Info || {};
                                                                             // Use player-level IsWinner flag from hook, or fallback to Team 1 flag
-                                                                            const isWinner = info.IsWinner !== undefined 
-                                                                                ? info.IsWinner 
+                                                                            const isWinner = info.IsWinner !== undefined
+                                                                                ? info.IsWinner
                                                                                 : info.Challenger?.IsWinner;
                                                                             const date = info.Date;
                                                                             const hasResult = match.Score?.Score && match.Score.Score.length > 0;
@@ -1697,11 +1696,10 @@ const PlayerProfile = () => {
                                                                                                             </div>
                                                                                                         ))}
                                                                                                     </div>
-                                                                                                    <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] shadow-lg ${
-                                                                                                        isWinner 
-                                                                                                            ? 'bg-padel-green text-black ring-1 ring-white/20' 
-                                                                                                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                                                                                                    }`}>
+                                                                                                    <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] shadow-lg ${isWinner
+                                                                                                        ? 'bg-padel-green text-black ring-1 ring-white/20'
+                                                                                                        : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                                                                                                        }`}>
                                                                                                         {isWinner ? 'Victory' : 'Defeat'}
                                                                                                     </div>
                                                                                                 </div>
