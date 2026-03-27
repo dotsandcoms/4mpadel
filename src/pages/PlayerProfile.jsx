@@ -1548,7 +1548,7 @@ const PlayerProfile = () => {
                                                                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
                                                             </div>
                                                         ) : (matchHistory.upcoming.length > 0 || matchHistory.history.length > 0) ? (
-                                                            <div className="space-y-8">
+                                                            <div className="space-y-8 max-h-[800px] overflow-y-auto pr-2 sm:pr-4 custom-scrollbar scroll-smooth">
 
                                                                 {/* Upcoming Matches Section */}
                                                                 {matchHistory.upcoming.length > 0 && (
