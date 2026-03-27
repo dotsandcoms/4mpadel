@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import Navbar from '../components/Navbar';
-import { Search, Filter, MapPin, Trophy, X, Calendar, TrendingUp, Activity, ArrowRight, Download, Share2 } from 'lucide-react';
+import { Search, Filter, MapPin, Trophy, X, Calendar, TrendingUp, Activity, ArrowRight, Download, Share2, Instagram } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import heroBg from '../assets/hero_bg.png';
 import * as htmlToImage from 'html-to-image';
@@ -343,6 +343,20 @@ const Players = () => {
                         <Trophy className="w-3 h-3 text-padel-green" />
                         {player.home_club}
                       </div>
+                      {player.instagram_link && (
+                        <>
+                          <span>•</span>
+                          <a 
+                            href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-gray-400 hover:text-padel-green transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Instagram className="w-4 h-4" />
+                          </a>
+                        </>
+                      )}
                     </div>
 
                     <p className="text-sm text-gray-500 line-clamp-2 mb-4">
@@ -435,6 +449,17 @@ const Players = () => {
                         <MapPin className="w-4 h-4 text-padel-green" />
                         {selectedPlayer.home_club}, {selectedPlayer.nationality}
                         {selectedPlayer.age && <span className="ml-2 px-2 py-0.5 bg-white/10 rounded text-xs font-bold uppercase">AGE: {selectedPlayer.age}</span>}
+                        {selectedPlayer.instagram_link && (
+                          <a 
+                            href={selectedPlayer.instagram_link.startsWith('http') ? selectedPlayer.instagram_link : `https://instagram.com/${selectedPlayer.instagram_link.replace('@', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-2 p-1.5 bg-white/10 hover:bg-padel-green hover:text-black rounded-lg transition-all"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Instagram size={14} />
+                          </a>
+                        )}
                       </div>
 
                       <motion.div layoutId={`category-${selectedPlayer.id}`} className="mt-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 py-2 rounded-xl inline-flex flex-col items-start shadow-xl">
