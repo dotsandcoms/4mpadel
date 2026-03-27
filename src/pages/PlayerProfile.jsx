@@ -1186,18 +1186,18 @@ const PlayerProfile = () => {
                                                                         being displayed on public community leaderboards.
                                                                     </p>
                                                                     {!isImpersonating && (
-                                                                        <div className="flex items-center gap-4 w-full md:w-auto">
+                                                                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
                                                                             <button
                                                                                 type="button"
                                                                                 onClick={() => setIsEditing(false)}
-                                                                                className="flex-1 md:flex-none bg-white/5 text-white font-black uppercase tracking-widest px-8 py-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all"
+                                                                                className="w-full sm:w-auto bg-white/5 text-white font-black uppercase tracking-widest px-10 py-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all font-bold"
                                                                             >
                                                                                 Cancel
                                                                             </button>
                                                                             <button
                                                                                 type="submit"
                                                                                 disabled={saving}
-                                                                                className="flex-1 md:flex-none bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95 whitespace-nowrap"
+                                                                                className="w-full sm:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95 whitespace-nowrap"
                                                                             >
                                                                                 <Save size={20} className="group-hover:rotate-12 transition-transform" />
                                                                                 {saving ? 'Syncing...' : 'Save Profile'}
