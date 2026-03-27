@@ -134,7 +134,7 @@ const Navbar = ({ isDark = false }) => {
             {session && player && (
               <div className={`${isMobileMenuOpen ? 'flex' : 'hidden sm:flex'} items-center gap-3 sm:gap-4 ml-0 sm:ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className={`truncate max-w-[120px] leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
+                  <span className={`leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
                   {player.rankedin_id && (
                     <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
                       ID: {player.rankedin_id}
