@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
@@ -96,6 +96,19 @@ const EventDetails = () => {
     const [winners, setWinners] = useState([]);
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
+
+    const isEventPassed = useMemo(() => {
+        if (!event) return false;
+        const compareDate = event.end_date || event.start_date;
+        if (!compareDate) return false;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const eventDate = new Date(compareDate);
+        eventDate.setHours(0, 0, 0, 0);
+        
+        return eventDate < today;
+    }, [event]);
 
     const stripHtml = (html) => {
         if (!html) return '';
@@ -569,21 +582,25 @@ const EventDetails = () => {
                                     <h3 className="font-bold text-slate-900 text-xl mb-2">Join the Action</h3>
                                     <p className="text-xs text-gray-500 mb-6">Secure your spot in the tournament.</p>
 
-                                    <a
-                                        href={event.rankedin_url || `https://www.rankedin.com/`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-block w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-xl shadow-lg shadow-padel-green/30 hover:bg-slate-900 hover:!text-white hover:scale-105 transition-all duration-300 uppercase tracking-widest text-sm mb-4 text-center ring-1 ring-inset ring-black/5"
-                                    >
-                                        Register Now
-                                    </a>
+                                    {!isEventPassed && (
+                                        <>
+                                            <a
+                                                href={event.rankedin_url || `https://www.rankedin.com/`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-block w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-xl shadow-lg shadow-padel-green/30 hover:bg-slate-900 hover:!text-white hover:scale-105 transition-all duration-300 uppercase tracking-widest text-sm mb-4 text-center ring-1 ring-inset ring-black/5"
+                                            >
+                                                Register Now
+                                            </a>
 
-                                    <button
-                                        className="w-full bg-white border-2 border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:border-slate-900 hover:text-slate-900 transition-all duration-300 uppercase tracking-wide text-xs mb-3"
-                                        onClick={handleAddToCalendar}
-                                    >
-                                        Add to Calendar
-                                    </button>
+                                            <button
+                                                className="w-full bg-white border-2 border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:border-slate-900 hover:text-slate-900 transition-all duration-300 uppercase tracking-wide text-xs mb-3"
+                                                onClick={handleAddToCalendar}
+                                            >
+                                                Add to Calendar
+                                            </button>
+                                        </>
+                                    )}
 
                                     {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
