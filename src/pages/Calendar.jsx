@@ -188,6 +188,8 @@ const Calendar = () => {
     const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
 
+    const [isFilterExpanded, setIsFilterExpanded] = useState(false);
+    
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
 
@@ -555,130 +557,210 @@ const Calendar = () => {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-4 mb-10 flex flex-col lg:flex-row gap-4 items-center justify-between relative z-40"
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 mb-10 relative z-40 overflow-hidden"
                 >
-                    {/* Search */}
-                    <div className="relative w-full lg:w-96 flex-shrink-0">
-                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                        <input
-                            type="text"
-                            placeholder="Search events or venues..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-colors placeholder-gray-500"
-                        />
-                    </div>
-
-                    {/* Filters & Toggle */}
-                    <div className="flex flex-wrap md:flex-nowrap gap-4 w-full lg:w-auto items-center justify-end">
-                        {/* Type Filter */}
-                        <div className="relative w-full md:w-auto min-w-[150px]">
-                            <Layers className="absolute pointer-events-none left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                            <select
-                                value={leagueFilter}
-                                onChange={(e) => setLeagueFilter(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
+                    <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+                        {/* Search Bar - Always Visible */}
+                        <div className="relative w-full lg:w-96 flex-shrink-0 flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                                <input
+                                    type="text"
+                                    placeholder="Search events or venues..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all placeholder-gray-500 text-sm"
+                                />
+                            </div>
+                            
+                            {/* Mobile Filter Toggle */}
+                            <button
+                                onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+                                className="lg:hidden flex items-center justify-center px-4 bg-black/40 border border-white/10 rounded-2xl text-padel-green hover:bg-white/10 transition-colors group"
                             >
-                                <option value="All" className="bg-slate-900">All Types</option>
-                                <option value="League" className="bg-slate-900">League Only</option>
-                                <option value="Tournaments" className="bg-slate-900">Tournaments</option>
-                            </select>
+                                <Filter className={`w-5 h-5 transition-transform duration-300 ${isFilterExpanded ? 'scale-110' : ''}`} />
+                                <span className="ml-2 text-xs font-bold uppercase tracking-widest md:hidden">Filters</span>
+                            </button>
                         </div>
 
+                        {/* DESKTOP FILTERS (Always Visible) */}
+                        <div className="hidden lg:flex flex-row gap-4 items-center justify-end">
+                            {/* Type Filter */}
+                            <div className="relative min-w-[150px]">
+                                <Layers className="absolute pointer-events-none left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
+                                <select
+                                    value={leagueFilter}
+                                    onChange={(e) => setLeagueFilter(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-sm"
+                                >
+                                    <option value="All" className="bg-slate-900">All Types</option>
+                                    <option value="League" className="bg-slate-900">League Only</option>
+                                    <option value="Tournaments" className="bg-slate-900">Tournaments</option>
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
 
+                            {/* Status Filter */}
+                            <div className="relative min-w-[160px]" ref={dropdownRef}>
+                                <Filter className="absolute z-10 left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                <button
+                                    onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors text-sm"
+                                >
+                                    <span className="truncate block">
+                                        {statusFilters.length === 0
+                                            ? 'All Statuses'
+                                            : statusFilters.length === 1
+                                                ? statusFilters[0]
+                                                : `${statusFilters.length} Selected`}
+                                    </span>
+                                </button>
+                                <ChevronDown className={`w-4 h-4 text-gray-400 absolute z-10 right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
 
-                        {/* Status Filter */}
-                        <div className="relative w-full md:w-auto min-w-[160px]" ref={dropdownRef}>
-                            <Filter className="absolute z-10 left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
-                            <button
-                                onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors"
-                            >
-                                <span className="truncate block">
-                                    {statusFilters.length === 0
-                                        ? 'All Statuses'
-                                        : statusFilters.length === 1
-                                            ? statusFilters[0]
-                                            : `${statusFilters.length} Selected`}
-                                </span>
-                            </button>
-                            <ChevronDown className={`w-4 h-4 text-gray-400 absolute z-10 right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
-
-                            {/* Dropdown Menu */}
-                            <AnimatePresence>
-                                {isStatusDropdownOpen && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        transition={{ duration: 0.15 }}
-                                        className="absolute z-50 top-full left-0 mt-2 w-full bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl shadow-black overflow-hidden flex flex-col"
-                                    >
-                                        <div className="max-h-60 overflow-y-auto nice-scrollbar py-2">
-                                            <button
-                                                onClick={() => {
-                                                    setStatusFilters([]);
-                                                    setIsStatusDropdownOpen(false);
-                                                }}
-                                                className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.length === 0 ? 'text-padel-green font-bold bg-white/5' : 'text-gray-300'}`}
-                                            >
-                                                <span>All Statuses</span>
-                                                {statusFilters.length === 0 && <Check className="w-4 h-4" />}
-                                            </button>
-
-                                            {uniqueStatuses.filter(s => s !== 'All').map(status => (
+                                <AnimatePresence>
+                                    {isStatusDropdownOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="absolute z-50 top-full left-0 mt-2 w-full bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+                                        >
+                                            <div className="max-h-60 overflow-y-auto nice-scrollbar py-2">
                                                 <button
-                                                    key={status}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setStatusFilters(prev =>
-                                                            prev.includes(status)
-                                                                ? prev.filter(s => s !== status)
-                                                                : [...prev, status]
-                                                        );
-                                                    }}
-                                                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.includes(status) ? 'text-white font-bold bg-white/5' : 'text-gray-300'}`}
+                                                    onClick={() => { setStatusFilters([]); setIsStatusDropdownOpen(false); }}
+                                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.length === 0 ? 'text-padel-green font-bold bg-white/5' : 'text-gray-300'}`}
                                                 >
-                                                    <span>{status}</span>
-                                                    {statusFilters.includes(status) && <Check className="w-4 h-4 text-padel-green" />}
+                                                    <span>All Statuses</span>
+                                                    {statusFilters.length === 0 && <Check className="w-4 h-4" />}
                                                 </button>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
+                                                {uniqueStatuses.filter(s => s !== 'All').map(status => (
+                                                    <button
+                                                        key={status}
+                                                        onClick={() => setStatusFilters(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status])}
+                                                        className={`w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.includes(status) ? 'text-white font-bold bg-white/5' : 'text-gray-300'}`}
+                                                    >
+                                                        <span>{status}</span>
+                                                        {statusFilters.includes(status) && <Check className="w-4 h-4 text-padel-green" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
 
-                        {/* City Filter */}
-                        <div className="relative w-full md:w-auto min-w-[140px]">
-                            <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                            <select
-                                value={cityFilter}
-                                onChange={(e) => setCityFilter(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
-                            >
-                                {uniqueCities.map(city => (
-                                    <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
-                                ))}
-                            </select>
-                        </div>
+                            {/* City Filter */}
+                            <div className="relative min-w-[140px]">
+                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
+                                <select
+                                    value={cityFilter}
+                                    onChange={(e) => setCityFilter(e.target.value)}
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-sm"
+                                >
+                                    {uniqueCities.map(city => (
+                                        <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
+                                    ))}
+                                </select>
+                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            </div>
 
-                        {/* View Toggle */}
-                        <div className="flex bg-black/40 border border-white/10 rounded-xl p-1 w-full md:w-auto mt-2 md:mt-0">
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`flex-1 md:w-20 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}
-                            >
-                                <List className="w-4 h-4" /> List
-                            </button>
-                            <button
-                                onClick={() => setViewMode('calendar')}
-                                className={`flex-1 md:w-20 py-2 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-gray-500 hover:text-white'}`}
-                            >
-                                <LayoutGrid className="w-4 h-4" /> Grid
-                            </button>
+                            {/* View Toggle */}
+                            <div className="flex bg-black/40 border border-white/10 rounded-xl p-1">
+                                <button
+                                    onClick={() => setViewMode('list')}
+                                    className={`w-12 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
+                                    title="List View"
+                                >
+                                    <List className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={() => setViewMode('calendar')}
+                                    className={`w-12 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
+                                    title="Grid View"
+                                >
+                                    <LayoutGrid className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
+
+                    {/* MOBILE FILTERS (Accordion) */}
+                    <AnimatePresence>
+                        {isFilterExpanded && (
+                            <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                                className="lg:hidden w-full space-y-4 pt-4 border-t border-white/5 mt-4"
+                            >
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Type Filter */}
+                                    <div className="relative">
+                                        <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
+                                        <select
+                                            value={leagueFilter}
+                                            onChange={(e) => setLeagueFilter(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
+                                        >
+                                            <option value="All" className="bg-slate-900">All Types</option>
+                                            <option value="League" className="bg-slate-900">League Only</option>
+                                            <option value="Tournaments" className="bg-slate-900">Tournaments</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Status Filter */}
+                                    <div className="relative">
+                                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
+                                        <select
+                                            multiple={false}
+                                            value={statusFilters[0] || 'All'}
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setStatusFilters(val === 'All' ? [] : [val]);
+                                            }}
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
+                                        >
+                                            <option value="All" className="bg-slate-900">All Statuses</option>
+                                            {uniqueStatuses.filter(s => s !== 'All').map(s => (
+                                                <option key={s} value={s} className="bg-slate-900">{s}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* City Filter */}
+                                    <div className="relative">
+                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
+                                        <select
+                                            value={cityFilter}
+                                            onChange={(e) => setCityFilter(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
+                                        >
+                                            {uniqueCities.map(city => (
+                                                <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* View Mode */}
+                                    <div className="flex bg-black/40 border border-white/10 rounded-2xl p-1 gap-1">
+                                        <button
+                                            onClick={() => setViewMode('list')}
+                                            className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
+                                        >
+                                            <List className="w-4 h-4" /> List
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('calendar')}
+                                            className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
+                                        >
+                                            <LayoutGrid className="w-4 h-4" /> Grid
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </motion.div>
 
                 {/* Content Area */}
