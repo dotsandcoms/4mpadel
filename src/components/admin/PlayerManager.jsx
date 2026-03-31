@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Image as ImageIcon, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PieChart,
@@ -46,6 +46,7 @@ const PlayerManager = () => {
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     const [toasts, setToasts] = useState([]);
 
     // Filters
@@ -304,6 +305,73 @@ const PlayerManager = () => {
         }
         if (error) showToast('Error saving: ' + error.message, 'error');
         else { showToast(currentPlayer ? 'Player updated' : 'Player added'); setIsEditing(false); setCurrentPlayer(null); fetchPlayers(); }
+    };
+
+    // Resizing Utility
+    const resizeImage = (file, maxWidth = 1200, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name, {
+                            type: 'image/jpeg',
+                            lastModified: Date.now()
+                        }));
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handleImageUpload = async (event) => {
+        try {
+            setUploadingImage(true);
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Optional: Show toast for processing
+            showToast('Processing image...', 'info');
+
+            const resizedFile = await resizeImage(file);
+            const fileExt = 'jpg';
+            const fileName = `${currentPlayer?.id || 'new'}_${Date.now()}.${fileExt}`;
+            const filePath = `players/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('profile-pics')
+                .upload(filePath, resizedFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('profile-pics')
+                .getPublicUrl(filePath);
+
+            setFormData({ ...formData, image_url: publicUrl });
+            showToast('Image uploaded successfully. Remember to save!');
+        } catch (error) {
+            console.error('Upload error:', error);
+            showToast('Failed to upload image: ' + error.message, 'error');
+        } finally {
+            setUploadingImage(false);
+        }
     };
 
     return (
@@ -640,8 +708,61 @@ const PlayerManager = () => {
                                         <input type="text" value={formData.sponsors || ''} onChange={e => setFormData({ ...formData, sponsors: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" />
                                     </div>
                                     <div className="md:col-span-2">
-                                        <label className="block text-gray-400 text-sm mb-1">Image URL</label>
-                                        <input type="text" value={formData.image_url || ''} onChange={e => setFormData({ ...formData, image_url: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none" />
+                                        <label className="block text-gray-400 text-sm mb-2">Player Photo</label>
+                                        <div className="flex flex-col sm:flex-row items-center gap-6 bg-black/40 p-6 rounded-2xl border border-white/10 group-hover:border-white/20 transition-all">
+                                            {/* Profile Preview */}
+                                            <div className="relative w-24 h-24 rounded-2xl overflow-hidden bg-gray-800 border-2 border-white/5 flex-shrink-0 group">
+                                                {formData.image_url ? (
+                                                    <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center opacity-30">
+                                                        <ImageIcon size={32} />
+                                                    </div>
+                                                )}
+                                                {uploadingImage && (
+                                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                                        <div className="w-6 h-6 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex-1 space-y-3 w-full">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <label className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${uploadingImage ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-white text-black hover:bg-padel-green shadow-lg shadow-white/5'}`}>
+                                                        <Upload size={14} />
+                                                        {uploadingImage ? 'Uploading...' : 'Upload Photo'}
+                                                        <input 
+                                                            type="file" 
+                                                            accept="image/*" 
+                                                            onChange={handleImageUpload} 
+                                                            disabled={uploadingImage} 
+                                                            className="hidden" 
+                                                        />
+                                                    </label>
+                                                    
+                                                    {formData.image_url && (
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setFormData({ ...formData, image_url: '' })}
+                                                            className="px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
+                                                        >
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-500 uppercase">URL</span>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Or paste external image URL..."
+                                                        value={formData.image_url || ''}
+                                                        onChange={e => setFormData({ ...formData, image_url: e.target.value })}
+                                                        className="w-full bg-black/40 border border-white/5 rounded-lg pl-12 pr-4 py-2 text-[11px] text-gray-400 focus:text-white focus:border-padel-green transition-all outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-gray-400 text-sm mb-1">Bio</label>
