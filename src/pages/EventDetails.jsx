@@ -800,7 +800,7 @@ const EventDetails = () => {
                                             href={event.rankedin_url || `https://www.rankedin.com/`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="bg-padel-green text-black font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
                                         >
                                             Register
                                         </a>
@@ -809,7 +809,7 @@ const EventDetails = () => {
                                     return (
                                         <Link
                                             to={`/results/${event.slug || rId}`}
-                                            className="bg-padel-green text-black font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
                                         >
                                             Results
                                         </Link>
