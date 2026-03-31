@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import {
     PieChart,
@@ -105,6 +105,7 @@ const CalendarManager = () => {
         organizer_email: '',
         organizer_website: '',
         image_url: '',
+        custom_image_url: '',
         featured_event: false,
         featured_result: false,
         is_league: false,
@@ -123,6 +124,8 @@ const CalendarManager = () => {
     useEffect(() => {
         fetchEvents();
     }, []);
+
+    const [isUploadingPoster, setIsUploadingPoster] = useState(false);
 
     const fetchEvents = async () => {
         try {
@@ -253,6 +256,7 @@ const CalendarManager = () => {
             organizer_email: '',
             organizer_website: '',
             image_url: '',
+            custom_image_url: '',
             featured_event: false,
             featured_result: false,
             is_league: false,
@@ -268,6 +272,67 @@ const CalendarManager = () => {
             is_visible: true
         });
     }
+
+    // Helper: Resize image for posters
+    const resizeImage = (file, maxWidth = 1200, quality = 0.8) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = (event) => {
+                const img = new Image();
+                img.src = event.target.result;
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width);
+                        width = maxWidth;
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
+                    }, 'image/jpeg', quality);
+                };
+                img.onerror = (err) => reject(err);
+            };
+            reader.onerror = (err) => reject(err);
+        });
+    };
+
+    const handlePosterUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        try {
+            setIsUploadingPoster(true);
+            const resizedFile = await resizeImage(file);
+            const fileExt = 'jpg';
+            const fileName = `poster_${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
+            const filePath = `posters/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('gallery') // Reuse gallery bucket or use a specific one if it exists
+                .upload(filePath, resizedFile);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('gallery')
+                .getPublicUrl(filePath);
+
+            setFormData(prev => ({ ...prev, custom_image_url: publicUrl }));
+            toast.success('Custom poster uploaded successfully');
+        } catch (error) {
+            console.error('Error uploading poster:', error);
+            toast.error('Failed to upload poster');
+        } finally {
+            setIsUploadingPoster(false);
+        }
+    };
 
     const handleEdit = (event) => {
         setEditingEvent(event);
@@ -289,6 +354,7 @@ const CalendarManager = () => {
             organizer_email: event.organizer_email || '',
             organizer_website: event.organizer_website || '',
             image_url: event.image_url || '',
+            custom_image_url: event.custom_image_url || '',
             featured_event: event.featured_event || false,
             featured_result: event.featured_result || false,
             is_league: event.is_league || false,
@@ -1293,38 +1359,79 @@ const CalendarManager = () => {
                                     </div>
 
                                     {/* Details & Image */}
-                                    <div className="grid grid-cols-1 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Description</label>
-                                            <textarea
-                                                name="description"
-                                                rows="3"
-                                                value={formData.description}
-                                                onChange={handleInputChange}
-                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none resize-none"
-                                            ></textarea>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Hero Image URL</label>
-                                            <div className="flex gap-2">
-                                                <div className="flex-1">
-                                                    <input
-                                                        type="text"
-                                                        name="image_url"
-                                                        placeholder="https://..."
-                                                        value={formData.image_url}
-                                                        onChange={handleInputChange}
-                                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
-                                                    />
-                                                </div>
-                                                <div className="w-12 h-12 bg-black/40 rounded-lg border border-white/10 flex items-center justify-center overflow-hidden">
-                                                    {formData.image_url ? (
-                                                        <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        <ImageIcon className="text-gray-600" />
-                                                    )}
-                                                </div>
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Description</label>
+                                                <textarea
+                                                    name="description"
+                                                    rows="4"
+                                                    value={formData.description}
+                                                    onChange={handleInputChange}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none resize-none"
+                                                ></textarea>
                                             </div>
+                                            <div>
+                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Rankedin Poster URL (Default)</label>
+                                                <input
+                                                    type="text"
+                                                    name="image_url"
+                                                    placeholder="Pulling from RankedIn..."
+                                                    value={formData.image_url}
+                                                    onChange={handleInputChange}
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none text-sm"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4">
+                                            <label className="block text-xs font-bold text-padel-green mb-1 uppercase">Custom Event Poster (Overrides Rankedin)</label>
+                                            <div className="relative group aspect-video bg-black/40 rounded-xl border-2 border-dashed border-white/10 hover:border-padel-green/50 transition-all overflow-hidden flex flex-col items-center justify-center p-4">
+                                                {formData.custom_image_url ? (
+                                                    <>
+                                                        <img src={formData.custom_image_url} alt="Custom Poster" className="absolute inset-0 w-full h-full object-cover" />
+                                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData(prev => ({ ...prev, custom_image_url: '' }))}
+                                                                className="p-3 bg-red-500 rounded-full text-white hover:scale-110 transition-transform"
+                                                                title="Remove Custom Poster"
+                                                            >
+                                                                <Trash size={20} />
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={handlePosterUpload}
+                                                            disabled={isUploadingPoster}
+                                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                        />
+                                                        {isUploadingPoster ? (
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <Loader2 className="w-8 h-8 animate-spin text-padel-green" />
+                                                                <span className="text-xs text-gray-400 font-bold uppercase">Uploading...</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col items-center gap-2 text-center">
+                                                                <div className="w-12 h-12 rounded-full bg-padel-green/10 flex items-center justify-center text-padel-green mb-1">
+                                                                    <UploadCloud size={24} />
+                                                                </div>
+                                                                <span className="text-sm text-white font-bold">Upload Custom Poster</span>
+                                                                <span className="text-[10px] text-gray-500 uppercase tracking-wider">JPG or PNG • Max 2MB recommended</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                )}
+                                            </div>
+                                            {formData.custom_image_url && (
+                                                <p className="text-[10px] text-padel-green font-bold uppercase tracking-widest text-center mt-2 flex items-center justify-center gap-1">
+                                                    <Star size={10} className="fill-padel-green" /> Custom Poster Active
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
 

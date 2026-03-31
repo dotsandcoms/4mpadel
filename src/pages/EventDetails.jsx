@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Trophy } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 
@@ -592,8 +592,8 @@ const EventDetails = () => {
             <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
                 {/* Hero Section with Image */}
                 <div className="relative h-[20vh] md:h-[45vh] min-h-[220px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
-                <img
-                        src={event.image_url || tournamentHero}
+                    <img
+                        src={event.custom_image_url || event.image_url || tournamentHero}
                         alt={event.event_name}
                         className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
                     />
@@ -993,69 +993,86 @@ const EventDetails = () => {
                                 )}
 
                                 {activeTab === 'divisions' && (
-                                    <div className="space-y-8">
-                                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                            <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
-                                                <h3 className="text-2xl font-bold text-slate-900">Divisions & Results</h3>
-                                                <p className="text-sm text-gray-500 mt-2">Data synced directly from Rankedin</p>
-                                            </div>
-
-                                            <div className="p-6 md:p-8 bg-slate-50">
+                                    <div className="space-y-6">
+                                        <ModuleAccordion title="Divisions & Results" icon={Trophy} defaultOpen={false}>
+                                            <div className="py-4 space-y-4">
                                                 {fetchingRankedinData ? (
                                                     <div className="flex flex-col items-center justify-center py-12">
                                                         <Loader className="w-8 h-8 animate-spin text-padel-green mb-4" />
                                                         <p className="text-gray-400 font-bold">Syncing data...</p>
                                                     </div>
                                                 ) : tournamentClasses.length > 0 ? (
-                                                    <div className="space-y-4">
+                                                    <div className="grid grid-cols-1 gap-4">
                                                         {tournamentClasses.map((cls, idx) => (
-                                                            <div key={idx} className="bg-white border text-center border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-                                                                <h4 className="font-black text-xl text-slate-900 mb-4">{cls.Name}</h4>
-                                                                {/* Check if there are winners specifically for this class */}
-                                                                {isEventPassed && winners.some(w => w.className === cls.Name) ? (
-                                                                    <div className="bg-slate-900 p-4 rounded-xl inline-block mx-auto">
-                                                                        <span className="text-padel-green font-bold text-xs uppercase tracking-widest block mb-1">Champions</span>
-                                                                        <span className="text-white font-black text-lg">
+                                                            <motion.div
+                                                                key={idx}
+                                                                initial={{ opacity: 0, x: -10 }}
+                                                                animate={{ opacity: 1, x: 0 }}
+                                                                transition={{ delay: idx * 0.05 }}
+                                                                className="bg-white/70 backdrop-blur-sm border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row items-center gap-5 group hover:shadow-xl hover:border-padel-green/30 transition-all duration-300"
+                                                            >
+                                                                {/* Icon Column */}
+                                                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isEventPassed && winners.some(w => w.className === cls.Name) ? 'bg-padel-green/10 text-padel-green' : 'bg-slate-100 text-slate-400'}`}>
+                                                                    <Trophy className={isEventPassed && winners.some(w => w.className === cls.Name) ? 'w-7 h-7 drop-shadow-[0_0_8px_rgba(154,233,0,0.4)]' : 'w-6 h-6'} />
+                                                                </div>
+
+                                                                {/* Content Column */}
+                                                                <div className="flex-1 text-center md:text-left">
+                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1 block">
+                                                                        {cls.Name}
+                                                                    </span>
+
+                                                                    {isEventPassed && winners.some(w => w.className === cls.Name) ? (
+                                                                        <h4 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
                                                                             {winners.find(w => w.className === cls.Name)?.winners}
+                                                                        </h4>
+                                                                    ) : !isEventPassed && upcomingMatches.some(m => m.MatchClass?.Id === cls.Id) ? (
+                                                                        <p className="text-sm font-bold text-slate-600 flex items-center justify-center md:justify-start gap-2">
+                                                                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                                                                            Tournament In Progress
+                                                                        </p>
+                                                                    ) : (
+                                                                        <p className="text-gray-400 text-sm font-medium italic">No results available yet</p>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Tag Column */}
+                                                                {isEventPassed && winners.some(w => w.className === cls.Name) && (
+                                                                    <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-full shadow-lg">
+                                                                        <span className="text-padel-green font-black text-[10px] uppercase tracking-widest">
+                                                                            Champions
                                                                         </span>
                                                                     </div>
-                                                                ) : !isEventPassed && upcomingMatches.some(m => m.MatchClass?.Id === cls.Id) ? (
-                                                                    <div className="bg-gray-50 p-4 rounded-xl">
-                                                                        <span className="text-slate-500 font-bold text-xs uppercase tracking-widest block mb-2">Upcoming Match Preview</span>
-                                                                        <p className="text-sm font-medium text-slate-700">Matches are scheduled. View Draws for full details.</p>
-                                                                    </div>
-                                                                ) : (
-                                                                    <p className="text-gray-400 text-sm">No results available yet.</p>
                                                                 )}
-                                                            </div>
+                                                            </motion.div>
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <div className="text-center py-12">
+                                                    <div className="text-center py-12 bg-white/50 rounded-2xl border border-dashed border-slate-200">
                                                         <p className="text-gray-400 font-bold italic">No division data available for this event.</p>
                                                     </div>
                                                 )}
-
-                                                <div className="mt-8 text-center pt-8 border-t border-gray-200">
-                                                    {(() => {
-                                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                                        if (hasDraw && !isEventPassed) {
-                                                            return (
-                                                                <Link to={`/draws/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
-                                                                    <GitBranch className="w-5 h-5" /> View Full Draws
-                                                                </Link>
-                                                            );
-                                                        } else if (hasResults) {
-                                                            return (
-                                                                <Link to={`/results/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
-                                                                    <CheckCircle className="w-5 h-5" /> View Full Results
-                                                                </Link>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    })()}
-                                                </div>
                                             </div>
+                                        </ModuleAccordion>
+
+                                        <div className="text-center py-4">
+                                            {(() => {
+                                                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                                if (hasDraw && !isEventPassed) {
+                                                    return (
+                                                        <Link to={`/draws/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
+                                                            <GitBranch className="w-5 h-5" /> View Full Draws
+                                                        </Link>
+                                                    );
+                                                } else if (hasResults) {
+                                                    return (
+                                                        <Link to={`/results/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
+                                                            <CheckCircle className="w-5 h-5" /> View Full Results
+                                                        </Link>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                         </div>
                                     </div>
                                 )}

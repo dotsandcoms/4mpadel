@@ -62,9 +62,9 @@ const CalendarEventItem = ({ event, index }) => {
                     <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
                         {/* Poster Image Box */}
                         <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-24 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
-                            {event.image_url || event.posterUrl ? (
+                            {event.custom_image_url || event.image_url || event.posterUrl ? (
                                 <img
-                                    src={event.image_url || event.posterUrl}
+                                    src={event.custom_image_url || event.image_url || event.posterUrl}
                                     alt={event.event_name || event.eventName}
                                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                                 />
@@ -323,7 +323,8 @@ const Calendar = () => {
                     slug: localEvent.slug,
                     id: localEvent.id, // Use local ID if slug missing
                     image_url: localEvent.image_url,
-                    posterUrl: localEvent.image_url || localEvent.posterUrl,
+                    custom_image_url: localEvent.custom_image_url,
+                    posterUrl: localEvent.custom_image_url || localEvent.image_url || localEvent.posterUrl,
                     venue: localEvent.venue || localEvent.clubName,
                     sapa_status: localEvent.sapa_status || pe.sapa_status,
                     is_league: localEvent.is_league ?? pe.is_league
