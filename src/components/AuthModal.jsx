@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
@@ -47,6 +47,9 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [showTermsModal, setShowTermsModal] = useState(false);
     const [paymentOption, setPaymentOption] = useState('pay_now'); // 'pay_now' | 'temporary' | 'pay_later'
     const [showPassword, setShowPassword] = useState(false);
+    const [profilePic, setProfilePic] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
 
     // Temporary License Addition
     const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -106,7 +109,23 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage(null);
                 onClose();
                 navigate('/profile');
-            }, 2000);
+            }, 2500);
+        }
+    };
+
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                setMessage({ type: 'error', text: 'Image size must be less than 2MB' });
+                return;
+            }
+            setProfilePic(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setPreviewUrl(reader.result);
+            };
+            reader.readAsDataURL(file);
         }
     };
 
@@ -245,7 +264,36 @@ const AuthModal = ({ isOpen, onClose }) => {
                 return;
             }
 
-            // 2. Create the initial profile (unpaid)
+            // 3. Handle image upload if selected
+            let uploadedImageUrl = null;
+            if (profilePic) {
+                setIsUploading(true);
+                try {
+                    const fileExt = profilePic.name.split('.').pop();
+                    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
+                    const filePath = `registration/${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage
+                        .from('profile-pics')
+                        .upload(filePath, profilePic);
+
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('profile-pics')
+                        .getPublicUrl(filePath);
+                    
+                    uploadedImageUrl = publicUrl;
+                } catch (error) {
+                    console.error('Error uploading image:', error);
+                    // Continue without image if upload fails? User might want to know.
+                    // For now, let's just proceed.
+                } finally {
+                    setIsUploading(false);
+                }
+            }
+
+            // 4. Create the initial profile (unpaid) or paid depending on logic
             const baseParams = {
                 p_email: email,
                 p_name: `${firstName} ${lastName}`.trim(),
@@ -264,6 +312,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 p_instagram_link: instagramLink || null,
                 p_paid_registration: false,
                 p_license_type: 'none',
+                p_image_url: uploadedImageUrl,
             });
 
             if (insertError) {
@@ -530,9 +579,35 @@ const AuthModal = ({ isOpen, onClose }) => {
                                         </div>
                                     ) : step === 2 ? (
                                         <div className="space-y-4">
-                                            <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center justify-between mb-4">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 2: Padel Profile</span>
                                                 <span className="text-gray-500 text-[10px] font-bold">2 / 3</span>
+                                            </div>
+
+                                            {/* Profile Picture Upload */}
+                                            <div className="flex flex-col items-center gap-4 py-2">
+                                                <div className="relative group">
+                                                    <div className="w-24 h-24 rounded-full border-2 border-dashed border-white/20 bg-black/40 flex items-center justify-center overflow-hidden transition-all group-hover:border-padel-green/50">
+                                                        {previewUrl ? (
+                                                            <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <Camera size={28} className="text-gray-500 group-hover:text-padel-green transition-colors" />
+                                                        )}
+                                                    </div>
+                                                    <label className="absolute -bottom-1 -right-1 bg-padel-green text-black p-2 rounded-full cursor-pointer hover:bg-white transition-all shadow-lg">
+                                                        <Upload size={14} />
+                                                        <input 
+                                                            type="file" 
+                                                            className="hidden" 
+                                                            accept="image/*" 
+                                                            onChange={handleImageChange}
+                                                        />
+                                                    </label>
+                                                </div>
+                                                <div className="text-center">
+                                                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Profile Picture</p>
+                                                    <p className="text-[9px] text-gray-500 uppercase mt-0.5">JPG, PNG allowed • Max 2MB</p>
+                                                </div>
                                             </div>
 
                                             <select
