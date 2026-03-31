@@ -349,7 +349,7 @@ const Rankings = () => {
         rawRank: item.Standing,
         rank: `Rank #${item.Standing}`,
         image: localImage || null,
-        hasLocalProfile: !!localImage,
+        hasLocalProfile: !!playerRecord,
         playerRecord: playerRecord || null,
         points: item.ParticipantPoints?.Points || 0,
         rankedinProfile: `https://www.rankedin.com${item.ParticipantUrl}`,

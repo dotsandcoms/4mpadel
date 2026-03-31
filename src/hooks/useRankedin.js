@@ -152,12 +152,10 @@ export const useRankedin = () => {
      * @param {number} take Number of players to fetch
      * @returns {Promise<Array>} Array of ranked players
      */
-    const getOrganisationRankings = useCallback(async (rankingType, ageGroup, take = 10) => {
+    const getOrganisationRankings = useCallback(async (rankingType, ageGroup, take = 10, rankingId = 15809) => {
         setLoading(true);
         setError(null);
         try {
-            // Hardcoded SAPA Ranking ID 15809 since it's the current main ranking system
-            const rankingId = 15809;
             const response = await fetch(
                 `${API_BASE}/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${rankingType}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=${take}`
             );

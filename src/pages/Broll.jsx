@@ -1,21 +1,121 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal, PlayCircle, Video } from 'lucide-react';
+import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal, PlayCircle, Video, Search, ChevronLeft, ChevronRight, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
+import { useRankedin } from '../hooks/useRankedin';
 import brollLogo from '../assets/BrollLogo.png';
+import * as htmlToImage from 'html-to-image';
+import { jsPDF } from 'jspdf';
 
 const Broll = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    // Rankings State
+    const { getOrganisationRankings } = useRankedin();
+    const [mensDataRaw, setMensDataRaw] = useState([]);
+    const [ladiesDataRaw, setLadiesDataRaw] = useState([]);
+    const [rankingsLoading, setRankingsLoading] = useState(true);
+    const [localProfileMap, setLocalProfileMap] = useState({});
+    const [activeTab, setActiveTab] = useState('men');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [imageErrors, setImageErrors] = useState({});
+    const itemsPerPage = 20;
+
     const BROLL_RED = '#F40020';
+    const BROLL_RANKING_ID = 16317;
 
     useEffect(() => {
         fetchBrollEvents();
+        fetchRankings();
     }, []);
+
+    const fetchRankings = async () => {
+        try {
+            setRankingsLoading(true);
+            const [mensData, ladiesData] = await Promise.all([
+                getOrganisationRankings(3, 82, 1000, BROLL_RANKING_ID),
+                getOrganisationRankings(4, 83, 1000, BROLL_RANKING_ID)
+            ]);
+            setMensDataRaw(mensData || []);
+            setLadiesDataRaw(ladiesData || []);
+        } catch (err) {
+            console.error('Error fetching Broll rankings:', err);
+        } finally {
+            setRankingsLoading(false);
+        }
+    };
+
+    // Fetch local player profiles once rankings load (reusing logic from Rankings.jsx)
+    useEffect(() => {
+        const fetchLocalProfiles = async () => {
+            const { data } = await supabase
+                .from('players')
+                .select('*')
+                .eq('approved', true);
+
+            if (data) {
+                const map = {};
+                data.forEach(p => {
+                    if (p.name) {
+                        map[p.name.trim().toLowerCase()] = p;
+                    }
+                });
+                setLocalProfileMap(map);
+            }
+        };
+        if (!rankingsLoading) fetchLocalProfiles();
+    }, [rankingsLoading]);
+
+    const formatRankings = (data, profileMap) => {
+        if (!data) return [];
+        return data.map(item => {
+            const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
+            const localImage = playerRecord?.image_url;
+
+            return {
+                id: item.Participant?.Id || item.RankedinId,
+                name: item.Name,
+                rawRank: item.Standing,
+                rank: `Rank #${item.Standing}`,
+                image: localImage || null,
+                hasLocalProfile: !!playerRecord,
+                playerRecord: playerRecord || null,
+                points: item.ParticipantPoints?.Points || 0,
+                rankedinProfile: `https://www.rankedin.com${item.ParticipantUrl}`,
+            };
+        });
+    };
+
+    const mensRankings = React.useMemo(() => formatRankings(mensDataRaw, localProfileMap), [mensDataRaw, localProfileMap]);
+    const ladiesRankings = React.useMemo(() => formatRankings(ladiesDataRaw, localProfileMap), [ladiesDataRaw, localProfileMap]);
+
+    const currentData = activeTab === 'men' ? mensRankings : ladiesRankings;
+    const filteredData = React.useMemo(() => {
+        return currentData.filter(player =>
+            player.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [currentData, searchTerm]);
+
+    const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
+    const paginatedData = React.useMemo(() => {
+        return filteredData.slice(
+            (currentPage - 1) * itemsPerPage,
+            currentPage * itemsPerPage
+        );
+    }, [filteredData, currentPage]);
+
+    const getInitials = (name) => {
+        if (!name) return '';
+        const parts = name.split(' ');
+        if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+        return name.substring(0, 2).toUpperCase();
+    };
 
     const fetchBrollEvents = async () => {
         try {
@@ -34,6 +134,124 @@ const Broll = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const RankingSlider = ({ title, playersData, onPlayerClick, accentColor = '#F40020' }) => {
+        const scrollRef = React.useRef(null);
+        const [canScrollLeft, setCanScrollLeft] = useState(false);
+        const [canScrollRight, setCanScrollRight] = useState(true);
+
+        const updateArrows = () => {
+            const el = scrollRef.current;
+            if (!el) return;
+            setCanScrollLeft(el.scrollLeft > 10);
+            setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
+        };
+
+        const scroll = (dir) => {
+            const el = scrollRef.current;
+            if (!el) return;
+            el.scrollBy({ left: dir * 260, behavior: 'smooth' });
+        };
+
+        const handleCardClick = (player) => {
+            if (player.hasLocalProfile && player.playerRecord) {
+                onPlayerClick(player.playerRecord);
+            }
+        };
+
+        if (!playersData || playersData.length === 0) return null;
+        return (
+            <div className="mb-20 last:mb-0">
+                <div className="flex items-center gap-3 mb-6 px-6 md:px-0">
+                    <Trophy className="w-6 h-6" style={{ color: accentColor }} />
+                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-wider">{title}</h3>
+                </div>
+                <div className="relative">
+                    {/* Left Arrow */}
+                    <button
+                        onClick={() => scroll(-1)}
+                        className={`absolute left-2 md:-left-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white shadow-xl border border-slate-100 flex items-center justify-center text-slate-900 transition-all duration-300 hover:scale-110 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                        aria-label="Scroll left"
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+
+                    {/* Right Arrow */}
+                    <button
+                        onClick={() => scroll(1)}
+                        className={`absolute right-2 md:-right-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white shadow-xl border border-slate-100 flex items-center justify-center text-slate-900 transition-all duration-300 hover:scale-110 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                        aria-label="Scroll right"
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
+
+                    {/* Scroll Container */}
+                    <div
+                        ref={scrollRef}
+                        onScroll={updateArrows}
+                        className="flex gap-6 overflow-x-auto pb-8 snap-x px-2 md:px-0 nice-scrollbar scroll-smooth"
+                    >
+                        {playersData.map((player, index) => (
+                            <motion.div
+                                key={player.id || index}
+                                initial={{ opacity: 0, x: 30 }}
+                                whileInView={{ opacity: 1, x: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: Math.min(index * 0.1, 0.5) }}
+                                className={`w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-lg border border-slate-100 bg-white flex-shrink-0 ${player.hasLocalProfile ? 'cursor-pointer hover:shadow-xl transition-shadow' : ''}`}
+                                onClick={() => handleCardClick(player)}
+                            >
+                                <div className="slider-card-media h-[280px] md:h-[320px] w-full relative bg-slate-100 flex items-center justify-center">
+                                    {player.image && !imageErrors[player.id] ? (
+                                        <img
+                                            src={player.image}
+                                            alt={player.name}
+                                            className={`w-full h-full object-cover object-top transition-all duration-500 scale-100 group-hover:scale-105 ${player.hasLocalProfile ? '' : 'grayscale group-hover:grayscale-0'}`}
+                                            onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
+                                        />
+                                    ) : null}
+                                    {/* Fallback initials */}
+                                    <div
+                                        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-slate-50"
+                                        style={{ display: player.image && !imageErrors[player.id] ? 'none' : 'flex' }}
+                                    >
+                                        <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center shadow-inner mb-8">
+                                            <span className="text-2xl font-black text-slate-400 tracking-tighter">{getInitials(player.name)}</span>
+                                        </div>
+                                    </div>
+                                    {player.hasLocalProfile && (
+                                        <div className="absolute top-3 left-3 bg-[#F40020] text-white text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full shadow-lg z-10">
+                                            4M Profile
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
+
+                                    {/* View Profile Overlay */}
+                                    {player.hasLocalProfile && (
+                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                                            <span className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl">
+                                                View Profile
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="absolute bottom-0 left-0 right-0 p-4">
+                                    <p className="font-black mb-1 text-[9px] tracking-widest uppercase" style={{ color: accentColor }}>{player.rank}</p>
+                                    <h4 className="text-lg font-bold text-white mb-3 line-clamp-1">{player.name}</h4>
+                                    <div className="flex justify-between items-center border-t border-white/20 pt-3">
+                                        <div>
+                                            <p className="text-[8px] text-white/60 uppercase font-bold tracking-widest leading-none mb-1">Points</p>
+                                            <p className="text-sm font-black text-white">{player.points.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -150,6 +368,162 @@ const Broll = () => {
                             </p>
                         </div>
                     </div>
+                </div>
+            </section>
+
+            {/* Broll Tour Rankings Section */}
+            <section className="py-24 px-6 bg-slate-900 text-white relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                    <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[#F40020] blur-[150px] rounded-full translate-x-1/2 -translate-y-1/2"></div>
+                    <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-[#F40020] blur-[150px] rounded-full -translate-x-1/2 translate-y-1/2"></div>
+                </div>
+
+                <div className="max-w-7xl mx-auto relative z-10">
+                    <div className="text-center mb-16">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            whileInView={{ opacity: 1, scale: 1 }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-[#F40020] text-sm font-bold uppercase tracking-widest mb-6"
+                        >
+                            <span className="w-2 h-2 rounded-full bg-[#F40020] animate-pulse" />
+                            Live Standings
+                        </motion.div>
+                        <h2 className="text-4xl md:text-6xl font-black text-white tracking-tighter uppercase mb-6">
+                            OFFICIAL <span className="text-[#F40020]">BROLL TOUR</span> RANKINGS
+                        </h2>
+                        <p className="text-slate-400 max-w-2xl mx-auto text-lg">
+                            Track the best Men's Pro players in South Africa as they compete for the Broll Tour bonus. Best 8 results count towards the final standings.
+                        </p>
+                    </div>
+
+                    {rankingsLoading ? (
+                        <div className="flex flex-col items-center justify-center py-24 text-slate-400">
+                            <Loader className="w-10 h-10 animate-spin mb-4 text-[#F40020]" />
+                            <p className="font-bold uppercase tracking-widest text-xs">Pulling latest rankings...</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Top Players Slider */}
+                            <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+
+                            {/* Searchable Rankings Table */}
+                            <div className="mt-32">
+                                <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
+                                    <div className="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full md:w-auto">
+                                        <button
+                                            onClick={() => setActiveTab('men')}
+                                            className={`flex-1 py-3 px-8 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${activeTab === 'men' ? 'bg-[#F40020] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                        >
+                                            Men
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('ladies')}
+                                            className={`flex-1 py-3 px-8 rounded-lg font-bold text-sm uppercase tracking-wider transition-all ${activeTab === 'ladies' ? 'bg-[#F40020] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+                                        >
+                                            Women
+                                        </button>
+                                    </div>
+
+                                    <div className="relative w-full md:w-80">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500" />
+                                        <input
+                                            type="text"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            placeholder="Search player name..."
+                                            className="w-full bg-white/5 border border-white/10 text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#F40020]/50 placeholder-slate-500 font-medium"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-white/5">
+                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm w-24">Pos</th>
+                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm">Player</th>
+                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm text-right">Points</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {paginatedData.length > 0 ? (
+                                                    paginatedData.map((player) => (
+                                                        <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                                                            <td className="py-4 px-6 text-2xl font-black text-slate-500 group-hover:text-[#F40020] transition-colors">{player.rawRank}</td>
+                                                            <td className="py-4 px-6">
+                                                                <div
+                                                                    onClick={() => {
+                                                                        if (player.hasLocalProfile && player.playerRecord) {
+                                                                            setSelectedPlayer(player.playerRecord);
+                                                                        } else {
+                                                                            window.open(player.rankedinProfile, '_blank');
+                                                                        }
+                                                                    }}
+                                                                    className="flex items-center gap-4 cursor-pointer group/link"
+                                                                >
+                                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
+                                                                        {!imageErrors[player.id] ? (
+                                                                            <img
+                                                                                src={player.image}
+                                                                                alt={player.name}
+                                                                                className={`w-full h-full object-cover transition-all ${player.hasLocalProfile ? '' : 'filter grayscale group-hover/link:grayscale-0'}`}
+                                                                                onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
+                                                                            />
+                                                                        ) : (
+                                                                            <span className="text-sm font-bold text-slate-400">{getInitials(player.name)}</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className="text-lg font-bold text-white group-hover/link:text-[#F40020] transition-colors">
+                                                                        {player.name}
+                                                                        {player.hasLocalProfile && (
+                                                                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-[#F40020]/10 text-[#F40020] text-[8px] font-black uppercase tracking-widest border border-[#F40020]/20">4M</span>
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </td>
+                                                            <td className="py-4 px-6 text-right">
+                                                                <span className="inline-block bg-white/10 px-4 py-2 rounded-xl text-lg font-black text-white group-hover:bg-[#F40020] group-hover:text-white transition-colors">
+                                                                    {player.points.toLocaleString()}
+                                                                </span>
+                                                            </td>
+                                                        </tr>
+                                                    ))
+                                                ) : (
+                                                    <tr>
+                                                        <td colSpan="3" className="py-16 text-center text-slate-500 font-medium">No players found matching "{searchTerm}"</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Pagination */}
+                                    {totalPages > 1 && (
+                                        <div className="border-t border-white/10 p-6 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                                    disabled={currentPage === 1}
+                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 hover:bg-white/10 hover:text-[#F40020] transition-all"
+                                                >
+                                                    <ChevronLeft className="w-5 h-5" />
+                                                </button>
+                                                <span className="text-sm text-slate-400 font-bold px-4">Page {currentPage} of {totalPages}</span>
+                                                <button
+                                                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                                                    disabled={currentPage === totalPages}
+                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 hover:bg-white/10 hover:text-[#F40020] transition-all"
+                                                >
+                                                    <ChevronRight className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </section>
 
@@ -373,6 +747,75 @@ const Broll = () => {
                     </div>
                 )}
             </section>
+
+            {/* Player Modal (Reused from Rankings.jsx logic) */}
+            <AnimatePresence>
+                {selectedPlayer && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setSelectedPlayer(null)}
+                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] cursor-pointer"
+                        />
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none p-4">
+                            <motion.div
+                                layoutId={`card-${selectedPlayer.id}`}
+                                className="w-full max-w-lg bg-[#0F172A] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] flex flex-col"
+                            >
+                                <button
+                                    onClick={() => setSelectedPlayer(null)}
+                                    className="absolute top-6 right-6 z-20 w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+
+                                <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
+                                    {selectedPlayer.image_url ? (
+                                        <img src={selectedPlayer.image_url} alt={selectedPlayer.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white/10">
+                                            <Trophy className="w-48 h-48 opacity-10" />
+                                        </div>
+                                    )}
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+                                    <div className="absolute bottom-0 left-0 w-full p-8 bg-gradient-to-t from-[#0F172A] to-transparent">
+                                        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-2">{selectedPlayer.name}</h2>
+                                        <p className="text-slate-400 font-black uppercase tracking-widest text-xs flex items-center gap-2">
+                                            <MapPin className="w-3 h-3 text-[#F40020]" />
+                                            {selectedPlayer.home_club || 'SA Professional Player'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="p-8 space-y-6 overflow-y-auto nice-scrollbar">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Skill Level</p>
+                                            <p className="text-2xl font-black text-white">{selectedPlayer.skill_rating || '-'}</p>
+                                        </div>
+                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Play Style</p>
+                                            <p className="text-2xl font-black text-white">{selectedPlayer.play_side || 'Pro'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <a
+                                            href={`https://www.rankedin.com/en/player/${selectedPlayer.rankedin_id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="flex-1 bg-[#F40020] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all"
+                                        >
+                                            View Full Stats <ExternalLink className="w-4 h-4" />
+                                        </a>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 };
