@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
 import tournamentHero from '../assets/tournament_hero.jpg'; // Specific tournament hero
 
@@ -94,6 +94,14 @@ const EventDetails = () => {
     const [hasDraw, setHasDraw] = useState(false);
     const [hasResults, setHasResults] = useState(false);
     const [winners, setWinners] = useState([]);
+    
+    // New State for Tabs & Enhanced Data
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
+    const [tournamentClasses, setTournamentClasses] = useState([]);
+    const [upcomingMatches, setUpcomingMatches] = useState([]);
+    const [albumPhotos, setAlbumPhotos] = useState([]);
+    const [fetchingRankedinData, setFetchingRankedinData] = useState(false);
+
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
 
@@ -220,27 +228,47 @@ const EventDetails = () => {
         const checkRankedinStatus = async () => {
             if (!event) return;
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            
             if (rId) {
-                // Check Draws
-                const classes = await getTournamentClasses(rId);
-                const drawAvailable = classes && classes.some(c =>
-                    c.IsPublished &&
-                    Array.isArray(c.TournamentDraws) &&
-                    c.TournamentDraws.length > 0
-                );
-                setHasDraw(drawAvailable);
-
-                // Check Results/Winners
-                const tournamentWinners = await getTournamentWinners(rId);
-                if (tournamentWinners && tournamentWinners.length > 0) {
-                    setWinners(tournamentWinners);
-                    setHasResults(true);
-                } else {
-                    // Try matches to be sure
-                    const tournamentMatches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                    if (tournamentMatches && tournamentMatches.length > 0) {
-                        setHasResults(true);
+                setFetchingRankedinData(true);
+                try {
+                    // Fetch all classes
+                    const classes = await getTournamentClasses(rId);
+                    if (classes) {
+                        setTournamentClasses(classes);
+                        const drawAvailable = classes.some(c =>
+                            c.IsPublished &&
+                            Array.isArray(c.TournamentDraws) &&
+                            c.TournamentDraws.length > 0
+                        );
+                        setHasDraw(drawAvailable);
                     }
+
+                    // Check Results/Winners (Only if event is passed)
+                    const isPassed = new Date(event.end_date || event.start_date) < new Date();
+                    if (isPassed) {
+                        const tournamentWinners = await getTournamentWinners(rId);
+                        if (tournamentWinners && tournamentWinners.length > 0) {
+                            setWinners(tournamentWinners);
+                            setHasResults(true);
+                        } else {
+                            const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                            if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
+                                setHasResults(true);
+                            }
+                        }
+                    } else {
+                        // Fetch upcoming matches for live/upcoming events
+                        const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
+                        if (matchesPreview && matchesPreview.length > 0) {
+                            // Filter specifically for matches that are actually scheduled/upcoming
+                            setUpcomingMatches(matchesPreview.slice(0, 15)); // Get top 15 matches to avoid overwhelming
+                        }
+                    }
+                } catch (err) {
+                    console.error("Error fetching rankedin detailed data:", err);
+                } finally {
+                    setFetchingRankedinData(false);
                 }
             } else if (event.slug) {
                 setHasDraw(false);
@@ -249,6 +277,36 @@ const EventDetails = () => {
         };
         checkRankedinStatus();
     }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches]);
+
+    useEffect(() => {
+        const fetchAlbumPhotos = async () => {
+            if (!event) return;
+            
+            // Check if there's an album linked to this event in our DB
+            try {
+                const { data: albumData, error: albumError } = await supabase
+                    .from('albums')
+                    .select('id')
+                    .eq('event_id', event.id)
+                    .single();
+
+                if (albumData?.id && !albumError) {
+                    const { data: images, error: imageError } = await supabase
+                        .from('gallery_images')
+                        .select('image_url, id')
+                        .eq('album_id', albumData.id)
+                        .order('sort_order', { ascending: true });
+
+                    if (images && !imageError) {
+                        setAlbumPhotos(images);
+                    }
+                }
+            } catch (err) {
+                console.error("Error fetching event album:", err);
+            }
+        };
+        fetchAlbumPhotos();
+    }, [event]);
 
     useEffect(() => {
         const fetchWeather = async () => {
@@ -434,9 +492,9 @@ const EventDetails = () => {
 
     return (
         <>
-            <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans">
+            <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
                 {/* Hero Section with Image */}
-                <div className="relative h-[45vh] min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                <div className="relative h-[35vh] md:h-[45vh] min-h-[300px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
                         src={event.image_url || tournamentHero}
                         alt={event.event_name}
@@ -510,51 +568,7 @@ const EventDetails = () => {
                                         </div>
                                     </div>
 
-                                    {/* Google Map Embed (New Location) */}
-                                    {(event.address || event.venue) && (
-                                        <div className="rounded-xl overflow-hidden shadow-sm h-[180px] w-full relative group border border-gray-100 my-4">
-                                            <iframe
-                                                width="100%"
-                                                height="100%"
-                                                frameBorder="0"
-                                                scrolling="no"
-                                                marginHeight="0"
-                                                marginWidth="0"
-                                                src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                                className="w-full h-full grayscale group-hover:grayscale-0 transition-all duration-700 ease-in-out"
-                                                title="Event Location"
-                                            ></iframe>
-                                            <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full text-[10px] font-bold text-slate-900 pointer-events-none shadow-sm flex items-center gap-1 border border-gray-100/50">
-                                                <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse"></div>
-                                                {event.city || 'Club'}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Tournament Champions Section */}
-                                    {hasResults && winners.length > 0 && (
-                                        <motion.div 
-                                            initial={{ opacity: 0, x: -20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            className="mb-8 p-6 bg-slate-900 rounded-2xl border border-padel-green/20 relative overflow-hidden"
-                                        >
-                                            <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
-                                                <CheckCircle size={80} className="text-padel-green" />
-                                            </div>
-                                            <h4 className="text-padel-green font-black uppercase tracking-widest text-xs mb-4 flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
-                                                Tournament Champions
-                                            </h4>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                {winners.map((w, idx) => (
-                                                    <div key={idx} className="flex flex-col">
-                                                        <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{w.className}</span>
-                                                        <span className="text-white font-bold text-lg leading-tight">{w.winners}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    )}
+                                    {/* Map and Champions have been moved to Tabs */}
 
                                     {/* Social Share */}
                                     <div className="pt-2 flex gap-4">
@@ -564,9 +578,9 @@ const EventDetails = () => {
                             </div>
 
                             {/* Right Side: Registration Action */}
-                            <div className="p-8 md:w-80 bg-gray-50 flex flex-col items-center justify-center gap-6 border-t md:border-t-0 md:border-l border-dashed border-gray-300 relative">
-                                <div className="hidden md:block absolute -top-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
-                                <div className="hidden md:block absolute -bottom-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
+                            <div className="hidden md:flex p-8 w-80 bg-gray-50 flex-col items-center justify-center gap-6 border-l border-dashed border-gray-300 relative">
+                                <div className="absolute -top-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
+                                <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
 
                                 <div className="text-center w-full">
                                     <div className="flex flex-col items-center mb-6">
@@ -649,38 +663,125 @@ const EventDetails = () => {
                         </motion.div>
                     </div>
 
-                    {/* Content Component */}
-                    <div className="mt-12 max-w-6xl mx-auto space-y-8">
+                    {/* Sticky Action Bar for Mobile */}
+                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{event.registered_players || 0} Registered</p>
+                            <p className="font-bold text-slate-900 line-clamp-1">{event.event_name}</p>
+                        </div>
+                        <div className="shrink-0 flex gap-2">
+                            {(() => {
+                                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                if (!isEventPassed) {
+                                    return (
+                                        <a
+                                            href={event.rankedin_url || `https://www.rankedin.com/`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="bg-padel-green text-black font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                        >
+                                            Register
+                                        </a>
+                                    );
+                                } else if (hasResults && (rId || event.slug)) {
+                                    return (
+                                        <Link
+                                            to={`/results/${event.slug || rId}`}
+                                            className="bg-padel-green text-black font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                        >
+                                            Results
+                                        </Link>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </div>
+                    </div>
 
-
-                        {/* Top Section: Details + Sidebar */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-
-                            {/* Left Column: Event Details & Map */}
-                            <div className="lg:col-span-2 h-full">
-                                <motion.div
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ duration: 0.5 }}
-                                    className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full overflow-hidden max-h-[800px]"
+                    {/* Content Component: Tabs Area */}
+                    <div className="mt-8 md:mt-12 max-w-6xl mx-auto space-y-8">
+                        
+                        {/* Tab Navigation */}
+                        <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/50 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-gray-200/50 shadow-sm mx-auto max-w-fit">
+                            {['overview', 'divisions', 'media'].map((tab) => (
+                                <button
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${
+                                        activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
+                                    }`}
                                 >
-                                    <div className="p-8 pb-4 shrink-0 border-b border-gray-50 bg-gray-50/50">
-                                        <h3 className="text-2xl font-bold text-slate-900">Event Details</h3>
-                                    </div>
-
-                                    <div className="p-8 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 scrollbar-track-transparent">
-
-                                        <div
-                                            className="text-slate-600 leading-relaxed text-lg mb-8 event-rich-description"
-                                            dangerouslySetInnerHTML={{
-                                                __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
-                                            }}
+                                    {activeTab === tab && (
+                                        <motion.div
+                                            layoutId="activeTabPill"
+                                            className="absolute inset-0 bg-slate-900 rounded-full shadow-md"
+                                            initial={false}
+                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                         />
+                                    )}
+                                    <span className="relative z-10">{tab === 'divisions' ? 'Divisions & Results' : tab === 'media' ? 'Media Showcase' : 'Overview'}</span>
+                                </button>
+                            ))}
+                        </div>
 
+                        {/* Tab Content Container */}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                transition={{ duration: 0.2 }}
+                                className="min-h-[400px]"
+                            >
+                                {activeTab === 'overview' && (
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                                        {/* Left Column: Event Details & Map */}
+                                        <div className="lg:col-span-2 space-y-8 h-full">
+                                            <motion.div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
+                                                    <h3 className="text-2xl font-bold text-slate-900">Event Details</h3>
+                                                </div>
+                                                <div className="p-6 md:p-8">
+                                                    <div
+                                                        className="text-slate-600 leading-relaxed md:text-lg event-rich-description"
+                                                        dangerouslySetInnerHTML={{
+                                                            __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
+                                                        }}
+                                                    />
+                                                </div>
+                                            </motion.div>
 
-                                    </div>
-                                </motion.div>
-                            </div>
+                                            {/* Moved Google Map here */}
+                                            {(event.address || event.venue) && (
+                                                <motion.div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
+                                                        <h3 className="text-xl font-bold text-slate-900">Location</h3>
+                                                        <a 
+                                                            href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-padel-green font-bold text-sm tracking-wide hover:underline flex items-center gap-1"
+                                                        >
+                                                            Get Directions <ArrowLeft className="w-4 h-4 rotate-135" />
+                                                        </a>
+                                                    </div>
+                                                    <div className="h-[300px] w-full relative">
+                                                        <iframe
+                                                            width="100%"
+                                                            height="100%"
+                                                            frameBorder="0"
+                                                            scrolling="no"
+                                                            marginHeight="0"
+                                                            marginWidth="0"
+                                                            src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                                            className="w-full h-full grayscale hover:grayscale-0 transition-all duration-700 ease-in-out"
+                                                            title="Event Location"
+                                                        ></iframe>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </div>
 
                             {/* Right Column: Sidebar Widgets */}
                             <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-32">
@@ -791,107 +892,180 @@ const EventDetails = () => {
                                 </motion.div>
                             </div>
                         </div>
+                                )}
 
-
-                    </div>
-                </div>
-
-                {/* YouTube Playlist / Highlights Section with Navy Background - Spans across the page */}
-                {event.youtube_playlist_url && (
-                    <section className="bg-slate-900 py-24 my-16 border-y border-slate-800 relative overflow-hidden">
-                        {/* Background Wording Effect */}
-                        <motion.h2
-                            initial={{ opacity: 0, x: -50 }}
-                            whileInView={{ opacity: 1, x: 0 }}
-                            viewport={{ once: true }}
-                            transition={{ duration: 0.8 }}
-                            className="text-[100px] md:text-[180px] font-black text-white/[0.03] absolute top-0 -left-10 select-none uppercase tracking-tighter z-0"
-                        >
-                            Highlights
-                        </motion.h2>
-
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            className="max-w-7xl mx-auto px-4 md:px-8 lg:px-12 relative z-10"
-                        >
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
-                                <h2 className="text-4xl md:text-5xl font-black flex items-center gap-4 text-white tracking-tight">
-                                    <div className="w-16 h-16 rounded-2xl bg-padel-green/10 flex items-center justify-center">
-                                        <PlayCircle className="text-padel-green w-10 h-10" />
-                                    </div>
-                                    Event Highlights
-                                </h2>
-                            </div>
-
-                            <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 p-8 md:p-14 overflow-hidden relative">
-
-
-                                {fetchingVideos ? (
-                                    <div className="flex flex-col items-center justify-center py-24 bg-gray-50 rounded-[2rem] border border-dashed border-gray-200">
-                                        <Loader className="w-10 h-10 animate-spin text-padel-green mb-6" />
-                                        <p className="text-gray-400 font-bold text-xl italic">Fetching latest highlights...</p>
-                                    </div>
-                                ) : playlistVideos.length > 0 ? (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
-                                        {playlistVideos.map((video) => (
-                                            <motion.div
-                                                key={video.id}
-                                                whileHover={{ y: -8 }}
-                                                className="group relative cursor-pointer"
-                                                onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
-                                            >
-                                                <div className="aspect-video rounded-[1.5rem] overflow-hidden bg-slate-100 relative shadow-md group-hover:shadow-2xl transition-all duration-500">
-                                                    <img
-                                                        src={video.thumbnail}
-                                                        alt={video.title}
-                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                                    />
-                                                    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors duration-500" />
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 transform scale-90 group-hover:scale-100">
-                                                        <div className="w-16 h-16 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
-                                                            <Play className="w-10 h-10 fill-current ml-1" />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="mt-5 px-1">
-                                                    <h3 className="font-bold text-slate-900 line-clamp-2 group-hover:text-padel-green transition-colors text-xl leading-snug">
-                                                        {video.title}
-                                                    </h3>
-                                                    <div className="flex items-center gap-3 mt-3">
-                                                        <div className="w-8 h-px bg-padel-green/30" />
-                                                        <p className="text-xs text-gray-400 uppercase font-black tracking-[0.2em]">
-                                                            {new Date(video.publishedAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="aspect-video w-full rounded-[2rem] overflow-hidden border border-gray-100 shadow-2xl" id="event-highlights">
-                                        {getPlaylistEmbedUrl(event.youtube_playlist_url) ? (
-                                            <iframe
-                                                src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
-                                                title="YouTube playlist player"
-                                                className="w-full h-full border-0"
-                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                                                allowFullScreen
-                                            />
-                                        ) : (                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 p-12 text-center rounded-[2rem]">
-                                                <PlayCircle className="w-16 h-16 mb-6 opacity-20 text-padel-green" />
-                                                <p className="font-bold text-xl text-slate-900">Watch the highlights</p>
-                                                <p className="text-gray-500 mt-2 max-w-md mx-auto">We couldn't load the dynamic grid right now. Please try again later or contact the organizer.</p>
+                                {activeTab === 'divisions' && (
+                                    <div className="space-y-8">
+                                        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
+                                                <h3 className="text-2xl font-bold text-slate-900">Divisions & Results</h3>
+                                                <p className="text-sm text-gray-500 mt-2">Data synced directly from Rankedin</p>
                                             </div>
+                                            
+                                            <div className="p-6 md:p-8 bg-slate-50">
+                                                {fetchingRankedinData ? (
+                                                    <div className="flex flex-col items-center justify-center py-12">
+                                                        <Loader className="w-8 h-8 animate-spin text-padel-green mb-4" />
+                                                        <p className="text-gray-400 font-bold">Syncing data...</p>
+                                                    </div>
+                                                ) : tournamentClasses.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {tournamentClasses.map((cls, idx) => (
+                                                            <div key={idx} className="bg-white border text-center border-gray-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                                                                <h4 className="font-black text-xl text-slate-900 mb-4">{cls.Name}</h4>
+                                                                {/* Check if there are winners specifically for this class */}
+                                                                {isEventPassed && winners.some(w => w.className === cls.Name) ? (
+                                                                    <div className="bg-slate-900 p-4 rounded-xl inline-block mx-auto">
+                                                                        <span className="text-padel-green font-bold text-xs uppercase tracking-widest block mb-1">Champions</span>
+                                                                        <span className="text-white font-black text-lg">
+                                                                            {winners.find(w => w.className === cls.Name)?.winners}
+                                                                        </span>
+                                                                    </div>
+                                                                ) : !isEventPassed && upcomingMatches.some(m => m.MatchClass?.Id === cls.Id) ? (
+                                                                    <div className="bg-gray-50 p-4 rounded-xl">
+                                                                        <span className="text-slate-500 font-bold text-xs uppercase tracking-widest block mb-2">Upcoming Match Preview</span>
+                                                                        <p className="text-sm font-medium text-slate-700">Matches are scheduled. View Draws for full details.</p>
+                                                                    </div>
+                                                                ) : (
+                                                                     <p className="text-gray-400 text-sm">No results available yet.</p>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-12">
+                                                        <p className="text-gray-400 font-bold italic">No division data available for this event.</p>
+                                                    </div>
+                                                )}
 
+                                                <div className="mt-8 text-center pt-8 border-t border-gray-200">
+                                                    {(() => {
+                                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                                        if (hasDraw && !isEventPassed) {
+                                                            return (
+                                                                <Link to={`/draws/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
+                                                                    <GitBranch className="w-5 h-5" /> View Full Draws
+                                                                </Link>
+                                                            );
+                                                        } else if (hasResults) {
+                                                            return (
+                                                                <Link to={`/results/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
+                                                                    <CheckCircle className="w-5 h-5" /> View Full Results
+                                                                </Link>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    })()}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'media' && (
+                                    <div className="space-y-8">
+                                        {/* Gallery Photos */}
+                                        {albumPhotos.length > 0 && (
+                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
+                                                    <h3 className="text-2xl font-bold text-slate-900">Event Gallery</h3>
+                                                </div>
+                                                <div className="p-6 md:p-8">
+                                                    <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+                                                        {albumPhotos.map((photo, i) => (
+                                                            <div key={photo.id} className="break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all">
+                                                                <img src={photo.image_url} alt="Event Gallery" className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* YouTube Highlights inside Media */}
+                                        {event.youtube_playlist_url && (
+                                            <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8 md:p-14 overflow-hidden relative">
+                                                {/* Background wording */}
+                                                <div className="absolute top-0 -left-10 select-none overflow-hidden h-full flex items-center transform -rotate-12 pointer-events-none opacity-[0.03]">
+                                                    <h2 className="text-[120px] font-black text-white uppercase tracking-tighter w-[200%] leading-none">
+                                                        Highlights Highlights
+                                                    </h2>
+                                                </div>
+
+                                                <div className="relative z-10">
+                                                    <div className="flex items-center gap-4 mb-10">
+                                                        <div className="w-16 h-16 rounded-2xl bg-padel-green/10 flex items-center justify-center">
+                                                            <PlayCircle className="text-padel-green w-10 h-10" />
+                                                        </div>
+                                                        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">Event Highlights</h2>
+                                                    </div>
+
+                                                    {fetchingVideos ? (
+                                                        <div className="flex flex-col items-center justify-center py-20 bg-slate-800/50 rounded-2xl border border-dashed border-slate-700">
+                                                            <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
+                                                            <p className="text-gray-400 font-bold">Loading videos...</p>
+                                                        </div>
+                                                    ) : playlistVideos.length > 0 ? (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                            {playlistVideos.map((video) => (
+                                                                <motion.div
+                                                                    key={video.id}
+                                                                    whileHover={{ y: -8 }}
+                                                                    className="group relative cursor-pointer"
+                                                                    onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
+                                                                >
+                                                                    <div className="aspect-video rounded-2xl overflow-hidden bg-slate-800 relative shadow-md group-hover:shadow-xl transition-all">
+                                                                        <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                                                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors" />
+                                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
+                                                                            <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
+                                                                                <Play className="w-8 h-8 fill-current ml-1" />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="mt-4">
+                                                                        <h3 className="font-bold text-white line-clamp-2 group-hover:text-padel-green transition-colors leading-snug">{video.title}</h3>
+                                                                    </div>
+                                                                </motion.div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-xl bg-slate-800 border-2 border-slate-700">
+                                                            {getPlaylistEmbedUrl(event.youtube_playlist_url) ? (
+                                                                <iframe
+                                                                    src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
+                                                                    title="YouTube playlist player"
+                                                                    className="w-full h-full border-0"
+                                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                    allowFullScreen
+                                                                />
+                                                            ) : (
+                                                                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center">
+                                                                    <PlayCircle className="w-16 h-16 mb-4 opacity-20 text-padel-green" />
+                                                                    <p className="font-bold text-xl text-white mb-2">Watch the highlights</p>
+                                                                    <p className="text-sm max-w-sm mx-auto">Could not load playlist grid. Please check back later.</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                        
+                                        {!event.youtube_playlist_url && albumPhotos.length === 0 && (
+                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
+                                                <ImageIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Media Available</h3>
+                                                <p className="text-gray-500">Photos and videos from the event will be posted here soon.</p>
+                                            </div>
                                         )}
                                     </div>
                                 )}
-                            </div>
-                        </motion.div>
-                    </section>
-                )}
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
+                </div>
 
 
                 {/* Registration Modal */}

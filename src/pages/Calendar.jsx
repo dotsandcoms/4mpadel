@@ -185,7 +185,7 @@ const Calendar = () => {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
-    const [timingFilter, setTimingFilter] = useState('Upcoming');
+    const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
 
     // View State
@@ -200,7 +200,6 @@ const Calendar = () => {
 
     // Personalized State
     const [userProfile, setUserProfile] = useState(null);
-    const [isMyCalendar, setIsMyCalendar] = useState(false);
     const [personalEvents, setPersonalEvents] = useState([]);
     const [personalLoading, setPersonalLoading] = useState(false);
 
@@ -255,10 +254,10 @@ const Calendar = () => {
     };
 
     useEffect(() => {
-        if (isMyCalendar && userProfile?.rankedin_id && personalEvents.length === 0) {
+        if (activeTab === 'my-calendar' && userProfile?.rankedin_id && personalEvents.length === 0) {
             fetchPersonalEvents();
         }
-    }, [isMyCalendar, userProfile]);
+    }, [activeTab, userProfile]);
 
     const fetchPersonalEvents = async () => {
         if (!userProfile?.rankedin_id) return;
@@ -306,6 +305,8 @@ const Calendar = () => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
+        const isMyCalendar = activeTab === 'my-calendar';
+
         const sourceEvents = isMyCalendar ? personalEvents.map(pe => {
             // Find a matching local event for internal routing
             const localEvent = events.find(le =>
@@ -350,10 +351,10 @@ const Calendar = () => {
                 const startDateStr = event.start_date || event.startDate;
                 const endDateStr = event.end_date || event.endDate || startDateStr;
 
-                if (timingFilter === 'Upcoming') {
+                if (activeTab === 'upcoming') {
                     const eventDate = new Date(endDateStr);
                     matchesTiming = !isNaN(eventDate.getTime()) && eventDate >= today;
-                } else if (timingFilter === 'Past') {
+                } else if (activeTab === 'past') {
                     const eventDate = new Date(endDateStr);
                     matchesTiming = !isNaN(eventDate.getTime()) && eventDate < today;
                 }
@@ -365,7 +366,7 @@ const Calendar = () => {
 
             return matchesSearch && matchesStatus && matchesCity && matchesTiming && matchesLeague;
         });
-    }, [events, personalEvents, isMyCalendar, searchTerm, statusFilters, cityFilter, timingFilter, leagueFilter, viewMode]);
+    }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode]);
 
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
@@ -378,7 +379,7 @@ const Calendar = () => {
     useEffect(() => {
         setCurrentPage(1);
         window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, [searchTerm, statusFilters, cityFilter, timingFilter, leagueFilter, viewMode, isMyCalendar]);
+    }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, viewMode]);
 
     // Scroll to top on page change
     useEffect(() => {
@@ -520,25 +521,35 @@ const Calendar = () => {
                     </motion.p>
                 </div>
 
-                {/* Sub-Navigation (if logged in and visible) */}
-                {userProfile && userProfile.paid_registration && userProfile.approved && (
-                    <div className="flex justify-center mb-8">
-                        <div className="bg-white/5 backdrop-blur-md border border-white/10 p-1.5 rounded-2xl flex gap-2">
+                {/* Primary Tab Navigation */}
+                <div className="flex justify-center mb-10 relative z-50">
+                    <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-[2rem] border border-white/10 shadow-xl shadow-black/20 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
+                        {[
+                            { id: 'upcoming', label: 'Upcoming' },
+                            { id: 'past', label: 'Past Events' },
+                            { id: 'all', label: 'All Events' },
+                            ...(userProfile && userProfile.paid_registration && userProfile.approved ? [{ id: 'my-calendar', label: 'My Calendar' }] : [])
+                        ].map((tab) => (
                             <button
-                                onClick={() => setIsMyCalendar(false)}
-                                className={`px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${!isMyCalendar ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`relative px-4 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-black text-[10px] sm:text-[11px] md:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center ${
+                                    activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                }`}
                             >
-                                All Events
+                                {activeTab === tab.id && (
+                                    <motion.div
+                                        layoutId="calendarPrimaryTab"
+                                        className="absolute inset-0 bg-padel-green rounded-full shadow-lg shadow-padel-green/20"
+                                        initial={false}
+                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                    />
+                                )}
+                                <span className="relative z-10">{tab.label}</span>
                             </button>
-                            <button
-                                onClick={() => setIsMyCalendar(true)}
-                                className={`px-8 py-3 rounded-xl font-black uppercase tracking-widest text-sm transition-all ${isMyCalendar ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                            >
-                                My Calendar
-                            </button>
-                        </div>
+                        ))}
                     </div>
-                )}
+                </div>
 
                 {/* Filters & Controls */}
                 <motion.div
@@ -574,21 +585,7 @@ const Calendar = () => {
                             </select>
                         </div>
 
-                        {/* Timing Filter (List View Only) */}
-                        {viewMode === 'list' && (
-                            <div className="relative w-full md:w-auto min-w-[140px]">
-                                <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                                <select
-                                    value={timingFilter}
-                                    onChange={(e) => setTimingFilter(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors"
-                                >
-                                    <option value="Upcoming" className="bg-slate-900">Upcoming</option>
-                                    <option value="Past" className="bg-slate-900">Past</option>
-                                    <option value="All" className="bg-slate-900">All Events</option>
-                                </select>
-                            </div>
-                        )}
+
 
                         {/* Status Filter */}
                         <div className="relative w-full md:w-auto min-w-[160px]" ref={dropdownRef}>

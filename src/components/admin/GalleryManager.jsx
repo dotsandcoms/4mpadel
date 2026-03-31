@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 const GalleryManager = () => {
     const [albums, setAlbums] = useState([]);
+    const [events, setEvents] = useState([]); // Fetch calendar events
     const [loading, setLoading] = useState(true);
     const [selectedAlbum, setSelectedAlbum] = useState(null); // If null, show albums list. If set, show images for this album.
 
@@ -16,7 +17,8 @@ const GalleryManager = () => {
         title: '',
         description: '',
         is_active: true,
-        cover_image_url: ''
+        cover_image_url: '',
+        event_id: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -27,6 +29,7 @@ const GalleryManager = () => {
 
     useEffect(() => {
         fetchAlbums();
+        fetchEvents();
     }, []);
 
     const fetchAlbums = async () => {
@@ -44,6 +47,21 @@ const GalleryManager = () => {
             toast.error('Failed to load albums');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchEvents = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('id, event_name, start_date')
+                .order('start_date', { ascending: false });
+
+            if (error) throw error;
+            setEvents(data || []);
+        } catch (error) {
+            console.error('Error fetching events:', error);
+            // Non-blocking error
         }
     };
 
@@ -80,7 +98,8 @@ const GalleryManager = () => {
             title: '',
             description: '',
             is_active: true,
-            cover_image_url: ''
+            cover_image_url: '',
+            event_id: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -92,7 +111,8 @@ const GalleryManager = () => {
             title: album.title || '',
             description: album.description || '',
             is_active: album.is_active,
-            cover_image_url: album.cover_image_url || ''
+            cover_image_url: album.cover_image_url || '',
+            event_id: album.event_id || ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -100,10 +120,16 @@ const GalleryManager = () => {
     const handleAlbumSubmit = async (e) => {
         e.preventDefault();
         try {
+            // Clean up empty string to null for event_id foreign key
+            const submissionData = {
+                ...albumFormData,
+                event_id: albumFormData.event_id === '' ? null : albumFormData.event_id
+            };
+
             if (editingAlbum) {
                 const { error } = await supabase
                     .from('albums')
-                    .update(albumFormData)
+                    .update(submissionData)
                     .eq('id', editingAlbum.id);
 
                 if (error) throw error;
@@ -111,7 +137,7 @@ const GalleryManager = () => {
             } else {
                 const { error } = await supabase
                     .from('albums')
-                    .insert([albumFormData]);
+                    .insert([submissionData]);
 
                 if (error) throw error;
                 toast.success('Album created successfully');
@@ -523,6 +549,22 @@ const GalleryManager = () => {
                                             placeholder="Brief description of the album..."
                                             className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
                                         ></textarea>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
+                                        <select
+                                            name="event_id"
+                                            value={albumFormData.event_id || ''}
+                                            onChange={handleAlbumInputChange}
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
+                                        >
+                                            <option value="">-- No Event Linked --</option>
+                                            {events.map(event => (
+                                                <option key={event.id} value={event.id}>
+                                                    {event.event_name} {event.start_date ? `(${event.start_date.substring(0, 10)})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="flex items-center gap-3 bg-black/40 border border-white/10 p-4 rounded-lg">
                                         <input
