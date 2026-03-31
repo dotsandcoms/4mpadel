@@ -591,8 +591,8 @@ const EventDetails = () => {
         <>
             <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
                 {/* Hero Section with Image */}
-                <div className="relative h-[35vh] md:h-[45vh] min-h-[300px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
-                    <img
+                <div className="relative h-[20vh] md:h-[45vh] min-h-[220px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                <img
                         src={event.image_url || tournamentHero}
                         alt={event.event_name}
                         className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
@@ -604,21 +604,28 @@ const EventDetails = () => {
                         <motion.h1
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="text-[120px] md:text-[220px] font-black text-white/[0.07] uppercase leading-none whitespace-nowrap text-center tracking-tighter"
+                            className="text-[70px] md:text-[220px] font-black text-white/[0.07] uppercase leading-none whitespace-nowrap text-center tracking-tighter"
                         >
                             {event.event_name.split(' ').slice(0, 3).join(' ')}
                         </motion.h1>
                     </div>
-
-                    <Link
-                        to="/calendar"
-                        className="absolute top-24 left-6 z-20 bg-white/10 backdrop-blur-md text-white p-2 rounded-full hover:bg-white hover:text-black transition-colors"
-                    >
-                        <ArrowLeft className="w-6 h-6" />
-                    </Link>
                 </div>
 
-                <div className="container mx-auto px-4 lg:px-6 relative z-10 -mt-32 pb-32">
+                <div className="container mx-auto px-4 lg:px-6 relative z-10 -mt-20 md:-mt-32 pb-32">
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="mb-6"
+                    >
+                        <Link
+                            to="/calendar"
+                            className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md text-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition-all duration-300 border border-white/20 group"
+                        >
+                            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                            <span className="text-xs font-black uppercase tracking-[0.2em]">Back to Calendar</span>
+                        </Link>
+                    </motion.div>
                     <div className="flex flex-col lg:flex-row gap-8 relative">
                         {/* Background Glow Effect */}
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-full opacity-30 blur-[100px] pointer-events-none z-0">
@@ -859,7 +866,7 @@ const EventDetails = () => {
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                         {/* Left Column: Event Details & Map */}
                                         <div className="lg:col-span-2 space-y-8">
-                                            <ModuleAccordion title="Event Details" icon={FileText} defaultOpen={true}>
+                                            <ModuleAccordion title="Event Details" icon={FileText} defaultOpen={false}>
                                                 <div
                                                     className="text-slate-600 leading-relaxed md:text-lg event-rich-description"
                                                     dangerouslySetInnerHTML={{
@@ -869,7 +876,7 @@ const EventDetails = () => {
                                             </ModuleAccordion>
 
                                             {(event.address || event.venue) && (
-                                                <ModuleAccordion title="Location" icon={MapPin} defaultOpen={true}>
+                                                <ModuleAccordion title="Location" icon={MapPin} defaultOpen={false}>
                                                     <div className="flex items-center justify-between mb-4">
                                                         <p className="text-sm text-gray-500">{event.address || event.venue} {event.city || ''}</p>
                                                         <a
