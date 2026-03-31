@@ -269,50 +269,65 @@ export const useRankedin = () => {
             const classes = await getTournamentClasses(tournamentId);
             const winnersList = [];
 
-            // We use a simple loop, but ideally we'd limit this if there are too many classes
-            // For Padel tournaments, usually 4-8 classes.
-            for (const cls of classes.slice(0, 10)) {
+            for (const cls of classes.slice(0, 12)) {
                 if (!cls.TournamentDraws || cls.TournamentDraws.length === 0) continue;
                 
-                // Get the last draw (usually the Final or Knockout)
-                const lastDraw = cls.TournamentDraws[cls.TournamentDraws.length - 1];
-                const drawData = await getDrawsForClass(cls.Id, lastDraw.Stage, lastDraw.Strength);
-                
-                if (!drawData) continue;
+                // Fetch each draw (Main, Backdraw, etc.)
+                for (const draw of cls.TournamentDraws) {
+                    try {
+                        const drawData = await getDrawsForClass(cls.Id, draw.Stage, draw.Strength);
+                        if (!drawData) continue;
 
-                // Look for Elimination draw winners
-                const elimination = drawData.find(d => d.BaseType === 'Elimination')?.Elimination;
-                if (elimination && elimination.DrawData) {
-                    const allMatches = elimination.DrawData.flat().filter(cell => cell && (cell.MatchCell || cell.MatchViewModel));
-                    const finalMatchCell = allMatches.sort((a,b) => (b.MatchCell || b).Round - (a.MatchCell || a).Round)[0];
-                    
-                    if (finalMatchCell) {
-                        const m = finalMatchCell.MatchCell || finalMatchCell;
-                        const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
-                        const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
-                        
-                        if (hasScore) {
-                            const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                        // Look for Elimination draw winners
+                        const elimination = drawData.find(d => d.BaseType === 'Elimination')?.Elimination;
+                        if (elimination && elimination.DrawData) {
+                            // Find the Final (highest round)
+                            const allMatches = elimination.DrawData.flat()
+                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel))
+                                .map(cell => cell.MatchCell || cell.MatchViewModel || cell);
                             
-                            const winningParticipant = isFirstWinner 
-                                ? (finalMatchCell.ChallengerParticipant || m.ChallengerParticipant) 
-                                : (finalMatchCell.ChallengedParticipant || m.ChallengedParticipant);
+                            const finalMatch = allMatches.sort((a,b) => b.Round - a.Round)[0];
                             
-                            if (winningParticipant) {
-                                let winnerNames = winningParticipant.Name;
-                                if (!winnerNames && winningParticipant.FirstPlayer) {
-                                    winnerNames = winningParticipant.FirstPlayer.Name;
-                                    if (winningParticipant.SecondPlayer) winnerNames += ` & ${winningParticipant.SecondPlayer.Name}`;
+                            if (finalMatch) {
+                                const m = finalMatch;
+                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
+                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId;
+                                
+                                // Robust detection: Winner ID or Boolean flag
+                                let winningParticipant = null;
+                                
+                                if (winnerId) {
+                                    const p1Matches = (m.ChallengerParticipant?.Id == winnerId || m.ChallengerParticipant?.EventParticipantId == winnerId);
+                                    const p2Matches = (m.ChallengedParticipant?.Id == winnerId || m.ChallengedParticipant?.EventParticipantId == winnerId);
+                                    
+                                    if (p1Matches) winningParticipant = m.ChallengerParticipant;
+                                    else if (p2Matches) winningParticipant = m.ChallengedParticipant;
                                 }
 
-                                if (winnerNames) {
-                                    winnersList.push({
-                                        className: cls.Name,
-                                        winners: winnerNames
-                                    });
+                                if (!winningParticipant) {
+                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                                    winningParticipant = isFirstWinner ? m.ChallengerParticipant : m.ChallengedParticipant;
+                                }
+                                
+                                if (winningParticipant) {
+                                    let winnerNames = winningParticipant.Name;
+                                    if (!winnerNames && winningParticipant.FirstPlayer) {
+                                        winnerNames = winningParticipant.FirstPlayer.Name;
+                                        if (winningParticipant.SecondPlayer) winnerNames += ` & ${winningParticipant.SecondPlayer.Name}`;
+                                    }
+
+                                    if (winnerNames) {
+                                        winnersList.push({
+                                            className: cls.Name,
+                                            drawName: draw.Name,
+                                            winners: winnerNames
+                                        });
+                                    }
                                 }
                             }
                         }
+                    } catch (drawErr) {
+                        console.error(`Error processing draw ${draw.Name}:`, drawErr);
                     }
                 }
             }
@@ -436,7 +451,15 @@ export const useRankedin = () => {
                             } catch (e) {}
 
                             // Determine if Team 1 (Challenger) won
-                            const firstWon = m.MatchResult?.IsFirstParticipantWinner || m.MatchResult?.Score?.IsFirstParticipantWinner;
+                            const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
+                            let firstWon = false;
+                            
+                            if (winnerId) {
+                                firstWon = (m.Challenger?.Id == winnerId || m.Challenger?.EventParticipantId == winnerId || m.Challenger?.Player1Id == winnerId);
+                            } else {
+                                firstWon = m.MatchResult?.IsFirstParticipantWinner || m.MatchResult?.Score?.IsFirstParticipantWinner;
+                            }
+
                             const pId = internalId;
                             
                             // Check if the current player is on Team 1 or Team 2 and if their team won

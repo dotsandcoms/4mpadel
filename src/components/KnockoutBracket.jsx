@@ -282,9 +282,22 @@ const KnockoutBracket = ({ matches }) => {
                                                     const m = cell.MatchCell || cell;
                                                     const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
                                                     const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                                                    const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId;
 
-                                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
-                                                    const isSecondWinner = scoreObj ? !scoreObj.IsFirstParticipantWinner : (!m.MatchViewModel?.IsFirstParticipantWinner && hasScore);
+                                                    let isFirstWinner = false;
+                                                    let isSecondWinner = false;
+
+                                                    if (hasScore) {
+                                                        if (winnerId) {
+                                                            isFirstWinner = (cell.ChallengerParticipant?.Id == winnerId || cell.ChallengerParticipant?.EventParticipantId == winnerId || m.ChallengerParticipant?.Id == winnerId || m.ChallengerParticipant?.EventParticipantId == winnerId);
+                                                            isSecondWinner = (cell.ChallengedParticipant?.Id == winnerId || cell.ChallengedParticipant?.EventParticipantId == winnerId || m.ChallengedParticipant?.Id == winnerId || m.ChallengedParticipant?.EventParticipantId == winnerId);
+                                                        }
+
+                                                        if (!isFirstWinner && !isSecondWinner) {
+                                                            isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                                                            isSecondWinner = !isFirstWinner;
+                                                        }
+                                                    }
 
                                                     const team1Players = getTeamPlayers(cell.ChallengerParticipant || m.ChallengerParticipant);
                                                     const team2Players = getTeamPlayers(cell.ChallengedParticipant || m.ChallengedParticipant);
@@ -344,18 +357,31 @@ const KnockoutBracket = ({ matches }) => {
 
                                 {(viewMode === 'bracket' || activeRoundIndex === sortedRounds.length) && sortedRounds.length > 0 && (() => {
                                     const finalRound = sortedRounds[sortedRounds.length - 1];
-                                    const finalMatch = finalRound.length > 0 ? finalRound[0] : null;
+                                    const finalMatchCell = finalRound.length > 0 ? finalRound[0] : null;
                                     let finalWinnerPlayers = null;
 
-                                    if (finalMatch) {
-                                        const fm = finalMatch.MatchCell || finalMatch;
+                                    if (finalMatchCell) {
+                                        const fm = finalMatchCell.MatchCell || finalMatchCell;
                                         const scoreObj = fm.MatchResults?.Score || fm.MatchViewModel?.Score || fm.Score;
                                         const hasScore = fm.MatchResults?.HasScore || fm.MatchViewModel?.HasScore || fm.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                                        const winnerId = fm.MatchResults?.WinnerParticipantId || fm.MatchViewModel?.WinnerParticipantId || fm.WinnerParticipantId;
+
                                         if (hasScore) {
-                                            const isFirstWinner = scoreObj?.IsFirstParticipantWinner || fm.MatchViewModel?.IsFirstParticipantWinner || false;
-                                            const isSecondWinner = scoreObj ? !scoreObj.IsFirstParticipantWinner : (!fm.MatchViewModel?.IsFirstParticipantWinner && hasScore);
-                                            if (isFirstWinner) finalWinnerPlayers = getTeamPlayers(finalMatch.ChallengerParticipant || fm.ChallengerParticipant);
-                                            else if (isSecondWinner) finalWinnerPlayers = getTeamPlayers(finalMatch.ChallengedParticipant || fm.ChallengedParticipant);
+                                            let isFirstWinner = false;
+                                            let isSecondWinner = false;
+
+                                            if (winnerId) {
+                                                isFirstWinner = (finalMatchCell.ChallengerParticipant?.Id == winnerId || finalMatchCell.ChallengerParticipant?.EventParticipantId == winnerId || fm.ChallengerParticipant?.Id == winnerId || fm.ChallengerParticipant?.EventParticipantId == winnerId);
+                                                isSecondWinner = (finalMatchCell.ChallengedParticipant?.Id == winnerId || finalMatchCell.ChallengedParticipant?.EventParticipantId == winnerId || fm.ChallengedParticipant?.Id == winnerId || fm.ChallengedParticipant?.EventParticipantId == winnerId);
+                                            }
+
+                                            if (!isFirstWinner && !isSecondWinner) {
+                                                isFirstWinner = scoreObj?.IsFirstParticipantWinner || fm.MatchViewModel?.IsFirstParticipantWinner || false;
+                                                isSecondWinner = !isFirstWinner;
+                                            }
+
+                                            if (isFirstWinner) finalWinnerPlayers = getTeamPlayers(finalMatchCell.ChallengerParticipant || fm.ChallengerParticipant);
+                                            else if (isSecondWinner) finalWinnerPlayers = getTeamPlayers(finalMatchCell.ChallengedParticipant || fm.ChallengedParticipant);
                                         }
                                     }
 

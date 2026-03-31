@@ -111,17 +111,17 @@ const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, cla
         <div className={`bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden transition-all ${className}`}>
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className={`w-full flex items-center justify-between p-6 md:p-8 text-left transition-colors hover:bg-gray-50/80 ${isOpen ? 'border-b border-gray-50 bg-gray-50/50' : 'bg-white'}`}
+                className={`w-full flex items-center justify-between p-6 md:p-8 text-left transition-all duration-300 ${isOpen ? 'bg-slate-900 border-b border-slate-800 shadow-lg' : 'bg-white hover:bg-gray-50/80'}`}
             >
                 <div className="flex items-center gap-4">
-                    {Icon && <Icon className="w-6 h-6 text-padel-green" />}
-                    <h3 className="text-xl md:text-2xl font-bold text-slate-900">{title}</h3>
+                    {Icon && <Icon className={`w-6 h-6 transition-colors duration-300 ${isOpen ? 'text-padel-green drop-shadow-[0_0_8px_rgba(154,233,0,0.4)]' : 'text-padel-green'}`} />}
+                    <h3 className={`text-xl md:text-2xl font-bold transition-colors duration-300 ${isOpen ? 'text-white' : 'text-slate-900'}`}>{title}</h3>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
                     transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                 >
-                    <ChevronDown className="w-6 h-6 text-gray-400" />
+                    <ChevronDown className={`w-6 h-6 transition-colors duration-300 ${isOpen ? 'text-padel-green' : 'text-gray-400'}`} />
                 </motion.div>
             </button>
             <AnimatePresence initial={false}>
@@ -1018,14 +1018,25 @@ const EventDetails = () => {
 
                                                                 {/* Content Column */}
                                                                 <div className="flex-1 text-center md:text-left">
-                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-1 block">
+                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">
                                                                         {cls.Name}
                                                                     </span>
 
                                                                     {isEventPassed && winners.some(w => w.className === cls.Name) ? (
-                                                                        <h4 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
-                                                                            {winners.find(w => w.className === cls.Name)?.winners}
-                                                                        </h4>
+                                                                        <div className="space-y-4">
+                                                                            {winners.filter(w => w.className === cls.Name).map((w, wi) => (
+                                                                                <div key={wi} className={wi > 0 ? "pt-3 border-t border-slate-100" : ""}>
+                                                                                    {w.drawName && !w.drawName.toLowerCase().includes('main') && (
+                                                                                        <span className="text-[10px] font-black text-padel-green uppercase tracking-wider mb-1 block">
+                                                                                            {w.drawName}
+                                                                                        </span>
+                                                                                    )}
+                                                                                    <h4 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
+                                                                                        {w.winners}
+                                                                                    </h4>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
                                                                     ) : !isEventPassed && upcomingMatches.some(m => m.MatchClass?.Id === cls.Id) ? (
                                                                         <p className="text-sm font-bold text-slate-600 flex items-center justify-center md:justify-start gap-2">
                                                                             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
@@ -1038,7 +1049,7 @@ const EventDetails = () => {
 
                                                                 {/* Tag Column */}
                                                                 {isEventPassed && winners.some(w => w.className === cls.Name) && (
-                                                                    <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-full shadow-lg">
+                                                                    <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-full shadow-lg shrink-0">
                                                                         <span className="text-padel-green font-black text-[10px] uppercase tracking-widest">
                                                                             Champions
                                                                         </span>

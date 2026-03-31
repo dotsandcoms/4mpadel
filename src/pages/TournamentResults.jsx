@@ -139,9 +139,17 @@ const TournamentResults = () => {
                 </div>
             );
         }
+        const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
+        let p1Wins = false;
+        let p2Wins = false;
 
-        const p1Wins = score.IsFirstParticipantWinner;
-        const p2Wins = !p1Wins;
+        if (winnerId) {
+            p1Wins = (m.Challenger?.Id == winnerId || m.Challenger?.EventParticipantId == winnerId || m.Challenger?.Player1Id == winnerId);
+            p2Wins = (m.Challenged?.Id == winnerId || m.Challenged?.EventParticipantId == winnerId || m.Challenged?.Player1Id == winnerId);
+        } else {
+            p1Wins = score.IsFirstParticipantWinner;
+            p2Wins = !p1Wins;
+        }
 
         return (
             <div className="flex flex-col items-end gap-1">
@@ -320,8 +328,17 @@ const TournamentResults = () => {
 
                                 {filteredMatches.map((m, idx) => {
                                     const score = m.MatchResult?.Score;
-                                    const p1Wins = score?.IsFirstParticipantWinner;
-                                    const p2Wins = !p1Wins && m.MatchResult?.IsPlayed;
+                                    const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
+                                    let p1Wins = false;
+                                    let p2Wins = false;
+
+                                    if (winnerId) {
+                                        p1Wins = (m.Challenger?.Id == winnerId || m.Challenger?.EventParticipantId == winnerId || m.Challenger?.Player1Id == winnerId);
+                                        p2Wins = (m.Challenged?.Id == winnerId || m.Challenged?.EventParticipantId == winnerId || m.Challenged?.Player1Id == winnerId);
+                                    } else {
+                                        p1Wins = score?.IsFirstParticipantWinner;
+                                        p2Wins = !p1Wins && m.MatchResult?.IsPlayed;
+                                    }
                                     
                                     return (
                                         <motion.div
