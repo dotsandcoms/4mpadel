@@ -163,9 +163,12 @@ const Broll = () => {
         if (!playersData || playersData.length === 0) return null;
         return (
             <div className="mb-20 last:mb-0">
-                <div className="flex items-center gap-3 mb-6 px-6 md:px-0">
-                    <Trophy className="w-6 h-6" style={{ color: accentColor }} />
-                    <h3 className="text-2xl md:text-3xl font-black text-slate-900 uppercase tracking-wider">{title}</h3>
+                <div className="flex flex-col gap-2 mb-8 px-6 md:px-0">
+                    <div className="flex items-center gap-3">
+                        <Trophy className="w-6 h-6" style={{ color: accentColor }} />
+                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-wider">{title}</h3>
+                    </div>
+                    <div className="h-1 w-20" style={{ backgroundColor: accentColor }}></div>
                 </div>
                 <div className="relative">
                     {/* Left Arrow */}
@@ -392,7 +395,7 @@ const Broll = () => {
                             OFFICIAL <span className="text-[#F40020]">BROLL TOUR</span> RANKINGS
                         </h2>
                         <p className="text-slate-400 max-w-2xl mx-auto text-lg">
-                            Track the best Men's Pro players in South Africa as they compete for the Broll Tour bonus. Best 8 results count towards the final standings.
+                            Track the best Men's and Ladies Pro players in South Africa as they compete for the Broll Tour bonus. Best 8 results count towards the final standings.
                         </p>
                     </div>
 
@@ -403,8 +406,11 @@ const Broll = () => {
                         </div>
                     ) : (
                         <>
-                            {/* Top Players Slider */}
-                            <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                            {/* Top Players Sliders */}
+                            <div className="space-y-20">
+                                <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                                <RankingSlider title="Women's Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                            </div>
 
                             {/* Searchable Rankings Table */}
                             <div className="mt-32">
