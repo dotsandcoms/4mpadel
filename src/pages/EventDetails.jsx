@@ -4,9 +4,34 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User } from 'lucide-react';
 import heroBg from '../assets/hero_bg.png'; // Fallback image
-import tournamentHero from '../assets/tournament_hero.jpg'; // Specific tournament hero
+const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
+
+// Simple CountUp animation component
+const CountUp = ({ end, duration = 1.5 }) => {
+    const [count, setCount] = useState(0);
+
+    useEffect(() => {
+        let startTime;
+        let animationFrame;
+
+        const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / (duration * 1000), 1);
+            setCount(Math.floor(progress * end));
+
+            if (progress < 1) {
+                animationFrame = requestAnimationFrame(animate);
+            }
+        };
+
+        animationFrame = requestAnimationFrame(animate);
+        return () => cancelAnimationFrame(animationFrame);
+    }, [end, duration]);
+
+    return <span>{count.toLocaleString()}</span>;
+};
 
 const extractRankedinId = (url) => {
     if (!url) return null;
@@ -79,6 +104,44 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
     );
 };
 
+const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, className = "" }) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    return (
+        <div className={`bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden transition-all ${className}`}>
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={`w-full flex items-center justify-between p-6 md:p-8 text-left transition-colors hover:bg-gray-50/80 ${isOpen ? 'border-b border-gray-50 bg-gray-50/50' : 'bg-white'}`}
+            >
+                <div className="flex items-center gap-4">
+                    {Icon && <Icon className="w-6 h-6 text-padel-green" />}
+                    <h3 className="text-xl md:text-2xl font-bold text-slate-900">{title}</h3>
+                </div>
+                <motion.div
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                >
+                    <ChevronDown className="w-6 h-6 text-gray-400" />
+                </motion.div>
+            </button>
+            <AnimatePresence initial={false}>
+                {isOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                    >
+                        <div className="p-6 md:p-8">
+                            {children}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 const EventDetails = () => {
     const getPlaylistEmbedUrl = (url) => {
         if (!url) return null;
@@ -90,7 +153,43 @@ const EventDetails = () => {
     const { slug } = useParams(); // changed from id to slug
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
+    const [albumPhotos, setAlbumPhotos] = useState([]);
+    
+    // Animation Variants
+    const containerVariants = {
+        hidden: { opacity: 0, y: 30 },
+        visible: { 
+            opacity: 1, 
+            y: 0,
+            transition: { 
+                duration: 0.8, 
+                ease: [0.16, 1, 0.3, 1],
+                staggerChildren: 0.1 
+            }
+        }
+    };
+
+    const itemVariants = {
+        hidden: { opacity: 0, y: 15 },
+        visible: { 
+            opacity: 1, 
+            y: 0,
+            transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+        }
+    };
+    
+    const isLive = React.useMemo(() => {
+        if (!event || !event.start_date) return false;
+        const now = new Date();
+        const start = new Date(event.start_date);
+        const end = new Date(event.end_date || event.start_date);
+        // Set end to end of day
+        end.setHours(23, 59, 59, 999);
+        return now >= start && now <= end;
+    }, [event]);
+    
     const [hasDraw, setHasDraw] = useState(false);
     const [hasResults, setHasResults] = useState(false);
     const [winners, setWinners] = useState([]);
@@ -99,7 +198,6 @@ const EventDetails = () => {
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
     const [tournamentClasses, setTournamentClasses] = useState([]);
     const [upcomingMatches, setUpcomingMatches] = useState([]);
-    const [albumPhotos, setAlbumPhotos] = useState([]);
     const [fetchingRankedinData, setFetchingRankedinData] = useState(false);
 
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
@@ -128,7 +226,6 @@ const EventDetails = () => {
     // Registration Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
-    const [submitting, setSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -521,103 +618,120 @@ const EventDetails = () => {
                     </Link>
                 </div>
 
-
                 <div className="container mx-auto px-4 lg:px-6 relative z-10 -mt-32 pb-32">
-                    <div className="flex flex-col lg:flex-row gap-8 relative z-10">
+                    <div className="flex flex-col lg:flex-row gap-8 relative">
+                        {/* Background Glow Effect */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-full opacity-30 blur-[100px] pointer-events-none z-0">
+                            <div 
+                                className="w-full h-full rounded-full bg-padel-green/40"
+                                style={{ 
+                                    background: event.image_url ? `url(${event.image_url})` : undefined,
+                                    backgroundSize: 'cover',
+                                    filter: 'blur(80px) saturate(2)'
+                                }}
+                            />
+                        </div>
 
-                        {/* Ticket Card (Floating) */}
+                        {/* Ticket Card (Floating & Glassmorphic) */}
                         <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row max-w-4xl w-full mx-auto border border-gray-100"
+                            variants={containerVariants}
+                            initial="hidden"
+                            animate="visible"
+                            className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col md:flex-row max-w-4xl w-full mx-auto border border-white/50 relative z-10"
                         >
                             {/* Left Side: Event Info */}
-                            <div className="p-8 flex-1 md:border-r border-dashed border-gray-300 relative">
+                            <div className="p-8 md:p-12 flex-1 md:border-r border-dashed border-gray-300/50 relative">
                                 {/* Punch hole effect top/bottom on border */}
-                                <div className="hidden md:block absolute -top-3 -right-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
-                                <div className="hidden md:block absolute -bottom-3 -right-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
+                                <div className="hidden md:block absolute -top-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner" />
+                                <div className="hidden md:block absolute -bottom-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner" />
 
-                                <h1 className="text-3xl md:text-4xl font-bold text-slate-900 mb-6">{event.event_name}</h1>
+                                <motion.div variants={itemVariants}>
+                                    {isLive && (
+                                        <div className="inline-flex items-center gap-2 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-red-500/20">
+                                            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
+                                            Live Now
+                                        </div>
+                                    )}
+                                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-8 tracking-tighter leading-tight">{event.event_name}</h1>
+                                </motion.div>
 
-                                <div className="space-y-6">
+                                <div className="space-y-8">
                                     {/* Date & Time */}
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0">
-                                            <CalendarIcon className="w-5 h-5" />
+                                    <motion.div variants={itemVariants} className="flex items-start gap-5">
+                                        <div className="w-12 h-12 rounded-2xl bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0 shadow-sm border border-padel-green/5">
+                                            <CalendarIcon className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-400 font-bold uppercase tracking-wider mb-1">Date and Time</p>
-                                            <p className="font-bold text-lg text-slate-800">{event.event_dates}</p>
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Date and Time</p>
+                                            <p className="font-bold text-xl text-slate-900 tracking-tight">{event.event_dates}</p>
                                             {(event.start_time || event.end_time) && (
-                                                <p className="text-slate-500 text-sm mt-1">
+                                                <p className="text-slate-500 font-medium text-sm mt-1 bg-slate-100/50 inline-block px-2 py-0.5 rounded-md">
                                                     {event.start_time} {event.end_time ? `- ${event.end_time}` : ''}
                                                 </p>
                                             )}
                                         </div>
-                                    </div>
+                                    </motion.div>
 
                                     {/* Location */}
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0">
-                                            <MapPin className="w-5 h-5" />
+                                    <motion.div variants={itemVariants} className="flex items-start gap-5">
+                                        <div className="w-12 h-12 rounded-2xl bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0 shadow-sm border border-padel-green/5">
+                                            <MapPin className="w-6 h-6" />
                                         </div>
                                         <div>
-                                            <p className="text-sm text-gray-400 font-bold uppercase tracking-wider mb-1">Address</p>
-                                            <p className="font-bold text-lg text-slate-800">{event.venue}</p>
-                                            <p className="text-slate-500 text-sm mt-1">{event.address || event.city}</p>
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Address</p>
+                                            <p className="font-bold text-xl text-slate-900 tracking-tight">{event.venue}</p>
+                                            <p className="text-slate-500 font-medium text-sm mt-1">{event.address || event.city}</p>
                                         </div>
-                                    </div>
-
-                                    {/* Map and Champions have been moved to Tabs */}
-
-                                    {/* Social Share */}
-                                    <div className="pt-2 flex gap-4">
-                                        <button className="text-gray-400 hover:text-slate-900 transition-colors"><Share2 className="w-5 h-5" /></button>
-                                    </div>
+                                    </motion.div>
                                 </div>
                             </div>
 
                             {/* Right Side: Registration Action */}
-                            <div className="hidden md:flex p-8 w-80 bg-gray-50 flex-col items-center justify-center gap-6 border-l border-dashed border-gray-300 relative">
-                                <div className="absolute -top-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
-                                <div className="absolute -bottom-3 -left-3 w-6 h-6 bg-slate-50 rounded-full z-10" />
+                            <div className="p-8 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-8 relative overflow-hidden">
+                                <div className="absolute -top-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
+                                <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
 
-                                <div className="text-center w-full">
-                                    <div className="flex flex-col items-center mb-6">
-                                        <div className="flex items-center gap-2 bg-slate-200/50 px-4 py-2 rounded-full mb-2">
-                                            <span className="text-2xl font-black text-slate-900">{event.registered_players || 0}</span>
-                                            <div className="text-left leading-tight">
-                                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">registered</p>
-                                                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-tighter">players</p>
+                                <motion.div variants={itemVariants} className="text-center w-full relative z-10">
+                                    <div className="flex flex-col items-center mb-8">
+                                        <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
+                                            <span className="text-3xl font-black text-slate-900 tabular-nums">
+                                                <CountUp end={event.registered_players || 0} />
+                                            </span>
+                                            <div className="text-left leading-none">
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Registered</p>
+                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Players</p>
                                             </div>
                                         </div>
                                     </div>
 
-                                    <h3 className="font-bold text-slate-900 text-xl mb-2">
-                                        {isEventPassed ? 'View Results' : 'Join the Action'}
+                                    <h3 className="font-black text-slate-900 text-2xl mb-2 tracking-tight uppercase">
+                                        {isEventPassed ? 'Results' : 'Join In'}
                                     </h3>
-                                    <p className="text-xs text-gray-500 mb-6">
-                                        {isEventPassed ? 'The tournament has concluded.' : 'Secure your spot in the tournament.'}
+                                    <p className="text-xs font-bold text-gray-400 mb-8 uppercase tracking-widest">
+                                        {isEventPassed ? 'Tournament concluded' : 'Secure your spot'}
                                     </p>
 
                                     {!isEventPassed && (
-                                        <>
-                                            <a
+                                        <div className="space-y-4">
+                                            <motion.a
+                                                whileHover={{ scale: 1.02 }}
+                                                whileTap={{ scale: 0.98 }}
                                                 href={event.rankedin_url || `https://www.rankedin.com/`}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
-                                                className="inline-block w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-xl shadow-lg shadow-padel-green/30 hover:bg-slate-900 hover:!text-white hover:scale-105 transition-all duration-300 uppercase tracking-widest text-sm mb-4 text-center ring-1 ring-inset ring-black/5"
+                                                className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
                                             >
                                                 Register Now
-                                            </a>
+                                            </motion.a>
 
-                                            <button
-                                                className="w-full bg-white border-2 border-slate-200 text-slate-600 font-bold py-3 rounded-xl hover:border-slate-900 hover:text-slate-900 transition-all duration-300 uppercase tracking-wide text-xs mb-3"
+                                            <motion.button
+                                                whileHover={{ border: '2px solid #0F172A' }}
+                                                className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px]"
                                                 onClick={handleAddToCalendar}
                                             >
                                                 Add to Calendar
-                                            </button>
-                                        </>
+                                            </motion.button>
+                                        </div>
                                     )}
 
                                     {(() => {
@@ -625,39 +739,47 @@ const EventDetails = () => {
                                         if ((!hasDraw && !hasResults) || (!rId && !event.slug)) return null;
                                         
                                         return (
-                                            <div className="w-full space-y-3">
+                                            <div className="w-full space-y-4">
                                                 {hasDraw && (
-                                                    <Link
-                                                        to={`/draws/${event.slug || rId}`}
-                                                        className="w-full flex items-center justify-center gap-2 bg-slate-900 !text-padel-green font-black py-4 rounded-xl shadow-lg hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-widest text-sm"
-                                                    >
-                                                        <GitBranch className="w-4 h-4" />
-                                                        View Draw
-                                                    </Link>
+                                                    <motion.div whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
+                                                        <Link
+                                                            to={`/draws/${event.slug || rId}`}
+                                                            className="w-full flex items-center justify-center gap-3 bg-slate-900 !text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-[0.2em] text-xs"
+                                                        >
+                                                            <GitBranch className="w-4 h-4" />
+                                                            View Draw
+                                                        </Link>
+                                                    </motion.div>
                                                 )}
                                                 {hasResults && (
-                                                    <Link
-                                                        to={`/results/${event.slug || rId}`}
-                                                        className="w-full flex items-center justify-center gap-2 bg-padel-green !text-black font-black py-4 rounded-xl shadow-lg hover:bg-slate-900 hover:!text-padel-green transition-all duration-300 uppercase tracking-widest text-sm"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4" />
-                                                        View Results
-                                                    </Link>
+                                                    <motion.div whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
+                                                        <Link
+                                                            to={`/results/${event.slug || rId}`}
+                                                            className="w-full flex items-center justify-center gap-3 bg-padel-green !text-black font-black py-4 rounded-2xl shadow-xl hover:bg-slate-900 hover:!text-padel-green transition-all duration-300 uppercase tracking-[0.2em] text-xs"
+                                                        >
+                                                            <CheckCircle className="w-4 h-4" />
+                                                            View Results
+                                                        </Link>
+                                                    </motion.div>
                                                 )}
                                             </div>
                                         );
                                     })()}
-                                </div>
+                                </motion.div>
 
                                 {/* Event Poster Image */}
                                 {event.image_url && (
-                                    <div className="w-full aspect-[3/4] rounded-xl overflow-hidden shadow-md border border-gray-100">
+                                    <motion.div 
+                                        variants={itemVariants}
+                                        whileHover={{ scale: 1.05 }}
+                                        className="w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white rotate-2 hover:rotate-0 transition-all duration-500 hover:shadow-padel-green/20"
+                                    >
                                         <img src={event.image_url} alt="Event Poster" className="w-full h-full object-cover" />
-                                    </div>
+                                    </motion.div>
                                 )}
 
-                                <div className="text-center pt-4 border-t border-gray-200 w-full">
-                                    <p className="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Powered by 4M PADEL</p>
+                                <div className="text-center pt-8 border-t border-gray-200/50 w-full relative z-10">
+                                    <p className="text-[10px] text-gray-300 uppercase tracking-[0.3em] font-black">Powered by 4M Padel</p>
                                 </div>
                             </div>
                         </motion.div>
@@ -737,26 +859,20 @@ const EventDetails = () => {
                                 {activeTab === 'overview' && (
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                                         {/* Left Column: Event Details & Map */}
-                                        <div className="lg:col-span-2 space-y-8 h-full">
-                                            <motion.div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
-                                                    <h3 className="text-2xl font-bold text-slate-900">Event Details</h3>
-                                                </div>
-                                                <div className="p-6 md:p-8">
-                                                    <div
-                                                        className="text-slate-600 leading-relaxed md:text-lg event-rich-description"
-                                                        dangerouslySetInnerHTML={{
-                                                            __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
-                                                        }}
-                                                    />
-                                                </div>
-                                            </motion.div>
+                                        <div className="lg:col-span-2 space-y-8">
+                                            <ModuleAccordion title="Event Details" icon={FileText} defaultOpen={true}>
+                                                <div
+                                                    className="text-slate-600 leading-relaxed md:text-lg event-rich-description"
+                                                    dangerouslySetInnerHTML={{
+                                                        __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
+                                                    }}
+                                                />
+                                            </ModuleAccordion>
 
-                                            {/* Moved Google Map here */}
                                             {(event.address || event.venue) && (
-                                                <motion.div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                                    <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
-                                                        <h3 className="text-xl font-bold text-slate-900">Location</h3>
+                                                <ModuleAccordion title="Location" icon={MapPin} defaultOpen={true}>
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <p className="text-sm text-gray-500">{event.address || event.venue} {event.city || ''}</p>
                                                         <a 
                                                             href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                             target="_blank"
@@ -766,7 +882,7 @@ const EventDetails = () => {
                                                             Get Directions <ArrowLeft className="w-4 h-4 rotate-135" />
                                                         </a>
                                                     </div>
-                                                    <div className="h-[300px] w-full relative">
+                                                    <div className="h-[300px] w-full relative rounded-2xl overflow-hidden border border-gray-100">
                                                         <iframe
                                                             width="100%"
                                                             height="100%"
@@ -779,119 +895,95 @@ const EventDetails = () => {
                                                             title="Event Location"
                                                         ></iframe>
                                                     </div>
-                                                </motion.div>
+                                                </ModuleAccordion>
                                             )}
                                         </div>
 
-                            {/* Right Column: Sidebar Widgets */}
-                            <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-32">
-                                {/* Organizer Widget */}
-                                <motion.div
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    transition={{ duration: 0.5 }}
-                                    className="bg-slate-900 rounded-2xl shadow-lg border border-slate-800 p-6"
-                                >
-                                    <div className="flex items-center gap-4 mb-6">
-                                        <div className="w-12 h-12 rounded-full bg-white text-slate-900 flex items-center justify-center font-bold text-xl">
-                                            {event.organizer_name ? event.organizer_name.charAt(0) : 'S'}
-                                        </div>
-                                        <div>
-                                            <p className="text-xs text-gray-400 font-bold uppercase">Event Organizer</p>
-                                            <h4 className="font-bold text-lg text-white">{event.organizer_name || 'SAPA'}</h4>
+                                        {/* Right Column: Sidebar Widgets */}
+                                        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-32">
+                                            {/* Organizer Widget */}
+                                            <ModuleAccordion title="Event Organiser" icon={User} defaultOpen={false}>
+                                                <div className="flex items-center gap-4 mb-6 pt-2">
+                                                    <div className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xl flex-shrink-0">
+                                                        {event.organizer_name ? event.organizer_name.charAt(0) : '4M'}
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-lg text-slate-900">{event.organizer_name || '4M Padel'}</h4>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-4">
+                                                    {event.organizer_phone && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Phone Number</p>
+                                                            <a href={`tel:${event.organizer_phone}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
+                                                                <Phone className="w-4 h-4" /> {event.organizer_phone}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    {event.organizer_email && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Email</p>
+                                                            <a href={`mailto:${event.organizer_email}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
+                                                                <Mail className="w-4 h-4" /> {event.organizer_email}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                    {event.organizer_website && (
+                                                        <div>
+                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Website</p>
+                                                            <a href={`https://${event.organizer_website}`} target="_blank" rel="noopener noreferrer" className="text-padel-green font-medium hover:underline flex items-center gap-2 break-all">
+                                                                <Globe className="w-4 h-4 flex-shrink-0" /> {event.organizer_website}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </ModuleAccordion>
+
+                                            {/* Weather Widget */}
+                                            {weather && (
+                                                <ModuleAccordion title="Event Forecast" icon={Cloud} defaultOpen={false}>
+                                                    <div className="flex items-center justify-between pt-2">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${weather.iconType === 'sun' ? 'bg-orange-100 text-orange-500' :
+                                                                weather.iconType === 'cloud' ? 'bg-gray-100 text-gray-500' :
+                                                                    weather.iconType === 'rain' ? 'bg-blue-100 text-blue-500' :
+                                                                        weather.iconType === 'thunder' ? 'bg-purple-100 text-purple-600' :
+                                                                            'bg-blue-50 text-blue-400'
+                                                                }`}>
+                                                                {weather.iconType === 'sun' && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sun"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>}
+                                                                {weather.iconType === 'cloud' && <Cloud className="w-6 h-6" />}
+                                                                {weather.iconType === 'rain' && <CloudRain className="w-6 h-6" />}
+                                                                {weather.iconType === 'thunder' && <CloudLightning className="w-6 h-6" />}
+                                                                {weather.iconType === 'snow' && <CloudSnow className="w-6 h-6" />}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-slate-900">{weather.condition}</p>
+                                                                <p className="text-xs text-gray-500">{Math.round(weather.temp)}°C | Precip: {weather.precip}%</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </ModuleAccordion>
+                                            )}
+
+                                            {/* Sponsors Widget */}
+                                            <ModuleAccordion title="Event Sponsors" icon={ImageIcon} defaultOpen={false}>
+                                                <div className="grid grid-cols-2 gap-3 pt-2">
+                                                    {event.sponsor_logos && event.sponsor_logos.length > 0 ? (
+                                                        event.sponsor_logos.map((logo, i) => (
+                                                            <div key={i} className="aspect-[3/2] bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100 hover:scale-105 transition-all duration-300 p-2">
+                                                                <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="col-span-2 py-8 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                                            <p className="text-gray-400 text-xs italic font-medium">No sponsors listed for this event</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </ModuleAccordion>
                                         </div>
                                     </div>
-
-                                    <div className="space-y-4">
-                                        {event.organizer_phone && (
-                                            <div>
-                                                <p className="text-xs text-gray-400 font-bold uppercase mb-1">Phone Number</p>
-                                                <a href={`tel:${event.organizer_phone}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
-                                                    <Phone className="w-4 h-4" /> {event.organizer_phone}
-                                                </a>
-                                            </div>
-                                        )}
-                                        {event.organizer_email && (
-                                            <div>
-                                                <p className="text-xs text-gray-400 font-bold uppercase mb-1">Email</p>
-                                                <a href={`mailto:${event.organizer_email}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
-                                                    <Mail className="w-4 h-4" /> {event.organizer_email}
-                                                </a>
-                                            </div>
-                                        )}
-                                        {event.organizer_website && (
-                                            <div>
-                                                <p className="text-xs text-gray-400 font-bold uppercase mb-1">Website</p>
-                                                <a href={`https://${event.organizer_website}`} target="_blank" rel="noopener noreferrer" className="text-padel-green font-medium hover:underline flex items-center gap-2 break-all">
-                                                    <Globe className="w-4 h-4 flex-shrink-0" /> {event.organizer_website}
-                                                </a>
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-
-                                {/* Weather Widget */}
-                                {weather && (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: 20 }}
-                                        whileInView={{ opacity: 1, x: 0 }}
-                                        viewport={{ once: true }}
-                                        transition={{ delay: 0.1 }}
-                                        className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6"
-                                    >
-                                        <h4 className="font-bold text-lg text-slate-900 mb-4">Event Forecast</h4>
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${weather.iconType === 'sun' ? 'bg-orange-100 text-orange-500' :
-                                                    weather.iconType === 'cloud' ? 'bg-gray-100 text-gray-500' :
-                                                        weather.iconType === 'rain' ? 'bg-blue-100 text-blue-500' :
-                                                            weather.iconType === 'thunder' ? 'bg-purple-100 text-purple-600' :
-                                                                'bg-blue-50 text-blue-400'
-                                                    }`}>
-                                                    {weather.iconType === 'sun' && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sun"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>}
-                                                    {weather.iconType === 'cloud' && <Cloud className="w-6 h-6" />}
-                                                    {weather.iconType === 'rain' && <CloudRain className="w-6 h-6" />}
-                                                    {weather.iconType === 'thunder' && <CloudLightning className="w-6 h-6" />}
-                                                    {weather.iconType === 'snow' && <CloudSnow className="w-6 h-6" />}
-                                                </div>
-                                                <div>
-                                                    <p className="font-bold text-slate-900">{weather.condition}</p>
-                                                    <p className="text-xs text-gray-500">Event Weather</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-2xl font-bold text-slate-900">{Math.round(weather.temp)}°C</p>
-                                                <p className="text-xs text-gray-400">Precip: {weather.precip}%</p>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                )}
-
-                                {/* Sponsors Widget */}
-                                <motion.div
-                                    initial={{ opacity: 0, x: 20 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: 0.2 }}
-                                    className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6"
-                                >
-                                    <h4 className="font-bold text-lg text-slate-900 mb-4">Event Sponsors</h4>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {event.sponsor_logos && event.sponsor_logos.length > 0 ? (
-                                            event.sponsor_logos.map((logo, i) => (
-                                                <div key={i} className="aspect-[3/2] bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100 hover:scale-105 transition-all duration-300 p-2">
-                                                    <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
-                                                </div>
-                                            ))
-                                        ) : (
-                                            <div className="col-span-2 py-8 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                                                <p className="text-gray-400 text-xs italic font-medium">No sponsors listed for this event</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </motion.div>
-                            </div>
-                        </div>
                                 )}
 
                                 {activeTab === 'divisions' && (
@@ -1164,10 +1256,10 @@ const EventDetails = () => {
 
                                                 <button
                                                     type="submit"
-                                                    disabled={submitting}
+                                                    disabled={isSubmitting}
                                                     className="w-full bg-padel-green text-black font-bold py-4 rounded-xl shadow-lg shadow-padel-green/20 hover:bg-black hover:text-padel-green transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {submitting ? 'Processing...' : 'Proceed to Payment'}
+                                                    {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
                                                 </button>
                                             </form>
                                         ) : (
