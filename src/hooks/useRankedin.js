@@ -283,7 +283,7 @@ export const useRankedin = () => {
                         if (elimination && elimination.DrawData) {
                             // Find the Final (highest round)
                             const allMatches = elimination.DrawData.flat()
-                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel))
+                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined))
                                 .map(cell => cell.MatchCell || cell.MatchViewModel || cell);
                             
                             const finalMatch = allMatches.sort((a,b) => b.Round - a.Round)[0];
