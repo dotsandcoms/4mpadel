@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X } from 'lucide-react';
+import { Calendar, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 
 const getStatusColors = (status) => {
@@ -195,7 +195,7 @@ const renderBrollTitle = (title, tag) => {
 
 // VideoModal is now shared from ./VideoModal.jsx
 
-const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null }) => {
+const TournamentCard = ({ index, title, label, date = null, image, linkPath, drawPath = null, isLive = false, youtubeUrl = null, livePlayers = null, nextMatch = null, onWatchLive = null, buttonLabel = "VIEW DETAILS", status = 'Gold', registeredPlayers = null, rankedinId = null, venue = null, organizerName = null, city = null }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -225,106 +225,133 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative w-full h-[180px] md:h-[280px] xl:h-[320px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
+            className={`relative flex flex-col w-full h-[360px] md:h-[420px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
             onClick={() => navigate(linkPath)}
         >
-            <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
-                <FallbackImage
-                    src={image}
-                    alt={title}
-                    title={title}
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
-                />
-            </div>
-
-            <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/80 to-transparent transition-opacity duration-300 pointer-events-none" />
-
-            {isLive && (
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-500/90 backdrop-blur-md px-2 py-1 rounded-full z-10">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    <span className="text-[9px] font-bold text-white uppercase tracking-wider">Live</span>
+            {/* Top Image Section */}
+            <div className="relative h-[45%] md:h-[50%] w-full overflow-hidden shrink-0 bg-black">
+                <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
+                    <FallbackImage
+                        src={image}
+                        alt={title}
+                        title={title}
+                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                    />
                 </div>
-            )}
+                {/* Gradient overlay for badges */}
+                <div className="absolute inset-0 bg-gradient-to-b from-[#05070A]/80 via-transparent to-black/20 pointer-events-none" />
 
-            <div className="absolute inset-x-0 bottom-0 p-5 xl:p-6 z-10 flex flex-col justify-end">
-                <div className="flex items-center justify-between gap-1.5 mb-2">
-                    <div className="flex items-center gap-1.5 opacity-90">
-                        <Calendar className={`w-3 h-3 ${colors.text}`} />
-                        <p className={`text-[9px] font-bold ${colors.text} uppercase tracking-widest truncate`}>{label}</p>
+                {/* Status Badges on Image */}
+                <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
+                    <div className={`px-2.5 py-1 backdrop-blur-md rounded-full border ${colors.border} flex items-center gap-1.5 shadow-lg bg-black/40`}>
+                        <div className={`w-2 h-2 rounded-full ${colors.solid} shadow-[0_0_8px_currentColor]`} />
+                        <span className={`text-[9px] font-black ${colors.text} uppercase tracking-widest`}>{label || status}</span>
                     </div>
-                    {registeredPlayers > 0 && (
-                        <div className="flex items-center gap-1.5">
-                            {date && (
-                                <div className="flex items-center gap-1 bg-[#CCFF00]/10 px-2 py-0.5 rounded-full border border-[#CCFF00]/20">
-                                    <Calendar className={`w-2.5 h-2.5 text-[#CCFF00]`} />
-                                    <span className="text-[8px] font-bold text-[#CCFF00] uppercase tracking-wider">{date}</span>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded-full border border-white/10">
-                                <GitBranch className={`w-2.5 h-2.5 ${colors.text}`} />
-                                <span className="text-[8px] font-bold text-white uppercase tracking-wider">{registeredPlayers} <span className="opacity-60">Players</span></span>
-                            </div>
+
+                    {isLive && (
+                        <div className="flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-2.5 py-1 rounded-full shadow-lg shadow-red-500/20">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Live</span>
                         </div>
                     )}
                 </div>
-                <h3 className={`text-lg md:text-xl xl:text-2xl leading-tight font-bold text-white line-clamp-2 mb-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight`}>{renderBrollTitle(title, status)}</h3>
+            </div>
+
+            {/* Bottom Content Section */}
+            <div className="flex flex-col flex-grow p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
+                <h3 className={`text-base md:text-xl font-bold text-white line-clamp-2 md:line-clamp-2 mb-3 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
+                    {renderBrollTitle(title, status)}
+                </h3>
+
+                {/* Info Grid */}
+                <div className="grid grid-cols-2 gap-y-2 gap-x-3 mb-auto">
+                    {date && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate">{date}</span>
+                        </div>
+                    )}
+                    {city && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={city}>{city}</span>
+                        </div>
+                    )}
+                    {venue && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={venue}>{venue}</span>
+                        </div>
+                    )}
+                    {organizerName && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Shield className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={organizerName}>{organizerName}</span>
+                        </div>
+                    )}
+                    {registeredPlayers > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Users className={`w-3.5 h-3.5 ${colors.text} shrink-0`} />
+                            <span className="text-[10px] sm:text-xs text-white font-bold truncate">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
+                        </div>
+                    )}
+                </div>
 
                 {isLive && (livePlayers || nextMatch) && (
-                    <div className="mb-4 space-y-2">
+                    <div className="mb-2 space-y-1.5 mt-3 bg-white/5 rounded-xl p-2 border border-white/10">
                         {livePlayers && (
-                            <div className="flex items-center gap-2">
-                                <div className="px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/20">
-                                    <span className="text-[7px] font-black text-red-500 uppercase tracking-tighter">NOW</span>
-                                </div>
-                                <span className="text-[10px] font-bold text-white line-clamp-1">{livePlayers}</span>
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="text-[8px] font-black text-red-500 uppercase tracking-widest bg-red-500/10 px-1.5 rounded shrink-0">NOW</span>
+                                <span className="text-[10px] sm:text-xs font-bold text-white truncate">{livePlayers}</span>
                             </div>
                         )}
                         {nextMatch && (
-                            <div className="flex items-center gap-2 opacity-60">
-                                <div className="px-1.5 py-0.5 rounded bg-white/10 border border-white/20">
-                                    <span className="text-[7px] font-black text-white uppercase tracking-tighter">NEXT</span>
-                                </div>
-                                <span className="text-[10px] font-bold text-white line-clamp-1">{nextMatch}</span>
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest bg-white/10 px-1.5 rounded shrink-0">NEXT</span>
+                                <span className="text-[10px] sm:text-xs font-medium text-gray-300 truncate">{nextMatch}</span>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div className="flex items-center gap-3 flex-wrap">
-                    <div className="flex items-center gap-3">
-                        <div className={`w-7 h-7 rounded-full border border-white/20 flex items-center justify-center group-hover:border-white transition-colors`}>
-                            <ChevronRight className={`w-3.5 h-3.5 text-gray-400 group-hover:text-white`} />
+                {/* Actions bottom row */}
+                <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-white/5">
+                    <div className="flex items-center gap-2.5">
+                        <div className={`w-7 h-7 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white transition-colors bg-white/5 group-hover:bg-white/10`}>
+                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-white" />
                         </div>
                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">{buttonLabel}</span>
                     </div>
 
-                    {drawPath && hasDraw && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className={`flex items-center gap-1.5 ${colors.solid} border ${colors.border} hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/draw shadow-lg ${colors.glow}`}
-                        >
-                            <GitBranch className={`w-3 h-3 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
-                            <span className={`text-[9px] font-bold ${colors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
-                        </button>
-                    )}
-
-                    {isLive && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (youtubeUrl) {
-                                    if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                    else window.open(youtubeUrl, '_blank');
-                                } else {
-                                    navigate(linkPath);
-                                }
-                            }}
-                            className={`flex items-center gap-1.5 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-2.5 py-1.5 rounded-full transition-all duration-300 group/live`}
-                        >
-                            <PlayCircle className={`w-3 h-3 text-white group-hover/live:!text-red-600 transition-colors`} />
-                            <span className={`text-[9px] font-bold text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest`}>{youtubeUrl ? 'WATCH LIVE' : 'WATCH LIVE SOON'}</span>
-                        </button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {drawPath && hasDraw && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full ${colors.solid} border ${colors.border} hover:bg-white hover:border-white transition-all duration-300 group/draw shadow-lg ${colors.glow}`}
+                                title="View Draw"
+                            >
+                                <GitBranch className={`w-3.5 h-3.5 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
+                            </button>
+                        )}
+                        
+                        {isLive && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (youtubeUrl) {
+                                        if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                        else window.open(youtubeUrl, '_blank');
+                                    } else {
+                                        navigate(linkPath);
+                                    }
+                                }}
+                                className={`flex items-center justify-center w-8 h-8 rounded-full bg-red-600 border border-red-600 hover:bg-white hover:border-white transition-all duration-300 group/live shadow-lg shadow-red-600/20`}
+                                title={youtubeUrl ? 'Watch Live' : 'Watch Live Soon'}
+                            >
+                                <PlayCircle className="w-4 h-4 text-white group-hover/live:!text-red-600 transition-colors" />
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
         </motion.div>
@@ -451,7 +478,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             key={t.eventId}
                             index={i}
                             title={t.eventName}
-                            label={t.city || 'Tournament'}
+                            label={t.sapaStatus || 'Tournament'}
                             date={t.date}
                             image={t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
                             linkPath={t.customLink || `/results/${t.eventId}`}
@@ -459,6 +486,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             status={t.sapaStatus || 'Gold'}
                             registeredPlayers={t.registeredPlayers}
                             rankedinId={t.eventId}
+                            venue={t.venue}
+                            organizerName={t.organizerName}
+                            city={t.city}
                         />
                     ))
                 ) : (
@@ -490,6 +520,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             status={t.sapa_status || 'Gold'}
                             registeredPlayers={t.registered_players}
                             rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
+                            venue={t.venue || t.clubName}
+                            organizerName={t.organizer_name}
+                            city={t.city}
                         />
                     ))
                 ) : (
@@ -512,6 +545,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             status={t.sapa_status || 'Gold'}
                             registeredPlayers={t.registered_players}
                             rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
+                            venue={t.venue || t.clubName}
+                            organizerName={t.organizer_name}
+                            city={t.city}
                         />
                     ))
                 ) : (
@@ -560,18 +596,36 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
                 <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{renderBrollTitle(data.cardTitle, data.tournament_tag || data.cardLabel)}</h3>
 
-                {(data.registeredPlayers > 0 || data.date) && (
-                    <div className="flex items-center gap-2 mb-6">
+                {(data.registeredPlayers > 0 || data.date || data.venue || data.organizerName) && (
+                    <div className="flex flex-wrap items-center gap-2 mb-6 pointer-events-auto">
                         {data.date && (
                             <div className="flex items-center gap-1.5 py-1 px-3 bg-[#CCFF00]/10 rounded-full border border-[#CCFF00]/20 w-fit">
                                 <Calendar className="w-3.5 h-3.5 text-[#CCFF00]" />
                                 <span className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">{data.date}</span>
                             </div>
                         )}
+                        {data.city && (
+                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
+                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text}`} />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.city}</span>
+                            </div>
+                        )}
+                        {data.venue && (
+                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
+                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text}`} />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.venue}</span>
+                            </div>
+                        )}
+                        {data.organizerName && (
+                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
+                                <Shield className={`w-3.5 h-3.5 ${statusColors.text}`} />
+                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.organizerName}</span>
+                            </div>
+                        )}
                         {data.registeredPlayers > 0 && (
                             <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
                                 <Users className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Registered Players</span>
+                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Players</span>
                             </div>
                         )}
                     </div>
@@ -695,12 +749,14 @@ const FeaturedSections = () => {
                     const mappedResults = featuredResults.map(t => ({
                         eventId: t.id,
                         eventName: t.event_name,
-                        city: t.city || 'Tournament',
+                        city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
                         image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
                         customLink: `/results/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
-                        registeredPlayers: t.registered_players
+                        registeredPlayers: t.registered_players,
+                        venue: t.venue || t.clubName,
+                        organizerName: t.organizer_name
                     }));
                     setLiveTournaments(mappedResults);
                 } else {
@@ -745,7 +801,10 @@ const FeaturedSections = () => {
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     rankedin_url: singleEvent.rankedin_url,
                                     registeredPlayers: singleEvent.registered_players,
-                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)
+                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url),
+                                    city: singleEvent.city,
+                                    venue: singleEvent.venue || singleEvent.clubName,
+                                    organizerName: singleEvent.organizer_name
                                 };
                             }
                             return newData;
@@ -792,7 +851,10 @@ const FeaturedSections = () => {
                                     tournament_tag: singleEvent.tournament_tag,
                                     rankedin_url: singleEvent.rankedin_url,
                                     registeredPlayers: singleEvent.registered_players,
-                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url)
+                                    rankedinId: singleEvent.rankedin_id || extractRankedinId(singleEvent.rankedin_url),
+                                    city: singleEvent.city,
+                                    venue: singleEvent.venue || singleEvent.clubName,
+                                    organizerName: singleEvent.organizer_name
                                 };
                             }
                             return newData;
