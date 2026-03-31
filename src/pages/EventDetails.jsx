@@ -579,8 +579,12 @@ const EventDetails = () => {
                                         </div>
                                     </div>
 
-                                    <h3 className="font-bold text-slate-900 text-xl mb-2">Join the Action</h3>
-                                    <p className="text-xs text-gray-500 mb-6">Secure your spot in the tournament.</p>
+                                    <h3 className="font-bold text-slate-900 text-xl mb-2">
+                                        {isEventPassed ? 'View Results' : 'Join the Action'}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mb-6">
+                                        {isEventPassed ? 'The tournament has concluded.' : 'Secure your spot in the tournament.'}
+                                    </p>
 
                                     {!isEventPassed && (
                                         <>
