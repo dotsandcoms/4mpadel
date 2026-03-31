@@ -189,7 +189,7 @@ const Calendar = () => {
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
 
     const [isFilterExpanded, setIsFilterExpanded] = useState(false);
-    
+
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
 
@@ -535,9 +535,8 @@ const Calendar = () => {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`relative px-4 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-black text-[10px] sm:text-[11px] md:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center ${
-                                    activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                }`}
+                                className={`relative px-4 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-black text-[10px] sm:text-[11px] md:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center ${activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                    }`}
                             >
                                 {activeTab === tab.id && (
                                     <motion.div
@@ -572,7 +571,7 @@ const Calendar = () => {
                                     className="w-full bg-black/40 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all placeholder-gray-500 text-sm"
                                 />
                             </div>
-                            
+
                             {/* Mobile Filter Toggle */}
                             <button
                                 onClick={() => setIsFilterExpanded(!isFilterExpanded)}

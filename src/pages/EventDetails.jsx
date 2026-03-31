@@ -156,30 +156,30 @@ const EventDetails = () => {
     const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
     const [albumPhotos, setAlbumPhotos] = useState([]);
-    
+
     // Animation Variants
     const containerVariants = {
         hidden: { opacity: 0, y: 30 },
-        visible: { 
-            opacity: 1, 
+        visible: {
+            opacity: 1,
             y: 0,
-            transition: { 
-                duration: 0.8, 
+            transition: {
+                duration: 0.8,
                 ease: [0.16, 1, 0.3, 1],
-                staggerChildren: 0.1 
+                staggerChildren: 0.1
             }
         }
     };
 
     const itemVariants = {
         hidden: { opacity: 0, y: 15 },
-        visible: { 
-            opacity: 1, 
+        visible: {
+            opacity: 1,
             y: 0,
             transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
         }
     };
-    
+
     const isLive = React.useMemo(() => {
         if (!event || !event.start_date) return false;
         const now = new Date();
@@ -189,11 +189,11 @@ const EventDetails = () => {
         end.setHours(23, 59, 59, 999);
         return now >= start && now <= end;
     }, [event]);
-    
+
     const [hasDraw, setHasDraw] = useState(false);
     const [hasResults, setHasResults] = useState(false);
     const [winners, setWinners] = useState([]);
-    
+
     // New State for Tabs & Enhanced Data
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
     const [tournamentClasses, setTournamentClasses] = useState([]);
@@ -207,12 +207,12 @@ const EventDetails = () => {
         if (!event) return false;
         const compareDate = event.end_date || event.start_date;
         if (!compareDate) return false;
-        
+
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         const eventDate = new Date(compareDate);
         eventDate.setHours(0, 0, 0, 0);
-        
+
         return eventDate < today;
     }, [event]);
 
@@ -325,7 +325,7 @@ const EventDetails = () => {
         const checkRankedinStatus = async () => {
             if (!event) return;
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-            
+
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
@@ -378,7 +378,7 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchAlbumPhotos = async () => {
             if (!event) return;
-            
+
             // Check if there's an album linked to this event in our DB
             try {
                 const { data: albumData, error: albumError } = await supabase
@@ -622,9 +622,9 @@ const EventDetails = () => {
                     <div className="flex flex-col lg:flex-row gap-8 relative">
                         {/* Background Glow Effect */}
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-full opacity-30 blur-[100px] pointer-events-none z-0">
-                            <div 
+                            <div
                                 className="w-full h-full rounded-full bg-padel-green/40"
-                                style={{ 
+                                style={{
                                     background: event.image_url ? `url(${event.image_url})` : undefined,
                                     backgroundSize: 'cover',
                                     filter: 'blur(80px) saturate(2)'
@@ -737,7 +737,7 @@ const EventDetails = () => {
                                     {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                         if ((!hasDraw && !hasResults) || (!rId && !event.slug)) return null;
-                                        
+
                                         return (
                                             <div className="w-full space-y-4">
                                                 {hasDraw && (
@@ -769,7 +769,7 @@ const EventDetails = () => {
 
                                 {/* Event Poster Image */}
                                 {event.image_url && (
-                                    <motion.div 
+                                    <motion.div
                                         variants={itemVariants}
                                         whileHover={{ scale: 1.05 }}
                                         className="w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white rotate-2 hover:rotate-0 transition-all duration-500 hover:shadow-padel-green/20"
@@ -822,16 +822,15 @@ const EventDetails = () => {
 
                     {/* Content Component: Tabs Area */}
                     <div className="mt-8 md:mt-12 max-w-6xl mx-auto space-y-8">
-                        
+
                         {/* Tab Navigation */}
                         <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/50 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-gray-200/50 shadow-sm mx-auto max-w-fit">
                             {['overview', 'divisions', 'media'].map((tab) => (
                                 <button
                                     key={tab}
                                     onClick={() => setActiveTab(tab)}
-                                    className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${
-                                        activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
-                                    }`}
+                                    className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
+                                        }`}
                                 >
                                     {activeTab === tab && (
                                         <motion.div
@@ -873,7 +872,7 @@ const EventDetails = () => {
                                                 <ModuleAccordion title="Location" icon={MapPin} defaultOpen={true}>
                                                     <div className="flex items-center justify-between mb-4">
                                                         <p className="text-sm text-gray-500">{event.address || event.venue} {event.city || ''}</p>
-                                                        <a 
+                                                        <a
                                                             href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
@@ -993,7 +992,7 @@ const EventDetails = () => {
                                                 <h3 className="text-2xl font-bold text-slate-900">Divisions & Results</h3>
                                                 <p className="text-sm text-gray-500 mt-2">Data synced directly from Rankedin</p>
                                             </div>
-                                            
+
                                             <div className="p-6 md:p-8 bg-slate-50">
                                                 {fetchingRankedinData ? (
                                                     <div className="flex flex-col items-center justify-center py-12">
@@ -1019,7 +1018,7 @@ const EventDetails = () => {
                                                                         <p className="text-sm font-medium text-slate-700">Matches are scheduled. View Draws for full details.</p>
                                                                     </div>
                                                                 ) : (
-                                                                     <p className="text-gray-400 text-sm">No results available yet.</p>
+                                                                    <p className="text-gray-400 text-sm">No results available yet.</p>
                                                                 )}
                                                             </div>
                                                         ))}
@@ -1144,7 +1143,7 @@ const EventDetails = () => {
                                                 </div>
                                             </div>
                                         )}
-                                        
+
                                         {!event.youtube_playlist_url && albumPhotos.length === 0 && (
                                             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
                                                 <ImageIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
