@@ -80,11 +80,12 @@ const CalendarManager = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10;
+    const itemsPerPage = 30;
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
     const [timeFilter, setTimeFilter] = useState('Upcoming');
+    const [visibilityFilter, setVisibilityFilter] = useState('Visible');
     const [editingEvent, setEditingEvent] = useState(null);
     const [isSyncing, setIsSyncing] = useState(false);
 
@@ -882,9 +883,13 @@ const CalendarManager = () => {
                 (timeFilter === 'Upcoming' && isUpcoming) ||
                 (timeFilter === 'Past' && !isUpcoming);
 
-            return matchesSearch && matchesStatus && matchesTime;
+            const matchesVisibility = visibilityFilter === 'All' ||
+                (visibilityFilter === 'Visible' && event.is_visible !== false) ||
+                (visibilityFilter === 'Hidden' && event.is_visible === false);
+
+            return matchesSearch && matchesStatus && matchesTime && matchesVisibility;
         });
-    }, [events, searchTerm, statusFilter, timeFilter, today]);
+    }, [events, searchTerm, statusFilter, timeFilter, visibilityFilter, today]);
 
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
 
@@ -896,7 +901,7 @@ const CalendarManager = () => {
     // Reset pagination when filters change
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, statusFilter, timeFilter]);
+    }, [searchTerm, statusFilter, timeFilter, visibilityFilter]);
 
     return (
         <div className="space-y-8 pb-12">
@@ -1023,6 +1028,15 @@ const CalendarManager = () => {
                     <option value="All">All Time</option>
                     <option value="Upcoming">Upcoming</option>
                     <option value="Past">Past Events</option>
+                </select>
+                <select
+                    value={visibilityFilter}
+                    onChange={(e) => setVisibilityFilter(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
+                >
+                    <option value="All">All Visibility</option>
+                    <option value="Visible">Visible</option>
+                    <option value="Hidden">Hidden</option>
                 </select>
             </div>
 
