@@ -2,14 +2,15 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, MoveHorizontal } from 'lucide-react';
 
-const KnockoutBracket = ({ matches }) => {
+const KnockoutBracket = ({ matches, forcedViewMode }) => {
     const scrollContainerRef = useRef(null);
     const [activeRoundIndex, setActiveRoundIndex] = useState(0);
     const [showSwipeHint, setShowSwipeHint] = useState(true);
-    const [viewMode, setViewMode] = useState('bracket'); // 'bracket' or 'list'
+    const [viewMode, setViewMode] = useState(forcedViewMode || 'bracket'); // 'bracket' or 'list'
 
-    // Set default view on mobile
+    // Set default view on mobile if not forced
     useEffect(() => {
+        if (forcedViewMode) return;
         const checkMobile = () => {
             if (window.innerWidth < 768) {
                 setViewMode('list');
@@ -18,7 +19,14 @@ const KnockoutBracket = ({ matches }) => {
         checkMobile();
         window.addEventListener('resize', checkMobile);
         return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+    }, [forcedViewMode]);
+
+    // Sync state if forcedViewMode changes
+    useEffect(() => {
+        if (forcedViewMode) {
+            setViewMode(forcedViewMode);
+        }
+    }, [forcedViewMode]);
 
     if (!matches || !Array.isArray(matches) || matches.length === 0) {
         return <div className="text-gray-400 p-10 text-center">No bracket data available.</div>;
@@ -92,23 +100,25 @@ const KnockoutBracket = ({ matches }) => {
 
     return (
         <div className="flex flex-col gap-8 md:gap-12">
-            {/* View Mode Toggle */}
-            <div className="flex justify-center md:justify-end">
-                <div className="bg-white/5 border border-white/10 p-1 rounded-2xl flex items-center shadow-lg backdrop-blur-md">
-                    <button 
-                        onClick={() => setViewMode('list')}
-                        className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Match List
-                    </button>
-                    <button 
-                        onClick={() => setViewMode('bracket')}
-                        className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'bracket' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
-                    >
-                        Bracket
-                    </button>
+            {/* View Mode Toggle - only if not forced */}
+            {!forcedViewMode && (
+                <div className="flex justify-center md:justify-end">
+                    <div className="bg-white/5 border border-white/10 p-1 rounded-2xl flex items-center shadow-lg backdrop-blur-md">
+                        <button 
+                            onClick={() => setViewMode('list')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Match List
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('bracket')}
+                            className={`px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${viewMode === 'bracket' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white'}`}
+                        >
+                            Bracket
+                        </button>
+                    </div>
                 </div>
-            </div>
+            )}
 
             {matches.map((bracket, bracketIndex) => {
                 if (bracket.BaseType === 'RoundRobin') {
@@ -343,7 +353,7 @@ const KnockoutBracket = ({ matches }) => {
                                                             </div>
 
                                                             {hasScore && (
-                                                                <div className="absolute -top-2 -right-2 bg-padel-green text-black text-[9px] font-black px-2 py-0.5 rounded-full shadow-lg border border-padel-green/50">
+                                                                <div className="absolute right-4 top-[50%] -translate-y-1/2 bg-padel-green text-black text-[8px] font-black px-2 py-0.5 rounded-full shadow-lg border border-padel-green/50 z-20">
                                                                     PLAYED
                                                                 </div>
                                                             )}

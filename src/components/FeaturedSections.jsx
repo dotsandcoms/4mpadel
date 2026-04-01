@@ -175,18 +175,18 @@ const formatTournamentDate = (startDate, endDate) => {
 
 const renderBrollTitle = (title, tag) => {
     if (!title) return null;
-    
+
     // Split by "BROLL" (case-insensitive) but only if tag is 'broll' or title contains BROLL
     const isBroll = tag?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL');
-    
+
     if (!isBroll) return title;
 
     const parts = title.split(/(BROLL)/i);
     return (
         <>
-            {parts.map((part, i) => 
-                part.toUpperCase() === 'BROLL' 
-                    ? <span key={i} className="text-[#F40020]">{part}</span> 
+            {parts.map((part, i) =>
+                part.toUpperCase() === 'BROLL'
+                    ? <span key={i} className="text-[#F40020]">{part}</span>
                     : part
             )}
         </>
@@ -339,7 +339,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                                 <GitBranch className={`w-3.5 h-3.5 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
                             </button>
                         )}
-                        
+
                         {isLive && (
                             <button
                                 onClick={(e) => {
@@ -450,9 +450,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                         </div>
                                         <p className="text-white font-bold text-sm tracking-tight">{data.livePlayers}</p>
                                     </div>
-                                    
+
                                     {data.youtubeUrl && (
-                                        <button 
+                                        <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onWatchLive(data.youtubeUrl, data.cardTitle);
@@ -494,7 +494,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             label={t.sapaStatus || 'Tournament'}
                             date={t.date}
                             image={t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
-                            linkPath={t.customLink || `/results/${t.eventId}`}
+                            linkPath={t.customLink || `/draws/${t.eventId}`}
                             buttonLabel="VIEW RESULTS"
                             status={t.sapaStatus || 'Gold'}
                             registeredPlayers={t.registeredPlayers}
@@ -765,7 +765,7 @@ const FeaturedSections = () => {
                         city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
                         image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
-                        customLink: `/results/${t.slug || t.id}`,
+                        customLink: `/draws/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
                         venue: t.venue || t.clubName,

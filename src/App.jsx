@@ -16,7 +16,7 @@ import Mens40 from './pages/Mens40';
 import AllTournaments from './pages/AllTournaments';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
-import TournamentResults from './pages/TournamentResults';
+
 import TournamentDraw from './pages/TournamentDraw';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
 import ApprovedCoaches from './pages/ApprovedCoaches';
@@ -53,7 +53,7 @@ function AppContent() {
         if (isMagicLink) {
           const isRecovery = hash.includes('type=recovery');
           const targetPath = isRecovery ? '/reset-password' : '/profile';
-          
+
           console.log(`App: Detected link sign-in (${targetPath}). Redirecting...`);
           // Small delay to ensure session is fully processed
           setTimeout(() => navigate(targetPath), 500);
@@ -98,7 +98,7 @@ function AppContent() {
           <Route path="/gallery" element={<Gallery />} />
           <Route path="/gallery/:id" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
-          <Route path="/results/:id" element={<TournamentResults />} />
+          <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />
           <Route path="/profile" element={<PlayerProfile />} />
           <Route path="/reset-password" element={<ResetPassword />} />
