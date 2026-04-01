@@ -62,18 +62,19 @@ const CalendarEventItem = ({ event, index }) => {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ delay: index * 0.05 }}
         >
-            <div className={`group block backdrop-blur-sm border ${tierColor} rounded-3xl p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}>
+            <div className={`group block backdrop-blur-sm border ${tierColor} rounded-3xl p-5 sm:p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}>
                 <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
 
-                <div className="flex flex-col md:flex-row gap-6 items-center justify-between relative z-10">
-                    <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
+                <div className="flex flex-col gap-6 relative z-10">
+                    {/* Top Row: Poster & Basic Info */}
+                    <div className="flex flex-row md:items-center gap-5 sm:gap-6 w-full min-w-0">
                         {/* Poster Image Box */}
-                        <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-24 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
+                        <div className="flex-shrink-0 w-[100px] sm:w-[130px] md:w-32 aspect-[3/4] rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group shadow-2xl">
                             {event.custom_image_url || event.image_url || event.posterUrl ? (
                                 <img
                                     src={event.custom_image_url || event.image_url || event.posterUrl}
                                     alt={event.event_name || event.eventName}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center">
@@ -83,97 +84,102 @@ const CalendarEventItem = ({ event, index }) => {
                             )}
                         </div>
 
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                            <div className="flex flex-wrap items-center gap-2 mb-3">
-                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
+                        {/* Info Content */}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                                <span className={`px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
                                     {event.sapa_status}
                                 </span>
                                 {event.is_league && (
-                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">
+                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
                                         League
                                     </span>
                                 )}
                                 {event.city && (
-                                    <span className="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
+                                    <span className="px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
                                         {event.city}
                                     </span>
                                 )}
                                 {event.registered_players > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-3 py-1 rounded-full">
-                                        <Users className="w-3.5 h-3.5 text-padel-green" />
-                                        <span className="text-white font-bold text-xs leading-none">{event.registered_players}</span>
-                                        <span className="text-[10px] uppercase tracking-tighter text-gray-400 font-bold leading-none">Registered</span>
+                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2.5 py-1 rounded-full">
+                                        <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-padel-green" />
+                                        <span className="text-white font-bold text-[10px] sm:text-xs leading-none">{event.registered_players}</span>
+                                        <span className="text-[9px] sm:text-[10px] uppercase tracking-tighter text-gray-400 font-bold leading-none hidden sm:inline">Registered</span>
                                     </div>
                                 )}
                             </div>
-                            <div className="flex flex-col md:flex-row md:items-baseline gap-2 md:gap-4 mb-2">
-                                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight">
-                                    {event.event_name || event.eventName}
-                                </h3>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-sm font-medium">
-                                <div className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-2.5 py-1 rounded-full whitespace-nowrap w-fit">
-                                    <CalendarIcon size={12} />
-                                    {event.event_dates ||
-                                        (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
-                                        (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
-                                </div>
-                                <div className="flex items-center gap-2 truncate">
-                                    <MapPin className="w-4 h-4 text-padel-green/50 shrink-0" />
-                                    <span className="truncate" title={event.venue || event.clubName}>
-                                        {event.venue || event.clubName || 'Location to be confirmed'}
+
+                            <h3 className="text-base sm:text-xl md:text-2xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight mb-2 sm:mb-3 line-clamp-2">
+                                {event.event_name || event.eventName}
+                            </h3>
+
+                            {/* Hidden on very small mobile to save space if needed, but let's keep it clean */}
+                            <div className="flex flex-col gap-1.5 text-gray-400 text-[10px] sm:text-sm font-medium">
+                                <div className="flex items-center gap-1.5 text-padel-green font-bold">
+                                    <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                                    <span>
+                                        {event.event_dates ||
+                                            (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                            (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
                                     </span>
                                 </div>
-                                {event.organizer_name && (
-                                    <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                                        <Shield className="w-3.5 h-3.5 text-gray-400" />
-                                        <span className="text-white font-bold text-xs">{event.organizer_name}</span>
+                                <div className="flex items-center gap-3 truncate">
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
+                                        <span className="truncate" title={event.venue || event.clubName}>
+                                            {event.venue || event.clubName || 'Location to be confirmed'}
+                                        </span>
                                     </div>
-                                )}
-
-                                {/* Status Pills */}
-                                {event.live_youtube_url && event.featured_live && (
-                                    <div className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-lg shadow-red-500/20">
-                                        <PlayCircle className="w-3 h-3" />
-                                        <span>Live</span>
-                                    </div>
-                                )}
-                                {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
-                                    <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
-                                        <Trophy className="w-3 h-3" />
-                                        <span>Results</span>
-                                    </div>
-                                )}
-                                {event.youtube_playlist_url && (
-                                    <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
-                                        <Video className="w-3 h-3 text-red-600" />
-                                        <span>Media</span>
-                                    </div>
-                                )}
+                                    {event.organizer_name && (
+                                        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">
+                                            <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400" />
+                                            <span className="text-white font-bold text-[9px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-start md:justify-end">
-                        {(hasDraw || hasResults) && (
+                    {/* Bottom Row: Status Tag & Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-5 border-t border-white/5">
+                        {/* Status/Organizer Info */}
+                        <div className="flex flex-wrap items-center gap-2">
+
+                            {event.live_youtube_url && event.featured_live && (
+                                <div className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-lg shadow-red-500/20">
+                                    <PlayCircle className="w-3 h-3 shrink-0" />
+                                    <span>Live</span>
+                                </div>
+                            )}
+                            {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
+                                <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
+                                    <Trophy className="w-3 h-3 shrink-0" />
+                                    <span>Results</span>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
+                            {(hasDraw || hasResults) && (
+                                <Link
+                                    to={drawPath}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-3 rounded-xl transition-all duration-300 font-bold text-[10px] lg:text-xs uppercase tracking-widest group/draw"
+                                >
+                                    <GitBranch className="w-3.5 h-3.5 !text-padel-green group-hover/draw:!text-black transition-colors shrink-0" />
+                                    <span className="!text-current whitespace-nowrap uppercase">Draws & Results</span>
+                                </Link>
+                            )}
                             <Link
-                                to={drawPath}
-                                className="flex items-center gap-2 bg-padel-green/5 border border-padel-green/20 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-2.5 rounded-xl transition-all duration-300 font-bold text-xs md:text-sm uppercase tracking-widest group/draw"
+                                to={detailsPath}
+                                target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
+                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-padel-green !text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] lg:text-xs hover:bg-white hover:!text-black hover:scale-105 transition-all shadow-lg shadow-padel-green/20"
                             >
-                                <GitBranch className="w-4 h-4 !text-padel-green group-hover/draw:!text-black transition-colors" />
-                                <span className="!text-current">Draws & Results</span>
+                                <span className="!text-black uppercase whitespace-nowrap">View Details</span>
+                                <ArrowRight className="w-4 h-4 !text-black shrink-0" />
                             </Link>
-                        )}
-                        <Link
-                            to={detailsPath}
-                            target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
-                            className="bg-padel-green !text-black px-6 py-2.5 rounded-xl font-black uppercase tracking-widest text-xs md:text-sm hover:bg-white hover:!text-black hover:scale-105 transition-all shadow-lg shadow-padel-green/20 flex items-center gap-2"
-                        >
-                            <span className="!text-black">Details</span>
-                            <ArrowRight className="w-4 h-4 !text-black" />
-                        </Link>
+                        </div>
                     </div>
                 </div>
             </div>
