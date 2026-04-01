@@ -641,6 +641,20 @@ const EventDetails = () => {
         setIsCalendarMenuOpen(false);
     };
 
+    const handleMainCalendarClick = () => {
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
+        const isAndroid = /android/i.test(userAgent);
+
+        if (isIOS) {
+            handleAppleCalendar();
+        } else if (isAndroid) {
+            handleGoogleCalendar();
+        } else {
+            setIsCalendarMenuOpen(!isCalendarMenuOpen);
+        }
+    };
+
 
     const handlePaymentRedirect = () => {
         // Mock payment redirection
@@ -820,11 +834,15 @@ const EventDetails = () => {
                                                  <motion.button
                                                      whileHover={{ border: '2px solid #0F172A' }}
                                                      className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px] flex items-center justify-center gap-2"
-                                                     onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                                                     onClick={handleMainCalendarClick}
                                                  >
                                                      Add to Calendar
-                                                     <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCalendarMenuOpen ? 'rotate-180' : ''}`} />
+                                                     {/* Show chevron only on desktop where menu is used */}
+                                                     <div className="hidden md:block">
+                                                        <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCalendarMenuOpen ? 'rotate-180' : ''}`} />
+                                                     </div>
                                                  </motion.button>
+
 
                                                  <AnimatePresence>
                                                      {isCalendarMenuOpen && (
