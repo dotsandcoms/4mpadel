@@ -216,6 +216,74 @@ const CalendarManager = () => {
         }
     };
 
+    const handleSyncAllPastEvents = async () => {
+        const pastEvents = events.filter(event => {
+            const isPassed = new Date(event.end_date || event.start_date) < new Date();
+            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            return isPassed && rId;
+        });
+
+        if (pastEvents.length === 0) {
+            toast.info('No past events with Rankedin URLs found to sync.');
+            return;
+        }
+
+        setIsSyncing(true);
+        let successCount = 0;
+        let failCount = 0;
+        
+        const toastId = toast.loading(`Syncing ${pastEvents.length} past events. Please wait...`);
+
+        for (const event of pastEvents) {
+            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            try {
+                const classes = await getTournamentClasses(rId);
+                let drawAvailable = false;
+                let apiWinners = [];
+                let apiHasResults = false;
+
+                if (classes) {
+                    drawAvailable = classes.some(c => c.IsPublished && Array.isArray(c.TournamentDraws) && c.TournamentDraws.length > 0);
+                }
+
+                const tournamentWinners = await getTournamentWinners(rId);
+                if (tournamentWinners && tournamentWinners.length > 0) {
+                    apiWinners = tournamentWinners;
+                    apiHasResults = true;
+                } else {
+                    const matches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                    apiHasResults = !!(matches && matches.length > 0);
+                }
+
+                const { error } = await supabase
+                    .from('rankedin_results_cache')
+                    .upsert({
+                        event_id: event.id,
+                        rankedin_id: rId.toString(),
+                        classes: classes || [],
+                        winners: apiWinners,
+                        has_draw: drawAvailable,
+                        has_results: apiHasResults,
+                        upcoming_matches: [],
+                        last_synced_at: new Date().toISOString()
+                    }, { onConflict: 'event_id' });
+
+                if (error) throw error;
+                successCount++;
+            } catch (err) {
+                console.error(`Failed to sync event ${event.event_name}:`, err);
+                failCount++;
+            }
+        }
+
+        setIsSyncing(false);
+        if (failCount === 0) {
+            toast.success(`Successfully synced all ${successCount} past events!`, { id: toastId });
+        } else {
+            toast.warning(`Synced ${successCount} events. ${failCount} failed.`, { id: toastId });
+        }
+    };
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
 
@@ -819,14 +887,22 @@ const CalendarManager = () => {
                     <h2 className="text-2xl font-bold text-white">Calendar Dashboard</h2>
                     <p className="text-gray-400 text-sm">Manage upcoming tournaments, leagues, and SAPA events</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                    <button
+                        onClick={handleSyncAllPastEvents}
+                        disabled={isSyncing}
+                        className={`bg-[#ff5500]/10 text-[#ff5500] border border-[#ff5500]/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-[#ff5500] hover:text-white transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
+                        {isSyncing ? 'Syncing Past Events...' : 'Sync Past Event Data'}
+                    </button>
                     <button
                         onClick={handleSyncRankedin}
                         disabled={isSyncing}
                         className={`bg-[#1E293B] text-white border border-white/20 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                         <RefreshCw size={18} className={isSyncing ? 'animate-spin' : ''} />
-                        {isSyncing ? 'Syncing...' : 'Sync from RankedIn'}
+                        {isSyncing ? 'Syncing...' : 'Sync Event List'}
                     </button>
                     <button
                         onClick={openNewModal}

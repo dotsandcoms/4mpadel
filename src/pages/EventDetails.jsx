@@ -337,7 +337,7 @@ const EventDetails = () => {
                         .maybeSingle();
 
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
-                    
+
                     let useCache = false;
                     if (cacheRow) {
                         if (isPassed) {
@@ -404,18 +404,18 @@ const EventDetails = () => {
                         // 3. Upsert back to Database Cache
                         console.log("Upserting Rankedin Cache to Database...");
                         await supabase
-                           .from('rankedin_results_cache')
-                           .upsert({
-                               event_id: event.id,
-                               rankedin_id: rId.toString(),
-                               classes: classes || [],
-                               winners: apiWinners,
-                               has_draw: drawAvailable,
-                               has_results: apiHasResults,
-                               upcoming_matches: apiUpcomingMatches,
-                               last_synced_at: new Date().toISOString()
-                           }, { onConflict: 'event_id' })
-                           .select();
+                            .from('rankedin_results_cache')
+                            .upsert({
+                                event_id: event.id,
+                                rankedin_id: rId.toString(),
+                                classes: classes || [],
+                                winners: apiWinners,
+                                has_draw: drawAvailable,
+                                has_results: apiHasResults,
+                                upcoming_matches: apiUpcomingMatches,
+                                last_synced_at: new Date().toISOString()
+                            }, { onConflict: 'event_id' })
+                            .select();
                     }
                 } catch (err) {
                     console.error("Error fetching rankedin detailed data:", err);
@@ -802,25 +802,14 @@ const EventDetails = () => {
 
                                         return (
                                             <div className="w-full space-y-4">
-                                                {hasDraw && (
+                                                {(hasDraw || hasResults) && (
                                                     <motion.div whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
                                                         <Link
                                                             to={`/draws/${event.slug || rId}`}
                                                             className="w-full flex items-center justify-center gap-3 bg-slate-900 !text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-[0.2em] text-xs"
                                                         >
                                                             <GitBranch className="w-4 h-4" />
-                                                            View Draw
-                                                        </Link>
-                                                    </motion.div>
-                                                )}
-                                                {hasResults && (
-                                                    <motion.div whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
-                                                        <Link
-                                                            to={`/results/${event.slug || rId}`}
-                                                            className="w-full flex items-center justify-center gap-3 bg-padel-green !text-black font-black py-4 rounded-2xl shadow-xl hover:bg-slate-900 hover:!text-padel-green transition-all duration-300 uppercase tracking-[0.2em] text-xs"
-                                                        >
-                                                            <CheckCircle className="w-4 h-4" />
-                                                            View Results
+                                                            View Draws & Results
                                                         </Link>
                                                     </motion.div>
                                                 )}
@@ -867,13 +856,13 @@ const EventDetails = () => {
                                             Register
                                         </a>
                                     );
-                                } else if (hasResults && (rId || event.slug)) {
+                                } else if ((hasResults || hasDraw) && (rId || event.slug)) {
                                     return (
                                         <Link
-                                            to={`/results/${event.slug || rId}`}
+                                            to={`/draws/${event.slug || rId}`}
                                             className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
                                         >
-                                            Results
+                                            Draws & Results
                                         </Link>
                                     );
                                 }
@@ -1124,16 +1113,10 @@ const EventDetails = () => {
                                         <div className="text-center py-4">
                                             {(() => {
                                                 const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                                if (hasDraw && !isEventPassed) {
+                                                if (hasDraw || hasResults) {
                                                     return (
                                                         <Link to={`/draws/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
-                                                            <GitBranch className="w-5 h-5" /> View Full Draws
-                                                        </Link>
-                                                    );
-                                                } else if (hasResults) {
-                                                    return (
-                                                        <Link to={`/results/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
-                                                            <CheckCircle className="w-5 h-5" /> View Full Results
+                                                            <GitBranch className="w-5 h-5" /> View Draws & Results
                                                         </Link>
                                                     );
                                                 }

@@ -15,10 +15,11 @@ const extractRankedinId = (url) => {
 const CalendarEventItem = ({ event, index }) => {
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
+    const [hasResults, setHasResults] = useState(false);
     const navigate = useNavigate();
 
     useEffect(() => {
-        const checkDraw = async () => {
+        const checkStatus = async () => {
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
             if (rId) {
                 const classes = await getTournamentClasses(rId);
@@ -28,9 +29,15 @@ const CalendarEventItem = ({ event, index }) => {
                     c.TournamentDraws.length > 0
                 );
                 setHasDraw(drawAvailable);
+
+                const resultsAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    c.HasResults === true
+                );
+                setHasResults(resultsAvailable);
             }
         };
-        checkDraw();
+        checkStatus();
     }, [event, getTournamentClasses]);
 
     let tierColor = 'border-white/10';
@@ -152,13 +159,13 @@ const CalendarEventItem = ({ event, index }) => {
 
                     {/* Actions */}
                     <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-start md:justify-end">
-                        {hasDraw && (
+                        {(hasDraw || hasResults) && (
                              <Link
                                 to={drawPath}
                                 className="flex items-center gap-2 bg-padel-green/5 border border-padel-green/20 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-2 rounded-xl transition-all duration-300 font-bold text-xs uppercase tracking-widest group/draw"
                             >
                                 <GitBranch className="w-4 h-4 !text-padel-green group-hover/draw:!text-black transition-colors" />
-                                <span className="!text-current">View Draw</span>
+                                <span className="!text-current">Draws & Results</span>
                             </Link>
                         )}
                         <Link

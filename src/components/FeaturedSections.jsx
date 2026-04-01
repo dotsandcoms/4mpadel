@@ -199,22 +199,28 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
+    const [hasResults, setHasResults] = useState(false);
 
     useEffect(() => {
-        const checkDraw = async () => {
+        const checkStatus = async () => {
             const rId = rankedinId || extractRankedinId(drawPath) || extractRankedinId(linkPath);
             if (rId) {
                 const classes = await getTournamentClasses(rId);
-                // A draw is only valid if it's published and has at least one draw/bracket established
                 const drawAvailable = classes && classes.some(c =>
                     c.IsPublished &&
                     Array.isArray(c.TournamentDraws) &&
                     c.TournamentDraws.length > 0
                 );
                 setHasDraw(drawAvailable);
+
+                const resultsAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    c.HasResults === true
+                );
+                setHasResults(resultsAvailable);
             }
         };
-        checkDraw();
+        checkStatus();
     }, [drawPath, linkPath, getTournamentClasses, rankedinId]);
 
     const colors = getStatusColors(status);
@@ -324,11 +330,11 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {drawPath && hasDraw && (
+                        {drawPath && (hasDraw || hasResults) && (
                             <button
                                 onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
                                 className={`flex items-center justify-center w-8 h-8 rounded-full ${colors.solid} border ${colors.border} hover:bg-white hover:border-white transition-all duration-300 group/draw shadow-lg ${colors.glow}`}
-                                title="View Draw"
+                                title="View Draws & Results"
                             >
                                 <GitBranch className={`w-3.5 h-3.5 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
                             </button>
@@ -362,9 +368,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
+    const [hasResults, setHasResults] = useState(false);
 
     useEffect(() => {
-        const checkDraw = async () => {
+        const checkStatus = async () => {
             // Only check for single blocks (where data.linkPath or data.rankedin_url exists)
             if (data.id !== 'recent-results' && !(data.id === 'featured-tournaments' && featuredTournaments?.length > 1) && !(data.id === 'featured-live' && liveFeaturedTournaments?.length > 1)) {
                 const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
@@ -376,10 +383,16 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         c.TournamentDraws.length > 0
                     );
                     setHasDraw(drawAvailable);
+
+                    const resultsAvailable = classes && classes.some(c =>
+                        c.IsPublished &&
+                        c.HasResults === true
+                    );
+                    setHasResults(resultsAvailable);
                 }
             }
         };
-        checkDraw();
+        checkStatus();
     }, [data.rankedin_url, data.linkPath, data.id, data.rankedinId, featuredTournaments, getTournamentClasses]);
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
@@ -661,13 +674,13 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                     </button>
                                 )}
 
-                                {hasDraw && rId && (
+                                {(hasDraw || hasResults) && rId && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
                                         className={`flex items-center gap-2 ${statusColors.solid} border ${statusColors.border} hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg ${statusColors.glow}`}
                                     >
                                         <GitBranch className={`w-3.5 h-3.5 ${statusColors.solidText} group-hover/draw:!text-black transition-colors`} />
-                                        <span className={`text-xs font-black ${statusColors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>VIEW DRAW</span>
+                                        <span className={`text-xs font-black ${statusColors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>DRAWS & RESULTS</span>
                                     </button>
                                 )}
                             </div>
