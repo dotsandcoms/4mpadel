@@ -86,12 +86,12 @@ const CalendarEventItem = ({ event, index }) => {
                 <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between relative z-10 w-full min-w-0">
                     <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
                         {/* Poster Image Box */}
-                        <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-24 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group">
-                            {event.image_url ? (
+                        <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-32 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group flex items-center justify-center">
+                            {(event.custom_image_url || event.image_url) ? (
                                 <img
-                                    src={event.image_url}
+                                    src={event.custom_image_url || event.image_url}
                                     alt={event.event_name}
-                                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center">

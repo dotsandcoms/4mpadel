@@ -236,12 +236,12 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
         >
             {/* Top Image Section */}
             <div className="relative h-[45%] md:h-[50%] w-full overflow-hidden shrink-0 bg-black">
-                <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700">
+                <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700 flex items-center justify-center">
                     <FallbackImage
                         src={image}
                         alt={title}
                         title={title}
-                        className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                        className="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105"
                     />
                 </div>
                 {/* Gradient overlay for badges */}
@@ -579,12 +579,12 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             className={`relative w-full h-[220px] sm:aspect-video lg:aspect-square max-h-[300px] md:max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(data.tournament_tag?.toLowerCase() === 'broll' || data.cardTitle?.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/10'} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
-            <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000">
+            <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000 flex items-center justify-center">
                 <FallbackImage
                     src={data.image}
                     alt={data.cardTitle}
                     title={data.cardTitle}
-                    className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+                    className="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105"
                 />
             </div>
 
@@ -764,7 +764,7 @@ const FeaturedSections = () => {
                         eventName: t.event_name,
                         city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
-                        image: t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
+                        image: t.custom_image_url || t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
                         customLink: `/draws/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
@@ -856,7 +856,7 @@ const FeaturedSections = () => {
                                     cardLabel: singleEvent.sapa_status || 'Live Event',
                                     highlight: singleEvent.live_youtube_url ? 'Streaming Now' : 'Starting Soon',
                                     date: formatTournamentDate(singleEvent.start_date, singleEvent.end_date),
-                                    image: singleEvent.image_url || newData[liveIndex].image,
+                                    image: singleEvent.custom_image_url || singleEvent.image_url || newData[liveIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     youtubeUrl: singleEvent.live_youtube_url,
                                     livePlayers: singleEvent.live_players,

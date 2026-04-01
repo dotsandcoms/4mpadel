@@ -650,7 +650,7 @@ const EventDetails = () => {
                     <img
                         src={event.custom_image_url || event.image_url || tournamentHero}
                         alt={event.event_name}
-                        className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
+                        className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50 blur-sm scale-110"
                     />
                     <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-slate-50" />
 
@@ -699,7 +699,7 @@ const EventDetails = () => {
                             variants={containerVariants}
                             initial="hidden"
                             animate="visible"
-                            className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col md:flex-row max-w-4xl w-full mx-auto border border-white/50 relative z-10"
+                            className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col md:flex-row max-w-6xl w-full mx-auto border border-white/50 relative z-10"
                         >
                             {/* Left Side: Event Info */}
                             <div className="p-8 md:p-12 flex-1 md:border-r border-dashed border-gray-300/50 relative">
@@ -714,7 +714,7 @@ const EventDetails = () => {
                                             Live Now
                                         </div>
                                     )}
-                                    <h1 className="text-3xl md:text-5xl font-black text-slate-900 mb-8 tracking-tighter leading-tight">{event.event_name}</h1>
+                                    <h1 className="text-2xl md:text-4xl font-black text-slate-900 mb-8 tracking-tighter leading-tight">{event.event_name}</h1>
                                 </motion.div>
 
                                 <div className="space-y-8">
@@ -748,10 +748,12 @@ const EventDetails = () => {
                                 </div>
                             </div>
 
-                            {/* Right Side: Registration Action */}
-                            <div className="p-8 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-8 relative overflow-hidden">
+                            {/* Middle Side: Registration Action */}
+                            <div className="p-8 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-8 relative overflow-hidden md:border-r border-dashed border-gray-300/50">
                                 <div className="absolute -top-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
                                 <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
+                                <div className="absolute -top-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
+                                <div className="absolute -bottom-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
 
                                 <motion.div variants={itemVariants} className="text-center w-full relative z-10">
                                     <div className="flex flex-col items-center mb-8">
@@ -818,21 +820,27 @@ const EventDetails = () => {
                                     })()}
                                 </motion.div>
 
-                                {/* Event Poster Image */}
-                                {event.image_url && (
-                                    <motion.div
-                                        variants={itemVariants}
-                                        whileHover={{ scale: 1.05 }}
-                                        className="w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white rotate-2 hover:rotate-0 transition-all duration-500 hover:shadow-padel-green/20"
-                                    >
-                                        <img src={event.image_url} alt="Event Poster" className="w-full h-full object-cover" />
-                                    </motion.div>
-                                )}
-
                                 <div className="text-center pt-8 border-t border-gray-200/50 w-full relative z-10">
                                     <p className="text-[10px] text-gray-300 uppercase tracking-[0.3em] font-black">Powered by 4M Padel</p>
                                 </div>
                             </div>
+
+                            {/* Right Side: Poster */}
+                            {(event.custom_image_url || event.image_url) && (
+                                <div className="p-6 md:p-12 w-full md:w-[300px] bg-white/40 flex flex-col items-center justify-center relative overflow-hidden">
+                                    <motion.div
+                                        variants={itemVariants}
+                                        whileHover={{ scale: 1.05 }}
+                                        className="w-2/3 md:w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white transition-all duration-500 hover:shadow-padel-green/20 bg-black flex items-center justify-center"
+                                    >
+                                        <img 
+                                            src={event.custom_image_url || event.image_url} 
+                                            alt="Event Poster" 
+                                            className="w-full h-full object-contain" 
+                                        />
+                                    </motion.div>
+                                </div>
+                            )}
                         </motion.div>
                     </div>
 
