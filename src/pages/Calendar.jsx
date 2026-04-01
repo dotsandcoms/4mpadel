@@ -151,6 +151,12 @@ const CalendarEventItem = ({ event, index }) => {
                                      <span>Live</span>
                                  </div>
                              )}
+                             {(new Date(event.end_date || event.start_date) < new Date()) && (
+                                 <div className="flex items-center gap-1 bg-slate-900 text-gray-400 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10 shadow-lg">
+                                     <Check className="w-3 h-3 shrink-0 text-padel-green" />
+                                     <span>Complete</span>
+                                 </div>
+                             )}
                              {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
                                  <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
                                      <Trophy className="w-3 h-3 shrink-0" />
@@ -158,12 +164,14 @@ const CalendarEventItem = ({ event, index }) => {
                                  </div>
                              )}
                              {event.youtube_playlist_url && (
-                                 <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
+                                 <div className="flex items-center gap-1 bg-slate-900 text-white border border-red-500/30 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
                                      <Video className="w-3 h-3 text-red-600" />
                                      <span>Media Available</span>
                                  </div>
                              )}
                          </div>
+
+
 
                         {/* Actions */}
                         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
@@ -356,19 +364,25 @@ const Calendar = () => {
             const eventName = event.event_name || event.eventName || '';
             const venueName = event.venue || event.clubName || '';
             const status = event.sapa_status || 'Gold'; // Default for Rankedin if not specified
+            const city = event.city || 'Rankedin';
+            const organizer = event.organizer_name || '';
+            const eventType = event.is_league ? 'League' : 'Tournament';
 
             const matchesSearch =
                 eventName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                venueName.toLowerCase().includes(searchTerm.toLowerCase());
+                venueName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                city.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                organizer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                eventType.toLowerCase().includes(searchTerm.toLowerCase());
 
             const matchesStatus = statusFilters.length === 0 || statusFilters.includes(status);
 
-            // Adjust Rankedin city if possible, or just default to match
-            const city = event.city || 'Rankedin';
             const matchesCity = cityFilter === 'All' || city === cityFilter;
 
+
             let matchesTiming = true;
-            if (viewMode === 'list') {
+            if (viewMode === 'list' && !searchTerm) {
                 const startDateStr = event.start_date || event.startDate;
                 const endDateStr = event.end_date || event.endDate || startDateStr;
 
@@ -380,6 +394,7 @@ const Calendar = () => {
                     matchesTiming = !isNaN(eventDate.getTime()) && eventDate < today;
                 }
             }
+
 
             const matchesLeague = leagueFilter === 'All' ||
                 (leagueFilter === 'League' && event.is_league === true) ||
