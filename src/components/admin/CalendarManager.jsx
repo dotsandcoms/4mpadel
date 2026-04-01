@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { useRankedin } from '../../hooks/useRankedin';
 import {
     PieChart,
     Pie,
@@ -75,6 +76,7 @@ const formatEventDates = (start, end) => {
 };
 
 const CalendarManager = () => {
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [currentPage, setCurrentPage] = useState(1);
@@ -143,6 +145,74 @@ const CalendarManager = () => {
             toast.error('Failed to load events');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const extractRankedinId = (url) => {
+        if (!url) return null;
+        const match = url.match(/\/tournament\/(\d+)/) || url.match(/id=(\d+)/);
+        return match ? match[1] : null;
+    };
+
+    const handleForceSync = async (event) => {
+        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+        if (!rId) {
+            toast.error('No Rankedin URL or ID found for this event');
+            return;
+        }
+
+        setIsSyncing(true);
+        const toastId = toast.loading(`Force syncing from Rankedin...`);
+        
+        try {
+            const classes = await getTournamentClasses(rId);
+            let drawAvailable = false;
+            let apiWinners = [];
+            let apiHasResults = false;
+            let apiUpcomingMatches = [];
+
+            if (classes) {
+                drawAvailable = classes.some(c => c.IsPublished && Array.isArray(c.TournamentDraws) && c.TournamentDraws.length > 0);
+            }
+
+            const isPassed = new Date(event.end_date || event.start_date) < new Date();
+            
+            if (isPassed) {
+                const tournamentWinners = await getTournamentWinners(rId);
+                if (tournamentWinners && tournamentWinners.length > 0) {
+                    apiWinners = tournamentWinners;
+                    apiHasResults = true;
+                } else {
+                    const matches = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                    apiHasResults = !!(matches && matches.length > 0);
+                }
+            } else {
+                const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
+                if (matchesPreview && matchesPreview.length > 0) {
+                    apiUpcomingMatches = matchesPreview.slice(0, 15);
+                }
+            }
+
+            const { error } = await supabase
+                .from('rankedin_results_cache')
+                .upsert({
+                    event_id: event.id,
+                    rankedin_id: rId.toString(),
+                    classes: classes || [],
+                    winners: apiWinners,
+                    has_draw: drawAvailable,
+                    has_results: apiHasResults,
+                    upcoming_matches: apiUpcomingMatches,
+                    last_synced_at: new Date().toISOString()
+                }, { onConflict: 'event_id' });
+
+            if (error) throw error;
+            toast.success(`Successfully synced cache`, { id: toastId });
+        } catch (error) {
+            console.error('Error force syncing:', error);
+            toast.error('Failed to sync. Please try again.', { id: toastId });
+        } finally {
+            setIsSyncing(false);
         }
     };
 
@@ -954,6 +1024,14 @@ const CalendarManager = () => {
                                         </td>
                                         <td className="py-3 px-4 align-middle text-right">
                                             <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => handleForceSync(event)}
+                                                    disabled={isSyncing}
+                                                    className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black disabled:opacity-50"
+                                                    title="Force Sync from Rankedin"
+                                                >
+                                                    <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
+                                                </button>
                                                 <button
                                                     onClick={() => handleEdit(event)}
                                                     className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white"

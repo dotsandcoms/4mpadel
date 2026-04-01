@@ -329,38 +329,93 @@ const EventDetails = () => {
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
-                    // Fetch all classes
-                    const classes = await getTournamentClasses(rId);
-                    if (classes) {
-                        setTournamentClasses(classes);
-                        const drawAvailable = classes.some(c =>
-                            c.IsPublished &&
-                            Array.isArray(c.TournamentDraws) &&
-                            c.TournamentDraws.length > 0
-                        );
-                        setHasDraw(drawAvailable);
-                    }
+                    // 1. Check DB Cache first
+                    const { data: cacheRow, error: cacheError } = await supabase
+                        .from('rankedin_results_cache')
+                        .select('*')
+                        .eq('event_id', event.id)
+                        .maybeSingle();
 
-                    // Check Results/Winners (Only if event is passed)
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
-                    if (isPassed) {
-                        const tournamentWinners = await getTournamentWinners(rId);
-                        if (tournamentWinners && tournamentWinners.length > 0) {
-                            setWinners(tournamentWinners);
-                            setHasResults(true);
+                    
+                    let useCache = false;
+                    if (cacheRow) {
+                        if (isPassed) {
+                            // If event is passed and we have cache, ALWAYS use it
+                            useCache = true;
                         } else {
-                            const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                            if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
-                                setHasResults(true);
+                            // If event is live, use cache only if it's less than 1 hour old
+                            const lastSynced = new Date(cacheRow.last_synced_at);
+                            const now = new Date();
+                            const diffHrs = Math.abs(now - lastSynced) / 36e5;
+                            if (diffHrs < 1) {
+                                useCache = true;
                             }
                         }
+                    }
+
+                    if (useCache && cacheRow) {
+                        setTournamentClasses(cacheRow.classes || []);
+                        setWinners(cacheRow.winners || []);
+                        setHasDraw(cacheRow.has_draw || false);
+                        setHasResults(cacheRow.has_results || false);
+                        setUpcomingMatches(cacheRow.upcoming_matches || []);
                     } else {
-                        // Fetch upcoming matches for live/upcoming events
-                        const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
-                        if (matchesPreview && matchesPreview.length > 0) {
-                            // Filter specifically for matches that are actually scheduled/upcoming
-                            setUpcomingMatches(matchesPreview.slice(0, 15)); // Get top 15 matches to avoid overwhelming
+                        // 2. Fetch from Live API
+                        const classes = await getTournamentClasses(rId);
+                        let drawAvailable = false;
+                        let apiWinners = [];
+                        let apiHasResults = false;
+                        let apiUpcomingMatches = [];
+
+                        if (classes) {
+                            setTournamentClasses(classes);
+                            drawAvailable = classes.some(c =>
+                                c.IsPublished &&
+                                Array.isArray(c.TournamentDraws) &&
+                                c.TournamentDraws.length > 0
+                            );
+                            setHasDraw(drawAvailable);
                         }
+
+                        if (isPassed) {
+                            const tournamentWinners = await getTournamentWinners(rId);
+                            if (tournamentWinners && tournamentWinners.length > 0) {
+                                apiWinners = tournamentWinners;
+                                setWinners(tournamentWinners);
+                                apiHasResults = true;
+                                setHasResults(true);
+                            } else {
+                                const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                                if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
+                                    apiHasResults = true;
+                                    setHasResults(true);
+                                }
+                            }
+                        } else {
+                            // Fetch upcoming matches for live/upcoming events
+                            const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
+                            if (matchesPreview && matchesPreview.length > 0) {
+                                apiUpcomingMatches = matchesPreview.slice(0, 15);
+                                setUpcomingMatches(apiUpcomingMatches);
+                            }
+                        }
+
+                        // 3. Upsert back to Database Cache
+                        console.log("Upserting Rankedin Cache to Database...");
+                        await supabase
+                           .from('rankedin_results_cache')
+                           .upsert({
+                               event_id: event.id,
+                               rankedin_id: rId.toString(),
+                               classes: classes || [],
+                               winners: apiWinners,
+                               has_draw: drawAvailable,
+                               has_results: apiHasResults,
+                               upcoming_matches: apiUpcomingMatches,
+                               last_synced_at: new Date().toISOString()
+                           }, { onConflict: 'event_id' })
+                           .select();
                     }
                 } catch (err) {
                     console.error("Error fetching rankedin detailed data:", err);
