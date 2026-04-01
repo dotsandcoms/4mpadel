@@ -113,9 +113,9 @@ const CalendarEventItem = ({ event, index }) => {
                                 {event.event_name || event.eventName}
                             </h3>
 
-                            {/* Hidden on very small mobile to save space if needed, but let's keep it clean */}
-                            <div className="flex flex-col gap-1.5 text-gray-400 text-[10px] sm:text-sm font-medium">
-                                <div className="flex items-center gap-1.5 text-padel-green font-bold">
+                            {/* Info Metadata Row */}
+                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-[10px] sm:text-sm font-medium">
+                                <div className="flex items-center gap-1.5 text-padel-green font-bold shrink-0">
                                     <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
                                     <span>
                                         {event.event_dates ||
@@ -123,20 +123,20 @@ const CalendarEventItem = ({ event, index }) => {
                                             (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
                                     </span>
                                 </div>
-                                <div className="flex items-center gap-3 truncate">
-                                    <div className="flex items-center gap-1.5 shrink-0">
-                                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
-                                        <span className="truncate" title={event.venue || event.clubName}>
-                                            {event.venue || event.clubName || 'Location to be confirmed'}
-                                        </span>
-                                    </div>
-                                    {event.organizer_name && (
-                                        <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">
-                                            <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400" />
-                                            <span className="text-white font-bold text-[9px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
-                                        </div>
-                                    )}
+                                
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
+                                    <span className="truncate" title={event.venue || event.clubName}>
+                                        {event.venue || event.clubName || 'Location to be confirmed'}
+                                    </span>
                                 </div>
+
+                                {event.organizer_name && (
+                                    <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">
+                                        <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400" />
+                                        <span className="text-white font-bold text-[9px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -155,7 +155,13 @@ const CalendarEventItem = ({ event, index }) => {
                             {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
                                 <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
                                     <Trophy className="w-3 h-3 shrink-0" />
-                                    <span>Results</span>
+                                    <span>Results Available</span>
+                                </div>
+                            )}
+                            {event.youtube_playlist_url && (
+                                <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
+                                    <Video className="w-3 h-3 text-red-600" />
+                                    <span>Media Available</span>
                                 </div>
                             )}
                         </div>
