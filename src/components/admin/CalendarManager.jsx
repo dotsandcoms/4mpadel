@@ -113,6 +113,7 @@ const CalendarManager = () => {
         is_league: false,
         tournament_tag: 'None',
         registered_players: 0,
+        rankedin_id: '',
         rankedin_url: '',
         featured_live: false,
         live_youtube_url: '',
@@ -400,6 +401,7 @@ const CalendarManager = () => {
             is_league: false,
             tournament_tag: 'None',
             registered_players: 0,
+            rankedin_id: '',
             rankedin_url: '',
             featured_live: false,
             live_youtube_url: '',
@@ -498,6 +500,7 @@ const CalendarManager = () => {
             is_league: event.is_league || false,
             tournament_tag: event.tournament_tag || 'None',
             registered_players: event.registered_players || 0,
+            rankedin_id: event.rankedin_id || '',
             rankedin_url: event.rankedin_url || '',
             featured_live: event.featured_live || false,
             live_youtube_url: event.live_youtube_url || '',
@@ -641,14 +644,18 @@ const CalendarManager = () => {
                     console.error(`Failed to fetch rich details for ${rankedinIdStr}:`, e);
                 }
 
-                // Try to find match in DB
-                const matchById = events.find(e => e.rankedin_url && e.rankedin_url.includes(`/${rankedinIdStr}/`));
+                // --- MATCHING LOGIC (Prioritize rankedin_id) ---
+                const matchById = events.find(e => {
+                    if (e.rankedin_id && e.rankedin_id.toString() === rankedinIdStr) return true;
+                    // Fallback to URL matching if id column is missing/empty but URL exists
+                    return e.rankedin_url && e.rankedin_url.includes(`/${rankedinIdStr}/`);
+                });
 
                 // Enhanced matching logic for names that might be slightly different
                 const normalizeValue = (str) => String(str).toLowerCase().replace(/[^a-z0-9]/g, '');
                 const reNameNorm = normalizeValue(evName);
 
-                const matchByName = events.find(e => {
+                const matchByName = !matchById && events.find(e => {
                     if (!e.event_name) return false;
                     const eNameNorm = normalizeValue(e.event_name);
                     // Match if names are identical after removing spaces/punctuation
@@ -669,6 +676,12 @@ const CalendarManager = () => {
                     // Update missing or outdated fields safely
                     let updates = {};
                     let needsUpdate = false;
+
+                    // Always ensure rankedin_id is stored
+                    if (!existingEvent.rankedin_id || existingEvent.rankedin_id.toString() !== rankedinIdStr) {
+                        updates.rankedin_id = rankedinIdStr;
+                        needsUpdate = true;
+                    }
 
                     if (!existingEvent.rankedin_url || (existingEvent.rankedin_url !== fullUrl && !existingEvent.rankedin_url.includes(rankedinIdStr))) {
                         updates.rankedin_url = fullUrl;
@@ -719,10 +732,14 @@ const CalendarManager = () => {
                         updates.sponsor_logos = richDetails.sponsor_logos;
                         needsUpdate = true;
                     }
-                    // SMART UPDATES for manual fields:
 
-                    // Only update is_league if it's true on RankedIn
-                    // We don't want to overwrite a local manual 'true' with 'false'
+                    // Update name if changed on RankedIn
+                    if (existingEvent.event_name !== evName) {
+                        updates.event_name = evName;
+                        needsUpdate = true;
+                    }
+
+                    // SMART UPDATES for manual fields:
                     if (isLeague && !existingEvent.is_league) {
                         updates.is_league = true;
                         needsUpdate = true;
@@ -768,6 +785,7 @@ const CalendarManager = () => {
                         end_date: eDate ? eDate.substring(0, 10) : null,
                         sapa_status: inferredStatus,
                         organizer_name: 'SAPA',
+                        rankedin_id: rankedinIdStr,
                         rankedin_url: fullUrl,
                         city: (re.city || '').trim(),
                         venue: richDetails.venue || re.club || '',
@@ -1016,6 +1034,7 @@ const CalendarManager = () => {
                             <tr className="bg-black/50 text-gray-400 border-b border-white/10">
                                 <th className="py-3 px-4 font-semibold text-xs uppercase w-48">Dates</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Event Name</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase">Source</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Location</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
@@ -1041,6 +1060,16 @@ const CalendarManager = () => {
                                         <td className="py-3 px-4 align-top">
                                             <div className="font-bold text-white line-clamp-2" title={event.event_name}>{event.event_name}</div>
                                             {event.organizer_name && <div className="text-xs text-gray-500 mt-1">by {event.organizer_name}</div>}
+                                        </td>
+                                        <td className="py-3 px-4 align-top">
+                                            {event.rankedin_id ? (
+                                                <div className="flex flex-col gap-1">
+                                                    <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-bold uppercase w-fit">RankedIn</span>
+                                                    <span className="text-[9px] text-gray-500 font-mono">ID: {event.rankedin_id}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="px-2 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20 text-[10px] font-bold uppercase w-fit">Manual</span>
+                                            )}
                                         </td>
                                         <td className="py-3 px-4 align-top">
                                             <div className="font-medium text-gray-300 text-sm truncate max-w-[150px]">{event.city}</div>
@@ -1360,16 +1389,31 @@ const CalendarManager = () => {
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Rankedin Tournament URL</label>
-                                        <input
-                                            type="url"
-                                            name="rankedin_url"
-                                            value={formData.rankedin_url}
-                                            onChange={handleInputChange}
-                                            placeholder="https://www.rankedin.com/en/tournament/..."
-                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
-                                        />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Rankedin Tournament URL</label>
+                                            <input
+                                                type="url"
+                                                name="rankedin_url"
+                                                value={formData.rankedin_url}
+                                                onChange={handleInputChange}
+                                                placeholder="https://www.rankedin.com/en/tournament/..."
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Rankedin ID (System Only)</label>
+                                            <input
+                                                type="text"
+                                                name="rankedin_id"
+                                                value={formData.rankedin_id}
+                                                onChange={handleInputChange}
+                                                placeholder="Numeric ID"
+                                                className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-500 focus:outline-none cursor-not-allowed"
+                                                readOnly
+                                            />
+                                            <p className="text-[9px] text-gray-500 mt-1 italic">Automatically populated when syncing/linking</p>
+                                        </div>
                                     </div>
 
                                     {formData.featured_live && (
