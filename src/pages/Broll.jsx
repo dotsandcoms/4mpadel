@@ -354,56 +354,21 @@ const Broll = () => {
                 </div>
             </section>
 
-            {/* Sponsor Info Section */}
-            <section className="py-16 md:py-24 px-6 bg-white border-b border-slate-100">
-                <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-                        <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
-                                <Building2 className="w-5 h-5 md:w-6 md:h-6" />
-                            </div>
-                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Premier Platform</h3>
-                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
-                                Broll Auctions and Sales is one of South Africa's leading commercial real estate auction houses with a proven track record.
-                            </p>
-                        </div>
-                        <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
-                                <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
-                            </div>
-                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Proven Success</h3>
-                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
-                                Specializing in the sale of iconic commercial, industrial, and retail properties across South Africa for over four decades.
-                            </p>
-                        </div>
-                        <div className="space-y-3 md:space-y-4">
-                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
-                                <Users className="w-5 h-5 md:w-6 md:h-6" />
-                            </div>
-                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Industry Leaders</h3>
-                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
-                                Committed to excellence and transparency, bringing the same standard of professionalism to the South African Padel scene.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
             {/* Content Navigation Tabs */}
             <div ref={contentRef} className="sticky top-20 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 py-4 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6">
                     <div className="flex items-center justify-center gap-2 md:gap-8 overflow-x-auto no-scrollbar py-2">
                         {[
-                            { id: 'rankings', label: 'Tour Rankings', icon: Trophy },
+                            { id: 'rankings', label: 'Tour Leaderboard', icon: Trophy },
                             { id: 'format', label: 'Tour Format', icon: Target },
-                            { id: 'dates', label: 'Broll Dates', icon: CalendarIcon }
+                            { id: 'dates', label: 'Broll Tour Dates', icon: CalendarIcon }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveContentTab(tab.id)}
                                 className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-sm uppercase tracking-wider transition-all whitespace-nowrap ${activeContentTab === tab.id
-                                        ? 'bg-[#F40020] text-white shadow-lg shadow-[#F40020]/20 scale-105'
-                                        : 'text-slate-500 hover:bg-slate-50 hover:text-[#F40020]'
+                                    ? 'bg-[#F40020] text-white shadow-lg shadow-[#F40020]/20 scale-105'
+                                    : 'text-slate-500 hover:bg-slate-50 hover:text-[#F40020]'
                                     }`}
                             >
                                 <tab.icon className="w-4 h-4" />
@@ -465,7 +430,7 @@ const Broll = () => {
                                         <div className="max-w-7xl mx-auto px-6 mt-32 relative z-10">
                                             <div className="mb-12">
                                                 <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-4 italic">Live Rankings</h2>
-                                                <p className="text-slate-400 text-lg max-w-2xl font-medium leading-relaxed italic">All player rankings across the Broll Pro Tour, updated in real-time from Rankedin.</p>
+                                                <p className="text-slate-400 text-lg max-w-2xl font-medium leading-relaxed italic">All player rankings across the Broll Pro Tour.</p>
                                             </div>
 
                                             <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
@@ -828,6 +793,41 @@ const Broll = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Sponsor Info Section */}
+            <section className="py-16 md:py-24 px-6 bg-white border-b border-slate-100">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
+                                <Building2 className="w-5 h-5 md:w-6 md:h-6" />
+                            </div>
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Premier Platform</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
+                                Broll Auctions and Sales is one of South Africa's leading commercial real estate auction houses with a proven track record.
+                            </p>
+                        </div>
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
+                                <TrendingUp className="w-5 h-5 md:w-6 md:h-6" />
+                            </div>
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Proven Success</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
+                                Specializing in the sale of iconic commercial, industrial, and retail properties across South Africa for over four decades.
+                            </p>
+                        </div>
+                        <div className="space-y-3 md:space-y-4">
+                            <div className="w-10 h-10 md:w-12 md:h-12 bg-[#F40020]/10 rounded-xl flex items-center justify-center text-[#F40020]">
+                                <Users className="w-5 h-5 md:w-6 md:h-6" />
+                            </div>
+                            <h3 className="text-lg md:text-xl font-bold text-slate-900">Industry Leaders</h3>
+                            <p className="text-slate-500 text-sm md:text-base leading-relaxed">
+                                Committed to excellence and transparency, bringing the same standard of professionalism to the South African Padel scene.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
             {/* Player Modal */}
             <AnimatePresence>
