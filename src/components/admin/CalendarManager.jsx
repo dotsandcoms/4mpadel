@@ -1584,10 +1584,10 @@ const CalendarManager = () => {
 
                                         <div className="space-y-4">
                                             <label className="block text-xs font-bold text-padel-green mb-1 uppercase">Custom Event Poster (Overrides Rankedin)</label>
-                                            <div className="relative group aspect-video bg-black/40 rounded-xl border-2 border-dashed border-white/10 hover:border-padel-green/50 transition-all overflow-hidden flex flex-col items-center justify-center p-4">
+                                            <div className="relative group aspect-[3/4] max-w-[240px] bg-black/40 rounded-xl border-2 border-dashed border-white/10 hover:border-padel-green/50 transition-all overflow-hidden flex flex-col items-center justify-center p-4 mx-auto">
                                                 {formData.custom_image_url ? (
                                                     <>
-                                                        <img src={formData.custom_image_url} alt="Custom Poster" className="absolute inset-0 w-full h-full object-cover" />
+                                                        <img src={formData.custom_image_url} alt="Custom Poster" className="absolute inset-0 w-full h-full object-contain" />
                                                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                                             <button
                                                                 type="button"
