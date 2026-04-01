@@ -225,6 +225,7 @@ const EventDetails = () => {
 
     // Registration Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
 
     const [formData, setFormData] = useState({
@@ -545,16 +546,14 @@ const EventDetails = () => {
         }
     };
 
-    const handleAddToCalendar = () => {
-        if (!event) return;
+    const getCalendarData = () => {
+        if (!event) return null;
 
-        // 1. Parse Start Date (YYYY-MM-DD)
         const dateParts = event.start_date ? event.start_date.split('-') : [];
         let year = dateParts[0];
         let month = dateParts[1];
         let day = dateParts[2];
 
-        // Fallback if start_date is missing (try to guess from event_dates string or default to today)
         if (!year) {
             const now = new Date();
             year = now.getFullYear();
@@ -562,48 +561,66 @@ const EventDetails = () => {
             day = String(now.getDate()).padStart(2, '0');
         }
 
-        // 2. Parse Start Time (e.g., "08:00 AM" or "14:00")
-        let startHour = '09';
-        let startMinute = '00';
+        let startHour = 9;
+        let startMinute = 0;
 
         if (event.start_time) {
             const timeMatch = event.start_time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
             if (timeMatch) {
                 let h = parseInt(timeMatch[1], 10);
-                const m = timeMatch[2];
+                startMinute = parseInt(timeMatch[2], 10);
                 const ampm = timeMatch[3];
-
                 if (ampm) {
                     if (ampm.toLowerCase() === 'pm' && h < 12) h += 12;
                     if (ampm.toLowerCase() === 'am' && h === 12) h = 0;
                 }
-                startHour = String(h).padStart(2, '0');
-                startMinute = m;
+                startHour = h;
             }
         }
 
-        // Format: YYYYMMDDTHHmm00
-        const dtStart = `${year}${month}${day}T${startHour}${startMinute}00`;
-        const dtEnd = `${year}${month}${day}T${String(parseInt(startHour) + 2).padStart(2, '0')}${startMinute}00`; // Default 2 hours duration
+        const startDate = new Date(year, month - 1, day, startHour, startMinute);
+        const endDate = new Date(startDate.getTime() + (2 * 60 * 60 * 1000)); // 2 hours default
 
-        // 3. Construct ICS Content
+        return {
+            title: event.event_name,
+            description: stripHtml(event.description || 'Padel Tournament Event'),
+            location: `${event.venue}${event.address ? `, ${event.address}` : ''}`,
+            start: startDate,
+            end: endDate
+        };
+    };
+
+    const handleGoogleCalendar = () => {
+        const data = getCalendarData();
+        if (!data) return;
+
+        const formatGDate = (date) => date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+        const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(data.title)}&dates=${formatGDate(data.start)}/${formatGDate(data.end)}&details=${encodeURIComponent(data.description)}&location=${encodeURIComponent(data.location)}`;
+        window.open(url, '_blank');
+        setIsCalendarMenuOpen(false);
+    };
+
+    const handleAppleCalendar = () => {
+        const data = getCalendarData();
+        if (!data) return;
+
+        const formatDate = (date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
         const icsContent = [
             'BEGIN:VCALENDAR',
             'VERSION:2.0',
             'PRODID:-//SAPA//Event Calendar//EN',
             'BEGIN:VEVENT',
-            `UID:${event.id}@padelsa.co.za`,
-            `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`,
-            `DTSTART:${dtStart}`,
-            `DTEND:${dtEnd}`,
-            `SUMMARY:${event.event_name}`,
-            `DESCRIPTION:${stripHtml(event.description || 'Padel Tournament Event')}`,
-            `LOCATION:${event.venue} ${event.address ? `, ${event.address}` : ''}`,
+            `UID:${event.id}@4mpadel.co.za`,
+            `DTSTAMP:${formatDate(new Date())}`,
+            `DTSTART:${formatDate(data.start)}`,
+            `DTEND:${formatDate(data.end)}`,
+            `SUMMARY:${data.title}`,
+            `DESCRIPTION:${data.description}`,
+            `LOCATION:${data.location}`,
             'END:VEVENT',
             'END:VCALENDAR'
         ].join('\r\n');
 
-        // 4. Trigger Download
         const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -612,7 +629,18 @@ const EventDetails = () => {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        setIsCalendarMenuOpen(false);
     };
+
+    const handleOutlookCalendar = () => {
+        const data = getCalendarData();
+        if (!data) return;
+
+        const url = `https://outlook.office.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(data.title)}&startdt=${data.start.toISOString()}&enddt=${data.end.toISOString()}&body=${encodeURIComponent(data.description)}&location=${encodeURIComponent(data.location)}`;
+        window.open(url, '_blank');
+        setIsCalendarMenuOpen(false);
+    };
+
 
     const handlePaymentRedirect = () => {
         // Mock payment redirection
@@ -788,13 +816,50 @@ const EventDetails = () => {
                                                 Register Now
                                             </motion.a>
 
-                                            <motion.button
-                                                whileHover={{ border: '2px solid #0F172A' }}
-                                                className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px]"
-                                                onClick={handleAddToCalendar}
-                                            >
-                                                Add to Calendar
-                                            </motion.button>
+                                             <div className="relative">
+                                                 <motion.button
+                                                     whileHover={{ border: '2px solid #0F172A' }}
+                                                     className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px] flex items-center justify-center gap-2"
+                                                     onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                                                 >
+                                                     Add to Calendar
+                                                     <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCalendarMenuOpen ? 'rotate-180' : ''}`} />
+                                                 </motion.button>
+
+                                                 <AnimatePresence>
+                                                     {isCalendarMenuOpen && (
+                                                         <motion.div
+                                                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                             animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                             className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
+                                                         >
+                                                             <button
+                                                                 onClick={handleGoogleCalendar}
+                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
+                                                             >
+                                                                 <div className="w-2 h-2 rounded-full bg-[#4285F4]" />
+                                                                 Google Calendar (Android)
+                                                             </button>
+                                                             <button
+                                                                 onClick={handleAppleCalendar}
+                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
+                                                             >
+                                                                 <div className="w-2 h-2 rounded-full bg-slate-900" />
+                                                                 Apple Calendar (iPhone)
+                                                             </button>
+                                                             <button
+                                                                 onClick={handleOutlookCalendar}
+                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3"
+                                                             >
+                                                                 <div className="w-2 h-2 rounded-full bg-[#0078D4]" />
+                                                                 Outlook / Other
+                                                             </button>
+                                                         </motion.div>
+                                                     )}
+                                                 </AnimatePresence>
+                                             </div>
+
                                         </div>
                                     )}
 
