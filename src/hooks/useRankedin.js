@@ -282,31 +282,38 @@ export const useRankedin = () => {
                         const elimination = drawData.find(d => d.BaseType === 'Elimination')?.Elimination;
                         if (elimination && elimination.DrawData) {
                             // Find the Final (highest round)
-                            const allMatches = elimination.DrawData.flat()
-                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined))
-                                .map(cell => cell.MatchCell || cell.MatchViewModel || cell);
+                            const allCells = elimination.DrawData.flat()
+                                .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
                             
-                            const finalMatch = allMatches.sort((a,b) => b.Round - a.Round)[0];
+                            const finalCell = allCells.sort((a,b) => {
+                                const mB = b.MatchCell || b.MatchViewModel || b;
+                                const mA = a.MatchCell || a.MatchViewModel || a;
+                                return (mB.Round || 0) - (mA.Round || 0);
+                            })[0];
                             
-                            if (finalMatch) {
-                                const m = finalMatch;
-                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
-                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId;
+                            if (finalCell) {
+                                const cell = finalCell;
+                                const m = cell.MatchCell || cell.MatchViewModel || cell;
+                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || cell.Score;
+                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || cell.WinnerParticipantId;
                                 
+                                const p1 = cell.ChallengerParticipant || m.ChallengerParticipant;
+                                const p2 = cell.ChallengedParticipant || m.ChallengedParticipant;
+
                                 // Robust detection: Winner ID or Boolean flag
                                 let winningParticipant = null;
                                 
                                 if (winnerId) {
-                                    const p1Matches = (m.ChallengerParticipant?.Id == winnerId || m.ChallengerParticipant?.EventParticipantId == winnerId);
-                                    const p2Matches = (m.ChallengedParticipant?.Id == winnerId || m.ChallengedParticipant?.EventParticipantId == winnerId);
+                                    const p1Matches = (p1?.Id == winnerId || p1?.EventParticipantId == winnerId);
+                                    const p2Matches = (p2?.Id == winnerId || p2?.EventParticipantId == winnerId);
                                     
-                                    if (p1Matches) winningParticipant = m.ChallengerParticipant;
-                                    else if (p2Matches) winningParticipant = m.ChallengedParticipant;
+                                    if (p1Matches) winningParticipant = p1;
+                                    else if (p2Matches) winningParticipant = p2;
                                 }
 
                                 if (!winningParticipant) {
                                     const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
-                                    winningParticipant = isFirstWinner ? m.ChallengerParticipant : m.ChallengedParticipant;
+                                    winningParticipant = isFirstWinner ? p1 : p2;
                                 }
                                 
                                 if (winningParticipant) {
