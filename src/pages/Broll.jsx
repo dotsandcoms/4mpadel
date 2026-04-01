@@ -6,8 +6,8 @@ import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import brollLogo from '../assets/BrollLogo.png';
+import PlayerModal from '../components/PlayerModal';
 import * as htmlToImage from 'html-to-image';
-import { jsPDF } from 'jspdf';
 
 const Broll = () => {
     const [events, setEvents] = useState([]);
@@ -24,6 +24,7 @@ const Broll = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
     const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [userEmail, setUserEmail] = useState(null);
     const [imageErrors, setImageErrors] = useState({});
     const itemsPerPage = 20;
 
@@ -33,7 +34,15 @@ const Broll = () => {
     useEffect(() => {
         fetchBrollEvents();
         fetchRankings();
+        fetchSession();
     }, []);
+
+    const fetchSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user?.email) {
+            setUserEmail(session.user.email);
+        }
+    };
 
     const fetchRankings = async () => {
         try {
@@ -163,7 +172,7 @@ const Broll = () => {
         if (!playersData || playersData.length === 0) return null;
         return (
             <div className="mb-20 last:mb-0">
-                <div className="flex flex-col gap-2 mb-8 px-6 md:px-0">
+                <div className="flex flex-col gap-2 mb-8 px-6 md:px-20">
                     <div className="flex items-center gap-3">
                         <Trophy className="w-6 h-6" style={{ color: accentColor }} />
                         <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-wider">{title}</h3>
@@ -193,7 +202,7 @@ const Broll = () => {
                     <div
                         ref={scrollRef}
                         onScroll={updateArrows}
-                        className="flex gap-6 overflow-x-auto pb-8 snap-x px-2 md:px-0 nice-scrollbar scroll-smooth"
+                        className="flex gap-6 overflow-x-auto pb-8 snap-x px-6 md:px-20 nice-scrollbar scroll-smooth"
                     >
                         {playersData.map((player, index) => (
                             <motion.div
@@ -407,13 +416,13 @@ const Broll = () => {
                     ) : (
                         <>
                             {/* Top Players Sliders */}
-                            <div className="space-y-20">
-                                <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
-                                <RankingSlider title="Women's Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                            <div className="space-y-20 px-6 md:px-20">
+                                <RankingSlider title="Men's Open Top 10 Leaderboard" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                                <RankingSlider title="Women's Open Top 10 Leaderboard" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                             </div>
 
                             {/* Searchable Rankings Table */}
-                            <div className="mt-32">
+                            <div className="mt-32 px-6 md:px-20">
                                 <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
                                     <div className="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full md:w-auto">
                                         <button
@@ -444,20 +453,22 @@ const Broll = () => {
 
                                 <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
                                     <div className="overflow-x-auto">
-                                        <table className="w-full text-left border-collapse">
+                                        <table className="w-full text-left border-collapse min-w-full md:min-w-[600px]">
                                             <thead>
                                                 <tr className="bg-white/5">
-                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm w-24">Pos</th>
-                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm">Player</th>
-                                                    <th className="py-5 px-6 font-bold text-slate-400 uppercase tracking-widest text-sm text-right">Points</th>
+                                                    <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-slate-400 uppercase tracking-widest text-xs md:text-sm w-12 md:w-24">Pos</th>
+                                                    <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-slate-400 uppercase tracking-widest text-xs md:text-sm">Player</th>
+                                                    <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-slate-400 uppercase tracking-widest text-xs md:text-sm text-right">Points</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
                                                 {paginatedData.length > 0 ? (
                                                     paginatedData.map((player) => (
                                                         <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                                                            <td className="py-4 px-6 text-2xl font-black text-slate-500 group-hover:text-[#F40020] transition-colors">{player.rawRank}</td>
-                                                            <td className="py-4 px-6">
+                                                            <td className="py-3 px-3 md:py-4 md:px-6 text-xl md:text-2xl font-black text-slate-500 group-hover:text-[#F40020] transition-colors text-center md:text-left">
+                                                                {player.rawRank}
+                                                            </td>
+                                                            <td className="py-3 px-3 md:py-4 md:px-6">
                                                                 <div
                                                                     onClick={() => {
                                                                         if (player.hasLocalProfile && player.playerRecord) {
@@ -466,9 +477,9 @@ const Broll = () => {
                                                                             window.open(player.rankedinProfile, '_blank');
                                                                         }
                                                                     }}
-                                                                    className="flex items-center gap-4 cursor-pointer group/link"
+                                                                    className="flex items-center gap-3 md:gap-4 cursor-pointer group/link"
                                                                 >
-                                                                    <div className="w-12 h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
+                                                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
                                                                         {!imageErrors[player.id] ? (
                                                                             <img
                                                                                 src={player.image}
@@ -477,10 +488,10 @@ const Broll = () => {
                                                                                 onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
                                                                             />
                                                                         ) : (
-                                                                            <span className="text-sm font-bold text-slate-400">{getInitials(player.name)}</span>
+                                                                            <span className="text-xs md:text-sm font-bold text-slate-400">{getInitials(player.name)}</span>
                                                                         )}
                                                                     </div>
-                                                                    <span className="text-lg font-bold text-white group-hover/link:text-[#F40020] transition-colors">
+                                                                    <span className="text-base md:text-lg font-bold text-white group-hover/link:text-[#F40020] transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
                                                                         {player.name}
                                                                         {player.hasLocalProfile && (
                                                                             <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-[#F40020]/10 text-[#F40020] text-[8px] font-black uppercase tracking-widest border border-[#F40020]/20">4M</span>
@@ -488,8 +499,8 @@ const Broll = () => {
                                                                     </span>
                                                                 </div>
                                                             </td>
-                                                            <td className="py-4 px-6 text-right">
-                                                                <span className="inline-block bg-white/10 px-4 py-2 rounded-xl text-lg font-black text-white group-hover:bg-[#F40020] group-hover:text-white transition-colors">
+                                                            <td className="py-3 px-3 md:py-4 md:px-6 text-right">
+                                                                <span className="inline-block bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-base md:text-lg font-black text-white group-hover:bg-[#F40020] group-hover:text-white transition-colors">
                                                                     {player.points.toLocaleString()}
                                                                 </span>
                                                             </td>
@@ -754,72 +765,15 @@ const Broll = () => {
                 )}
             </section>
 
-            {/* Player Modal (Reused from Rankings.jsx logic) */}
+            {/* Player Modal */}
             <AnimatePresence>
                 {selectedPlayer && (
-                    <>
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setSelectedPlayer(null)}
-                            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[9999] cursor-pointer"
-                        />
-                        <div className="fixed inset-0 z-[9999] flex items-center justify-center pointer-events-none p-4">
-                            <motion.div
-                                layoutId={`card-${selectedPlayer.id}`}
-                                className="w-full max-w-lg bg-[#0F172A] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] flex flex-col"
-                            >
-                                <button
-                                    onClick={() => setSelectedPlayer(null)}
-                                    className="absolute top-6 right-6 z-20 w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-
-                                <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
-                                    {selectedPlayer.image_url ? (
-                                        <img src={selectedPlayer.image_url} alt={selectedPlayer.name} className="w-full h-full object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-slate-800 text-white/10">
-                                            <Trophy className="w-48 h-48 opacity-10" />
-                                        </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
-                                    <div className="absolute bottom-0 left-0 w-full p-8 bg-gradient-to-t from-[#0F172A] to-transparent">
-                                        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-2">{selectedPlayer.name}</h2>
-                                        <p className="text-slate-400 font-black uppercase tracking-widest text-xs flex items-center gap-2">
-                                            <MapPin className="w-3 h-3 text-[#F40020]" />
-                                            {selectedPlayer.home_club || 'SA Professional Player'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="p-8 space-y-6 overflow-y-auto nice-scrollbar">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Skill Level</p>
-                                            <p className="text-2xl font-black text-white">{selectedPlayer.skill_rating || '-'}</p>
-                                        </div>
-                                        <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Play Style</p>
-                                            <p className="text-2xl font-black text-white">{selectedPlayer.play_side || 'Pro'}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <a
-                                            href={`https://www.rankedin.com/en/player/${selectedPlayer.rankedin_id}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex-1 bg-[#F40020] text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-[#960f24] transition-all"
-                                        >
-                                            View Full Stats <ExternalLink className="w-4 h-4" />
-                                        </a>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        </div>
-                    </>
+                    <PlayerModal
+                        player={selectedPlayer}
+                        onClose={() => setSelectedPlayer(null)}
+                        userEmail={userEmail}
+                        hideSapaRankings={true}
+                    />
                 )}
             </AnimatePresence>
         </div>
