@@ -607,7 +607,7 @@ const Calendar = () => {
                                     placeholder="Search events or venues..."
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all placeholder-gray-500 text-sm"
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all placeholder-gray-500 text-base"
                                 />
                             </div>
 
@@ -629,7 +629,7 @@ const Calendar = () => {
                                 <select
                                     value={leagueFilter}
                                     onChange={(e) => setLeagueFilter(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-sm"
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-base"
                                 >
                                     <option value="All" className="bg-slate-900">All Types</option>
                                     <option value="League" className="bg-slate-900">League Only</option>
@@ -643,7 +643,7 @@ const Calendar = () => {
                                 <Filter className="absolute z-10 left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
                                 <button
                                     onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors text-sm"
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors text-base"
                                 >
                                     <span className="truncate block">
                                         {statusFilters.length === 0
@@ -693,7 +693,7 @@ const Calendar = () => {
                                 <select
                                     value={cityFilter}
                                     onChange={(e) => setCityFilter(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-sm"
+                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-base"
                                 >
                                     {uniqueCities.map(city => (
                                         <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
@@ -739,7 +739,7 @@ const Calendar = () => {
                                         <select
                                             value={leagueFilter}
                                             onChange={(e) => setLeagueFilter(e.target.value)}
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
+                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-base"
                                         >
                                             <option value="All" className="bg-slate-900">All Types</option>
                                             <option value="League" className="bg-slate-900">League Only</option>
