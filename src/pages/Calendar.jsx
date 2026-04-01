@@ -557,7 +557,7 @@ const Calendar = () => {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 mb-10 relative z-40 overflow-hidden"
+                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 mb-10 relative z-40"
                 >
                     <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
                         {/* Search Bar - Always Visible */}
