@@ -86,85 +86,84 @@ const CalendarEventItem = ({ event, index }) => {
 
                         {/* Info Content */}
                         <div className="flex-1 min-w-0 flex flex-col justify-center">
-                            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                                <span className={`px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
-                                    {event.sapa_status}
-                                </span>
-                                {event.is_league && (
-                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-widest">
-                                        League
-                                    </span>
-                                )}
-                                {event.city && (
-                                    <span className="px-2.5 py-1 rounded-full text-[9px] sm:text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
-                                        {event.city}
-                                    </span>
-                                )}
-                                {event.registered_players > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2.5 py-1 rounded-full">
-                                        <Users className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-padel-green" />
-                                        <span className="text-white font-bold text-[10px] sm:text-xs leading-none">{event.registered_players}</span>
-                                        <span className="text-[9px] sm:text-[10px] uppercase tracking-tighter text-gray-400 font-bold leading-none hidden sm:inline">Registered</span>
-                                    </div>
-                                )}
-                            </div>
+                             <div className="flex flex-wrap items-center gap-1.5 mb-2 sm:mb-3">
+                                 <span className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
+                                     {event.sapa_status}
+                                 </span>
+                                 {event.is_league && (
+                                     <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
+                                         League
+                                     </span>
+                                 )}
+                                 {event.city && (
+                                     <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
+                                         {event.city}
+                                     </span>
+                                 )}
+                                 {event.registered_players > 0 && (
+                                     <div className="flex items-center gap-1 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full">
+                                         <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-padel-green" />
+                                         <span className="text-white font-bold text-[9px] sm:text-xs leading-none">{event.registered_players}</span>
+                                     </div>
+                                 )}
+                             </div>
 
                             <h3 className="text-base sm:text-xl md:text-2xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight mb-2 sm:mb-3 line-clamp-2">
                                 {event.event_name || event.eventName}
                             </h3>
 
-                            {/* Info Metadata Row */}
-                            <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-[10px] sm:text-sm font-medium">
-                                <div className="flex items-center gap-1.5 text-padel-green font-bold shrink-0">
-                                    <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                                    <span>
-                                        {event.event_dates ||
-                                            (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
-                                            (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
-                                    </span>
-                                </div>
-                                
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                    <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
-                                    <span className="truncate" title={event.venue || event.clubName}>
-                                        {event.venue || event.clubName || 'Location to be confirmed'}
-                                    </span>
-                                </div>
+                             {/* Info Metadata Row */}
+                             <div className="flex flex-wrap items-center gap-y-1 gap-x-2.5 text-gray-400 text-[9px] sm:text-sm font-medium">
+                                 <div className="flex items-center gap-1 text-padel-green font-bold shrink-0">
+                                     <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                                     <span>
+                                         {event.event_dates ||
+                                             (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                             (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
+                                     </span>
+                                 </div>
+                                 
+                                 <div className="flex items-center gap-1 shrink-0 max-w-[120px] sm:max-w-none">
+                                     <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
+                                     <span className="truncate" title={event.venue || event.clubName}>
+                                         {event.venue || event.clubName || 'Location TBC'}
+                                     </span>
+                                 </div>
 
-                                {event.organizer_name && (
-                                    <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-2.5 py-1 rounded-full shrink-0">
-                                        <Shield className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-gray-400" />
-                                        <span className="text-white font-bold text-[9px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
-                                    </div>
-                                )}
-                            </div>
+                                 {event.organizer_name && (
+                                     <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
+                                         <Shield className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-gray-400" />
+                                         <span className="text-white font-bold text-[8px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
+                                     </div>
+                                 )}
+                             </div>
                         </div>
                     </div>
 
                     {/* Bottom Row: Status Tag & Action Buttons */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-5 border-t border-white/5">
-                        {/* Status/Organizer Info */}
-                        <div className="flex flex-wrap items-center gap-2">
-
-                            {event.live_youtube_url && event.featured_live && (
-                                <div className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-lg shadow-red-500/20">
-                                    <PlayCircle className="w-3 h-3 shrink-0" />
-                                    <span>Live</span>
-                                </div>
-                            )}
-                            {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
-                                <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
-                                    <Trophy className="w-3 h-3 shrink-0" />
-                                    <span>Results Available</span>
-                                </div>
-                            )}
-                            {event.youtube_playlist_url && (
-                                <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
-                                    <Video className="w-3 h-3 text-red-600" />
-                                    <span>Media Available</span>
-                                </div>
-                            )}
-                        </div>
+                         {/* Status/Organizer Info */}
+                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 w-full sm:w-auto">
+ 
+                             {event.live_youtube_url && event.featured_live && (
+                                 <div className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-lg shadow-red-500/20">
+                                     <PlayCircle className="w-3 h-3 shrink-0" />
+                                     <span>Live</span>
+                                 </div>
+                             )}
+                             {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
+                                 <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg">
+                                     <Trophy className="w-3 h-3 shrink-0" />
+                                     <span>Results Available</span>
+                                 </div>
+                             )}
+                             {event.youtube_playlist_url && (
+                                 <div className="flex items-center gap-1 bg-white text-slate-900 border border-slate-200 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg">
+                                     <Video className="w-3 h-3 text-red-600" />
+                                     <span>Media Available</span>
+                                 </div>
+                             )}
+                         </div>
 
                         {/* Actions */}
                         <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
