@@ -172,18 +172,15 @@ const Broll = () => {
         if (!playersData || playersData.length === 0) return null;
         return (
             <div className="mb-20 last:mb-0">
-                <div className="flex flex-col gap-2 mb-8 px-6 md:px-20">
-                    <div className="flex items-center gap-3">
-                        <Trophy className="w-6 h-6" style={{ color: accentColor }} />
-                        <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-wider">{title}</h3>
-                    </div>
-                    <div className="h-1 w-20" style={{ backgroundColor: accentColor }}></div>
+                <div className="flex items-center gap-3 mb-8 px-6 md:px-20">
+                    <Trophy className="w-6 h-6" style={{ color: accentColor }} />
+                    <h3 className="text-2xl md:text-3xl font-black text-white uppercase tracking-wider">{title}</h3>
                 </div>
                 <div className="relative">
                     {/* Left Arrow */}
                     <button
                         onClick={() => scroll(-1)}
-                        className={`absolute left-2 md:-left-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white shadow-xl border border-slate-100 flex items-center justify-center text-slate-900 transition-all duration-300 hover:scale-110 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                        className={`absolute left-2 md:left-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-xl transition-all duration-300 hover:bg-[#F40020] hover:text-white hover:border-[#F40020] ${canScrollLeft ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}
                         aria-label="Scroll left"
                     >
                         <ChevronLeft className="w-5 h-5" />
@@ -192,7 +189,7 @@ const Broll = () => {
                     {/* Right Arrow */}
                     <button
                         onClick={() => scroll(1)}
-                        className={`absolute right-2 md:-right-6 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-white shadow-xl border border-slate-100 flex items-center justify-center text-slate-900 transition-all duration-300 hover:scale-110 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                        className={`absolute right-2 md:right-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-xl transition-all duration-300 hover:bg-[#F40020] hover:text-white hover:border-[#F40020] ${canScrollRight ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}
                         aria-label="Scroll right"
                     >
                         <ChevronRight className="w-5 h-5" />
@@ -211,10 +208,10 @@ const Broll = () => {
                                 whileInView={{ opacity: 1, x: 0 }}
                                 viewport={{ once: true }}
                                 transition={{ delay: Math.min(index * 0.1, 0.5) }}
-                                className={`w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-lg border border-slate-100 bg-white flex-shrink-0 ${player.hasLocalProfile ? 'cursor-pointer hover:shadow-xl transition-shadow' : ''}`}
+                                className={`w-[200px] md:w-[240px] relative group rounded-3xl overflow-hidden snap-center shadow-2xl border border-white/5 bg-white/5 flex-shrink-0 ${player.hasLocalProfile ? 'cursor-pointer hover:border-[#F40020]/50' : ''}`}
                                 onClick={() => handleCardClick(player)}
                             >
-                                <div className="slider-card-media h-[280px] md:h-[320px] w-full relative bg-slate-100 flex items-center justify-center">
+                                <div className="slider-card-media h-[280px] md:h-[320px] w-full relative bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
                                     {player.image && !imageErrors[player.id] ? (
                                         <img
                                             src={player.image}
@@ -225,7 +222,7 @@ const Broll = () => {
                                     ) : null}
                                     {/* Fallback initials */}
                                     <div
-                                        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-slate-50"
+                                        className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-b from-gray-800 to-gray-900"
                                         style={{ display: player.image && !imageErrors[player.id] ? 'none' : 'flex' }}
                                     >
                                         <div className="w-20 h-20 rounded-full bg-slate-200 flex items-center justify-center shadow-inner mb-8">
@@ -237,23 +234,23 @@ const Broll = () => {
                                             4M Profile
                                         </div>
                                     )}
-                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent" />
-
+                                    <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
+                                    
                                     {/* View Profile Overlay */}
                                     {player.hasLocalProfile && (
-                                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
-                                            <span className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold transform translate-y-4 group-hover:translate-y-0 transition-all duration-300 shadow-xl">
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-20">
+                                            <span className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
                                                 View Profile
                                             </span>
                                         </div>
                                     )}
                                 </div>
                                 <div className="absolute bottom-0 left-0 right-0 p-4">
-                                    <p className="font-black mb-1 text-[9px] tracking-widest uppercase" style={{ color: accentColor }}>{player.rank}</p>
+                                    <p className="text-[#F40020] font-black mb-1 text-[9px] tracking-widest uppercase">{player.rank}</p>
                                     <h4 className="text-lg font-bold text-white mb-3 line-clamp-1">{player.name}</h4>
-                                    <div className="flex justify-between items-center border-t border-white/20 pt-3">
+                                    <div className="flex justify-between items-center border-t border-white/10 pt-3">
                                         <div>
-                                            <p className="text-[8px] text-white/60 uppercase font-bold tracking-widest leading-none mb-1">Points</p>
+                                            <p className="text-[8px] text-gray-400 uppercase font-bold tracking-widest leading-none mb-1">Points</p>
                                             <p className="text-sm font-black text-white">{player.points.toLocaleString()}</p>
                                         </div>
                                     </div>
@@ -416,13 +413,18 @@ const Broll = () => {
                     ) : (
                         <>
                             {/* Top Players Sliders */}
-                            <div className="space-y-20 px-6 md:px-20">
+                            <div className="space-y-20">
                                 <RankingSlider title="Men's Open Top 10 Leaderboard" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                                 <RankingSlider title="Women's Open Top 10 Leaderboard" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                             </div>
 
                             {/* Searchable Rankings Table */}
-                            <div className="mt-32 px-6 md:px-20">
+                            <div className="max-w-7xl mx-auto px-6 mt-32 relative z-10">
+                                <div className="mb-12">
+                                    <h2 className="text-3xl md:text-5xl font-black text-white uppercase tracking-tighter mb-4 italic">Live Rankings</h2>
+                                    <p className="text-slate-400 text-lg max-w-2xl font-medium leading-relaxed italic">All player rankings across the Broll Pro Tour, updated in real-time from Rankedin.</p>
+                                </div>
+
                                 <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-12">
                                     <div className="flex p-1 bg-white/5 border border-white/10 rounded-xl w-full md:w-auto">
                                         <button
@@ -515,22 +517,50 @@ const Broll = () => {
                                         </table>
                                     </div>
 
-                                    {/* Pagination */}
+                                    {/* Pagination Controls */}
                                     {totalPages > 1 && (
-                                        <div className="border-t border-white/10 p-6 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
+                                        <div className="border-t border-white/10 p-6 flex items-center justify-between bg-white/[0.02]">
+                                            <p className="text-sm text-slate-500 font-medium hidden md:block">
+                                                Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="text-white">{filteredData.length}</span> players
+                                            </p>
+
+                                            <div className="flex items-center gap-2 mx-auto md:mx-0">
                                                 <button
                                                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                                                     disabled={currentPage === 1}
-                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 hover:bg-white/10 hover:text-[#F40020] transition-all"
+                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-[#F40020] transition-colors"
                                                 >
                                                     <ChevronLeft className="w-5 h-5" />
                                                 </button>
-                                                <span className="text-sm text-slate-400 font-bold px-4">Page {currentPage} of {totalPages}</span>
+
+                                                <div className="flex items-center gap-1 mx-4">
+                                                    {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
+                                                        // Logic to show a sliding window of pages
+                                                        let pageNum = currentPage;
+                                                        if (totalPages <= 5) pageNum = idx + 1;
+                                                        else if (currentPage <= 3) pageNum = idx + 1;
+                                                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + idx;
+                                                        else pageNum = currentPage - 2 + idx;
+
+                                                        return (
+                                                            <button
+                                                                key={pageNum}
+                                                                onClick={() => setCurrentPage(pageNum)}
+                                                                className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-all duration-300 ${currentPage === pageNum
+                                                                    ? 'bg-[#F40020] text-white shadow-lg shadow-[#F40020]/20 scale-110'
+                                                                    : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                                                                    }`}
+                                                            >
+                                                                {pageNum}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+
                                                 <button
                                                     onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                                                     disabled={currentPage === totalPages}
-                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 hover:bg-white/10 hover:text-[#F40020] transition-all"
+                                                    className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-[#F40020] transition-colors"
                                                 >
                                                     <ChevronRight className="w-5 h-5" />
                                                 </button>
