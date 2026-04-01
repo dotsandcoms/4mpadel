@@ -397,11 +397,16 @@ const Calendar = () => {
         currentPage * itemsPerPage
     );
 
-    // Reset page on filter change and scroll to top
+    // Reset page on filter change
     useEffect(() => {
         setCurrentPage(1);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [searchTerm, statusFilters, cityFilter, activeTab, leagueFilter, viewMode]);
+
+    // Scroll to top on filter change, but NOT on search typing
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [statusFilters, cityFilter, activeTab, leagueFilter, viewMode]);
+
 
     // Scroll to top on page change
     useEffect(() => {
