@@ -1199,9 +1199,9 @@ const EventDetails = () => {
                                                 <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Registered Players</h2>
                                                 <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tournament Field by Division</p>
                                             </div>
-                                            <div className="flex items-center gap-3 bg-padel-green/10 text-padel-green px-4 py-2 rounded-xl border border-padel-green/20">
-                                                <User className="w-5 h-5" />
-                                                <span className="font-black text-sm uppercase tracking-wider">{event.registered_players || 0} Total</span>
+                                            <div className="flex items-center gap-3 bg-padel-green/10 px-4 py-2 rounded-xl border border-padel-green/30">
+                                                <User className="w-5 h-5 text-padel-green" />
+                                                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">{event.registered_players || 0} Total</span>
                                             </div>
                                         </div>
 
