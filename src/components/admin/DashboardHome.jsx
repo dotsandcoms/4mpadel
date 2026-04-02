@@ -8,10 +8,10 @@ import { supabase } from '../../supabaseClient';
 
 const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick, color = 'padel-green' }) => (
     <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ delay, duration: 0.5 }}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay, duration: 0.4, ease: "easeOut" }}
+
         onClick={onClick}
         className="relative group cursor-pointer"
     >
@@ -42,10 +42,10 @@ const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick, 
 
 const QuickAction = ({ icon: Icon, label, onClick, delay }) => (
     <motion.button
-        initial={{ opacity: 0, scale: 0.9 }}
-        whileInView={{ opacity: 1, scale: 1 }}
-        viewport={{ once: true }}
-        transition={{ delay }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ delay, duration: 0.3 }}
+
         onClick={onClick}
         className="flex items-center gap-2 md:gap-3 bg-white/5 hover:bg-padel-green hover:text-black border border-white/10 p-3 md:p-4 rounded-2xl transition-all duration-300 group overflow-hidden"
     >
@@ -133,9 +133,10 @@ const DashboardHome = ({ onTabChange }) => {
             // 3. Fetch Recent Players (limit 5)
             const { data: newPlayers, error: recentError } = await supabase
                 .from('players')
-                .select('id, name, created_at, rank_label')
+                .select('id, name, created_at, rank_label, license_type, paid_registration')
                 .order('created_at', { ascending: false })
                 .limit(5);
+
 
             // 4. Fetch Next Upcoming Events for the list
             const { data: nextEvents, error: nextEventsError } = await supabase
@@ -170,17 +171,22 @@ const DashboardHome = ({ onTabChange }) => {
     return (
         <div className="space-y-8 pb-12">
             {/* Header */}
-            <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"
-            >
-                <div>
+            <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.4 }}
+                >
                     <h2 className="text-3xl lg:text-4xl font-bold text-white mb-2">4M Padel Overview</h2>
                     <p className="text-gray-400">Live metrics across tournaments and players</p>
-                </div>
-                <div className="flex items-center gap-4">
+                </motion.div>
+                <motion.div 
+                    className="flex items-center gap-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.2 }}
+                >
+
                     <Link
                         to="/"
                         className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-colors self-start md:self-auto"
@@ -188,8 +194,9 @@ const DashboardHome = ({ onTabChange }) => {
                         <Home size={18} className="text-padel-green" />
                         <span className="font-semibold text-sm">View Live Site</span>
                     </Link>
-                </div>
-            </motion.div>
+                </motion.div>
+            </div>
+
 
 
             {/* Quick Actions Bar */}
@@ -244,12 +251,12 @@ const DashboardHome = ({ onTabChange }) => {
 
             {/* Growth Chart Section */}
             <motion.div
-                initial={{ opacity: 0, y: 30 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: 0.5 }}
-                className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative overflow-hidden"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5, duration: 0.6 }}
+                className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative overflow-hidden min-h-[400px]"
             >
+
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 px-2">
                     <div>
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
@@ -309,15 +316,10 @@ const DashboardHome = ({ onTabChange }) => {
             </motion.div>
 
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-12">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-12 min-h-[600px]">
                 {/* Upcoming Schedule - Left 2 Columns */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.6 }}
-                    className="xl:col-span-2 bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10"
-                >
+                <div className="xl:col-span-2 bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10">
+
                     <div className="flex items-center justify-between mb-6">
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
                             <Calendar className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Schedule
@@ -388,28 +390,27 @@ const DashboardHome = ({ onTabChange }) => {
                             </div>
                         )}
                     </div>
-                </motion.div>
+                </div>
 
                 {/* Recent Players - Right Column */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    viewport={{ once: true }}
-                    transition={{ delay: 0.7 }}
-                    className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 flex flex-col h-full"
-                >
+                <div className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 flex flex-col h-full min-h-[500px]">
+
                     <div className="flex items-center justify-between mb-10">
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
                             <UserPlus className="text-padel-green w-6 h-6" /> New Registered Members
                         </h3>
                     </div>
 
-                    <div className="space-y-4 flex-grow">
+                    <div className="mb-4 flex items-center justify-between px-4 text-[10px] font-black text-gray-600 uppercase tracking-widest">
+                        <span>NAME</span>
+                        <span>LICENSE</span>
+                    </div>
 
+                    <div className="space-y-1 flex-grow">
                         {loading ? (
                             <div className="space-y-4">
                                 {[1, 2, 3, 4, 5].map(i => (
-                                    <div key={i} className="h-16 bg-white/5 rounded-2xl animate-pulse" />
+                                    <div key={i} className="h-12 bg-white/5 rounded-xl animate-pulse" />
                                 ))}
                             </div>
                         ) : recentPlayers.length === 0 ? (
@@ -419,35 +420,29 @@ const DashboardHome = ({ onTabChange }) => {
                             </div>
                         ) : (
                             recentPlayers.map((player, index) => (
-                                <motion.div
+                                <div
                                     key={player.id}
-                                    initial={{ opacity: 0, x: 20 }}
-                                    whileInView={{ opacity: 1, x: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: 0.8 + (index * 0.1) }}
                                     onClick={() => onTabChange?.('players')}
-                                    className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 hover:bg-white/5 transition-all border border-white/5 cursor-pointer group hover:border-padel-green/30"
+                                    className="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-all cursor-pointer group"
                                 >
-                                    <div className="w-12 h-12 rounded-full bg-[#0F172A] border border-white/10 flex items-center justify-center text-padel-green shadow-inner flex-shrink-0 group-hover:scale-110 transition-transform">
-                                        <Users size={20} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="text-white font-bold text-sm tracking-tight group-hover:text-padel-green transition-colors uppercase">{player.name}</h4>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-padel-green"></span>
-                                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest truncate">
-                                                {player.rank_label || 'Provisional'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="text-[10px] font-bold text-gray-700 uppercase tracking-tighter">
-                                        {new Date(player.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                                    </div>
 
-                                </motion.div>
+                                    <span className="text-white font-bold text-sm tracking-tight group-hover:text-padel-green transition-colors">{player.name}</span>
+                                    
+                                    <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${
+                                        !player.paid_registration 
+                                            ? 'bg-amber-900/40 text-amber-500 border border-amber-500/20' 
+                                            : (player.license_type === 'full' 
+                                                ? 'text-padel-green font-black scale-110' 
+                                                : 'bg-blue-900/40 text-blue-400 border border-blue-400/20')
+                                    }`}>
+                                        {!player.paid_registration ? 'Unpaid' : (player.license_type === 'full' ? 'Full' : 'Temp')}
+                                    </span>
+                                </div>
                             ))
+
                         )}
                     </div>
+
                     
                     <button 
                         onClick={() => onTabChange?.('players')}
@@ -455,12 +450,11 @@ const DashboardHome = ({ onTabChange }) => {
                     >
                         Directory <ArrowRight size={14} />
                     </button>
-
-                </motion.div>
+                </div>
             </div>
-
         </div>
     );
 };
+
 
 export default DashboardHome;
