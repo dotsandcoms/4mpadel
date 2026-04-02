@@ -201,7 +201,10 @@ const EventDetails = () => {
     const [fetchingRankedinData, setFetchingRankedinData] = useState(false);
 
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
-    const { getTournamentClasses, getTournamentWinners, getTournamentMatches } = useRankedin();
+    const [participants, setParticipants] = useState({});
+    const [playerDivisions, setPlayerDivisions] = useState([]);
+    const [fetchingParticipants, setFetchingParticipants] = useState(false);
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
 
     const isEventPassed = useMemo(() => {
         if (!event) return false;
@@ -436,6 +439,39 @@ const EventDetails = () => {
         };
         checkRankedinStatus();
     }, [event, getTournamentClasses, getTournamentWinners, getTournamentMatches]);
+
+    useEffect(() => {
+        const fetchParticipantsData = async () => {
+            if (activeTab !== 'players' || !event) return;
+            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            if (!rId) return;
+
+            setFetchingParticipants(true);
+            try {
+                // First get the divisions (tabs) specifically from the players view
+                let divisions = playerDivisions;
+                if (divisions.length === 0) {
+                    divisions = await getTournamentPlayerTabs(rId);
+                    setPlayerDivisions(divisions);
+                }
+
+                if (divisions.length > 0) {
+                    const participantsMap = {};
+                    for (const cls of divisions) {
+                        const data = await getTournamentParticipants(rId, cls.Id);
+                        participantsMap[cls.Id] = data;
+                    }
+                    setParticipants(prev => ({ ...prev, ...participantsMap }));
+                }
+            } catch (err) {
+                console.error("Error fetching participants:", err);
+            } finally {
+                setFetchingParticipants(false);
+            }
+        };
+
+        fetchParticipantsData();
+    }, [activeTab, event, getTournamentParticipants, getTournamentPlayerTabs, playerDivisions]);
 
     useEffect(() => {
         const fetchAlbumPhotos = async () => {
@@ -975,13 +1011,17 @@ const EventDetails = () => {
                         {/* Tab Navigation */}
                         <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/50 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-gray-200/50 shadow-sm mx-auto max-w-fit">
                             {(() => {
-                                const tabs = ['overview', 'divisions', 'media'];
-                                // Hide 'divisions' (Champions) if upcoming and no draws/results
+                                const tabs = ['overview', 'players', 'divisions', 'media'];
+                                // Hide 'divisions' if upcoming, hide 'players' if past
                                 const filteredTabs = tabs.filter(tab => {
                                     if (tab === 'divisions') {
                                         const isUpcoming = !isEventPassed;
                                         const noData = !hasDraw && !hasResults;
-                                        return !(isUpcoming && noData);
+                                        // Hide Champions if it is upcoming AND we want to show Player List instead
+                                        return !isUpcoming || !noData;
+                                    }
+                                    if (tab === 'players') {
+                                        return !isEventPassed && (event.rankedin_id || extractRankedinId(event.rankedin_url));
                                     }
                                     return true;
                                 });
@@ -1001,7 +1041,11 @@ const EventDetails = () => {
                                                 transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                             />
                                         )}
-                                        <span className="relative z-10">{tab === 'divisions' ? 'Champions' : tab === 'media' ? 'Media' : 'Overview'}</span>
+                                        <span className="relative z-10">
+                                            {tab === 'divisions' ? 'Champions' : 
+                                             tab === 'players' ? 'Player List' :
+                                             tab === 'media' ? 'Media' : 'Overview'}
+                                        </span>
                                     </button>
                                 ));
                             })()}
@@ -1145,6 +1189,108 @@ const EventDetails = () => {
                                                 </div>
                                             </ModuleAccordion>
                                         </div>
+                                    </div>
+                                )}
+
+                                {activeTab === 'players' && (
+                                    <div className="space-y-8">
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 backdrop-blur-md p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+                                            <div>
+                                                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Registered Players</h2>
+                                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tournament Field by Division</p>
+                                            </div>
+                                            <div className="flex items-center gap-3 bg-padel-green/10 text-padel-green px-4 py-2 rounded-xl border border-padel-green/20">
+                                                <User className="w-5 h-5" />
+                                                <span className="font-black text-sm uppercase tracking-wider">{event.registered_players || 0} Total</span>
+                                            </div>
+                                        </div>
+
+                                        {fetchingParticipants && playerDivisions.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-gray-200">
+                                                <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
+                                                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Syncing athletes...</p>
+                                            </div>
+                                        ) : playerDivisions.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {playerDivisions.map((cls, idx) => {
+                                                    const clsParticipants = participants[cls.Id] || [];
+                                                    return (
+                                                        <ModuleAccordion
+                                                            key={cls.Id}
+                                                            title={`${cls.Name} (${clsParticipants.length} Teams)`}
+                                                            icon={User}
+                                                            defaultOpen={idx === 0}
+                                                        >
+                                                            <div className="pt-4">
+                                                                {clsParticipants.length > 0 ? (
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+                                                                        {clsParticipants.map((item, pIdx) => {
+                                                                            const p = item.Participant || {};
+                                                                            const fPlayer = p.FirstPlayer || {};
+                                                                            const sPlayer = p.SecondPlayer || {};
+                                                                            const seed = p.Seed;
+                                                                            const rank = item.Ranking;
+
+                                                                            return (
+                                                                                <motion.div
+                                                                                    key={pIdx}
+                                                                                    initial={{ opacity: 0, y: 10 }}
+                                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                                    transition={{ delay: pIdx * 0.05 }}
+                                                                                    className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group"
+                                                                                >
+                                                                                    <div className="flex items-center justify-between mb-4">
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest leading-none mb-1">Team #{pIdx + 1}</span>
+                                                                                            {rank && <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rank: {rank}</span>}
+                                                                                        </div>
+                                                                                        {seed && (
+                                                                                            <span className="bg-slate-900 text-padel-green text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Seed {seed}</span>
+                                                                                        )}
+                                                                                    </div>
+
+                                                                                    <div className="space-y-3">
+                                                                                        <div className="flex items-center gap-3">
+                                                                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors">
+                                                                                                <User className="w-4 h-4" />
+                                                                                            </div>
+                                                                                            <span className="font-bold text-slate-700">{fPlayer.Name}</span>
+                                                                                        </div>
+                                                                                        {sPlayer.Name && (
+                                                                                            <div className="flex items-center gap-3">
+                                                                                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors">
+                                                                                                    <User className="w-4 h-4" />
+                                                                                                </div>
+                                                                                                <span className="font-bold text-slate-700">{sPlayer.Name}</span>
+                                                                                            </div>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </motion.div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                ) : fetchingParticipants ? (
+                                                                    <div className="py-12 text-center">
+                                                                        <Loader className="w-6 h-6 animate-spin text-padel-green mx-auto mb-2" />
+                                                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Updating field...</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="py-12 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                                                                        <p className="text-gray-400 text-sm italic font-medium">No players registered in this division yet</p>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </ModuleAccordion>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
+                                                <User className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Players Registered Yet</h3>
+                                                <p className="text-gray-500">The player list for this tournament will be available soon.</p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

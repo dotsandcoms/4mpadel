@@ -558,6 +558,32 @@ export const useRankedin = () => {
         }
     }, [getAnonymousToken, getPlayerEventsAsync]);
 
+    const getTournamentParticipants = useCallback(async (tournamentId, classId) => {
+        try {
+            const url = `${API_BASE}/tournament/GetPlayersForClassAsync?tournamentId=${tournamentId}&tournamentClassId=${classId}&language=en`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            const data = await response.json();
+            return data.Participants || [];
+        } catch (err) {
+            console.error('Error fetching tournament participants:', err);
+            return [];
+        }
+    }, []);
+
+    const getTournamentPlayerTabs = useCallback(async (tournamentId) => {
+        try {
+            const url = `${API_BASE}/tournament/GetPlayersTabAsync?id=${tournamentId}&language=en`;
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            const data = await response.json();
+            return data || [];
+        } catch (err) {
+            console.error('Error fetching tournament player tabs:', err);
+            return [];
+        }
+    }, []);
+
     return {
         loading,
         error,
@@ -570,6 +596,10 @@ export const useRankedin = () => {
         getPlayerEventsAsync,
         getTournamentWinners,
         getTournamentMatches,
+        getTournamentParticipants,
+        getTournamentPlayerTabs,
         getPlayerMatches
     };
 };
+
+
