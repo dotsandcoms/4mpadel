@@ -60,7 +60,8 @@ const RankingSlider = ({ title, playersData, onPlayerClick }) => {
     setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 10);
   };
 
-  const scroll = (dir) => {
+  const scroll = (e, dir) => {
+    if (e) e.stopPropagation();
     const el = scrollRef.current;
     if (!el) return;
     el.scrollBy({ left: dir * 260, behavior: 'smooth' });
@@ -82,20 +83,20 @@ const RankingSlider = ({ title, playersData, onPlayerClick }) => {
       <div className="relative">
         {/* Left Arrow */}
         <button
-          onClick={() => scroll(-1)}
-          className={`absolute left-2 md:left-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-xl transition-all duration-300 hover:bg-padel-green hover:text-black hover:border-padel-green ${canScrollLeft ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}
+          onClick={(e) => scroll(e, -1)}
+          className={`absolute left-2 md:left-8 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-2xl transition-all duration-300 hover:bg-padel-green hover:text-black hover:border-padel-green active:scale-95 ${canScrollLeft ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
           aria-label="Scroll left"
         >
-          <ChevronLeft className="w-5 h-5" />
+          <ChevronLeft className="w-6 h-6" />
         </button>
 
         {/* Right Arrow */}
         <button
-          onClick={() => scroll(1)}
-          className={`absolute right-2 md:right-8 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-black/70 backdrop-blur-sm border border-white/20 flex items-center justify-center text-white shadow-xl transition-all duration-300 hover:bg-padel-green hover:text-black hover:border-padel-green ${canScrollRight ? 'opacity-100' : 'opacity-30 pointer-events-none'}`}
+          onClick={(e) => scroll(e, 1)}
+          className={`absolute right-2 md:left-auto md:right-8 top-1/2 -translate-y-1/2 z-30 w-12 h-12 rounded-full bg-black/80 backdrop-blur-md border border-white/20 flex items-center justify-center text-white shadow-2xl transition-all duration-300 hover:bg-padel-green hover:text-black hover:border-padel-green active:scale-95 ${canScrollRight ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
           aria-label="Scroll right"
         >
-          <ChevronRight className="w-5 h-5" />
+          <ChevronRight className="w-6 h-6" />
         </button>
 
         {/* Scroll Container */}
