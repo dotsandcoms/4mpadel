@@ -413,7 +413,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     ];
     const bgColor = isFeatured ? 'bg-padel-green' : bgColors[index % bgColors.length];
     const Icon = data.icon || PlayCircle;
-    const statusColors = getStatusColors(data.tournament_tag || data.cardLabel);
+    const displayStatus = (data.tournament_tag && data.tournament_tag.toLowerCase() !== 'none') ? data.tournament_tag : (data.status || data.cardLabel);
+    const statusColors = getStatusColors(displayStatus);
 
     // Text content for the left/top side of the hero section
     const textContent = (
@@ -473,7 +474,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         </div>
 
                         {data.nextMatch && (
-                            <div className="mt-4 pt-4 border-t border-white/5">
+                            <div className="mt-1 pt-2 border-t border-white/5">
                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">UP NEXT</p>
                                 <p className="text-white/60 font-medium text-sm">{data.nextMatch}</p>
                             </div>
@@ -584,9 +585,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         >
             {/* Corner Ribbon */}
             <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none z-30 overflow-hidden rounded-tr-[28px]">
-                <div className={`absolute top-[22px] right-[-45px] w-[160px] py-1.5 ${statusColors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
+                <div className={`absolute top-[22px] right-[-45px] w-[180px] py-1.5 ${statusColors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
                     <span className={`text-[8px] font-black ${statusColors.solidText} uppercase tracking-wider`}>
-                        {data.tournament_tag || data.cardLabel}
+                        {displayStatus}
                     </span>
                 </div>
             </div>
@@ -603,17 +604,6 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             )}
 
             <div className="flex flex-col h-full p-8 md:p-10 lg:p-12 pt-32 md:pt-36 z-20 pointer-events-none flex-grow">
-                <div className="flex items-center gap-3 mb-5">
-                    {isFeatured ? (
-                         <Trophy className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                    ) : isLiveSection ? (
-                        <Play className={`w-3.5 h-3.5 ${statusColors.text} fill-current`} />
-                    ) : (
-                        <Calendar className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                    )}
-                    <p className={`text-[10px] font-medium ${statusColors.text} uppercase tracking-[0.2em]`}>{data.cardLabel}</p>
-                </div>
-
                 <h3 className={`text-xl md:text-2xl lg:text-3xl font-medium text-white leading-tight mb-8 group-hover:${statusColors.text} transition-all duration-500 tracking-tight`}>
                     {renderBrollTitle(data.cardTitle || data.title, data.tournament_tag || data.cardLabel)}
                 </h3>
