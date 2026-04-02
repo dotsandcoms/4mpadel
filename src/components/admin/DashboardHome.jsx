@@ -1,29 +1,62 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
-import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home } from 'lucide-react';
+import { Users, Calendar, Trophy, Star, Activity, UserPlus, MapPin, ExternalLink, Home, Plus, FileText, Settings, ArrowRight } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
 import { supabase } from '../../supabaseClient';
 
-const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick }) => (
+const StatCard = ({ title, value, subtext, icon: Icon, delay, loading, onClick, color = 'padel-green' }) => (
     <motion.div
         initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
         transition={{ delay, duration: 0.5 }}
         onClick={onClick}
-        className={`bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10 relative overflow-hidden group hover:border-padel-green/30 transition-all cursor-pointer hover:bg-[#1E293B]/80 hover:scale-[1.02] active:scale-[0.98] ${onClick ? 'cursor-pointer' : ''}`}
+        className="relative group cursor-pointer"
     >
-        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-300">
-            <Icon size={48} className="text-padel-green" />
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-padel-green/20 to-transparent rounded-2xl opacity-0 group-hover:opacity-100 transition duration-500 blur"></div>
+        <div className="relative bg-[#1E293B]/40 backdrop-blur-xl p-6 rounded-2xl border border-white/10 overflow-hidden hover:border-padel-green/50 transition-all hover:bg-[#1E293B]/60 h-full">
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500">
+                <Icon size={64} className="text-padel-green" />
+            </div>
+            
+            <div className="flex flex-col justify-between h-full">
+                <div>
+                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">{title}</p>
+                    <h3 className="text-4xl font-bold text-white mb-2 font-display tabular-nums tracking-tight">
+                        {loading ? <span className="animate-pulse opacity-50">---</span> : value}
+                    </h3>
+                </div>
+                <div className="flex items-center gap-2 mt-4">
+
+                    <span className="flex h-2 w-2 rounded-full bg-padel-green animate-pulse"></span>
+                    <p className="text-padel-green/70 text-[10px] font-bold uppercase tracking-widest group-hover:text-padel-green transition-colors">
+                        {subtext}
+                    </p>
+                </div>
+            </div>
         </div>
-        <h3 className="text-gray-400 text-sm font-bold uppercase tracking-wider mb-2">{title}</h3>
-        <p className="text-4xl font-black text-white mb-2 font-display">
-            {loading ? <span className="animate-pulse">---</span> : value}
-        </p>
-        <p className="text-padel-green/80 text-xs font-bold uppercase tracking-widest flex items-center gap-1 group-hover:text-white transition-colors">
-            {subtext}
-        </p>
     </motion.div>
 );
+
+const QuickAction = ({ icon: Icon, label, onClick, delay }) => (
+    <motion.button
+        initial={{ opacity: 0, scale: 0.9 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        viewport={{ once: true }}
+        transition={{ delay }}
+        onClick={onClick}
+        className="flex items-center gap-2 md:gap-3 bg-white/5 hover:bg-padel-green hover:text-black border border-white/10 p-3 md:p-4 rounded-2xl transition-all duration-300 group overflow-hidden"
+    >
+        <div className="p-1.5 md:p-2 bg-white/5 rounded-xl group-hover:bg-black/10 transition-colors flex-shrink-0">
+            <Icon size={18} />
+        </div>
+        <span className="font-bold text-[11px] md:text-sm tracking-wide truncate">{label}</span>
+    </motion.button>
+);
+
+
 
 const DashboardHome = ({ onTabChange }) => {
     const navigate = useNavigate();
@@ -38,10 +71,24 @@ const DashboardHome = ({ onTabChange }) => {
     const [recentPlayers, setRecentPlayers] = useState([]);
     const [upcomingCalendar, setUpcomingCalendar] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [chartData, setChartData] = useState([]);
 
     useEffect(() => {
         fetchDashboardData();
+        generateChartData();
     }, []);
+
+    const generateChartData = () => {
+        // Create mock data for the growth chart based on realistic progression
+        const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
+        const base = 250;
+        const data = months.map((month, i) => ({
+            name: month,
+            players: base + (i * 20) + Math.floor(Math.random() * 15)
+        }));
+        setChartData(data);
+    };
+
 
     const fetchDashboardData = async () => {
         try {
@@ -125,21 +172,35 @@ const DashboardHome = ({ onTabChange }) => {
             {/* Header */}
             <motion.div
                 initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
                 className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4"
             >
                 <div>
                     <h2 className="text-3xl lg:text-4xl font-bold text-white mb-2">4M Padel Overview</h2>
                     <p className="text-gray-400">Live metrics across tournaments and players</p>
                 </div>
-                <Link
-                    to="/"
-                    className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-colors self-start md:self-auto"
-                >
-                    <Home size={18} className="text-padel-green" />
-                    <span className="font-semibold text-sm">View Live Site</span>
-                </Link>
+                <div className="flex items-center gap-4">
+                    <Link
+                        to="/"
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-colors self-start md:self-auto"
+                    >
+                        <Home size={18} className="text-padel-green" />
+                        <span className="font-semibold text-sm">View Live Site</span>
+                    </Link>
+                </div>
             </motion.div>
+
+
+            {/* Quick Actions Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                <QuickAction icon={Plus} label="Schedule Event" onClick={() => onTabChange?.('calendar')} delay={0.1} />
+                <QuickAction icon={Plus} label="New Player" onClick={() => onTabChange?.('players')} delay={0.2} />
+                <QuickAction icon={FileText} label="Post Update" onClick={() => onTabChange?.('blog')} delay={0.3} />
+                <QuickAction icon={Settings} label="Config" onClick={() => onTabChange?.('settings')} delay={0.4} />
+            </div>
+
+
 
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
@@ -148,7 +209,7 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.totalPlayers}
                     subtext="Registered Roster"
                     icon={Users}
-                    delay={0.0}
+                    delay={0.1}
                     loading={loading}
                     onClick={() => onTabChange?.('players')}
                 />
@@ -157,7 +218,7 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.totalCoaches}
                     subtext={`${stats.approvedCoaches} Approved`}
                     icon={UserPlus}
-                    delay={0.1}
+                    delay={0.2}
                     loading={loading}
                     onClick={() => onTabChange?.('coaches')}
                 />
@@ -166,7 +227,7 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.upcomingEvents}
                     subtext="Scheduled Calendar"
                     icon={Calendar}
-                    delay={0.2}
+                    delay={0.3}
                     loading={loading}
                     onClick={() => onTabChange?.('calendar')}
                 />
@@ -175,69 +236,154 @@ const DashboardHome = ({ onTabChange }) => {
                     value={stats.featuredEvents}
                     subtext="Homepage Highlights"
                     icon={Star}
-                    delay={0.3}
+                    delay={0.4}
                     loading={loading}
                     onClick={() => onTabChange?.('calendar')}
                 />
             </div>
 
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-10">
+            {/* Growth Chart Section */}
+            <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: 0.5 }}
+                className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 relative overflow-hidden"
+            >
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 px-2">
+                    <div>
+                        <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
+                            <Activity className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Growth Overview
+                        </h3>
+                        <p className="text-gray-500 text-[10px] md:text-xs font-bold tracking-widest uppercase mt-1">Player Registration Trend</p>
+                    </div>
+                </div>
+
+                
+                <div className="h-[250px] md:h-[300px] w-full">
+
+                    <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData}>
+                            <defs>
+                                <linearGradient id="colorPlayers" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#CCFF00" stopOpacity={0.3}/>
+                                    <stop offset="95%" stopColor="#CCFF00" stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                            <XAxis 
+                                dataKey="name" 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
+                                dy={10}
+                            />
+                            <YAxis 
+                                axisLine={false} 
+                                tickLine={false} 
+                                tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
+                                dx={-10}
+                            />
+                            <Tooltip 
+                                contentStyle={{ 
+                                    backgroundColor: '#0F172A', 
+                                    border: '1px solid rgba(255,255,255,0.1)',
+                                    borderRadius: '16px',
+                                    color: '#fff',
+                                    fontWeight: 'bold'
+                                }}
+                                itemStyle={{ color: '#CCFF00' }}
+                            />
+                            <Area 
+                                type="monotone" 
+                                dataKey="players" 
+                                stroke="#CCFF00" 
+                                strokeWidth={4}
+                                fillOpacity={1} 
+                                fill="url(#colorPlayers)" 
+                                animationDuration={2000}
+                            />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                </div>
+            </motion.div>
+
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mt-12">
                 {/* Upcoming Schedule - Left 2 Columns */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="xl:col-span-2 bg-[#1E293B]/50 backdrop-blur-md p-6 lg:p-8 rounded-2xl border border-white/10"
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.6 }}
+                    className="xl:col-span-2 bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10"
                 >
-                    <div className="flex items-center justify-between mb-8">
-                        <h3 className="text-xl font-bold text-white flex items-center gap-3">
-                            <Calendar className="text-padel-green w-5 h-5" /> Next on Calendar
+                    <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
+                            <Calendar className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Schedule
                         </h3>
+                        <button onClick={() => onTabChange?.('calendar')} className="text-padel-green text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 hover:translate-x-1 transition-transform">
+                            All <ArrowRight size={12} />
+                        </button>
                     </div>
+
+
 
                     <div className="space-y-4">
                         {loading ? (
-                            <p className="text-gray-500 text-center py-8">Loading schedule...</p>
+                            <div className="flex flex-col gap-4">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="h-20 bg-white/5 rounded-2xl animate-pulse" />
+                                ))}
+                            </div>
                         ) : upcomingCalendar.length === 0 ? (
-                            <div className="text-center py-12 border border-white/5 bg-white/5 rounded-xl">
-                                <Calendar className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-                                <p className="text-gray-400 font-medium">No upcoming events scheduled.</p>
+                            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
+                                <Calendar className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">Quiet on the courts...</p>
                             </div>
                         ) : (
-                            <div className="grid gap-3">
+                            <div className="grid gap-4">
                                 {upcomingCalendar.map((event, index) => (
-                                    <div
+                                    <motion.div
                                         key={event.id}
+                                        initial={{ opacity: 0, x: -10 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: 0.7 + (index * 0.1) }}
                                         onClick={() => onTabChange?.('calendar')}
-                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group cursor-pointer"
+                                        className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-black/40 hover:bg-white/5 border border-white/5 hover:border-padel-green/30 transition-all group cursor-pointer"
                                     >
-                                        <div className="flex items-start sm:items-center gap-4">
-                                            <div className="hidden sm:flex w-12 h-12 rounded-lg bg-[#0F172A] border border-white/10 flex-col items-center justify-center flex-shrink-0">
-                                                <span className="text-[10px] font-bold text-gray-500 uppercase">{new Date(event.start_date || new Date()).toLocaleString('default', { month: 'short' })}</span>
-                                                <span className="text-lg font-bold text-white leading-none">{new Date(event.start_date || new Date()).getDate()}</span>
+                                        <div className="flex items-center gap-6">
+                                            <div className="flex w-16 h-16 rounded-2xl bg-[#0F172A] border border-white/10 flex-col items-center justify-center flex-shrink-0 group-hover:border-padel-green/50 transition-colors">
+                                                <span className="text-[10px] font-bold text-padel-green uppercase tracking-tighter">{new Date(event.start_date || new Date()).toLocaleString('default', { month: 'short' })}</span>
+                                                <span className="text-2xl font-bold text-white leading-none">{new Date(event.start_date || new Date()).getDate()}</span>
                                             </div>
                                             <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <h4 className="text-white font-bold text-base md:text-lg group-hover:text-padel-green transition-colors">{event.event_name}</h4>
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <h4 className="text-white font-bold text-lg group-hover:text-padel-green transition-colors uppercase tracking-tight">{event.event_name}</h4>
                                                     {event.featured_event && (
-                                                        <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                                                        <Star className="w-4 h-4 text-padel-green fill-padel-green shadow-[0_0_10px_rgba(204,255,0,0.5)]" />
                                                     )}
                                                 </div>
-                                                <div className="flex flex-wrap items-center gap-3 md:gap-4 text-xs font-bold uppercase tracking-wider text-gray-500">
-                                                    <span className="flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" /> {event.city}</span>
-                                                    <span className={`px-2 py-0.5 rounded
-                                                        ${event.sapa_status === 'Major' ? 'bg-purple-500/10 text-purple-400' :
-                                                            (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') ? 'bg-amber-500/10 text-amber-400' :
-                                                                event.sapa_status === 'Gold' ? 'bg-yellow-500/10 text-yellow-400' :
-                                                                    event.sapa_status === 'Silver' ? 'bg-gray-500/10 text-gray-300' :
-                                                                        event.sapa_status === 'Bronze' ? 'bg-orange-700/10 text-orange-400' :
-                                                                            'bg-blue-500/10 text-blue-400'}`}>
+
+                                                <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">
+                                                    <span className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full"><MapPin className="w-3.5 h-3.5 text-padel-green" /> {event.city}</span>
+                                                    <span className={`px-3 py-1 rounded-full border
+                                                        ${event.sapa_status === 'Major' ? 'border-purple-500/30 bg-purple-500/10 text-purple-400' :
+                                                            (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') ? 'border-amber-500/30 bg-amber-500/10 text-amber-400' :
+                                                                event.sapa_status === 'Gold' ? 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400' :
+                                                                    event.sapa_status === 'Silver' ? 'border-gray-500/30 bg-gray-500/10 text-gray-300' :
+                                                                        event.sapa_status === 'Bronze' ? 'border-orange-700/30 bg-orange-700/10 text-orange-400' :
+                                                                            'border-blue-500/30 bg-blue-500/10 text-blue-400'}`}>
                                                         {event.sapa_status || 'Event'}
                                                     </span>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
+                                        <div className="hidden sm:block opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <ArrowRight className="text-padel-green" />
+                                        </div>
+                                    </motion.div>
                                 ))}
                             </div>
                         )}
@@ -247,44 +393,72 @@ const DashboardHome = ({ onTabChange }) => {
                 {/* Recent Players - Right Column */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.5 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 lg:p-8 rounded-2xl border border-white/10 flex flex-col h-full"
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: 0.7 }}
+                    className="bg-[#1E293B]/40 backdrop-blur-xl p-8 rounded-3xl border border-white/10 flex flex-col h-full"
                 >
-                    <h3 className="text-xl font-bold text-white mb-8 flex items-center gap-3">
-                        <UserPlus className="text-padel-green w-5 h-5" /> New Registrations
-                    </h3>
+                    <div className="flex items-center justify-between mb-10">
+                        <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
+                            <UserPlus className="text-padel-green w-6 h-6" /> New Registered Members
+                        </h3>
+                    </div>
 
-                    <div className="space-y-3 flex-grow">
+                    <div className="space-y-4 flex-grow">
+
                         {loading ? (
-                            <p className="text-gray-500 text-center py-4">Loading players...</p>
+                            <div className="space-y-4">
+                                {[1, 2, 3, 4, 5].map(i => (
+                                    <div key={i} className="h-16 bg-white/5 rounded-2xl animate-pulse" />
+                                ))}
+                            </div>
                         ) : recentPlayers.length === 0 ? (
-                            <div className="text-center py-10 border border-white/5 bg-white/5 rounded-xl">
-                                <Users className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                                <p className="text-gray-500 text-sm">No players database</p>
+                            <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl">
+                                <Users className="w-10 h-10 text-gray-700 mx-auto mb-4" />
+                                <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">No new players yet</p>
                             </div>
                         ) : (
-                            recentPlayers.map((player) => (
-                                <div
+                            recentPlayers.map((player, index) => (
+                                <motion.div
                                     key={player.id}
+                                    initial={{ opacity: 0, x: 20 }}
+                                    whileInView={{ opacity: 1, x: 0 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: 0.8 + (index * 0.1) }}
                                     onClick={() => onTabChange?.('players')}
-                                    className="flex items-center gap-4 p-3.5 rounded-xl bg-black/40 hover:bg-white/5 transition-all border border-white/5 cursor-pointer group hover:border-padel-green/30"
+                                    className="flex items-center gap-4 p-4 rounded-2xl bg-black/40 hover:bg-white/5 transition-all border border-white/5 cursor-pointer group hover:border-padel-green/30"
                                 >
-                                    <div className="w-10 h-10 rounded-full bg-[#0F172A] border border-white/10 flex items-center justify-center text-gray-400 shadow-inner flex-shrink-0">
-                                        <Users size={18} />
+                                    <div className="w-12 h-12 rounded-full bg-[#0F172A] border border-white/10 flex items-center justify-center text-padel-green shadow-inner flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <Users size={20} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h4 className="text-white font-bold text-sm truncate">{player.name}</h4>
-                                        <p className="text-padel-green text-[10px] font-bold uppercase tracking-widest truncate mt-0.5">
-                                            {player.rank_label || 'Unranked'}
-                                        </p>
+                                        <h4 className="text-white font-bold text-sm tracking-tight group-hover:text-padel-green transition-colors uppercase">{player.name}</h4>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-padel-green"></span>
+                                            <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest truncate">
+                                                {player.rank_label || 'Provisional'}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
+                                    <div className="text-[10px] font-bold text-gray-700 uppercase tracking-tighter">
+                                        {new Date(player.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                    </div>
+
+                                </motion.div>
                             ))
                         )}
                     </div>
+                    
+                    <button 
+                        onClick={() => onTabChange?.('players')}
+                        className="mt-8 w-full py-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl text-xs font-bold uppercase tracking-[0.2em] transition-all hover:border-padel-green/30 flex items-center justify-center gap-3"
+                    >
+                        Directory <ArrowRight size={14} />
+                    </button>
+
                 </motion.div>
             </div>
+
         </div>
     );
 };
