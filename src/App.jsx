@@ -79,7 +79,7 @@ function AppContent() {
       <Analytics />
       <SpeedInsights />
       {!isAdminRoute && <Navbar isDark={location.pathname === '/tournaments/broll'} />}
-      <div id="site-content" className="max-md:pt-20">
+      <div id="site-content" className={location.pathname === '/' ? '' : 'max-md:pt-20'}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />

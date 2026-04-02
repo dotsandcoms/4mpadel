@@ -50,8 +50,8 @@ const Hero = () => {
     }, []);
 
     return (
-        <div className="relative w-full px-4 md:px-6 pb-6 bg-black">
-            <div className="relative h-[85vh] w-full overflow-hidden rounded-[2rem] border border-white/10">
+        <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
+        <div className="relative h-[75vh] md:h-[85vh] w-full overflow-hidden rounded-[2rem] border border-white/10">
                 {/* Parallax Background */}
                 <motion.div
                     style={{ y: yBackend }}
