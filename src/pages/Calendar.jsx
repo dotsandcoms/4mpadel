@@ -531,14 +531,14 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pt-32 pb-20 container mx-auto px-6 max-w-7xl">
+            <main className="relative z-10 pt-20 md:pt-32 pb-20 container mx-auto px-6 max-w-7xl">
 
                 {/* Hero Header */}
-                <div className="text-center mb-16">
+                <div className="text-center mb-10 md:mb-16">
                     <motion.div
                         initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-sm font-bold uppercase tracking-widest mb-8"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-sm font-bold uppercase tracking-widest mb-4 md:mb-8"
                     >
                         <span className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
                         Official Schedule
@@ -547,9 +547,9 @@ const Calendar = () => {
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="flex flex-col md:flex-row items-center justify-center gap-4 mb-6"
+                        className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4 md:mb-6"
                     >
-                        <img src={sapaLogo} alt="SAPA Logo" className="h-16 md:h-20 object-contain drop-shadow-lg" />
+                        <img src={sapaLogo} alt="SAPA Logo" className="h-12 md:h-20 object-contain drop-shadow-lg" />
                         <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase m-0 leading-none">
                             SAPA Tour <span className="text-padel-green">Calendar</span>
                         </h1>

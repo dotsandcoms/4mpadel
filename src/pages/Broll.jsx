@@ -273,7 +273,7 @@ const Broll = () => {
         <div className="min-h-screen bg-white text-slate-900 font-sans">
 
             {/* Hero Section - Official Broll Aesthetic */}
-            <section className="relative pt-40 pb-24 px-6 overflow-hidden bg-slate-50">
+            <section className="relative pt-12 md:pt-40 pb-20 md:pb-24 px-6 overflow-hidden bg-slate-50">
                 <div className="absolute top-0 right-0 w-1/3 h-full bg-[#F40020]/5 skew-x-12 transform translate-x-1/2"></div>
                 <div className="max-w-7xl mx-auto relative z-10">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
@@ -357,25 +357,27 @@ const Broll = () => {
             {/* Content Navigation Tabs */}
             <div ref={contentRef} className="sticky top-20 z-40 bg-white/80 backdrop-blur-md border-b border-slate-100 py-4 shadow-sm">
                 <div className="max-w-7xl mx-auto px-6">
-                    <div className="flex items-center justify-center gap-2 md:gap-8 overflow-x-auto no-scrollbar py-2">
+                    <div className="flex items-center justify-center gap-1.5 md:gap-8 py-2">
                         {[
-                            { id: 'rankings', label: 'Tour Leaderboard', icon: Trophy },
-                            { id: 'format', label: 'Tour Format', icon: Target },
-                            { id: 'dates', label: 'Broll Tour Dates', icon: CalendarIcon }
+                            { id: 'rankings', label: 'Tour Leaderboard', shortLabel: 'Leaderboard', icon: Trophy },
+                            { id: 'format', label: 'Tour Format', shortLabel: 'Format', icon: Target },
+                            { id: 'dates', label: 'Broll Tour Dates', shortLabel: 'Dates', icon: CalendarIcon }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveContentTab(tab.id)}
-                                className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-bold text-sm uppercase tracking-wider transition-all whitespace-nowrap ${activeContentTab === tab.id
+                                className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 px-2 md:px-6 py-2.5 rounded-full font-bold text-[10px] md:text-sm uppercase tracking-wider transition-all ${activeContentTab === tab.id
                                     ? 'bg-[#F40020] text-white shadow-lg shadow-[#F40020]/20 scale-105'
                                     : 'text-slate-500 hover:bg-slate-50 hover:text-[#F40020]'
                                     }`}
                             >
-                                <tab.icon className="w-4 h-4" />
-                                {tab.label}
+                                <tab.icon className="w-3.5 h-3.5 md:w-4 h-4 shrink-0" />
+                                <span className="hidden md:inline">{tab.label}</span>
+                                <span className="md:hidden">{tab.shortLabel}</span>
                             </button>
                         ))}
                     </div>
+
                 </div>
             </div>
 
