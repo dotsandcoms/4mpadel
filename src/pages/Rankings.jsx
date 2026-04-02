@@ -268,6 +268,7 @@ const Rankings = () => {
   const [localProfileMap, setLocalProfileMap] = useState({});
 
   // Search & Pagination State
+  const [activeMainTab, setActiveMainTab] = useState('overview'); // 'overview', 'leaderboards', 'rankings'
   const [activeTab, setActiveTab] = useState('men');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -275,6 +276,7 @@ const Rankings = () => {
 
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
+
 
   useEffect(() => {
     const fetchRankings = async () => {
@@ -445,9 +447,8 @@ const Rankings = () => {
     );
   }, [filteredData, currentPage]);
 
-
   return (
-    <div className="bg-[#0F172A] min-h-screen pt-32 pb-20 font-sans selection:bg-padel-green selection:text-black">
+    <div className="bg-[#0F172A] min-h-screen pt-20 md:pt-32 pb-20 font-sans selection:bg-padel-green selection:text-black text-white">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
@@ -457,11 +458,11 @@ const Rankings = () => {
 
       <div className="container mx-auto px-6 max-w-5xl relative z-10">
         {/* Hero Header */}
-        <div className="text-center mb-20">
+        <div className="text-center mb-12 md:mb-20">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-sm font-bold uppercase tracking-widest mb-8"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-[10px] md:text-sm font-bold uppercase tracking-widest mb-4 md:mb-8"
           >
             <span className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
             Live Standings
@@ -485,38 +486,91 @@ const Rankings = () => {
           </motion.p>
         </div>
 
-        {/* Info Cards */}
-        <RankingExplanation />
-
-        {/* Points Breakdown Header */}
-        <div className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-white/10 pb-6 gap-4">
-          <div>
-            <h2 className="text-3xl font-bold text-white mb-2">Points Breakdown for official SAPA Rankings 2026</h2>
-            <p className="text-gray-400">Expand each tier to see detailed point structures by category.</p>
-          </div>
-        </div>
-
-        {/* Expandable Tiers List */}
-        <div className="space-y-6">
-          {rankingData.map((tier) => (
-            <TierCard key={tier.type} tier={tier} />
+        {/* Categories Tab Navigation */}
+        <div className="flex items-center gap-1 md:gap-2 mb-12 md:mb-16 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto">
+          {[
+            { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5 md:w-4 md:h-4" /> },
+            { id: 'leaderboards', label: 'Leaderboards', icon: <Trophy className="w-3.5 h-3.5 md:w-4 md:h-4" /> },
+            { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5 md:w-4 md:h-4" /> }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveMainTab(tab.id)}
+              className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-3 md:px-6 py-2 md:py-2.5 rounded-xl md:rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 ${activeMainTab === tab.id
+                ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              {tab.icon}
+              <span className="truncate">{tab.label}</span>
+            </button>
           ))}
         </div>
 
       </div>
 
-      {/* Live Rankings - Full width (same as footer) */}
-      {!rankingsLoading && (
-        <div className="w-full mt-24 pt-16 border-t border-white/10 relative z-10">
-          <div className="px-6 md:px-20 mb-12">
-            <h2 className="text-3xl font-bold text-white mb-2">SA’s Top Players</h2>
-            <p className="text-gray-400">Latest Top 10 Players</p>
-          </div>
-          <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
-          <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+      <AnimatePresence mode="wait">
+        {activeMainTab === 'overview' && (
+          <motion.div
+            key="overview-tab"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="container mx-auto px-6 max-w-5xl relative z-10"
+          >
+            {/* Info Cards */}
+            <RankingExplanation />
 
-          {/* Full Searchable Table Section */}
-          <div className="max-w-7xl mx-auto px-6 mt-32 mb-12 relative z-10">
+            {/* Points Breakdown Header */}
+            <div className="mb-10 text-center md:text-left flex flex-col md:flex-row md:items-end justify-between border-b border-white/10 pb-6 gap-4">
+              <div>
+                <h2 className="text-3xl font-bold text-white mb-2">Points Breakdown for official SAPA Rankings 2026</h2>
+                <p className="text-gray-400">Expand each tier to see detailed point structures by category.</p>
+              </div>
+            </div>
+
+            {/* Expandable Tiers List */}
+            <div className="space-y-6">
+              {rankingData.map((tier) => (
+                <TierCard key={tier.type} tier={tier} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {activeMainTab === 'leaderboards' && (
+          <motion.div
+            key="leaderboards-tab"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="w-full relative z-10"
+          >
+            {!rankingsLoading && (
+              <div className="relative pt-4">
+                <div className="max-w-7xl mx-auto px-6 md:px-20 mb-12">
+                  <h2 className="text-4xl font-bold text-white mb-2 uppercase tracking-tighter">SA’s Top Players</h2>
+                  <p className="text-gray-400">Live rankings of the current top performers across South Africa.</p>
+                </div>
+                <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+              </div>
+            )}
+          </motion.div>
+        )}
+
+        {activeMainTab === 'rankings' && (
+          <motion.div
+            key="rankings-tab"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            className="max-w-7xl mx-auto px-6 relative z-10"
+          >
+            {/* Official Rankings Header */}
             <div className="mb-10 text-center">
               <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">SAPA</span> Rankings</h2>
               <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
@@ -526,7 +580,7 @@ const Rankings = () => {
             <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-md mb-8">
               <div className="flex flex-col md:flex-row justify-between items-center gap-6">
 
-                {/* Tabs */}
+                {/* Internal Table Tabs */}
                 <div className="flex p-1 bg-black/40 rounded-xl max-w-sm w-full md:w-auto">
                   <button
                     onClick={() => setActiveTab('men')}
@@ -653,7 +707,6 @@ const Rankings = () => {
 
                     <div className="flex items-center gap-1 mx-4">
                       {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
-                        // Logic to show a sliding window of pages
                         let pageNum = currentPage;
                         if (totalPages <= 5) pageNum = idx + 1;
                         else if (currentPage <= 3) pageNum = idx + 1;
@@ -686,9 +739,9 @@ const Rankings = () => {
                 </div>
               )}
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Player Modal */}
       <AnimatePresence>
