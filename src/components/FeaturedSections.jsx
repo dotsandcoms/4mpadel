@@ -231,24 +231,13 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative flex flex-col w-full h-[360px] md:h-[420px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
+            className={`relative flex flex-col w-full h-[210px] md:h-[260px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
             onClick={() => navigate(linkPath)}
         >
-            {/* Top Image Section */}
-            <div className="relative h-[45%] md:h-[50%] w-full overflow-hidden shrink-0 bg-black">
-                <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-700 flex items-center justify-center">
-                    <FallbackImage
-                        src={image}
-                        alt={title}
-                        title={title}
-                        className="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105"
-                    />
-                </div>
-                {/* Gradient overlay for badges */}
-                <div className="absolute inset-0 bg-gradient-to-b from-[#05070A]/80 via-transparent to-black/20 pointer-events-none" />
-
-                {/* Status Badges on Image */}
-                <div className="absolute top-4 left-4 right-4 flex justify-between items-start z-10">
+            {/* Content Section */}
+            <div className="flex flex-col flex-grow p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
+                {/* Status Badges */}
+                <div className="flex justify-between items-start mb-4">
                     <div className={`px-2.5 py-1 backdrop-blur-md rounded-full border ${colors.border} flex items-center gap-1.5 shadow-lg bg-black/40`}>
                         <div className={`w-2 h-2 rounded-full ${colors.solid} shadow-[0_0_8px_currentColor]`} />
                         <span className={`text-[9px] font-black ${colors.text} uppercase tracking-widest`}>{label || status}</span>
@@ -261,10 +250,6 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* Bottom Content Section */}
-            <div className="flex flex-col flex-grow p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
                 <h3 className={`text-base md:text-xl font-bold text-white line-clamp-2 md:line-clamp-2 mb-3 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
                     {renderBrollTitle(title, status)}
                 </h3>
@@ -273,8 +258,8 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                 <div className="grid grid-cols-2 gap-y-2 gap-x-3 mb-auto">
                     {date && (
                         <div className="flex items-center gap-1.5 overflow-hidden">
-                            <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate">{date}</span>
+                            <Calendar className="w-3.5 h-3.5 text-padel-green shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-padel-green font-bold truncate">{date}</span>
                         </div>
                     )}
                     {city && (
@@ -321,43 +306,48 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                 )}
 
                 {/* Actions bottom row */}
-                <div className="flex items-center justify-between gap-2 mt-4 pt-4 border-t border-white/5">
-                    <div className="flex items-center gap-2.5">
-                        <div className={`w-7 h-7 rounded-full border border-white/10 flex items-center justify-center group-hover:border-white transition-colors bg-white/5 group-hover:bg-white/10`}>
-                            <ChevronRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-white" />
-                        </div>
-                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest group-hover:text-white transition-colors duration-300">{buttonLabel}</span>
+                <div className="flex flex-col gap-2 mt-auto pt-4 border-t border-white/5">
+                    {/* Watch Live Button (Primary if Live) */}
+                    {isLive && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (youtubeUrl) {
+                                    if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                    else window.open(youtubeUrl, '_blank');
+                                } else {
+                                    navigate(linkPath);
+                                }
+                            }}
+                            className="flex items-center justify-center gap-3 w-full bg-red-600/90 hover:bg-red-500 py-3 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/10 group/live"
+                        >
+                            <PlayCircle className="w-4 h-4 text-white" />
+                            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] leading-none">
+                                {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
+                            </span>
+                        </button>
+                    )}
+
+                    {/* View Details Button */}
+                    <div className={`group/btn flex items-center justify-center gap-3 w-full bg-white/5 border ${colors.border} group-hover:${colors.solid} py-3 rounded-xl transition-all duration-500`}>
+                        <span className={`text-[10px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none`}>
+                            {buttonLabel}
+                        </span>
+                        <ChevronRight className={`w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
                     </div>
 
-                    <div className="flex items-center gap-2">
-                        {drawPath && (hasDraw || hasResults) && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full ${colors.solid} border ${colors.border} hover:bg-white hover:border-white transition-all duration-300 group/draw shadow-lg ${colors.glow}`}
-                                title="View Draws & Results"
-                            >
-                                <GitBranch className={`w-3.5 h-3.5 ${colors.solidText} group-hover/draw:!text-black transition-colors`} />
-                            </button>
-                        )}
-
-                        {isLive && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (youtubeUrl) {
-                                        if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                        else window.open(youtubeUrl, '_blank');
-                                    } else {
-                                        navigate(linkPath);
-                                    }
-                                }}
-                                className={`flex items-center justify-center w-8 h-8 rounded-full bg-red-600 border border-red-600 hover:bg-white hover:border-white transition-all duration-300 group/live shadow-lg shadow-red-600/20`}
-                                title={youtubeUrl ? 'Watch Live' : 'Watch Live Soon'}
-                            >
-                                <PlayCircle className="w-4 h-4 text-white group-hover/live:!text-red-600 transition-colors" />
-                            </button>
-                        )}
-                    </div>
+                    {/* Draws & Results Button */}
+                    {drawPath && (hasDraw || hasResults) && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
+                            className={`flex items-center justify-center gap-2.5 w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:${colors.solid} transition-all duration-300 group/draw`}
+                        >
+                            <GitBranch className={`w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} transition-colors`} />
+                            <span className={`text-[9px] font-black text-white/40 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-widest`}>
+                                Draws & Results
+                            </span>
+                        </button>
+                    )}
                 </div>
             </div>
         </motion.div>
