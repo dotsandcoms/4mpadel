@@ -730,7 +730,7 @@ const EventDetails = () => {
         <>
             <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
                 {/* Hero Section with Image */}
-                <div className="relative h-[20vh] md:h-[45vh] min-h-[220px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
+                <div className="relative h-[20vh] md:h-[45vh] min-h-[140px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
                         src={event.custom_image_url || event.image_url || tournamentHero}
                         alt={event.event_name}

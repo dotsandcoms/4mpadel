@@ -71,6 +71,7 @@ function AppContent() {
     };
   }, [navigate]);
 
+  const isHeroRoute = location.pathname === '/' || location.pathname.startsWith('/calendar/');
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
 
   return (
@@ -79,7 +80,7 @@ function AppContent() {
       <Analytics />
       <SpeedInsights />
       {!isAdminRoute && <Navbar isDark={location.pathname === '/tournaments/broll'} />}
-      <div id="site-content" className={location.pathname === '/' ? '' : 'max-md:pt-20'}>
+      <div id="site-content" className={isHeroRoute ? '' : 'max-md:pt-20'}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
