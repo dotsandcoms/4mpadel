@@ -437,7 +437,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     </span>
                 </h2>
                 
-                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-10 ${isGridSection ? 'text-sm' : 'text-base md:text-lg max-w-md'}`}>
+                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 ${isGridSection ? 'text-sm' : 'text-base md:text-lg max-w-md'}`}>
                     {data.description}
                 </p>
 
@@ -487,7 +487,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     // Image/Card content for the right/bottom side of the hero section
     const imageContent = isGridSection ? (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 relative z-10 w-full mt-8 lg:mt-0">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 relative z-10 w-full mt-4 lg:mt-0">
             {data.id === 'recent-results' ? (
                 liveTournaments && liveTournaments.length > 0 ? (
                     liveTournaments.map((t, i) => (
@@ -580,7 +580,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full min-h-[400px] md:min-h-[440px] h-auto max-w-[540px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[28px] overflow-hidden group cursor-pointer border-2 ${statusColors.border} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0 shadow-2xl flex flex-col`}
+            className={`relative w-full min-h-[400px] md:min-h-[440px] h-auto max-w-[540px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[28px] overflow-hidden group cursor-pointer border-2 ${statusColors.border} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-4 lg:mt-0 shadow-2xl flex flex-col`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
             {/* Corner Ribbon */}
