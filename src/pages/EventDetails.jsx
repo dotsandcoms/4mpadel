@@ -338,7 +338,9 @@ const EventDetails = () => {
                         .maybeSingle();
 
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
-                    const MIN_SYNC_DATE = new Date('2026-04-02T08:40:00Z');
+                    const MIN_SYNC_DATE = new Date('2026-04-02T08:50:00Z');
+
+
 
 
                     let useCache = false;

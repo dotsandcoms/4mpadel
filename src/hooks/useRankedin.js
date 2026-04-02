@@ -287,14 +287,34 @@ export const useRankedin = () => {
                             const allCells = elimination.DrawData.flat()
                                 .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
                             
-                            // Sort by round descending to find the final match
-                            const sortedCells = [...allCells].sort((a,b) => {
-                                const mB = b.MatchCell || b.MatchViewModel || b;
-                                const mA = a.MatchCell || a.MatchViewModel || a;
-                                return (mB.Round || 0) - (mA.Round || 0);
+                            // Identical grouping logic to KnockoutBracket.jsx
+                            const roundsMap = {};
+                            elimination.DrawData.forEach(row => {
+
+                                row.forEach(cell => {
+                                    if (!cell || (!cell.MatchCell && !cell.MatchViewModel)) return;
+                                    const m = cell.MatchCell || cell;
+                                    const round = m.Round;
+                                    if (typeof round === 'undefined') return;
+                                    if (!roundsMap[round]) roundsMap[round] = [];
+                                    const matchId = m.MatchId;
+                                    if (!roundsMap[round].some(existing => (existing.MatchCell || existing).MatchId === matchId)) {
+                                        roundsMap[round].push(cell);
+                                    }
+                                });
                             });
 
-                            const finalCell = sortedCells[0];
+                            const sortedRounds = Object.keys(roundsMap).map(Number).sort((a, b) => a - b).map(roundKey => {
+                                return roundsMap[roundKey].sort((a, b) => {
+                                    const ordA = (a.MatchCell || a).MatchOrder || 0;
+                                    const ordB = (b.MatchCell || b).MatchOrder || 0;
+                                    return ordA - ordB;
+                                });
+                            });
+
+                            const finalRound = sortedRounds.length > 0 ? sortedRounds[sortedRounds.length - 1] : [];
+                            const finalCell = finalRound.length > 0 ? finalRound[0] : null;
+
                             
                             if (finalCell) {
                                 const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
@@ -467,6 +487,7 @@ export const useRankedin = () => {
                             let formattedDate = m.Date;
                             try {
                                 const d = new Date(m.Date);
+
                                 const day = String(d.getDate()).padStart(2, '0');
                                 const month = String(d.getMonth() + 1).padStart(2, '0');
                                 const year = d.getFullYear();
