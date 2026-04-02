@@ -338,18 +338,21 @@ const EventDetails = () => {
                         .maybeSingle();
 
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
+                    const MIN_SYNC_DATE = new Date('2026-04-02T08:00:00Z');
 
                     let useCache = false;
                     if (cacheRow) {
+                        const lastSynced = new Date(cacheRow.last_synced_at);
+                        const isCacheValid = lastSynced >= MIN_SYNC_DATE;
+
                         if (isPassed) {
-                            // If event is passed and we have cache, ALWAYS use it
-                            useCache = true;
+                            // If event is passed, use cache only if it's from after our latest logic fix
+                            useCache = isCacheValid;
                         } else {
-                            // If event is live, use cache only if it's less than 1 hour old
-                            const lastSynced = new Date(cacheRow.last_synced_at);
+                            // If event is live, use cache only if it's less than 1 hour old AND from after our fix
                             const now = new Date();
                             const diffHrs = Math.abs(now - lastSynced) / 36e5;
-                            if (diffHrs < 1) {
+                            if (diffHrs < 1 && isCacheValid) {
                                 useCache = true;
                             }
                         }
@@ -830,53 +833,53 @@ const EventDetails = () => {
                                                 Register Now
                                             </motion.a>
 
-                                             <div className="relative">
-                                                 <motion.button
-                                                     whileHover={{ border: '2px solid #0F172A' }}
-                                                     className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px] flex items-center justify-center gap-2"
-                                                     onClick={handleMainCalendarClick}
-                                                 >
-                                                     Add to Calendar
-                                                     {/* Show chevron only on desktop where menu is used */}
-                                                     <div className="hidden md:block">
+                                            <div className="relative">
+                                                <motion.button
+                                                    whileHover={{ border: '2px solid #0F172A' }}
+                                                    className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px] flex items-center justify-center gap-2"
+                                                    onClick={handleMainCalendarClick}
+                                                >
+                                                    Add to Calendar
+                                                    {/* Show chevron only on desktop where menu is used */}
+                                                    <div className="hidden md:block">
                                                         <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCalendarMenuOpen ? 'rotate-180' : ''}`} />
-                                                     </div>
-                                                 </motion.button>
+                                                    </div>
+                                                </motion.button>
 
 
-                                                 <AnimatePresence>
-                                                     {isCalendarMenuOpen && (
-                                                         <motion.div
-                                                             initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                             animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                             className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
-                                                         >
-                                                             <button
-                                                                 onClick={handleGoogleCalendar}
-                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
-                                                             >
-                                                                 <div className="w-2 h-2 rounded-full bg-[#4285F4]" />
-                                                                 Google Calendar (Android)
-                                                             </button>
-                                                             <button
-                                                                 onClick={handleAppleCalendar}
-                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
-                                                             >
-                                                                 <div className="w-2 h-2 rounded-full bg-slate-900" />
-                                                                 Apple Calendar (iPhone)
-                                                             </button>
-                                                             <button
-                                                                 onClick={handleOutlookCalendar}
-                                                                 className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3"
-                                                             >
-                                                                 <div className="w-2 h-2 rounded-full bg-[#0078D4]" />
-                                                                 Outlook / Other
-                                                             </button>
-                                                         </motion.div>
-                                                     )}
-                                                 </AnimatePresence>
-                                             </div>
+                                                <AnimatePresence>
+                                                    {isCalendarMenuOpen && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                                            className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
+                                                        >
+                                                            <button
+                                                                onClick={handleGoogleCalendar}
+                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
+                                                            >
+                                                                <div className="w-2 h-2 rounded-full bg-[#4285F4]" />
+                                                                Google Calendar (Android)
+                                                            </button>
+                                                            <button
+                                                                onClick={handleAppleCalendar}
+                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
+                                                            >
+                                                                <div className="w-2 h-2 rounded-full bg-slate-900" />
+                                                                Apple Calendar (iPhone)
+                                                            </button>
+                                                            <button
+                                                                onClick={handleOutlookCalendar}
+                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3"
+                                                            >
+                                                                <div className="w-2 h-2 rounded-full bg-[#0078D4]" />
+                                                                Outlook / Other
+                                                            </button>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
 
                                         </div>
                                     )}
@@ -898,6 +901,7 @@ const EventDetails = () => {
                                                         </Link>
                                                     </motion.div>
                                                 )}
+
                                             </div>
                                         );
                                     })()}
@@ -916,10 +920,10 @@ const EventDetails = () => {
                                         whileHover={{ scale: 1.05 }}
                                         className="w-2/3 md:w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white transition-all duration-500 hover:shadow-padel-green/20 bg-black flex items-center justify-center"
                                     >
-                                        <img 
-                                            src={event.custom_image_url || event.image_url} 
-                                            alt="Event Poster" 
-                                            className="w-full h-full object-contain" 
+                                        <img
+                                            src={event.custom_image_url || event.image_url}
+                                            alt="Event Poster"
+                                            className="w-full h-full object-contain"
                                         />
                                     </motion.div>
                                 </div>
@@ -982,7 +986,7 @@ const EventDetails = () => {
                                             transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                         />
                                     )}
-                                    <span className="relative z-10">{tab === 'divisions' ? 'Divisions & Results' : tab === 'media' ? 'Media Showcase' : 'Overview'}</span>
+                                    <span className="relative z-10">{tab === 'divisions' ? 'Champions' : tab === 'media' ? 'Media' : 'Overview'}</span>
                                 </button>
                             ))}
                         </div>
@@ -1129,7 +1133,7 @@ const EventDetails = () => {
 
                                 {activeTab === 'divisions' && (
                                     <div className="space-y-6">
-                                        <ModuleAccordion title="Divisions & Results" icon={Trophy} defaultOpen={false}>
+                                        <ModuleAccordion title="Champions" icon={Trophy} defaultOpen={false}>
                                             <div className="py-4 space-y-4">
                                                 {fetchingRankedinData ? (
                                                     <div className="flex flex-col items-center justify-center py-12">
@@ -1201,19 +1205,29 @@ const EventDetails = () => {
                                             </div>
                                         </ModuleAccordion>
 
-                                        <div className="text-center py-4">
+                                        <div className="pt-2">
                                             {(() => {
                                                 const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                                 if (hasDraw || hasResults) {
                                                     return (
-                                                        <Link to={`/draws/${event.slug || rId}`} className="inline-flex items-center gap-2 bg-slate-900 text-padel-green font-black py-4 px-8 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all uppercase tracking-widest text-sm">
-                                                            <GitBranch className="w-5 h-5" /> View Draws & Results
-                                                        </Link>
+                                                        <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
+                                                            <Link 
+                                                                to={`/draws/${event.slug || rId}`} 
+                                                                className="w-full flex items-center justify-between p-6 md:p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:bg-gray-50/80 hover:border-padel-green/30 transition-all group"
+                                                            >
+                                                                <div className="flex items-center gap-4">
+                                                                    <GitBranch className="w-6 h-6 text-padel-green" />
+                                                                    <h3 className="text-xl md:text-2xl font-bold text-slate-900">View Draws & Full Results</h3>
+                                                                </div>
+                                                                <ChevronDown className="w-6 h-6 text-gray-400 -rotate-90 group-hover:text-padel-green transition-colors" />
+                                                            </Link>
+                                                        </motion.div>
                                                     );
                                                 }
                                                 return null;
                                             })()}
                                         </div>
+
                                     </div>
                                 )}
 

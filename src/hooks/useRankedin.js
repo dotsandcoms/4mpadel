@@ -269,36 +269,40 @@ export const useRankedin = () => {
             const classes = await getTournamentClasses(tournamentId);
             const winnersList = [];
 
-            for (const cls of classes.slice(0, 12)) {
+            for (const cls of classes.slice(0, 24)) {
                 if (!cls.TournamentDraws || cls.TournamentDraws.length === 0) continue;
                 
                 // Fetch each draw (Main, Backdraw, etc.)
                 for (const draw of cls.TournamentDraws) {
                     try {
                         const drawData = await getDrawsForClass(cls.Id, draw.Stage, draw.Strength);
-                        if (!drawData) continue;
+                        if (!drawData || !Array.isArray(drawData)) continue;
 
                         // Look for Elimination draw winners
-                        const elimination = drawData.find(d => d.BaseType === 'Elimination')?.Elimination;
+                        const eliminationDraw = drawData.find(d => d.BaseType === 'Elimination');
+                        const elimination = eliminationDraw?.Elimination;
+                        
                         if (elimination && elimination.DrawData) {
                             // Find the Final (highest round)
                             const allCells = elimination.DrawData.flat()
                                 .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
                             
-                            const finalCell = allCells.sort((a,b) => {
+                            // Sort by round descending to find the final match
+                            const sortedCells = [...allCells].sort((a,b) => {
                                 const mB = b.MatchCell || b.MatchViewModel || b;
                                 const mA = a.MatchCell || a.MatchViewModel || a;
                                 return (mB.Round || 0) - (mA.Round || 0);
-                            })[0];
+                            });
+
+                            const finalCell = sortedCells[0];
                             
                             if (finalCell) {
-                                const cell = finalCell;
-                                const m = cell.MatchCell || cell.MatchViewModel || cell;
-                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || cell.Score;
-                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || cell.WinnerParticipantId;
+                                const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
+                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || finalCell.Score;
+                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || finalCell.WinnerParticipantId;
                                 
-                                const p1 = cell.ChallengerParticipant || m.ChallengerParticipant;
-                                const p2 = cell.ChallengedParticipant || m.ChallengedParticipant;
+                                const p1 = finalCell.ChallengerParticipant || m.ChallengerParticipant;
+                                const p2 = finalCell.ChallengedParticipant || m.ChallengedParticipant;
 
                                 // Robust detection: Winner ID or Boolean flag
                                 let winningParticipant = null;
@@ -330,6 +334,20 @@ export const useRankedin = () => {
                                             winners: winnerNames
                                         });
                                     }
+                                }
+                            }
+                        } else if (drawData.some(d => d.BaseType === 'RoundRobin')) {
+                            // Simple RoundRobin detection if available
+                            const rr = drawData.find(d => d.BaseType === 'RoundRobin')?.RoundRobin;
+                            if (rr && rr.Ranking && rr.Ranking.length > 0) {
+                                const top = rr.Ranking[0];
+                                let winnerNames = top.ParticipantName;
+                                if (winnerNames) {
+                                    winnersList.push({
+                                        className: cls.Name,
+                                        drawName: draw.Name,
+                                        winners: winnerNames
+                                    });
                                 }
                             }
                         }
