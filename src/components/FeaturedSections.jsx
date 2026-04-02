@@ -8,10 +8,19 @@ import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
+    if (s.includes('broll')) return {
+        text: 'text-[#F40020]',
+        bg: 'bg-[#F40020]/20',
+        border: 'border-[#F40020]/40',
+        hover: 'hover:border-[#F40020]',
+        glow: 'shadow-[#F40020]/20',
+        solid: 'bg-[#F40020]',
+        solidText: 'text-white'
+    };
     if (s.includes('major')) return {
         text: 'text-red-500',
         bg: 'bg-red-500/20',
-        border: 'border-red-500/30',
+        border: 'border-red-500/40',
         hover: 'hover:border-red-500',
         glow: 'shadow-red-500/20',
         solid: 'bg-red-600',
@@ -20,7 +29,7 @@ const getStatusColors = (status) => {
     if (s.includes('super gold') || s === 's gold') return {
         text: 'text-amber-500',
         bg: 'bg-amber-500/20',
-        border: 'border-amber-500/30',
+        border: 'border-amber-500/40',
         hover: 'hover:border-amber-500',
         glow: 'shadow-amber-500/20',
         solid: 'bg-amber-500',
@@ -29,7 +38,7 @@ const getStatusColors = (status) => {
     if (s.includes('gold')) return {
         text: 'text-yellow-400',
         bg: 'bg-yellow-400/20',
-        border: 'border-yellow-400/30',
+        border: 'border-yellow-400/40',
         hover: 'hover:border-yellow-400',
         glow: 'shadow-yellow-400/20',
         solid: 'bg-yellow-400',
@@ -38,7 +47,7 @@ const getStatusColors = (status) => {
     if (s.includes('silver')) return {
         text: 'text-gray-400',
         bg: 'bg-gray-400/20',
-        border: 'border-gray-400/30',
+        border: 'border-gray-400/40',
         hover: 'hover:border-gray-400',
         glow: 'shadow-gray-400/20',
         solid: 'bg-gray-400',
@@ -47,7 +56,7 @@ const getStatusColors = (status) => {
     if (s.includes('bronze')) return {
         text: 'text-orange-700',
         bg: 'bg-orange-700/20',
-        border: 'border-orange-700/30',
+        border: 'border-orange-700/40',
         hover: 'hover:border-orange-700',
         glow: 'shadow-orange-700/20',
         solid: 'bg-orange-700',
@@ -56,7 +65,7 @@ const getStatusColors = (status) => {
     if (s.includes('fip')) return {
         text: 'text-blue-500',
         bg: 'bg-blue-500/20',
-        border: 'border-blue-500/30',
+        border: 'border-blue-500/40',
         hover: 'hover:border-blue-500',
         glow: 'shadow-blue-500/20',
         solid: 'bg-blue-500',
@@ -65,7 +74,7 @@ const getStatusColors = (status) => {
     return {
         text: 'text-padel-green',
         bg: 'bg-padel-green/20',
-        border: 'border-padel-green/30',
+        border: 'border-padel-green/40',
         hover: 'hover:border-padel-green',
         glow: 'shadow-padel-green/20',
         solid: 'bg-padel-green',
@@ -84,7 +93,7 @@ const featuredDataTemplate = [
         image: 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop',
         align: 'left',
         linkPath: null,
-        icon: PlayCircle
+        icon: Play
     },
     {
         id: 'featured-tournaments',
@@ -231,24 +240,30 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: index * 0.15 }}
-            className={`relative flex flex-col w-full h-[210px] md:h-[260px] rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(status?.toLowerCase() === 'broll' || title.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/5'} ${colors.hover} transition-all duration-500 bg-[#060913]`}
+            className={`relative flex flex-col w-full min-h-[225px] md:h-[260px] h-auto rounded-[24px] overflow-hidden group cursor-pointer border-2 ${colors.border} ${colors.hover} transition-all duration-500 bg-[#060913] shadow-2xl`}
             onClick={() => navigate(linkPath)}
         >
-            {/* Content Section */}
-            <div className="flex flex-col flex-grow p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
-                {/* Status Badges */}
-                <div className="flex justify-between items-start mb-4">
-                    <div className={`px-2.5 py-1 backdrop-blur-md rounded-full border ${colors.border} flex items-center gap-1.5 shadow-lg bg-black/40`}>
-                        <div className={`w-2 h-2 rounded-full ${colors.solid} shadow-[0_0_8px_currentColor]`} />
-                        <span className={`text-[9px] font-black ${colors.text} uppercase tracking-widest`}>{label || status}</span>
-                    </div>
+            {/* Corner Ribbon */}
+            <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none z-20 overflow-hidden rounded-tr-[24px]">
+                <div className={`absolute top-[22px] right-[-45px] w-[160px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
+                    <span className={`text-[8px] font-black ${colors.solidText} uppercase tracking-wider`}>
+                        {label || status}
+                    </span>
+                </div>
+            </div>
 
-                    {isLive && (
-                        <div className="flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-2.5 py-1 rounded-full shadow-lg shadow-red-500/20">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                            <span className="text-[9px] font-black text-white uppercase tracking-widest">Live</span>
-                        </div>
-                    )}
+            {/* Content Section */}
+            <div className="flex flex-col h-full p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
+                {/* Top Section Actions */}
+                <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center gap-2">
+                        {isLive && (
+                            <div className="flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-2.5 py-1 rounded-full shadow-lg shadow-red-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Live</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <h3 className={`text-base md:text-xl font-bold text-white line-clamp-2 md:line-clamp-2 mb-3 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
                     {renderBrollTitle(title, status)}
@@ -319,33 +334,35 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                                     navigate(linkPath);
                                 }
                             }}
-                            className="flex items-center justify-center gap-3 w-full bg-red-600/90 hover:bg-red-500 py-3 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/10 group/live"
+                            className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/10 group/live"
                         >
-                            <PlayCircle className="w-4 h-4 text-white" />
+                            <PlayCircle className="absolute left-4 w-4 h-4 text-white" />
                             <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] leading-none">
                                 {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
                             </span>
+                            <ChevronRight className="absolute right-4 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
                         </button>
                     )}
 
                     {/* View Details Button */}
-                    <div className={`group/btn flex items-center justify-center gap-3 w-full bg-white/5 border ${colors.border} group-hover:${colors.solid} py-3 rounded-xl transition-all duration-500`}>
+                    <div className={`group/btn relative flex items-center justify-center w-full bg-white/5 border ${colors.border} group-hover:${colors.solid} py-3 rounded-xl transition-all duration-500`}>
                         <span className={`text-[10px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none`}>
                             {buttonLabel}
                         </span>
-                        <ChevronRight className={`w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                        <ChevronRight className={`absolute right-4 w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
                     </div>
 
                     {/* Draws & Results Button */}
                     {drawPath && (hasDraw || hasResults) && (
                         <button
                             onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className={`flex items-center justify-center gap-2.5 w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:${colors.solid} transition-all duration-300 group/draw`}
+                            className={`group/btn relative flex items-center justify-center w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:${colors.solid} transition-all duration-300 group/draw`}
                         >
-                            <GitBranch className={`w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} transition-colors`} />
+                            <GitBranch className={`absolute left-4 w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} transition-colors`} />
                             <span className={`text-[9px] font-black text-white/40 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-widest`}>
                                 Draws & Results
                             </span>
+                            <ChevronRight className={`absolute right-4 w-4 h-4 text-white/20 group-hover/draw:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
                         </button>
                     )}
                 </div>
@@ -395,9 +412,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         'bg-[#080C17]'
     ];
     const bgColor = isFeatured ? 'bg-padel-green' : bgColors[index % bgColors.length];
-    const Icon = data.icon;
-    const statusColors = getStatusColors(data.cardLabel);
+    const Icon = data.icon || PlayCircle;
+    const statusColors = getStatusColors(data.tournament_tag || data.cardLabel);
 
+    // Text content for the left/top side of the hero section
     const textContent = (
         <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
             <motion.div
@@ -406,72 +424,67 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.8, ease: "easeOut" }}
             >
-                <div className={`inline-flex items-center gap-2 px-2.5 py-1 rounded-full border ${isFeatured ? 'border-black/20 text-black' : isLiveSection ? 'border-purple-500/20 text-purple-400 bg-purple-500/10' : 'border-white/10 text-padel-green'} text-[10px] font-bold uppercase tracking-widest mb-4`}>
-                    <Icon className="w-3.5 h-3.5" />
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${isFeatured ? 'border-black/20 text-black bg-black/5' : isLiveSection ? 'border-red-500/20 text-red-400 bg-red-500/10' : 'border-white/10 text-padel-green bg-padel-green/5'} text-[10px] font-bold uppercase tracking-widest mb-6`}>
+                    {isLiveSection ? <Play className="w-3.5 h-3.5 fill-current" /> : <Icon className="w-3.5 h-3.5" />}
                     <span>{data.highlight}</span>
                 </div>
 
-                <h2 className={`font-bold mb-4 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-3xl xl:text-[36px]' : 'text-4xl lg:text-[48px] xl:text-[56px]'}`}>
+                <h2 className={`font-bold mb-6 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-3xl xl:text-[42px]' : 'text-5xl lg:text-[64px] xl:text-[72px]'}`}>
                     {data.title.split(' ')[0]} <br className={isGridSection ? 'hidden lg:block' : ''} />
-                    <span className={isFeatured ? 'text-black/70' : 'text-transparent bg-clip-text bg-gradient-to-r from-gray-300 to-gray-600'}>
+                    <span className={isFeatured ? 'text-black/70' : 'text-transparent bg-clip-text bg-gradient-to-r from-gray-200 via-gray-400 to-gray-600'}>
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
-                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 ${isGridSection ? 'text-xs md:text-sm' : 'text-sm md:text-base max-w-sm'}`}>
+                
+                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-10 ${isGridSection ? 'text-sm' : 'text-base md:text-lg max-w-md'}`}>
                     {data.description}
                 </p>
 
                 {isLiveSection && data.cardTitle && (
-                    <div className="mb-6">
-                        <span className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] block mb-1">EVENT</span>
-                        <h4 className="text-white font-black text-lg md:text-xl uppercase tracking-tighter leading-none">{renderBrollTitle(data.cardTitle, data.tournament_tag || data.cardLabel)}</h4>
+                    <div className="mb-8">
+                        <p className="text-[10px] font-black text-padel-green uppercase tracking-widest mb-2">EVENT</p>
+                        <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight leading-tight">{data.cardTitle}</h3>
                     </div>
                 )}
 
-                {isLiveSection && (data.livePlayers || data.nextMatch) && (
-                    <div className="mb-8 space-y-3 max-w-sm">
-                        {data.livePlayers && (
-                            <div className="group/live-card relative p-3 rounded-2xl bg-red-500/5 border border-red-500/10 backdrop-blur-sm transition-all duration-300 hover:bg-red-500/10 hover:border-red-500/20">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
-                                            <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">LIVE NOW</span>
-                                        </div>
-                                        <p className="text-white font-bold text-sm tracking-tight">{data.livePlayers}</p>
-                                    </div>
-
-                                    {data.youtubeUrl && (
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onWatchLive(data.youtubeUrl, data.cardTitle);
-                                            }}
-                                            className="relative flex items-center justify-center w-10 h-10 rounded-full bg-red-600 text-white hover:bg-white hover:text-red-600 transition-all duration-300 shadow-lg shadow-red-600/20 group/play"
-                                        >
-                                            <div className="absolute inset-0 rounded-full bg-red-600 animate-ping opacity-20 group-hover/play:hidden" />
-                                            <Play className="w-4 h-4 relative z-10 ml-0.5" fill="currentColor" stroke="currentColor" />
-                                        </button>
-                                    )}
+                {isLiveSection && data.livePlayers && (
+                    <div className="mb-8 p-6 rounded-[24px] bg-red-500/5 border border-red-500/10 backdrop-blur-sm max-w-sm">
+                        <div className="flex justify-between items-start">
+                            <div className="flex-grow">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                                    <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">LIVE NOW</span>
                                 </div>
+                                <p className="text-white font-bold text-xl tracking-tight leading-tight">{data.livePlayers}</p>
                             </div>
-                        )}
+
+                            {data.youtubeUrl && (
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onWatchLive(data.youtubeUrl, data.cardTitle || data.title);
+                                    }}
+                                    className="relative flex items-center justify-center w-12 h-12 rounded-full bg-red-600 text-white hover:bg-white hover:text-red-600 transition-all duration-300 shadow-xl shadow-red-600/30 group/play shrink-0 ml-4 pointer-events-auto"
+                                >
+                                    <div className="absolute inset-0 rounded-full bg-red-600 animate-ping opacity-20 group-hover/play:hidden" />
+                                    <Play className="w-5 h-5 relative z-10 fill-current" />
+                                </button>
+                            )}
+                        </div>
+
                         {data.nextMatch && (
-                            <div className="p-3 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-sm opacity-60">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">UP NEXT</span>
-                                </div>
-                                <p className="text-white/80 font-bold text-sm tracking-tight">{data.nextMatch}</p>
+                            <div className="mt-4 pt-4 border-t border-white/5">
+                                <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-1">UP NEXT</p>
+                                <p className="text-white/60 font-medium text-sm">{data.nextMatch}</p>
                             </div>
                         )}
                     </div>
                 )}
-
-                {/* EXPLORE ALL button removed as requested */}
             </motion.div>
         </div>
     );
 
+    // Image/Card content for the right/bottom side of the hero section
     const imageContent = isGridSection ? (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6 relative z-10 w-full mt-8 lg:mt-0">
             {data.id === 'recent-results' ? (
@@ -566,111 +579,115 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             whileInView={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className={`relative w-full h-[220px] sm:aspect-video lg:aspect-square max-h-[300px] md:max-h-[360px] lg:max-h-[420px] max-w-[480px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[24px] overflow-hidden group cursor-pointer border-2 ${(data.tournament_tag?.toLowerCase() === 'broll' || data.cardTitle?.toUpperCase().includes('BROLL')) ? 'border-[#F40020]' : 'border-white/10'} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0`}
+            className={`relative w-full min-h-[400px] md:min-h-[440px] h-auto max-w-[540px] mx-auto lg:mx-0 ${isLeft ? 'lg:ml-auto' : 'lg:mr-auto'} rounded-[28px] overflow-hidden group cursor-pointer border-2 ${statusColors.border} ${statusColors.hover} transition-all duration-700 bg-[#05070A] z-10 mt-8 lg:mt-0 shadow-2xl flex flex-col`}
             onClick={() => data.linkPath && navigate(data.linkPath)}
         >
-            <div className="absolute inset-0 w-full h-full mix-blend-luminosity opacity-40 group-hover:opacity-60 transition-all duration-1000 flex items-center justify-center">
-                <FallbackImage
-                    src={data.image}
-                    alt={data.cardTitle}
-                    title={data.cardTitle}
-                    className="w-full h-full object-contain transition-transform duration-1000 group-hover:scale-105"
-                />
+            {/* Corner Ribbon */}
+            <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none z-30 overflow-hidden rounded-tr-[28px]">
+                <div className={`absolute top-[22px] right-[-45px] w-[160px] py-1.5 ${statusColors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
+                    <span className={`text-[8px] font-black ${statusColors.solidText} uppercase tracking-wider`}>
+                        {data.tournament_tag || data.cardLabel}
+                    </span>
+                </div>
             </div>
 
-            <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/80 to-transparent transition-opacity duration-500 pointer-events-none" />
+            {/* Background Gradient & Overlays */}
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0A0F1F] via-[#05070A] to-[#05070A]" />
+            <div className="absolute inset-0 bg-white/[0.01]" />
 
-            {data.id === 'live-events' && (
-                <div className="absolute top-5 left-5 flex items-center gap-2 bg-red-500/90 backdrop-blur-md px-3 py-1.5 rounded-full z-20">
-                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                    <span className="text-[10px] font-bold text-white uppercase tracking-widest">Live</span>
+            {(data.isLive || data.id === 'live-events' || data.id === 'featured-live') && (
+                <div className="absolute top-6 left-6 flex items-center gap-2 bg-red-600 px-3 py-1.5 rounded-full z-30 shadow-lg shadow-red-600/30">
+                    <Play className="w-2.5 h-2.5 text-white fill-current animate-pulse" />
+                    <span className="text-[9px] font-black text-white uppercase tracking-widest">Live Now</span>
                 </div>
             )}
 
-            <div className="absolute inset-x-0 bottom-0 p-5 md:p-6 lg:p-8 z-20 flex flex-col justify-end pointer-events-none">
-                <div className="flex items-center gap-2 mb-2">
-                    {data.id === 'live-events' ? (
-                        <PlayCircle className={`w-3.5 h-3.5 ${statusColors.text}`} />
+            <div className="flex flex-col h-full p-8 md:p-10 lg:p-12 pt-32 md:pt-36 z-20 pointer-events-none flex-grow">
+                <div className="flex items-center gap-3 mb-5">
+                    {isFeatured ? (
+                         <Trophy className={`w-3.5 h-3.5 ${statusColors.text}`} />
+                    ) : isLiveSection ? (
+                        <Play className={`w-3.5 h-3.5 ${statusColors.text} fill-current`} />
                     ) : (
                         <Calendar className={`w-3.5 h-3.5 ${statusColors.text}`} />
                     )}
-                    <p className={`text-[10px] font-bold ${statusColors.text} uppercase tracking-widest`}>{data.cardLabel}</p>
+                    <p className={`text-[10px] font-medium ${statusColors.text} uppercase tracking-[0.2em]`}>{data.cardLabel}</p>
                 </div>
 
-                <h3 className={`text-lg md:text-xl lg:text-2xl font-bold text-white leading-[1.1] mb-2 group-hover:${statusColors.text} transition-colors duration-500 tracking-tight`}>{renderBrollTitle(data.cardTitle, data.tournament_tag || data.cardLabel)}</h3>
+                <h3 className={`text-xl md:text-2xl lg:text-3xl font-medium text-white leading-tight mb-8 group-hover:${statusColors.text} transition-all duration-500 tracking-tight`}>
+                    {renderBrollTitle(data.cardTitle || data.title, data.tournament_tag || data.cardLabel)}
+                </h3>
 
-                {(data.registeredPlayers > 0 || data.date || data.venue || data.organizerName) && (
-                    <div className="flex flex-wrap items-center gap-2 mb-6 pointer-events-auto">
+                {(data.date || data.city || data.venue || data.organizerName || data.registeredPlayers > 0) && (
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-6 pt-8 border-t border-white/10 pointer-events-auto">
                         {data.date && (
-                            <div className="flex items-center gap-1.5 py-1 px-3 bg-[#CCFF00]/10 rounded-full border border-[#CCFF00]/20 w-fit">
-                                <Calendar className="w-3.5 h-3.5 text-[#CCFF00]" />
-                                <span className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest">{data.date}</span>
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                                <Calendar className="w-3.5 h-3.5 text-padel-green shrink-0" />
+                                <span className="text-[10px] md:text-xs font-medium text-padel-green truncate uppercase tracking-widest">{data.date}</span>
                             </div>
                         )}
                         {data.city && (
-                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.city}</span>
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.city}</span>
                             </div>
                         )}
                         {data.venue && (
-                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.venue}</span>
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                                <MapPin className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.venue}</span>
                             </div>
                         )}
                         {data.organizerName && (
-                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                                <Shield className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.organizerName}</span>
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                                <Shield className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.organizerName}</span>
                             </div>
                         )}
                         {data.registeredPlayers > 0 && (
-                            <div className="flex items-center gap-1.5 py-1 px-3 bg-white/5 rounded-full border border-white/10 w-fit">
-                                <Users className={`w-3.5 h-3.5 ${statusColors.text}`} />
-                                <span className="text-[10px] font-bold text-white uppercase tracking-widest">{data.registeredPlayers} Players</span>
+                            <div className="flex items-center gap-2.5 overflow-hidden">
+                                <Users className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.registeredPlayers} Players</span>
                             </div>
                         )}
                     </div>
                 )}
 
-                <div className="flex items-center gap-3 pointer-events-auto flex-wrap">
-
-
+                <div className="mt-auto pt-10 flex items-center gap-4 pointer-events-auto flex-wrap">
                     {(() => {
                         const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
-
-                        // If we have a slug in linkPath, use it for draws too
                         const slugMatch = data.linkPath?.match(/\/calendar\/([^\/]+)/);
                         const slug = slugMatch ? slugMatch[1] : null;
 
                         return (
-                            <div className="flex items-center gap-3">
+                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full">
                                 {data.id === 'featured-live' && (
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             if (data.youtubeUrl) {
-                                                if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle);
+                                                if (onWatchLive) onWatchLive(data.youtubeUrl, data.cardTitle || data.title);
                                                 else window.open(data.youtubeUrl, '_blank');
                                             } else {
                                                 navigate(data.linkPath || `/calendar/${slug || rId}`);
                                             }
                                         }}
-                                        className="flex items-center gap-2 bg-red-600 border border-red-600 hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/live shadow-lg shadow-red-600/20"
+                                        className="group/btn relative flex items-center justify-center w-full bg-red-600 border border-red-600 hover:bg-white px-6 py-4 rounded-2xl transition-all duration-300 shadow-xl shadow-red-600/20"
                                     >
-                                        <PlayCircle className="w-3.5 h-3.5 !text-white group-hover/live:!text-red-600 transition-colors" />
-                                        <span className="text-xs font-black !text-white group-hover/live:!text-red-600 transition-colors uppercase tracking-widest">{data.youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}</span>
+                                        <Play className="absolute left-6 w-5 h-5 text-white group-hover:text-red-600 transition-colors fill-current" />
+                                        <span className="text-sm font-black text-white group-hover:text-red-600 transition-colors uppercase tracking-[0.2em]">{data.youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}</span>
+                                        <ChevronRight className="absolute right-6 w-5 h-5 text-white group-hover:text-red-600 group-hover:translate-x-1.5 transition-all duration-500" />
                                     </button>
                                 )}
 
                                 {(hasDraw || hasResults) && rId && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); navigate(`/draws/${slug || rId}`); }}
-                                        className={`flex items-center gap-2 ${statusColors.solid} border ${statusColors.border} hover:bg-white hover:border-white px-4 py-2 rounded-full transition-all duration-300 group/draw shadow-lg ${statusColors.glow}`}
+                                        className={`group/btn relative flex items-center justify-center w-full bg-white/5 border-2 ${statusColors.border} hover:${statusColors.solid} px-6 py-4 rounded-2xl transition-all duration-300 shadow-xl ${statusColors.glow}`}
                                     >
-                                        <GitBranch className={`w-3.5 h-3.5 ${statusColors.solidText} group-hover/draw:!text-black transition-colors`} />
-                                        <span className={`text-xs font-black ${statusColors.solidText} group-hover/draw:!text-black transition-colors uppercase tracking-widest`}>DRAWS & RESULTS</span>
+                                        <GitBranch className={`absolute left-6 w-5 h-5 ${statusColors.text} group-hover:${statusColors.solidText} transition-colors`} />
+                                        <span className={`text-sm font-black ${statusColors.text} group-hover:${statusColors.solidText} transition-colors uppercase tracking-[0.2em]`}>DRAWS & RESULTS</span>
+                                        <ChevronRight className={`absolute right-6 w-5 h-5 ${statusColors.text} group-hover:${statusColors.solidText} group-hover:translate-x-1.5 transition-all duration-500`} />
                                     </button>
                                 )}
                             </div>
@@ -682,7 +699,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 
     return (
-        <section className={`relative py-12 lg:py-16 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
+        <section className={`relative py-16 lg:py-24 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
             <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-6 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-8 lg:gap-16 items-center'}`}>
                 {isGridSection ? (
                     <>
