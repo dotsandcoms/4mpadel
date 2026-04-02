@@ -338,7 +338,8 @@ const EventDetails = () => {
                         .maybeSingle();
 
                     const isPassed = new Date(event.end_date || event.start_date) < new Date();
-                    const MIN_SYNC_DATE = new Date('2026-04-02T08:00:00Z');
+                    const MIN_SYNC_DATE = new Date('2026-04-02T08:40:00Z');
+
 
                     let useCache = false;
                     if (cacheRow) {
@@ -971,25 +972,39 @@ const EventDetails = () => {
 
                         {/* Tab Navigation */}
                         <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/50 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-gray-200/50 shadow-sm mx-auto max-w-fit">
-                            {['overview', 'divisions', 'media'].map((tab) => (
-                                <button
-                                    key={tab}
-                                    onClick={() => setActiveTab(tab)}
-                                    className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
-                                        }`}
-                                >
-                                    {activeTab === tab && (
-                                        <motion.div
-                                            layoutId="activeTabPill"
-                                            className="absolute inset-0 bg-slate-900 rounded-full shadow-md"
-                                            initial={false}
-                                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                        />
-                                    )}
-                                    <span className="relative z-10">{tab === 'divisions' ? 'Champions' : tab === 'media' ? 'Media' : 'Overview'}</span>
-                                </button>
-                            ))}
+                            {(() => {
+                                const tabs = ['overview', 'divisions', 'media'];
+                                // Hide 'divisions' (Champions) if upcoming and no draws/results
+                                const filteredTabs = tabs.filter(tab => {
+                                    if (tab === 'divisions') {
+                                        const isUpcoming = !isEventPassed;
+                                        const noData = !hasDraw && !hasResults;
+                                        return !(isUpcoming && noData);
+                                    }
+                                    return true;
+                                });
+
+                                return filteredTabs.map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
+                                            }`}
+                                    >
+                                        {activeTab === tab && (
+                                            <motion.div
+                                                layoutId="activeTabPill"
+                                                className="absolute inset-0 bg-slate-900 rounded-full shadow-md"
+                                                initial={false}
+                                                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                                            />
+                                        )}
+                                        <span className="relative z-10">{tab === 'divisions' ? 'Champions' : tab === 'media' ? 'Media' : 'Overview'}</span>
+                                    </button>
+                                ));
+                            })()}
                         </div>
+
 
                         {/* Tab Content Container */}
                         <AnimatePresence mode="wait">
@@ -1211,8 +1226,8 @@ const EventDetails = () => {
                                                 if (hasDraw || hasResults) {
                                                     return (
                                                         <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
-                                                            <Link 
-                                                                to={`/draws/${event.slug || rId}`} 
+                                                            <Link
+                                                                to={`/draws/${event.slug || rId}`}
                                                                 className="w-full flex items-center justify-between p-6 md:p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:bg-gray-50/80 hover:border-padel-green/30 transition-all group"
                                                             >
                                                                 <div className="flex items-center gap-4">
@@ -1325,8 +1340,8 @@ const EventDetails = () => {
                                         {!event.youtube_playlist_url && albumPhotos.length === 0 && (
                                             <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
                                                 <ImageIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Media Available</h3>
-                                                <p className="text-gray-500">Photos and videos from the event will be posted here soon.</p>
+                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Media Available Yet</h3>
+                                                <p className="text-gray-500">Photos and videos from the event will be posted here once the event has completed - Check Back Soon.</p>
                                             </div>
                                         )}
                                     </div>
