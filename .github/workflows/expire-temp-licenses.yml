@@ -1,0 +1,22 @@
+name: Expire Temporary Licenses
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight (UTC)
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: read
+
+jobs:
+  expire_licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping License Expiration Function
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -i -X POST "${SUPABASE_URL}/functions/v1/expire-temp-licenses" \
+          -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+          -H "Content-Type: application/json"
