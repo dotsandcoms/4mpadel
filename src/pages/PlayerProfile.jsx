@@ -566,8 +566,8 @@ const PlayerProfile = () => {
                                     transition={{ delay: 0.2 }}
                                 >
                                     <div className="flex items-center gap-2 md:gap-3 mb-1.5 md:mb-2 flex-wrap">
-                                        <span className={`${player.paid_registration ? (player.license_type === 'full' ? 'bg-padel-green text-black' : 'bg-blue-500 text-white') : 'bg-gray-700 text-gray-300'} px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-wider shadow-lg border border-white/10`}>
-                                            {player.paid_registration ? (player.license_type === 'full' ? 'Full License' : 'Temporary License') : 'Pending License'}
+                                        <span className={`${player.license_type === 'full' ? 'bg-padel-green text-black' : (player.license_type === 'temporary' ? 'bg-blue-500 text-white' : 'bg-gray-700 text-gray-300')} px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-wider shadow-lg border border-white/10`}>
+                                            {player.license_type === 'full' ? 'Full License' : (player.license_type === 'temporary' ? 'Temporary License' : 'Pending License')}
                                         </span>
                                         {player.license_type === 'temporary' && (
                                             <span className="bg-yellow-500/20 text-yellow-500 border border-yellow-500/30 px-2 py-0.5 md:px-3 md:py-1 rounded-full text-[8px] md:text-[10px] font-black uppercase tracking-wider">
