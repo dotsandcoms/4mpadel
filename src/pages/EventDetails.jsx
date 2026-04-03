@@ -1042,9 +1042,9 @@ const EventDetails = () => {
                                             />
                                         )}
                                         <span className="relative z-10">
-                                            {tab === 'divisions' ? 'Champions' : 
-                                             tab === 'players' ? 'Player List' :
-                                             tab === 'media' ? 'Media' : 'Overview'}
+                                            {tab === 'divisions' ? 'Results' :
+                                                tab === 'players' ? 'Player List' :
+                                                    tab === 'media' ? 'Media' : 'Overview'}
                                         </span>
                                     </button>
                                 ));
