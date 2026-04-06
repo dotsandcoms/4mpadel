@@ -95,42 +95,99 @@ const AlbumDetails = () => {
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
             </Helmet>
 
-            <div className="w-full max-w-[1800px] mx-auto px-2 sm:px-10 lg:px-16">
-                {/* Header */}
-                <div className="mb-4 md:mb-20">
+            {/* Cinematic Hero Section - Full Width & Square */}
+            <div className="relative mb-8 md:mb-16 overflow-hidden bg-slate-900 shadow-2xl border-b border-white/5 min-h-[35vh] md:min-h-[45vh] flex items-center">
+                {/* Dynamic Background Image Layer */}
+                <AnimatePresence mode="wait">
+                    <motion.div 
+                        key={images[0]?.image_url || 'fallback'}
+                        initial={{ opacity: 0, scale: 1.05 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 1.2 }}
+                        className="absolute inset-0"
+                    >
+                        {images[0]?.image_url ? (
+                            <img 
+                                src={images[0].image_url} 
+                                alt="" 
+                                className="w-full h-full object-cover blur-2xl opacity-30 scale-105"
+                            />
+                        ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-slate-900 via-slate-800 to-black" />
+                        )}
+                        {/* Deep Vignette Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/70 to-transparent" />
+                    </motion.div>
+                </AnimatePresence>
+
+                {/* Header Content */}
+                <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16 py-12 md:py-20">
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                     >
                         <Link
                             to="/gallery"
-                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-transform mb-4 sm:mb-8 group"
+                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-all mb-8 md:mb-12 group bg-black/40 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10"
                         >
                             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-3 group-hover:scale-110 transition-transform" />
                             Back to Collection
                         </Link>
                     </motion.div>
 
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-4 sm:space-y-6"
-                    >
-                        <h1 className="text-3xl sm:text-6xl md:text-[8rem] font-black text-white tracking-tighter uppercase leading-[0.8] mb-2 sm:mb-8 transition-all">{album.title}</h1>
-                        <div className="flex items-center gap-3 sm:gap-4 text-white/40 font-black text-[8px] sm:text-xs uppercase tracking-[0.3em]">
-                            <span className="text-padel-green">
-                                {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
-                            </span>
-                            <div className="w-[1px] h-3 sm:h-4 bg-white/10" />
-                            <span>{images.length} Photos Captured</span>
+                    {/* Title Group with Watermark - Centered Content */}
+                    <div className="relative flex flex-col items-center">
+                        {/* Massive Background Watermark Title (Centered Behind) */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none opacity-[0.03] whitespace-nowrap overflow-hidden w-full text-center z-0">
+                            <h2 className="text-[12vw] font-black text-white uppercase tracking-tighter leading-none">
+                                {album.title}
+                            </h2>
                         </div>
-                        {album.description && (
-                            <p className="text-gray-400 text-xs sm:text-lg md:text-2xl max-w-4xl font-medium leading-relaxed opacity-60 border-l-[2px] sm:border-l-[3px] border-padel-green/30 pl-4 sm:pl-8 mt-4 sm:mt-10">
-                                {album.description}
-                            </p>
-                        )}
-                    </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 40 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="space-y-4 md:space-y-8 relative z-10 flex flex-col items-center text-center"
+                        >
+                            <div className="flex flex-col items-center">
+                                <motion.div
+                                    initial={{ opacity: 0, x: -10 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    transition={{ delay: 0.2 }}
+                                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-padel-green/10 border border-padel-green/20 text-padel-green text-[10px] md:text-xs font-black uppercase tracking-[0.2em] mb-4 md:mb-5"
+                                >
+                                    <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
+                                    <span>Official Album</span>
+                                </motion.div>
+                                
+                                <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter uppercase leading-[0.9] transition-all drop-shadow-2xl">
+                                    {album.title}
+                                </h1>
+                            </div>
+
+                            <div className="flex flex-wrap items-center justify-center gap-4 text-white/40 font-black text-[9px] sm:text-xs uppercase tracking-[0.3em]">
+                                <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                                    <span className="text-padel-green font-black">
+                                        {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                    </span>
+                                </div>
+                                <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                                    <span className="text-padel-green">{images.length}</span>
+                                    <span className="opacity-40">MOMENTS CAPTURED</span>
+                                </div>
+                            </div>
+
+                            {album.description && (
+                                <p className="text-gray-400 text-sm sm:text-lg md:text-xl max-w-3xl font-medium leading-relaxed opacity-60 border-l-[3px] border-padel-green/30 pl-6 md:pl-8 mt-5 md:mt-8 mx-auto">
+                                    {album.description}
+                                </p>
+                            )}
+                        </motion.div>
+                    </div>
                 </div>
+            </div>
+
+            <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
 
                 {/* Masonry / Grid Layout - 4 columns on mobile */}
                 {images.length === 0 ? (
@@ -143,10 +200,9 @@ const AlbumDetails = () => {
                         {images.map((img, index) => (
                                 <motion.div
                                     key={img.id}
-                                    initial={{ opacity: 0, scale: 0.9 }}
-                                    whileInView={{ opacity: 1, scale: 1 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: (index % 10) * 0.02, duration: 0.3 }}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    transition={{ delay: (index % 10) * 0.03, duration: 0.4 }}
                                     whileHover={{ scale: 1.05, zIndex: 10 }}
                                     className="break-inside-avoid relative cursor-zoom-in overflow-hidden rounded-md sm:rounded-2xl bg-slate-900 border border-white/5 shadow-sm sm:shadow-lg"
                                     onClick={() => setSelectedImageIndex(index)}

@@ -4,8 +4,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Trophy } from 'lucide-react';
-import heroBg from '../assets/hero_bg.png'; // Fallback image
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Trophy, AlertCircle } from 'lucide-react';
+import { usePaystackPayment } from 'react-paystack';
+import { toPaystackAmount } from '../constants/fees';
+import { toast } from 'sonner';
+
+const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
+    .trim()
+    .replace(/['"]/g, '')
+    .split(/\s+/)[0]
+    .replace(/[^a-zA-Z0-9_]/g, '');
+
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 
 // Simple CountUp animation component
@@ -156,6 +165,7 @@ const EventDetails = () => {
     const [isSubmitting, setSubmitting] = useState(false);
     const [weather, setWeather] = useState(null);
     const [albumPhotos, setAlbumPhotos] = useState([]);
+    const [albumInfo, setAlbumInfo] = useState(null);
 
     // Animation Variants
     const containerVariants = {
@@ -230,14 +240,73 @@ const EventDetails = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
+    const [loggedInPlayer, setLoggedInPlayer] = useState(null);
+    const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: '',
         email: '',
         phone: '',
         partner_name: '',
-        division: 'Gold'
+        division: ''
     });
+
+    // Prefill form from logged-in player profile when modal opens
+    useEffect(() => {
+        if (!isModalOpen) return;
+        const prefillFromSession = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
+
+            const { data: playerData } = await supabase
+                .from('players')
+                .select('name, email, contact_number, category')
+                .eq('email', session.user.email)
+                .maybeSingle();
+
+            if (playerData) {
+                setLoggedInPlayer(playerData);
+                setFormData(prev => ({
+                    ...prev,
+                    full_name: prev.full_name || playerData.name || '',
+                    email: prev.email || playerData.email || session.user.email || '',
+                    phone: prev.phone || playerData.contact_number || '',
+                    division: prev.division || playerData.category || ''
+                }));
+            } else {
+                // Not a registered player yet, at least fill email
+                setFormData(prev => ({
+                    ...prev,
+                    email: prev.email || session.user.email || ''
+                }));
+            }
+
+            // check for existing registration to prevent duplicates early
+            const checkEmail = (playerData?.email || session.user.email || '').toLowerCase().trim();
+            if (checkEmail) {
+                const { data: reg } = await supabase
+                    .from('event_registrations')
+                    .select('id')
+                    .eq('event_id', event.id)
+                    .eq('email', checkEmail)
+                    .eq('payment_status', 'paid')
+                    .maybeSingle();
+
+                const { data: part } = await supabase
+                    .from('tournament_participants')
+                    .select('id')
+                    .eq('event_id', event.id)
+                    .eq('email', checkEmail)
+                    .eq('is_paid', true)
+                    .maybeSingle();
+
+                if (reg || part) {
+                    setIsAlreadyRegistered(true);
+                }
+            }
+        };
+        prefillFromSession();
+    }, [isModalOpen]);
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
@@ -481,14 +550,15 @@ const EventDetails = () => {
             try {
                 const { data: albumData, error: albumError } = await supabase
                     .from('albums')
-                    .select('id')
+                    .select('id, title, description')
                     .eq('event_id', event.id)
                     .single();
 
                 if (albumData?.id && !albumError) {
+                    setAlbumInfo(albumData);
                     const { data: images, error: imageError } = await supabase
                         .from('gallery_images')
-                        .select('image_url, id')
+                        .select('image_url, thumbnail_url, id')
                         .eq('album_id', albumData.id)
                         .order('sort_order', { ascending: true });
 
@@ -558,34 +628,49 @@ const EventDetails = () => {
         fetchWeather();
     }, [event]);
 
+    const paystackConfig = {
+        reference: `REGEV-${event?.id}-${Date.now()}`,
+        email: formData.email,
+        amount: toPaystackAmount(event?.entry_fee || 0),
+        currency: 'ZAR',
+        publicKey: PAYSTACK_PUBLIC_KEY,
+        metadata: {
+            event_id: event?.id,
+            event_name: event?.event_name,
+            full_name: formData.full_name,
+            partner_name: formData.partner_name,
+            division: formData.division
+        }
+    };
+
+    const initializePayment = usePaystackPayment(paystackConfig);
+
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
-    const handleRegister = async (e) => {
-        e.preventDefault();
-        setSubmitting(true);
-
-        try {
-            const { error } = await supabase
-                .from('event_registrations')
-                .insert([{
-                    event_id: event.id,
-                    ...formData,
-                    payment_status: 'pending'
-                }]);
-
-            if (error) throw error;
-
-            // Success -> Move to Step 2 (Payment Redirect Mock)
-            setRegStep(2);
-        } catch (error) {
-            console.error('Registration error:', error);
-            alert('Registration failed. Please try again.');
-        } finally {
-            setSubmitting(false);
+    const handleRegister = () => {
+        // Validation — must be synchronous to avoid popup blocking/redirects
+        if (!formData.full_name.trim() || !formData.email.trim()) {
+            toast.error('Please fill in your name and email.');
+            return;
         }
+
+        if (isAlreadyRegistered) {
+            toast.error('You are already registered for this event!');
+            return;
+        }
+
+        if (!PAYSTACK_PUBLIC_KEY.startsWith('pk_')) {
+            toast.error('Payment system not configured. Please contact support.');
+            return;
+        }
+
+        // Open Paystack inline popup directly (synchronously)
+        initializePayment(handlePaymentSuccess, () => {
+            toast.info('Payment cancelled.');
+        });
     };
 
     const getCalendarData = () => {
@@ -698,13 +783,70 @@ const EventDetails = () => {
     };
 
 
-    const handlePaymentRedirect = () => {
-        // Mock payment redirection
-        alert('Redirecting to Payment Gateway...');
-        // In a real app: window.location.href = 'https://paystack.com/...' 
-        setIsModalOpen(false);
-        setRegStep(1);
-        setFormData({ full_name: '', email: '', phone: '', partner_name: '', division: 'Gold' });
+
+    const handlePaymentSuccess = async (reference) => {
+        try {
+            console.log("Payment success callback triggered:", reference);
+            
+            // 1. Update or Create Registration Record (Upsert)
+            const { error: regError } = await supabase
+                .from('event_registrations')
+                .upsert({
+                    event_id: event.id,
+                    full_name: formData.full_name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    partner_name: formData.partner_name,
+                    division: formData.division,
+                    payment_status: 'paid'
+                }, { onConflict: 'event_id, email' });
+
+            if (regError) {
+                console.error("Error creating registration:", regError);
+                throw regError;
+            }
+            
+            // Immediately show success step to user
+            setRegStep(2);
+            toast.success("Payment successful! You are now registered.");
+
+            // 2. Record Payment (background)
+            console.log("Recording payment details...");
+            const { data: pData } = await supabase.from('players').select('id').eq('email', formData.email).maybeSingle();
+
+            await supabase.from('payments').insert([{
+                player_id: pData?.id || null,
+                event_id: event.id,
+                amount: event.entry_fee || 0,
+                status: 'success',
+                payment_type: 'event_entry_fee',
+                payment_method: 'paystack',
+                reference: `${formData.full_name} - ${event.event_name}`,
+                metadata: { paystack_ref: reference.reference }
+            }]);
+
+            // 3. Try to update tournament_participants match (background)
+            console.log("Updating participant paid status...");
+            await supabase
+                .from('tournament_participants')
+                .update({ is_paid: true })
+                .eq('event_id', event.id)
+                .ilike('full_name', `%${formData.full_name}%`);
+
+        } catch (err) {
+            console.error("Post-payment error details:", err);
+            toast.error("Payment recorded but we had trouble updating your status. Please contact support.");
+        }
+    };
+
+    const handlePayNow = () => {
+        if (!PAYSTACK_PUBLIC_KEY.startsWith('pk_')) {
+            toast.error('Payment system not configured correctly');
+            return;
+        }
+        initializePayment(handlePaymentSuccess, () => {
+            toast.info('Payment cancelled');
+        });
     };
 
     if (loading) {
@@ -848,11 +990,7 @@ const EventDetails = () => {
                                             <div className="text-left leading-none">
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Registered</p>
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Players</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <h3 className="font-black text-slate-900 text-2xl mb-2 tracking-tight uppercase">
+                                            </div></div></div><h3 className="font-black text-slate-900 text-2xl mb-2 tracking-tight uppercase">
                                         {isEventPassed ? 'Results' : 'Join In'}
                                     </h3>
                                     <p className="text-xs font-bold text-gray-400 mb-8 uppercase tracking-widest">
@@ -871,6 +1009,19 @@ const EventDetails = () => {
                                             >
                                                 Register Now
                                             </motion.a>
+
+                                            {/* Pay Entry Fee button — only shown when entry_fee is configured */}
+                                            {event.entry_fee > 0 && (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                    className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-white/5"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>
+                                                    Pay Entry Fee — R{event.entry_fee}
+                                                </motion.button>
+                                            )}
 
                                             <div className="relative">
                                                 <motion.button
@@ -981,14 +1132,24 @@ const EventDetails = () => {
                                 const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                 if (!isEventPassed) {
                                     return (
-                                        <a
-                                            href={event.rankedin_url || `https://www.rankedin.com/`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                        >
-                                            Register
-                                        </a>
+                                        <div className="flex gap-2">
+                                            <a
+                                                href={event.rankedin_url || `https://www.rankedin.com/`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                            >
+                                                Register
+                                            </a>
+                                            {event.entry_fee > 0 && (
+                                                <button
+                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                    className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                                >
+                                                    Pay R{event.entry_fee}
+                                                </button>
+                                            )}
+                                        </div>
                                     );
                                 } else if ((hasResults || hasDraw) && (rId || event.slug)) {
                                     return (
@@ -1166,10 +1327,7 @@ const EventDetails = () => {
                                                             <div>
                                                                 <p className="font-bold text-slate-900">{weather.condition}</p>
                                                                 <p className="text-xs text-gray-500">{Math.round(weather.temp)}°C | Precip: {weather.precip}%</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </ModuleAccordion>
+                                                            </div></div></div></ModuleAccordion>
                                             )}
 
                                             {/* Sponsors Widget */}
@@ -1395,29 +1553,80 @@ const EventDetails = () => {
                                 )}
 
                                 {activeTab === 'media' && (
-                                    <div className="space-y-8">
-                                        {/* Gallery Photos */}
-                                        {albumPhotos.length > 0 && (
-                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="p-6 md:p-8 border-b border-gray-50 bg-gray-50/50">
-                                                    <h3 className="text-2xl font-bold text-slate-900">Event Gallery</h3>
+                                    <div className="space-y-12 pb-20">
+                                        {/* Simplified Media Header + Link to Full Gallery */}
+                                        {albumInfo ? (
+                                            <div className="bg-slate-900 rounded-[3rem] shadow-2xl border border-white/5 p-8 md:p-14 overflow-hidden relative">
+                                                {/* Background wording */}
+                                                <div className="absolute top-0 -left-10 select-none overflow-hidden h-full flex items-center transform -rotate-12 pointer-events-none opacity-[0.03]">
+                                                    <h2 className="text-[12vw] font-black text-white uppercase tracking-tighter w-[200%] leading-none whitespace-nowrap">
+                                                        {albumInfo.title}
+                                                    </h2>
                                                 </div>
-                                                <div className="p-6 md:p-8">
-                                                    <div className="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
-                                                        {albumPhotos.map((photo, i) => (
-                                                            <div key={photo.id} className="break-inside-avoid relative group rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-xl transition-all">
-                                                                <img src={photo.image_url} alt="Event Gallery" className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-500" />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
-                                                            </div>
-                                                        ))}
+
+                                                <div className="relative z-10 flex flex-col items-center text-center">
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 20 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-padel-green/10 border border-padel-green/20 text-padel-green text-xs font-black uppercase tracking-[0.4em] mb-8"
+                                                    >
+                                                        <ImageIcon size={14} />
+                                                        <span>Official Media Available</span>
+                                                    </motion.div>
+                                                    
+                                                    <motion.h2 
+                                                        initial={{ opacity: 0, scale: 0.9 }}
+                                                        animate={{ opacity: 1, scale: 1 }}
+                                                        className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase mb-8 drop-shadow-2xl max-w-4xl leading-[0.9]"
+                                                    >
+                                                        {albumInfo.title}
+                                                    </motion.h2>
+
+                                                    {albumInfo.description && (
+                                                        <p className="text-gray-400 text-lg md:text-xl max-w-2xl font-medium leading-relaxed italic opacity-80 mb-10 border-l border-padel-green/30 pl-6 mx-auto">
+                                                            {albumInfo.description}
+                                                        </p>
+                                                    )}
+
+                                                    <div className="flex flex-col items-center gap-8">
+                                                        <div className="flex items-center gap-4 text-white font-black text-xs uppercase tracking-[0.3em] bg-black/40 px-6 py-2.5 rounded-full border border-white/10">
+                                                            <span className="flex items-center gap-2">
+                                                                <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
+                                                                {albumPhotos.length} High-Res Moments
+                                                            </span>
+                                                        </div>
+
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 20 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: 0.2 }}
+                                                        >
+                                                            <Link 
+                                                                to={`/gallery/${albumInfo.id}`}
+                                                                className="group relative inline-flex items-center gap-10 pl-10 pr-4 py-4 bg-padel-green text-slate-950 rounded-full font-black uppercase tracking-widest text-base hover:bg-white hover:scale-105 transition-all duration-500 shadow-[0_0_50px_rgba(150,250,50,0.3)]"
+                                                            >
+                                                                <span className="relative z-10 !text-slate-950">Enter Full Gallery</span>
+                                                                <div className="w-14 h-14 rounded-full bg-slate-950 flex items-center justify-center text-padel-green group-hover:translate-x-2 transition-transform duration-500">
+                                                                    <ArrowLeft size={24} className="rotate-180" />
+                                                                </div>
+                                                            </Link>
+                                                        </motion.div>
                                                     </div>
                                                 </div>
                                             </div>
+                                        ) : (
+                                            !event.youtube_playlist_url && (
+                                                <div className="bg-slate-900 shadow-2xl border border-white/5 rounded-3xl p-12 text-center opacity-60">
+                                                    <ImageIcon className="w-16 h-16 text-slate-700 mx-auto mb-6" />
+                                                    <h3 className="text-2xl font-bold text-white mb-2">No Media Available Yet</h3>
+                                                    <p className="text-gray-500">Media from this event will be posted shortly after completion.</p>
+                                                </div>
+                                            )
                                         )}
 
-                                        {/* YouTube Highlights inside Media */}
+                                        {/* YouTube Highlights Section */}
                                         {event.youtube_playlist_url && (
-                                            <div className="bg-slate-900 rounded-3xl shadow-2xl border border-slate-800 p-8 md:p-14 overflow-hidden relative">
+                                            <div className="bg-slate-900 rounded-[3rem] shadow-2xl border border-slate-800 p-8 md:p-14 overflow-hidden relative">
                                                 {/* Background wording */}
                                                 <div className="absolute top-0 -left-10 select-none overflow-hidden h-full flex items-center transform -rotate-12 pointer-events-none opacity-[0.03]">
                                                     <h2 className="text-[120px] font-black text-white uppercase tracking-tighter w-[200%] leading-none">
@@ -1484,14 +1693,6 @@ const EventDetails = () => {
                                                 </div>
                                             </div>
                                         )}
-
-                                        {!event.youtube_playlist_url && albumPhotos.length === 0 && (
-                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
-                                                <ImageIcon className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Media Available Yet</h3>
-                                                <p className="text-gray-500">Photos and videos from the event will be posted here once the event has completed - Check Back Soon.</p>
-                                            </div>
-                                        )}
                                     </div>
                                 )}
                             </motion.div>
@@ -1531,7 +1732,7 @@ const EventDetails = () => {
                                     {/* Modal Content */}
                                     <div className="p-8">
                                         {regStep === 1 ? (
-                                            <form onSubmit={handleRegister} className="space-y-4">
+                                            <div className="space-y-4">
                                                 <div>
                                                     <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
                                                     <input
@@ -1576,10 +1777,38 @@ const EventDetails = () => {
                                                             onChange={handleInputChange}
                                                             className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all appearance-none cursor-pointer"
                                                         >
-                                                            <option value="Gold">Gold</option>
-                                                            <option value="Silver">Silver</option>
-                                                            <option value="Bronze">Bronze</option>
+                                                            <option value="" disabled>Select Category</option>
+                                                            {playerDivisions.length > 0 ? (
+                                                                playerDivisions.map(tab => (
+                                                                    <option key={tab.Id} value={tab.Name}>{tab.Name}</option>
+                                                                ))
+                                                            ) : (
+                                                                <>
+                                                                    <optgroup label="Men's">
+                                                                        <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
+                                                                        <option value="Men's Advanced">Men's Advanced</option>
+                                                                        <option value="Men's Intermediate">Men's Intermediate</option>
+                                                                    </optgroup>
+                                                                    <optgroup label="Ladies">
+                                                                        <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
+                                                                        <option value="Ladies Advanced">Ladies Advanced</option>
+                                                                        <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                                    </optgroup>
+                                                                    <optgroup label="Mixed">
+                                                                        <option value="Mixed Open">Mixed Open</option>
+                                                                        <option value="Mixed Advanced">Mixed Advanced</option>
+                                                                        <option value="Mixed Intermediate">Mixed Intermediate</option>
+                                                                    </optgroup>
+                                                                    <optgroup label="Other">
+                                                                        <option value="Men's 40+">Men's 40+</option>
+                                                                        <option value="Ladies 40+">Ladies 40+</option>
+                                                                    </optgroup>
+                                                                </>
+                                                            )}
                                                         </select>
+                                                        {loggedInPlayer?.category && (
+                                                            <p className="text-[10px] text-padel-green font-bold mt-1">✓ Pre-filled from your profile</p>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <div>
@@ -1594,31 +1823,58 @@ const EventDetails = () => {
                                                     />
                                                 </div>
 
+                                                {/* Entry fee summary */}
+                                                {event.entry_fee > 0 && (
+                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between">
+                                                        <span className="text-sm font-bold text-slate-600">Entry Fee</span>
+                                                        <span className="text-lg font-black text-slate-900">R{event.entry_fee}</span>
+                                                    </div>
+                                                )}
+
+                                                {isAlreadyRegistered && (
+                                                    <p className="text-red-500 text-xs font-bold text-center bg-red-50 py-2 rounded-lg border border-red-100">
+                                                        You have already registered for this event.
+                                                    </p>
+                                                )}
+
                                                 <button
-                                                    type="submit"
-                                                    disabled={isSubmitting}
-                                                    className="w-full bg-padel-green text-black font-bold py-4 rounded-xl shadow-lg shadow-padel-green/20 hover:bg-black hover:text-padel-green transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    type="button"
+                                                    onClick={handleRegister}
+                                                    disabled={isSubmitting || isAlreadyRegistered}
+                                                    className="w-full bg-slate-900 text-padel-green font-bold py-4 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all mt-4 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {isSubmitting ? 'Processing...' : 'Proceed to Payment'}
+                                                    {isSubmitting ? (
+                                                        <Loader className="w-5 h-5 animate-spin" />
+                                                    ) : (
+                                                        <>
+                                                            <CreditCard className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                                            {isAlreadyRegistered ? 'Already Registered' : `Pay ${event.entry_fee ? `R${event.entry_fee}` : 'Now'} via Paystack`}
+                                                        </>
+                                                    )}
                                                 </button>
-                                            </form>
+                                                <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">Secured by Paystack · ZAR</p>
+                                            </div>
                                         ) : (
                                             <div className="text-center py-8">
                                                 <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
                                                     <CheckCircle className="w-10 h-10 text-green-600" />
                                                 </div>
-                                                <h4 className="text-2xl font-bold text-slate-900 mb-2">Registration Confirmed!</h4>
-                                                <p className="text-slate-500 mb-8">Your details have been saved. Please proceed to payment to finalize your booking.</p>
-
+                                                <h4 className="text-2xl font-bold text-slate-900 mb-2">Payment Successful!</h4>
+                                                <p className="text-slate-500 mb-6">You're registered for <strong>{event.event_name}</strong>. See you on the court!</p>
                                                 <button
-                                                    onClick={handlePaymentRedirect}
-                                                    className="w-full bg-slate-900 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all flex items-center justify-center gap-2"
+                                                    onClick={() => { 
+                                                        setIsModalOpen(false); 
+                                                        setRegStep(1);
+                                                        setFormData({ full_name: '', email: '', phone: '', partner_name: '', division: '' });
+                                                        setIsAlreadyRegistered(true);
+                                                    }}
+                                                    className="w-full bg-padel-green text-black font-bold py-4 rounded-xl shadow-lg hover:bg-black hover:text-padel-green transition-all"
                                                 >
-                                                    <CreditCard className="w-5 h-5" />
-                                                    Pay Now
+                                                    Close
                                                 </button>
                                             </div>
                                         )}
+
                                     </div>
                                 </div>
                             </motion.div>
