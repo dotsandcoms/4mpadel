@@ -90,21 +90,21 @@ const AlbumDetails = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#0A0D14] pt-8 md:pt-24 pb-12 relative overflow-x-hidden">
+        <div className="min-h-screen bg-[#0A0D14] pt-4 md:pt-24 pb-12 relative overflow-x-hidden">
             <Helmet>
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
             </Helmet>
 
-            <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
+            <div className="w-full max-w-[1800px] mx-auto px-2 sm:px-10 lg:px-16">
                 {/* Header */}
-                <div className="mb-8 md:mb-20">
+                <div className="mb-4 md:mb-20">
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                     >
                         <Link
                             to="/gallery"
-                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[10px] sm:text-xs hover:translate-x-[-8px] transition-transform mb-6 sm:mb-8 group"
+                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-transform mb-4 sm:mb-8 group"
                         >
                             <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-3 group-hover:scale-110 transition-transform" />
                             Back to Collection
@@ -116,16 +116,16 @@ const AlbumDetails = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="space-y-4 sm:space-y-6"
                     >
-                        <h1 className="text-4xl sm:text-6xl md:text-[8rem] font-black text-white tracking-tighter uppercase leading-[0.8] mb-4 sm:mb-8 transition-all">{album.title}</h1>
-                        <div className="flex items-center gap-3 sm:gap-4 text-white/40 font-black text-[9px] sm:text-xs uppercase tracking-[0.3em]">
+                        <h1 className="text-3xl sm:text-6xl md:text-[8rem] font-black text-white tracking-tighter uppercase leading-[0.8] mb-2 sm:mb-8 transition-all">{album.title}</h1>
+                        <div className="flex items-center gap-3 sm:gap-4 text-white/40 font-black text-[8px] sm:text-xs uppercase tracking-[0.3em]">
                             <span className="text-padel-green">
                                 {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                             </span>
                             <div className="w-[1px] h-3 sm:h-4 bg-white/10" />
-                            <span>{images.length} Photos</span>
+                            <span>{images.length} Photos Captured</span>
                         </div>
                         {album.description && (
-                            <p className="text-gray-400 text-sm sm:text-lg md:text-2xl max-w-4xl font-medium leading-relaxed opacity-60 border-l-[2px] sm:border-l-[3px] border-padel-green/30 pl-4 sm:pl-8 mt-6 sm:mt-10">
+                            <p className="text-gray-400 text-xs sm:text-lg md:text-2xl max-w-4xl font-medium leading-relaxed opacity-60 border-l-[2px] sm:border-l-[3px] border-padel-green/30 pl-4 sm:pl-8 mt-4 sm:mt-10">
                                 {album.description}
                             </p>
                         )}
@@ -134,12 +134,12 @@ const AlbumDetails = () => {
 
                 {/* Masonry / Grid Layout - 4 columns on mobile */}
                 {images.length === 0 ? (
-                    <div className="text-center py-20 bg-[#1E293B]/10 rounded-2xl border border-white/5">
-                        <ImageIcon className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                        <h3 className="text-xl font-bold text-white mb-2">No Images Yet</h3>
+                    <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
+                        <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+                        <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
                     </div>
                 ) : (
-                    <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-2 sm:gap-4 space-y-2 sm:space-y-4">
+                    <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
                         {images.map((img, index) => (
                                 <motion.div
                                     key={img.id}
