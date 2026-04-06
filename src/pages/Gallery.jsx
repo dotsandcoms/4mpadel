@@ -30,7 +30,7 @@ const Gallery = () => {
     }, []);
 
     return (
-        <div className="pt-8 md:pt-24 pb-12 min-h-screen relative overflow-hidden bg-[#0A0D14]">
+        <div className="pt-4 md:pt-24 pb-4 md:pb-12 min-h-screen relative overflow-hidden bg-[#0A0D14]">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />
@@ -42,9 +42,9 @@ const Gallery = () => {
                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-padel-green/10 rounded-full blur-[150px] translate-y-1/2 -translate-x-1/4" />
             </div>
 
-            <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
+            <div className="relative z-10 w-full max-w-[1800px] mx-auto px-2 sm:px-10 lg:px-16">
                 {/* Stylistic WOW Header - Full Width Style */}
-                <div className="relative pt-2 md:pt-20 pb-16 md:pb-32 overflow-hidden">
+                <div className="relative pt-0 md:pt-20 pb-10 md:pb-32 overflow-hidden">
                     {/* Background Translucent Watermark (Now scaled for true full width) */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none w-full flex items-center justify-center -rotate-2 overflow-hidden opacity-[0.03]">
                         <h2 className="text-[20vw] font-black text-white uppercase tracking-tighter w-full text-center leading-none whitespace-nowrap">
@@ -96,11 +96,11 @@ const Gallery = () => {
                         <p className="text-gray-500 font-bold text-lg">New memories are currently being processed.</p>
                     </motion.div>
                 ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-12 pb-32">
+                    <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-12 pb-32">
                         {albums.map((album, index) => (
                             <motion.div
                                 key={album.id}
-                                initial={{ opacity: 0, y: 40 }}
+                                initial={{ opacity: 0, y: 30 }}
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true, margin: "-100px" }}
                                 transition={{ delay: index * 0.05, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
@@ -108,7 +108,7 @@ const Gallery = () => {
                             >
                                 <Link
                                     to={`/gallery/${album.id}`}
-                                    className="group relative block bg-slate-900/60 border border-white/5 rounded-[3rem] overflow-hidden hover:border-padel-green/40 transition-all duration-700 shadow-3xl h-full flex flex-col"
+                                    className="group relative block bg-slate-900/60 border border-white/5 rounded-2xl md:rounded-[3rem] overflow-hidden hover:border-padel-green/40 transition-all duration-700 shadow-xl h-full flex flex-col"
                                 >
                                     <div className="relative aspect-[16/11] overflow-hidden bg-slate-950">
                                         {album.cover_image_url ? (
@@ -120,39 +120,39 @@ const Gallery = () => {
                                             />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center bg-slate-900">
-                                                <ImageIcon className="w-16 h-16 text-slate-800" />
+                                                <ImageIcon className="w-10 h-10 text-slate-800" />
                                             </div>
                                         )}
                                         
                                         {/* Immersive Overlay */}
                                         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent opacity-90 group-hover:opacity-100 transition-opacity duration-700" />
                                         
-                                        <div className="absolute inset-x-0 bottom-0 p-10 transform group-hover:-translate-y-2 transition-transform duration-700">
-                                            <div className="flex items-center gap-3 mb-5">
-                                                <div className="px-4 py-1.5 rounded-full bg-padel-green/10 border border-padel-green/30 backdrop-blur-xl">
-                                                    <p className="text-padel-green text-[11px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
+                                        <div className="absolute inset-x-0 bottom-0 p-4 md:p-10 transform group-hover:-translate-y-2 transition-transform duration-700">
+                                            <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-5">
+                                                <div className="px-2 md:px-4 py-0.5 md:py-1.5 rounded-full bg-padel-green/10 border border-padel-green/30 backdrop-blur-xl">
+                                                    <p className="text-padel-green text-[7px] md:text-[11px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
                                                         {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                                                     </p>
                                                 </div>
                                             </div>
-                                            <h3 className="text-4xl md:text-5xl font-black text-white leading-[0.9] uppercase tracking-tighter mb-6 group-hover:text-white transition-colors">
+                                            <h3 className="text-lg md:text-5xl font-black text-white leading-[1] uppercase tracking-tighter mb-2 md:mb-6 group-hover:text-white transition-colors line-clamp-2">
                                                 {album.title}
                                             </h3>
-                                            <div className="flex items-center gap-3 text-gray-500 font-black text-xs uppercase tracking-[0.3em] group-hover:text-padel-green transition-all duration-500">
-                                                <span>Enter Gallery</span>
-                                                <ArrowLeft className="w-5 h-5 rotate-180 group-hover:translate-x-3 transition-transform duration-500" />
+                                            <div className="flex items-center gap-2 text-gray-500 font-black text-[7px] md:text-xs uppercase tracking-[0.3em] group-hover:text-padel-green transition-all duration-500">
+                                                <span>Enter</span>
+                                                <ArrowLeft className="w-3 h-3 md:w-5 md:h-5 rotate-180 group-hover:translate-x-2 transition-transform duration-500" />
                                             </div>
                                         </div>
 
                                         {/* Floating Action Button */}
-                                        <div className="absolute top-8 right-8 w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-2xl border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0 shadow-2xl">
-                                            <ImageIcon size={24} className="text-padel-green" />
+                                        <div className="absolute top-4 right-4 md:top-8 md:right-8 w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0 shadow-2xl">
+                                            <ImageIcon size={18} className="text-padel-green" />
                                         </div>
                                     </div>
                                     
                                     {album.description && (
-                                        <div className="p-10 pt-4 flex-grow bg-slate-900/40">
-                                            <p className="text-gray-400 text-base font-medium line-clamp-3 leading-relaxed opacity-60 italic border-l-[3px] border-padel-green/30 pl-6 group-hover:opacity-100 transition-opacity duration-700">
+                                        <div className="p-4 md:p-10 pt-2 flex-grow bg-slate-900/40 hidden md:block">
+                                            <p className="text-gray-400 text-xs md:text-base font-medium line-clamp-2 leading-relaxed opacity-60 italic border-l-[2px] md:border-l-[3px] border-padel-green/30 pl-4 md:pl-6 group-hover:opacity-100 transition-opacity duration-700">
                                                 {album.description}
                                             </p>
                                         </div>
