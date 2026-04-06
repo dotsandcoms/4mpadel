@@ -975,7 +975,7 @@ const EventDetails = () => {
                             </div>
 
                             {/* Middle Side: Registration Action */}
-                            <div className="p-8 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-8 relative overflow-hidden md:border-r border-dashed border-gray-300/50">
+                            <div className="p-6 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-4 md:gap-8 relative overflow-hidden md:border-r border-dashed border-gray-300/50">
                                 <div className="absolute -top-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
                                 <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
                                 <div className="absolute -top-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
@@ -1097,14 +1097,14 @@ const EventDetails = () => {
                                     })()}
                                 </motion.div>
 
-                                <div className="text-center pt-8 border-t border-gray-200/50 w-full relative z-10">
+                                <div className="text-center pt-4 md:pt-8 border-t border-gray-200/50 w-full relative z-10">
                                     <p className="text-[10px] text-gray-300 uppercase tracking-[0.3em] font-black">Powered by 4M Padel</p>
                                 </div>
                             </div>
 
                             {/* Right Side: Poster */}
                             {(event.custom_image_url || event.image_url) && (
-                                <div className="p-6 md:p-12 w-full md:w-[300px] bg-white/40 flex flex-col items-center justify-center relative overflow-hidden">
+                                <div className="p-4 md:p-12 w-full md:w-[300px] bg-white/40 flex flex-col items-center justify-center relative overflow-hidden">
                                     <motion.div
                                         variants={itemVariants}
                                         whileHover={{ scale: 1.05 }}
