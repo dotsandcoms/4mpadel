@@ -76,6 +76,7 @@ const Navbar = ({ isDark = false }) => {
     { name: 'Calendar', href: '/calendar' },
     { name: 'Players', href: '/players' },
     { name: 'Rankings', href: '/rankings' },
+    { name: 'Media', href: '/gallery', authRequired: true },
     {
       name: 'Academy',
       href: '#',
@@ -95,6 +96,8 @@ const Navbar = ({ isDark = false }) => {
     },
     { name: 'Contact', href: '/contact' },
   ];
+
+  const visibleLinks = navLinks.filter(link => !link.authRequired || session);
 
   return (
     <>
@@ -161,7 +164,7 @@ const Navbar = ({ isDark = false }) => {
 
           {/* Desktop Links */}
           <div className={`hidden md:flex items-center gap-6 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
-            {navLinks.map((link) => (
+            {visibleLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
@@ -245,7 +248,7 @@ const Navbar = ({ isDark = false }) => {
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
             className="fixed inset-0 z-40 bg-black/95 backdrop-blur-xl flex flex-col items-center justify-center gap-5 overflow-y-auto pt-32 pb-20"
           >
-            {navLinks.map((link, index) => (
+            {visibleLinks.map((link, index) => (
               <div key={link.name} className="flex flex-col items-center w-full">
                 <motion.a
                   href={link.href}

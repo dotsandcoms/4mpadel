@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, UploadCloud, Loader2, RefreshCw } from 'lucide-react';
+import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, UploadCloud, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 
 const GalleryManager = () => {
+    const fileInputRef = React.useRef(null);
     const [albums, setAlbums] = useState([]);
     const [events, setEvents] = useState([]); // Fetch calendar events
     const [loading, setLoading] = useState(true);
@@ -37,7 +38,7 @@ const GalleryManager = () => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('albums')
-                .select('*')
+                .select('*, calendar(event_name)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
@@ -227,6 +228,16 @@ const GalleryManager = () => {
         });
     };
 
+    // Helper for sanitizing title to folder name
+    const sanitizeFolderName = (title) => {
+        return (title || 'unnamed-album')
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9]/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+    };
+
     const handleBulkImageUpload = async (e) => {
         const files = Array.from(e.target.files);
         if (files.length === 0 || !selectedAlbum) return;
@@ -238,60 +249,70 @@ const GalleryManager = () => {
             let uploadedCount = 0;
             let dbErrorCount = 0;
 
+            // Sanitize album title for folder name
+            const folderName = sanitizeFolderName(selectedAlbum.title);
+
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 try {
-                    // Resize image
-                    const resizedFile = await resizeImage(file);
+                    // Generate both Full and Thumbnail resolutions
+                    const [resizedFull, resizedThumb] = await Promise.all([
+                        resizeImage(file, 1920, 0.82), // High Quality Full Size
+                        resizeImage(file, 600, 0.7)    // Fast Loading Thumbnail
+                    ]);
 
-                    const fileExt = 'jpg'; // We save resized as jpg
-                    const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`;
-                    const filePath = `${selectedAlbum.id}/${fileName}`;
+                    const randomId = Math.random().toString(36).substring(2, 8);
+                    const timestamp = Date.now();
+                    const baseFileName = `${randomId}_${timestamp}`;
+                    
+                    const fullPath = `${folderName}/${baseFileName}_full.jpg`;
+                    const thumbPath = `${folderName}/${baseFileName}_thumb.jpg`;
 
-                    // Upload to Storage
-                    const { error: uploadError } = await supabase.storage
-                        .from('gallery')
-                        .upload(filePath, resizedFile);
+                    // Upload both in parallel
+                    const [fullUpload, thumbUpload] = await Promise.all([
+                        supabase.storage.from('gallery').upload(fullPath, resizedFull, { cacheControl: '3600', upsert: false }),
+                        supabase.storage.from('gallery').upload(thumbPath, resizedThumb, { cacheControl: '3600', upsert: false })
+                    ]);
 
-                    if (uploadError) throw uploadError;
+                    if (fullUpload.error) throw fullUpload.error;
+                    if (thumbUpload.error) throw thumbUpload.error;
 
-                    // Get Public URL
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('gallery')
-                        .getPublicUrl(filePath);
+                    // Get Public URLs
+                    const fullUrl = supabase.storage.from('gallery').getPublicUrl(fullPath).data.publicUrl;
+                    const thumbUrl = supabase.storage.from('gallery').getPublicUrl(thumbPath).data.publicUrl;
 
-                    // Insert into DB
+                    // Insert into DB with both full and thumb URLs
                     const { error: dbError } = await supabase
                         .from('gallery_images')
                         .insert([{
                             album_id: selectedAlbum.id,
-                            image_url: publicUrl,
-                            sort_order: i // Initial simple sort
+                            image_url: fullUrl,
+                            thumbnail_url: thumbUrl,
+                            sort_order: (images?.[images.length - 1]?.sort_order || 0) + uploadedCount + 1
                         }]);
 
-                    // If it is the first image and the album has no cover image, set it
+                    if (dbError) throw dbError;
+
+                    // Update album cover if needed
                     if (uploadedCount === 0 && !selectedAlbum.cover_image_url) {
-                        await supabase.from('albums').update({ cover_image_url: publicUrl }).eq('id', selectedAlbum.id);
-                        selectedAlbum.cover_image_url = publicUrl; // Update local state for next check
+                        await supabase.from('albums').update({ cover_image_url: fullUrl }).eq('id', selectedAlbum.id);
+                        setSelectedAlbum(prev => ({ ...prev, cover_image_url: fullUrl }));
                     }
 
-                    if (dbError) {
-                        console.error('DB Error inserting image tracking row:', dbError);
-                        dbErrorCount++;
-                    } else {
-                        uploadedCount++;
-                    }
+                    uploadedCount++;
+                    setUploadProgress({ current: uploadedCount, total: files.length });
                 } catch (err) {
-                    console.error(`Error processing file ${file.name}:`, err);
+                    console.error("Error uploading file:", err);
+                    toast.error(`Failed to upload ${file.name}`);
                 }
-                setUploadProgress({ current: i + 1, total: files.length });
             }
 
-            toast.success(`Successfully uploaded ${uploadedCount} images.`);
+            if (uploadedCount > 0) {
+                toast.success(`Successfully uploaded ${uploadedCount} images.`);
+                fetchImages(selectedAlbum.id);
+                fetchAlbums(); // refresh total list
+            }
             if (dbErrorCount > 0) toast.error(`Failed to register ${dbErrorCount} images in database.`);
-
-            fetchImages(selectedAlbum.id);
-            fetchAlbums(); // refresh to hopefully fetch updated cover image
 
         } catch (error) {
             console.error('Bulk upload error:', error);
@@ -336,42 +357,75 @@ const GalleryManager = () => {
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setSelectedAlbum(null)}
-                            className="text-gray-400 hover:text-white transition-colors"
+                            className="p-3 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition-all border border-white/5 flex items-center justify-center"
+                            title="Back to Albums"
                         >
-                            &larr; Back to Albums
+                            <ArrowLeft size={20} />
                         </button>
                         <div>
-                            <h2 className="text-3xl font-bold text-white">{selectedAlbum.title}</h2>
-                            <p className="text-gray-400">Manage images for this album</p>
+                            <h2 className="text-3xl font-bold text-white tracking-tight">{selectedAlbum.title}</h2>
+                            <p className="text-gray-400 text-sm flex items-center gap-2">
+                                <FileText size={14} />
+                                {selectedAlbum.calendar?.event_name ? `Linked to ${selectedAlbum.calendar.event_name}` : 'No event linked'}
+                            </p>
                         </div>
                     </div>
-                    <div className="relative">
+                    <div>
                         <input
                             type="file"
+                            ref={fileInputRef}
                             multiple
                             accept="image/*"
                             onChange={handleBulkImageUpload}
-                            disabled={isUploading}
-                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed z-10"
+                            className="hidden"
                         />
                         <button
+                            onClick={() => fileInputRef.current?.click()}
                             disabled={isUploading}
-                            className="flex items-center gap-2 bg-padel-green text-black px-6 py-3 rounded-xl font-bold hover:bg-white transition-colors disabled:opacity-50"
+                            className="relative group overflow-hidden bg-padel-green text-black px-6 py-3 rounded-xl font-bold hover:bg-white transition-all disabled:opacity-50"
                         >
-                            {isUploading ? (
-                                <>
-                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                    Uploading {uploadProgress.current}/{uploadProgress.total}
-                                </>
-                            ) : (
-                                <>
-                                    <UploadCloud size={20} />
-                                    Bulk Upload Images
-                                </>
+                            <div className="flex items-center gap-2 relative z-10">
+                                {isUploading ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Uploading {uploadProgress.current}/{uploadProgress.total}</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <UploadCloud size={20} />
+                                        <span>Bulk Upload</span>
+                                    </>
+                                )}
+                            </div>
+                            {isUploading && (
+                                <motion.div
+                                    className="absolute inset-0 bg-black/10 origin-left"
+                                    initial={{ scaleX: 0 }}
+                                    animate={{ scaleX: uploadProgress.current / uploadProgress.total }}
+                                    transition={{ duration: 0.5 }}
+                                />
                             )}
                         </button>
                     </div>
                 </div>
+
+                {isUploading && (
+                    <div className="bg-padel-green/5 border border-padel-green/20 rounded-2xl p-4 md:p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-full bg-padel-green/10 flex items-center justify-center shrink-0">
+                                <Loader2 className="w-6 h-6 text-padel-green animate-spin" />
+                            </div>
+                            <div>
+                                <p className="text-white font-bold text-lg leading-tight">Uploading Assets</p>
+                                <p className="text-gray-400 text-xs">Storing resized JPEGs in storage...</p>
+                            </div>
+                        </div>
+                        <div className="w-full sm:w-auto text-left sm:text-right border-t sm:border-t-0 border-white/5 pt-3 sm:pt-0">
+                            <p className="text-padel-green font-black text-2xl sm:text-3xl leading-none">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</p>
+                            <p className="text-gray-500 text-[10px] uppercase tracking-widest mt-1 font-bold">{uploadProgress.current} / {uploadProgress.total} Files Complete</p>
+                        </div>
+                    </div>
+                )}
 
                 {loadingImages ? (
                     <div className="flex justify-center py-12">
@@ -385,8 +439,13 @@ const GalleryManager = () => {
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {images.map(img => (
-                            <div key={img.id} className="relative group bg-black/50 border border-white/10 rounded-xl overflow-hidden aspect-square">
-                                <img src={img.image_url} alt="Gallery" className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                            <div key={img.id} className="relative group bg-slate-900 border border-white/5 rounded-xl overflow-hidden aspect-square">
+                                <img 
+                                    src={img.thumbnail_url || img.image_url} 
+                                    alt="Gallery" 
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                                    loading="lazy"
+                                />
                                 <div className="absolute inset-0 bg-black/60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                     <button
                                         onClick={() => window.open(img.image_url, '_blank')}
@@ -464,11 +523,19 @@ const GalleryManager = () => {
                             <div className="p-5 flex-1 flex flex-col">
                                 <div className="flex justify-between items-start mb-2">
                                     <h3 className="text-xl font-bold text-white line-clamp-1">{album.title}</h3>
-                                    <div className={`px-2 py-1 rounded-full text-xs font-bold ${album.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
+                                    <div className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${album.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
                                         {album.is_active ? 'Active' : 'Hidden'}
                                     </div>
                                 </div>
-                                <p className="text-sm text-gray-400 line-clamp-2 mb-4 flex-1">{album.description || 'No description'}</p>
+                                <div className="flex-1">
+                                    {album.calendar?.event_name && (
+                                        <div className="flex items-center gap-1.5 text-padel-green/70 text-[11px] font-bold uppercase tracking-wider mb-2">
+                                            <FileText size={12} />
+                                            <span className="line-clamp-1">{album.calendar.event_name}</span>
+                                        </div>
+                                    )}
+                                    <p className="text-sm text-gray-400 line-clamp-2 mb-4">{album.description || 'No description'}</p>
+                                </div>
 
                                 <div className="flex justify-between items-center pt-4 border-t border-white/10">
                                     <button

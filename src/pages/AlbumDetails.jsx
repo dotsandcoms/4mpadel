@@ -95,24 +95,37 @@ const AlbumDetails = () => {
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
             </Helmet>
 
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="w-full max-w-[1800px] mx-auto px-6 sm:px-10 lg:px-16">
                 {/* Header */}
-                <div className="mb-12">
-                    <Link
-                        to="/gallery"
-                        className="inline-flex items-center text-gray-400 hover:text-white transition-colors mb-6 group"
+                <div className="mb-20">
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
                     >
-                        <ArrowLeft className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform" />
-                        Back to Galleries
-                    </Link>
+                        <Link
+                            to="/gallery"
+                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-xs hover:translate-x-[-8px] transition-transform mb-8 group"
+                        >
+                            <ArrowLeft className="w-5 h-5 mr-3 group-hover:scale-110 transition-transform" />
+                            Back to Collection
+                        </Link>
+                    </motion.div>
 
                     <motion.div
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
+                        className="space-y-6"
                     >
-                        <h1 className="text-4xl md:text-5xl font-bold text-white mb-4 uppercase">{album.title}</h1>
+                        <h1 className="text-6xl md:text-[8rem] font-black text-white tracking-tighter uppercase leading-[0.8] mb-8">{album.title}</h1>
+                        <div className="flex items-center gap-4 text-gray-500 font-black text-xs uppercase tracking-[0.3em]">
+                            <span className="text-padel-green">
+                                {new Date(album.created_at).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                            </span>
+                            <div className="w-[1px] h-4 bg-white/10" />
+                            <span>{images.length} High-Res Moments</span>
+                        </div>
                         {album.description && (
-                            <p className="text-xl text-gray-400 max-w-3xl border-l-4 border-padel-green pl-4">
+                            <p className="text-gray-400 text-lg md:text-2xl max-w-4xl font-medium leading-relaxed opacity-70 border-l-[3px] border-padel-green/30 pl-8 mt-10">
                                 {album.description}
                             </p>
                         )}
@@ -129,22 +142,24 @@ const AlbumDetails = () => {
                 ) : (
                     <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
                         {images.map((img, index) => (
-                            <motion.div
-                                key={img.id}
-                                initial={{ opacity: 0, scale: 0.9 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ delay: index * 0.05, duration: 0.3 }}
-                                className="break-inside-avoid relative group cursor-zoom-in overflow-hidden rounded-xl bg-black/50 border border-white/10"
-                                onClick={() => setSelectedImageIndex(index)}
-                            >
-                                <img
-                                    src={img.image_url}
-                                    alt={img.caption || album.title}
-                                    className="w-full h-auto object-cover transition-transform duration-500 group-hover:scale-[1.03]"
-                                    loading="lazy"
-                                />
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                            </motion.div>
+                                <motion.div
+                                    key={img.id}
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    whileInView={{ opacity: 1, scale: 1 }}
+                                    viewport={{ once: true }}
+                                    transition={{ delay: index * 0.02, duration: 0.4 }}
+                                    whileHover={{ scale: 1.02 }}
+                                    className="break-inside-avoid relative group cursor-zoom-in overflow-hidden rounded-2xl bg-slate-900 border border-white/5 shadow-lg group"
+                                    onClick={() => setSelectedImageIndex(index)}
+                                >
+                                    <img
+                                        src={img.thumbnail_url || img.image_url}
+                                        alt={img.caption || album.title}
+                                        className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110"
+                                        loading="lazy"
+                                    />
+                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-slate-900/10 transition-colors duration-300" />
+                                </motion.div>
                         ))}
                     </div>
                 )}
