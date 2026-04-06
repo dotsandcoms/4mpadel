@@ -30,7 +30,7 @@ const Gallery = () => {
     }, []);
 
     return (
-        <div className="pt-24 pb-12 min-h-screen relative overflow-hidden bg-[#0A0D14]">
+        <div className="pt-8 md:pt-24 pb-12 min-h-screen relative overflow-hidden bg-[#0A0D14]">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />
@@ -44,7 +44,7 @@ const Gallery = () => {
 
             <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
                 {/* Stylistic WOW Header - Full Width Style */}
-                <div className="relative pt-20 pb-32 overflow-hidden">
+                <div className="relative pt-2 md:pt-20 pb-16 md:pb-32 overflow-hidden">
                     {/* Background Translucent Watermark (Now scaled for true full width) */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none w-full flex items-center justify-center -rotate-2 overflow-hidden opacity-[0.03]">
                         <h2 className="text-[20vw] font-black text-white uppercase tracking-tighter w-full text-center leading-none whitespace-nowrap">
