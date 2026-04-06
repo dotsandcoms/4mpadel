@@ -90,14 +90,14 @@ const AlbumDetails = () => {
     }
 
     return (
-        <div className="min-h-screen bg-[#0A0D14] pt-24 pb-12 relative">
+        <div className="min-h-screen bg-[#0A0D14] pt-16 md:pt-24 pb-12 relative">
             <Helmet>
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
             </Helmet>
 
             <div className="w-full max-w-[1800px] mx-auto px-6 sm:px-10 lg:px-16">
                 {/* Header */}
-                <div className="mb-20">
+                <div className="mb-12 md:mb-20">
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
