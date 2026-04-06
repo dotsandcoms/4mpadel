@@ -116,6 +116,7 @@ const CalendarManager = () => {
         registered_players: 0,
         rankedin_id: '',
         rankedin_url: '',
+        entry_fee: '',
         featured_live: false,
         live_youtube_url: '',
         youtube_playlist_url: '',
@@ -327,6 +328,9 @@ const CalendarManager = () => {
             if (payload.end_date === '') payload.end_date = null;
             if (payload.start_time === '') payload.start_time = null;
             if (payload.end_time === '') payload.end_time = null;
+            if (payload.entry_fee === '') payload.entry_fee = null;
+            if (payload.registered_players === '') payload.registered_players = 0;
+            if (payload.rankedin_id === '') payload.rankedin_id = null;
 
             if (editingEvent) {
                 // Update
@@ -404,6 +408,7 @@ const CalendarManager = () => {
             registered_players: 0,
             rankedin_id: '',
             rankedin_url: '',
+            entry_fee: '',
             featured_live: false,
             live_youtube_url: '',
             youtube_playlist_url: '',
@@ -503,6 +508,7 @@ const CalendarManager = () => {
             registered_players: event.registered_players || 0,
             rankedin_id: event.rankedin_id || '',
             rankedin_url: event.rankedin_url || '',
+            entry_fee: event.entry_fee !== undefined && event.entry_fee !== null ? String(event.entry_fee) : '',
             featured_live: event.featured_live || false,
             live_youtube_url: event.live_youtube_url || '',
             youtube_playlist_url: event.youtube_playlist_url || '',
@@ -1427,6 +1433,27 @@ const CalendarManager = () => {
                                                 readOnly
                                             />
                                             <p className="text-[9px] text-gray-500 mt-1 italic">Automatically populated when syncing/linking</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Entry Fee */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-padel-green mb-1 uppercase">Entry Fee (R)</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold">R</span>
+                                                <input
+                                                    type="number"
+                                                    name="entry_fee"
+                                                    value={formData.entry_fee}
+                                                    onChange={handleInputChange}
+                                                    placeholder="e.g. 450"
+                                                    min="0"
+                                                    step="1"
+                                                    className="w-full bg-black/40 border border-padel-green/30 rounded-lg pl-8 pr-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                                />
+                                            </div>
+                                            <p className="text-[9px] text-gray-500 mt-1 italic">Used by Event Finance to track entry payments</p>
                                         </div>
                                     </div>
 
