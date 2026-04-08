@@ -8,7 +8,7 @@ import VideoModal from '../components/VideoModal';
 import AuthModal from '../components/AuthModal';
 
 const AlbumDetails = () => {
-    const { id } = useParams();
+    const { slug } = useParams();
     const [album, setAlbum] = useState(null);
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -39,12 +39,17 @@ const AlbumDetails = () => {
         const fetchAlbumAndImages = async () => {
             try {
                 // Fetch Album
-                const { data: albumData, error: albumError } = await supabase
-                    .from('albums')
-                    .select('*')
-                    .eq('id', id)
-                    .eq('is_active', true)
-                    .single();
+                // Fetch Album - Try Slug first, then ID as fallback 
+                const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slug);
+                let albumQuery = supabase.from('albums').select('*').eq('is_active', true);
+                
+                if (isUUID) {
+                    albumQuery = albumQuery.or(`slug.eq.${slug},id.eq.${slug}`);
+                } else {
+                    albumQuery = albumQuery.eq('slug', slug);
+                }
+
+                const { data: albumData, error: albumError } = await albumQuery.single();
 
                 if (albumError) throw albumError;
                 setAlbum(albumData);
@@ -53,7 +58,7 @@ const AlbumDetails = () => {
                 const { data: imagesData, error: imagesError } = await supabase
                     .from('gallery_images')
                     .select('*')
-                    .eq('album_id', id)
+                    .eq('album_id', albumData.id)
                     .order('sort_order', { ascending: true })
                     .order('created_at', { ascending: true }); // old ones first generally makes sense for chronological event photos
 
@@ -82,10 +87,10 @@ const AlbumDetails = () => {
             }
         };
 
-        if (id) {
+        if (slug) {
             fetchAlbumAndImages();
         }
-    }, [id]);
+    }, [slug]);
 
     useEffect(() => {
         const fetchPlaylistItems = async () => {

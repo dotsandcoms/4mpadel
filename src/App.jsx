@@ -97,7 +97,7 @@ function AppContent() {
           <Route path="/blog" element={<Blog />} />
           <Route path="/blog/:slug" element={<BlogPost />} />
           <Route path="/gallery" element={<Gallery />} />
-          <Route path="/gallery/:id" element={<AlbumDetails />} />
+          <Route path="/gallery/:slug" element={<AlbumDetails />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/results/:id" element={<TournamentDraw />} />
           <Route path="/draws/:id" element={<TournamentDraw />} />

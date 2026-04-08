@@ -106,7 +106,7 @@ const Gallery = () => {
                                 className="h-full"
                             >
                                 <Link
-                                    to={`/gallery/${album.id}`}
+                                    to={`/gallery/${album.slug || album.id}`}
                                     className="group relative block bg-slate-900/60 border border-white/5 rounded-2xl md:rounded-[3rem] overflow-hidden hover:border-padel-green/40 transition-all duration-700 shadow-xl h-full flex flex-col"
                                 >
                                     <div className="relative aspect-[16/11] overflow-hidden bg-slate-950">

@@ -20,7 +20,8 @@ const GalleryManager = () => {
         is_active: true,
         cover_image_url: '',
         event_id: '',
-        youtube_playlist_url: ''
+        youtube_playlist_url: '',
+        slug: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -102,7 +103,8 @@ const GalleryManager = () => {
             is_active: true,
             cover_image_url: '',
             event_id: '',
-            youtube_playlist_url: ''
+            youtube_playlist_url: '',
+            slug: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -116,7 +118,8 @@ const GalleryManager = () => {
             is_active: album.is_active,
             cover_image_url: album.cover_image_url || '',
             event_id: album.event_id || '',
-            youtube_playlist_url: album.youtube_playlist_url || ''
+            youtube_playlist_url: album.youtube_playlist_url || '',
+            slug: album.slug || ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -239,6 +242,18 @@ const GalleryManager = () => {
             .replace(/[^a-z0-9]/g, '-')
             .replace(/-+/g, '-')
             .replace(/^-|-$/g, '');
+    };
+
+    const generateSlug = (text) => {
+        return text
+            .toString()
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, '-')     // Replace spaces with -
+            .replace(/[^\w-]+/g, '') // Remove all non-word chars
+            .replace(/--+/g, '-')    // Replace multiple - with single -
+            .replace(/^-+/, '')      // Trim - from start of text
+            .replace(/-+$/, '');     // Trim - from end of text
     };
 
     const handleBulkImageUpload = async (e) => {
@@ -604,10 +619,31 @@ const GalleryManager = () => {
                                             name="title"
                                             required
                                             value={albumFormData.title}
-                                            onChange={handleAlbumInputChange}
+                                            onChange={(e) => {
+                                                const newTitle = e.target.value;
+                                                setAlbumFormData(prev => ({
+                                                    ...prev,
+                                                    title: newTitle,
+                                                    // Only auto-update slug if it was empty or matched the previous title's slug
+                                                    slug: (!prev.slug || prev.slug === generateSlug(prev.title)) ? generateSlug(newTitle) : prev.slug
+                                                }));
+                                            }}
                                             placeholder="e.g. Summer Tournament 2024"
                                             className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">URL Slug (Human-friendly ID)</label>
+                                        <input
+                                            type="text"
+                                            name="slug"
+                                            required
+                                            value={albumFormData.slug}
+                                            onChange={handleAlbumInputChange}
+                                            placeholder="e.g. summer-tournament-2024"
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none font-mono text-sm"
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-1 italic">This determines the URL: 4mpadel.co.za/gallery/slug</p>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Description</label>
