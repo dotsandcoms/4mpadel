@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Trophy, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, Trophy, AlertCircle } from 'lucide-react';
 import { usePaystackPayment } from 'react-paystack';
-import { toPaystackAmount } from '../constants/fees';
+import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
@@ -15,7 +15,18 @@ const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '
     .split(/\s+/)[0]
     .replace(/[^a-zA-Z0-9_]/g, '');
 
+const isTestMode = PAYSTACK_PUBLIC_KEY.startsWith('pk_test');
+
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
+
+const EVENT_CATEGORIES = [
+    "Men's Open (Pro/Elite)",
+    "Men's Advanced",
+    "Men's Intermediate",
+    "Ladies Open (Pro/Elite)",
+    "Ladies Advanced",
+    "Ladies Intermediate"
+];
 
 // Simple CountUp animation component
 const CountUp = ({ end, duration = 1.5 }) => {
@@ -251,6 +262,15 @@ const EventDetails = () => {
         division: ''
     });
 
+    const [partnerProfile, setPartnerProfile] = useState(null);
+    const [partnerSearchResults, setPartnerSearchResults] = useState([]);
+    const [hasPartner, setHasPartner] = useState(false);
+    const [isLookingUpPartner, setIsLookingUpPartner] = useState(false);
+    const [payForPartner, setPayForPartner] = useState(false);
+    const [partnerLookupError, setPartnerLookupError] = useState(null);
+    const [searchTimeout, setSearchTimeout] = useState(null);
+    const [paymentReference, setPaymentReference] = useState('');
+
     // Prefill form from logged-in player profile when modal opens
     useEffect(() => {
         if (!isModalOpen) return;
@@ -260,7 +280,7 @@ const EventDetails = () => {
 
             const { data: playerData } = await supabase
                 .from('players')
-                .select('name, email, contact_number, category')
+                .select('name, email, contact_number, category, license_type, paid_registration')
                 .eq('email', session.user.email)
                 .maybeSingle();
 
@@ -304,9 +324,12 @@ const EventDetails = () => {
                     setIsAlreadyRegistered(true);
                 }
             }
+
+            // Generate a stable payment reference for this registration attempt
+            setPaymentReference(`REGEV-${event.id}-${Date.now()}`);
         };
         prefillFromSession();
-    }, [isModalOpen]);
+    }, [isModalOpen, event?.id]);
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
@@ -550,7 +573,7 @@ const EventDetails = () => {
             try {
                 const { data: albumData, error: albumError } = await supabase
                     .from('albums')
-                    .select('id, title, description')
+                    .select('id, title, description, slug')
                     .eq('event_id', event.id)
                     .single();
 
@@ -628,10 +651,41 @@ const EventDetails = () => {
         fetchWeather();
     }, [event]);
 
+    const getEntryFeeForCategory = (category) => {
+        if (event?.category_fees && event.category_fees[category]) {
+            return Number(event.category_fees[category]);
+        }
+        return Number(event?.entry_fee || 0);
+    };
+
+    const calculateTotalAmount = () => {
+        let total = getEntryFeeForCategory(formData.division);
+        
+        // Add Temp License fee if player doesn't have a valid license
+        if (loggedInPlayer && !loggedInPlayer.paid_registration) {
+            total += FEES.TEMPORARY_LICENSE;
+        }
+
+        // Add Partner costs if paying for them and partner registration is enabled
+        if (hasPartner && payForPartner && partnerProfile) {
+            total += getEntryFeeForCategory(formData.division); // Same division assumed for partners usually
+            if (!partnerProfile.paid_registration) {
+                total += FEES.TEMPORARY_LICENSE;
+            }
+        }
+        
+        return total;
+    };
+
+    const [firstname, ...lastnameParts] = (formData.full_name || '').split(' ');
+    const lastname = lastnameParts.join(' ');
+
     const paystackConfig = {
-        reference: `REGEV-${event?.id}-${Date.now()}`,
+        reference: paymentReference || `REGEV-${event?.id}-${Date.now()}`,
         email: formData.email,
-        amount: toPaystackAmount(event?.entry_fee || 0),
+        firstname: firstname || '',
+        lastname: lastname || '',
+        amount: toPaystackAmount(calculateTotalAmount()),
         currency: 'ZAR',
         publicKey: PAYSTACK_PUBLIC_KEY,
         metadata: {
@@ -639,7 +693,12 @@ const EventDetails = () => {
             event_name: event?.event_name,
             full_name: formData.full_name,
             partner_name: formData.partner_name,
-            division: formData.division
+            partner_id: partnerProfile?.id,
+            division: formData.division,
+            is_test: isTestMode,
+            includes_license: loggedInPlayer && !loggedInPlayer.paid_registration,
+            paying_for_partner: hasPartner && payForPartner,
+            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration
         }
     };
 
@@ -648,6 +707,55 @@ const EventDetails = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
+        
+        if (name === 'partner_name') {
+            handlePartnerSearch(value);
+        }
+    };
+
+    const handlePartnerSearch = (name) => {
+        if (searchTimeout) clearTimeout(searchTimeout);
+        
+        // Immediate cleanup for better UX
+        setPartnerProfile(null);
+        setPartnerLookupError(null);
+        setPayForPartner(false);
+
+        if (!name || name.length < 2) {
+            setPartnerSearchResults([]);
+            return;
+        }
+
+        const timeout = setTimeout(async () => {
+            setIsLookingUpPartner(true);
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('id, name, email, paid_registration, license_type, category')
+                    .ilike('name', `%${name.trim()}%`)
+                    .limit(8);
+
+                if (data && data.length > 0) {
+                    setPartnerSearchResults(data);
+                    setPartnerLookupError(null);
+                } else {
+                    setPartnerSearchResults([]);
+                    setPartnerLookupError("Profile not found. Partner must register to be paid for.");
+                }
+            } catch (err) {
+                console.error("Partner lookup error:", err);
+            } finally {
+                setIsLookingUpPartner(false);
+            }
+        }, 500);
+        setSearchTimeout(timeout);
+    };
+
+    const handleSelectPartner = (player) => {
+        setPartnerProfile(player);
+        setFormData(prev => ({ ...prev, partner_name: player.name }));
+        setPartnerSearchResults([]);
+        setPartnerLookupError(null);
     };
 
     const handleRegister = () => {
@@ -667,9 +775,13 @@ const EventDetails = () => {
             return;
         }
 
-        // Open Paystack inline popup directly (synchronously)
-        initializePayment(handlePaymentSuccess, () => {
-            toast.info('Payment cancelled.');
+        // Open Paystack inline popup directly using the exact pattern from License Modal
+        initializePayment({
+            onSuccess: (ref) => handlePaymentSuccess(ref),
+            onClose: () => {
+                console.log("Paystack payment cancelled.");
+                toast.info('Payment cancelled.');
+            }
         });
     };
 
@@ -781,61 +893,248 @@ const EventDetails = () => {
             setIsCalendarMenuOpen(!isCalendarMenuOpen);
         }
     };
-
-
-
     const handlePaymentSuccess = async (reference) => {
+        console.log("SUCCESS CALLBACK TRIGGERED. Reference:", reference);
+        
+        // Move to success step immediately for UX closure (matches License Modal's immediate reaction)
+        setRegStep(2);
+        setIsAlreadyRegistered(true);
+        toast.success("Payment Received! Recording your registration...");
+
         try {
-            console.log("Payment success callback triggered:", reference);
+            const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
+            const entryFee = getEntryFeeForCategory(formData.division);
             
-            // 1. Update or Create Registration Record (Upsert)
-            const { error: regError } = await supabase
-                .from('event_registrations')
-                .upsert({
+            // 1. Create registrations
+            const registrationsToUpsert = [
+                {
                     event_id: event.id,
                     full_name: formData.full_name,
                     email: formData.email,
                     phone: formData.phone,
                     partner_name: formData.partner_name,
                     division: formData.division,
-                    payment_status: 'paid'
-                }, { onConflict: 'event_id, email' });
+                    payment_status: 'paid',
+                    is_test: isTestMode
+                }
+            ];
+
+            if (payForPartner && partnerProfile) {
+                registrationsToUpsert.push({
+                    event_id: event.id,
+                    full_name: partnerProfile.name,
+                    email: partnerProfile.email,
+                    partner_name: formData.full_name,
+                    division: formData.division,
+                    payment_status: 'paid',
+                    is_test: isTestMode
+                });
+            }
+
+            console.log("Saving registrations...");
+            // Ensure unique registrations by email to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
+            const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [r.email.toLowerCase(), r])).values());
+            
+            const { error: regError } = await supabase
+                .from('event_registrations')
+                .upsert(uniqueRegistrations, { onConflict: 'event_id, email' });
 
             if (regError) {
-                console.error("Error creating registration:", regError);
-                throw regError;
+                console.error("Reg Error:", regError);
+                toast.error(`Database Error: ${regError.message}`);
             }
-            
-            // Immediately show success step to user
-            setRegStep(2);
-            toast.success("Payment successful! You are now registered.");
 
-            // 2. Record Payment (background)
-            console.log("Recording payment details...");
+            // 2. Record Payment Records
             const { data: pData } = await supabase.from('players').select('id').eq('email', formData.email).maybeSingle();
+            const playerId = pData?.id || null;
 
-            await supabase.from('payments').insert([{
-                player_id: pData?.id || null,
+            const paymentsToInsert = [];
+
+            // Main Player: Entry Fee
+            paymentsToInsert.push({
+                player_id: playerId,
                 event_id: event.id,
-                amount: event.entry_fee || 0,
+                amount: entryFee,
                 status: 'success',
                 payment_type: 'event_entry_fee',
                 payment_method: 'paystack',
-                reference: `${formData.full_name} - ${event.event_name}`,
-                metadata: { paystack_ref: reference.reference }
-            }]);
+                reference: `${formData.full_name} - Entry`,
+                is_test: isTestMode,
+                metadata: { paystack_ref: paystackRef }
+            });
 
-            // 3. Try to update tournament_participants match (background)
-            console.log("Updating participant paid status...");
-            await supabase
-                .from('tournament_participants')
-                .update({ is_paid: true })
-                .eq('event_id', event.id)
-                .ilike('full_name', `%${formData.full_name}%`);
+            // Main Player: License (if applicable)
+            if (loggedInPlayer && !loggedInPlayer.paid_registration) {
+                paymentsToInsert.push({
+                    player_id: playerId,
+                    event_id: event.id,
+                    amount: FEES.TEMPORARY_LICENSE,
+                    status: 'success',
+                    payment_type: 'temp_license',
+                    payment_method: 'paystack',
+                    reference: `License - ${formData.full_name}`,
+                    is_test: isTestMode,
+                    metadata: { paystack_ref: paystackRef }
+                });
+                
+                // Add to temporary_licenses table
+                await supabase.from('temporary_licenses').insert({
+                    player_id: playerId,
+                    event_id: event.id,
+                    event_name: event.event_name,
+                    event_date: event.start_date
+                });
+
+                await supabase.from('players').update({ paid_registration: true, approved: true, license_type: 'temporary' }).eq('id', playerId);
+            }
+
+            // Partner side
+            if (payForPartner && partnerProfile) {
+                // Partner: Entry Fee
+                paymentsToInsert.push({
+                    player_id: partnerProfile.id,
+                    event_id: event.id,
+                    amount: entryFee,
+                    status: 'success',
+                    payment_type: 'event_entry_fee',
+                    payment_method: 'paystack',
+                    reference: `${partnerProfile.name} - Entry (Paid by ${formData.full_name})`,
+                    is_test: isTestMode,
+                    metadata: { paystack_ref: paystackRef, paid_by: formData.email }
+                });
+
+                // Partner: License (if applicable)
+                if (!partnerProfile.paid_registration) {
+                    paymentsToInsert.push({
+                        player_id: partnerProfile.id,
+                        event_id: event.id,
+                        amount: FEES.TEMPORARY_LICENSE,
+                        status: 'success',
+                        payment_type: 'temp_license',
+                        payment_method: 'paystack',
+                        reference: `License - ${partnerProfile.name} (Paid by ${formData.full_name})`,
+                        is_test: isTestMode,
+                        metadata: { paystack_ref: paystackRef, paid_by: formData.email }
+                    });
+
+                    // Add to temporary_licenses table for partner
+                    await supabase.from('temporary_licenses').insert({
+                        player_id: partnerProfile.id,
+                        event_id: event.id,
+                        event_name: event.event_name,
+                        event_date: event.start_date
+                    });
+
+                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: 'temporary' }).eq('id', partnerProfile.id);
+                }
+            }
+
+            console.log("Saving payments...");
+            await supabase.from('payments').insert(paymentsToInsert);
+
+            // 3. Mark in participants list
+            console.log("Updating participants...");
+            
+            // Sync Main Player
+            const mainPlayerFilters = [];
+            if (playerId) mainPlayerFilters.push(`profile_id.eq.${playerId}`);
+            if (formData.email) mainPlayerFilters.push(`email.ilike.${formData.email}`);
+            if (formData.full_name) mainPlayerFilters.push(`full_name.ilike.%${formData.full_name}%`);
+
+            // 3. Mark in participants list (Improved Sync)
+            console.log("Updating participants for Event ID:", event.id);
+
+            const syncParticipant = async (pId, pEmail, pName, label) => {
+                try {
+                    const filters = [];
+                    if (pId) filters.push(`profile_id.eq.${pId}`);
+                    if (pName) filters.push(`full_name.ilike.%${pName}%`);
+
+                    if (filters.length === 0) {
+                        console.warn(`No sync data provided for ${label}`);
+                        return;
+                    }
+
+                    console.info(`Searching for ${label} participant...`, filters.join(','));
+
+                    // 1. Try finding with combined filters (OR)
+                    let { data: matches, error: fetchError } = await supabase
+                        .from('tournament_participants')
+                        .select('id, full_name, profile_id, event_id')
+                        .eq('event_id', Number(event.id))
+                        .or(filters.join(','));
+
+                    // 1b. Fallback: If no match and we have a name, try searching for name match in this event specifically
+                    if ((!matches || matches.length === 0) && pName) {
+                        console.info(`No filters match for ${label}. Trying direct name match in event...`);
+                        const { data: nameMatch } = await supabase
+                            .from('tournament_participants')
+                            .select('id, full_name, profile_id')
+                            .eq('event_id', Number(event.id))
+                            .ilike('full_name', `%${pName}%`);
+                        
+                        if (nameMatch && nameMatch.length > 0) {
+                            matches = nameMatch;
+                        }
+                    }
+
+                    if (fetchError) {
+                        console.error(`${label} Participant Sync Fetch Error:`, fetchError);
+                        return;
+                    }
+
+                    if (!matches || matches.length === 0) {
+                        console.warn(`CRITICAL: No participant record found for ${label} (${pName}) in event ${event.id}. Check if Rankedin sync is complete.`);
+                        return;
+                    }
+
+                    console.info(`Found ${matches.length} matching record(s) for ${label}:`, matches);
+
+                    // 2. Update each match by its unique UUID
+                    for (const match of matches) {
+                        const { error: updateError } = await supabase
+                            .from('tournament_participants')
+                            .update({ 
+                                is_paid: true, 
+                                is_test: isTestMode,
+                                last_synced_at: new Date().toISOString()
+                            })
+                            .eq('id', match.id);
+
+                        if (updateError) {
+                            console.error(`Update Error for ${label} (Row: ${match.id}):`, updateError);
+                        } else {
+                            console.info(`MATCH SUCCESS: ${label} marked as PAID. Row ID: ${match.id}`);
+                        }
+                    }
+                } catch (sErr) {
+                    console.error(`${label} sync logic failure:`, sErr);
+                }
+            };
+
+            // Get logged in player profile details for sync
+            const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
+            const mainPEmail = loggedInPlayer?.email || formData.email;
+            const mainPName = loggedInPlayer?.name || formData.full_name;
+
+            if (!mainPId && !mainPEmail && !mainPName) {
+                console.error("FATAL: No registrant information available for sync!");
+            } else {
+                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName });
+                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player");
+            }
+
+            // Sync Partner
+            if (payForPartner && partnerProfile) {
+                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name });
+                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner");
+            }
+
+            console.log("Registration Save Complete!");
 
         } catch (err) {
-            console.error("Post-payment error details:", err);
-            toast.error("Payment recorded but we had trouble updating your status. Please contact support.");
+            console.error("Critical Save Error:", err);
+            toast.error(`Error saving registration: ${err.message}`);
         }
     };
 
@@ -1010,8 +1309,8 @@ const EventDetails = () => {
                                                 Register Now
                                             </motion.a>
 
-                                            {/* Pay Entry Fee button — only shown when entry_fee is configured */}
-                                            {event.entry_fee > 0 && (
+                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured */}
+                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
                                                 <motion.button
                                                     whileHover={{ scale: 1.02 }}
                                                     whileTap={{ scale: 0.98 }}
@@ -1019,7 +1318,7 @@ const EventDetails = () => {
                                                     className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-white/5"
                                                 >
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>
-                                                    Pay Entry Fee — R{event.entry_fee}
+                                                    Pay Entry Fee
                                                 </motion.button>
                                             )}
 
@@ -1141,12 +1440,12 @@ const EventDetails = () => {
                                             >
                                                 Register
                                             </a>
-                                            {event.entry_fee > 0 && (
+                                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
                                                 <button
                                                     onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                     className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
                                                 >
-                                                    Pay R{event.entry_fee}
+                                                    Pay Entry Fee
                                                 </button>
                                             )}
                                         </div>
@@ -1602,7 +1901,7 @@ const EventDetails = () => {
                                                             transition={{ delay: 0.2 }}
                                                         >
                                                             <Link 
-                                                                to={`/gallery/${albumInfo.id}`}
+                                                                to={`/gallery/${albumInfo.slug || albumInfo.id}`}
                                                                 className="group relative inline-flex items-center gap-10 pl-10 pr-4 py-4 bg-padel-green text-slate-950 rounded-full font-black uppercase tracking-widest text-base hover:bg-white hover:scale-105 transition-all duration-500 shadow-[0_0_50px_rgba(150,250,50,0.3)]"
                                                             >
                                                                 <span className="relative z-10 !text-slate-950">Enter Full Gallery</span>
@@ -1718,7 +2017,7 @@ const EventDetails = () => {
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-4"
                             >
-                                <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto overflow-hidden">
+                                <div className="bg-[#0F172A] w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto overflow-hidden border border-white/10">
                                     {/* Modal Header */}
                                     <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                         <h3 className="text-white font-bold text-lg">
@@ -1730,148 +2029,350 @@ const EventDetails = () => {
                                     </div>
 
                                     {/* Modal Content */}
-                                    <div className="p-8">
+                                    <div className="p-6">
                                         {regStep === 1 ? (
-                                            <div className="space-y-4">
-                                                <div>
-                                                    <label className="block text-sm font-bold text-slate-700 mb-1">Full Name</label>
-                                                    <input
-                                                        type="text"
-                                                        name="full_name"
-                                                        required
-                                                        value={formData.full_name}
-                                                        onChange={handleInputChange}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                                        placeholder="Enter your full name"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-bold text-slate-700 mb-1">Email Address</label>
-                                                    <input
-                                                        type="email"
-                                                        name="email"
-                                                        required
-                                                        value={formData.email}
-                                                        onChange={handleInputChange}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                                        placeholder="name@example.com"
-                                                    />
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div>
-                                                        <label className="block text-sm font-bold text-slate-700 mb-1">Phone</label>
-                                                        <input
-                                                            type="tel"
-                                                            name="phone"
-                                                            value={formData.phone}
-                                                            onChange={handleInputChange}
-                                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                                            placeholder="+27..."
-                                                        />
+                                            <div className="space-y-5">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
+                                                        <div className="relative group">
+                                                            <User className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green group-focus-within:text-white transition-colors" size={16} />
+                                                            <input
+                                                                type="text"
+                                                                name="full_name"
+                                                                value={formData.full_name}
+                                                                onChange={handleInputChange}
+                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                placeholder="Mark Stillerman"
+                                                                required
+                                                            />
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-sm font-bold text-slate-700 mb-1">Category</label>
-                                                        <select
-                                                            name="division"
-                                                            value={formData.division}
-                                                            onChange={handleInputChange}
-                                                            className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all appearance-none cursor-pointer"
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
+                                                        <div className="relative">
+                                                            <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                            <input
+                                                                type="email"
+                                                                name="email"
+                                                                value={formData.email}
+                                                                onChange={handleInputChange}
+                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                placeholder="email@example.com"
+                                                                required
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
+                                                        <div className="relative">
+                                                            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                            <input
+                                                                type="tel"
+                                                                name="phone"
+                                                                value={formData.phone}
+                                                                onChange={handleInputChange}
+                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                placeholder="+27 00 000 0000"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Division</label>
+                                                        <div className="relative">
+                                                            <Trophy className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                            <select
+                                                                name="division"
+                                                                value={formData.division}
+                                                                onChange={handleInputChange}
+                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold appearance-none cursor-pointer"
+                                                                required
+                                                            >
+                                                                <option value="" disabled className="bg-[#0F172A]">Select Division</option>
+                                                                {playerDivisions.length > 0 ? (
+                                                                    playerDivisions.map(tab => (
+                                                                        <option key={tab.Id} value={tab.Name} className="bg-[#0F172A]">{tab.Name}</option>
+                                                                    ))
+                                                                ) : (
+                                                                  EVENT_CATEGORIES.map(cat => (
+                                                                    <option key={cat} value={cat} className="bg-[#0F172A]">{cat}</option>
+                                                                  ))
+                                                                )}
+                                                            </select>
+                                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                <Users size={16} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">Register with a Partner?</p>
+                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional registration</p>
+                                                            </div>
+                                                        </div>
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const newState = !hasPartner;
+                                                                setHasPartner(newState);
+                                                                if (!newState) {
+                                                                    setPartnerProfile(null);
+                                                                    setPartnerSearchResults([]);
+                                                                    setPayForPartner(false);
+                                                                    setFormData(prev => ({ ...prev, partner_name: '' }));
+                                                                }
+                                                            }}
+                                                            className={`relative inline-flex h-6 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
                                                         >
-                                                            <option value="" disabled>Select Category</option>
-                                                            {playerDivisions.length > 0 ? (
-                                                                playerDivisions.map(tab => (
-                                                                    <option key={tab.Id} value={tab.Name}>{tab.Name}</option>
-                                                                ))
-                                                            ) : (
-                                                                <>
-                                                                    <optgroup label="Men's">
-                                                                        <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
-                                                                        <option value="Men's Advanced">Men's Advanced</option>
-                                                                        <option value="Men's Intermediate">Men's Intermediate</option>
-                                                                    </optgroup>
-                                                                    <optgroup label="Ladies">
-                                                                        <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
-                                                                        <option value="Ladies Advanced">Ladies Advanced</option>
-                                                                        <option value="Ladies Intermediate">Ladies Intermediate</option>
-                                                                    </optgroup>
-                                                                    <optgroup label="Mixed">
-                                                                        <option value="Mixed Open">Mixed Open</option>
-                                                                        <option value="Mixed Advanced">Mixed Advanced</option>
-                                                                        <option value="Mixed Intermediate">Mixed Intermediate</option>
-                                                                    </optgroup>
-                                                                    <optgroup label="Other">
-                                                                        <option value="Men's 40+">Men's 40+</option>
-                                                                        <option value="Ladies 40+">Ladies 40+</option>
-                                                                    </optgroup>
-                                                                </>
-                                                            )}
-                                                        </select>
-                                                        {loggedInPlayer?.category && (
-                                                            <p className="text-[10px] text-padel-green font-bold mt-1">✓ Pre-filled from your profile</p>
+                                                            <span
+                                                                aria-hidden="true"
+                                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${hasPartner ? 'translate-x-4' : 'translate-x-0'}`}
+                                                            />
+                                                        </button>
+                                                    </div>
+
+                                                    <AnimatePresence>
+                                                        {hasPartner && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, height: 0 }}
+                                                                animate={{ opacity: 1, height: 'auto' }}
+                                                                exit={{ opacity: 0, height: 0 }}
+                                                                className="space-y-3"
+                                                            >
+                                                                <div className="space-y-1.5">
+                                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
+                                                                    <div className="relative group">
+                                                                        <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                                        <input
+                                                                            type="text"
+                                                                            name="partner_name"
+                                                                            value={formData.partner_name}
+                                                                            onChange={handleInputChange}
+                                                                            autoComplete="off"
+                                                                            className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                            placeholder="Type 2+ characters to search..."
+                                                                        />
+                                                                        {isLookingUpPartner && (
+                                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                                                <Loader className="w-4 h-4 animate-spin text-padel-green" />
+                                                                            </div>
+                                                                        )}
+                                                                        {partnerProfile && !isLookingUpPartner && (
+                                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                                <CheckCircle className="w-3 h-3 fill-current" />
+                                                                                Found
+                                                                            </div>
+                                                                        )}
+
+                                                                        {/* Search Results Dropdown */}
+                                                                        <AnimatePresence>
+                                                                            {partnerSearchResults.length > 0 && (
+                                                                                <motion.div
+                                                                                    initial={{ opacity: 0, y: -5 }}
+                                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                                    exit={{ opacity: 0, y: -5 }}
+                                                                                    className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                                >
+                                                                                    {partnerSearchResults.map((player) => (
+                                                                                        <button
+                                                                                            key={player.id}
+                                                                                            type="button"
+                                                                                            onClick={() => handleSelectPartner(player)}
+                                                                                            className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
+                                                                                        >
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
+                                                                                                    <User size={12} />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <p className="text-xs font-bold text-slate-900">{player.name}</p>
+                                                                                                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                                                        </button>
+                                                                                    ))}
+                                                                                </motion.div>
+                                                                            )}
+                                                                        </AnimatePresence>
+                                                                    </div>
+                                                                    {partnerLookupError && !partnerSearchResults.length && (
+                                                                        <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
+                                                                            {partnerLookupError}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+
+                                                                {partnerProfile && (
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, y: 5 }}
+                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                        className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
+                                                                                <CreditCard className="w-5 h-5" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
+                                                                                <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
+                                                                                    R{getEntryFeeForCategory(formData.division)} (Entry Fee) {partnerProfile.paid_registration ? '(License valid)' : `(+ R${FEES.TEMPORARY_LICENSE} Temp License)`}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => setPayForPartner(!payForPartner)}
+                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
+                                                                        >
+                                                                            <span
+                                                                                aria-hidden="true"
+                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                            />
+                                                                        </button>
+                                                                    </motion.div>
+                                                                )}
+                                                            </motion.div>
                                                         )}
-                                                    </div>
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-bold text-slate-700 mb-1">Partner's Name (Optional)</label>
-                                                    <input
-                                                        type="text"
-                                                        name="partner_name"
-                                                        value={formData.partner_name}
-                                                        onChange={handleInputChange}
-                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                                                        placeholder="Enter partner's name"
-                                                    />
+                                                    </AnimatePresence>
                                                 </div>
 
-                                                {/* Entry fee summary */}
-                                                {event.entry_fee > 0 && (
-                                                    <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 flex items-center justify-between">
-                                                        <span className="text-sm font-bold text-slate-600">Entry Fee</span>
-                                                        <span className="text-lg font-black text-slate-900">R{event.entry_fee}</span>
+                                                <div className="pt-4 border-t border-white/10">
+                                                    <div className="bg-slate-900/50 rounded-[1.5rem] p-5 text-white overflow-hidden relative group border border-white/5">
+                                                        {/* Decorative Background Glow */}
+                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-padel-green/20 transition-colors duration-500" />
+                                                        
+                                                        <div className="relative z-10 space-y-4">
+                                                            {/* Itemized list for clarity */}
+                                                            <div className="space-y-3">
+                                                                <div className="space-y-2">
+                                                                    {/* Registrant Section */}
+                                                                    <div className="flex justify-between items-start gap-4">
+                                                                        <div className="space-y-0.5">
+                                                                            <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
+                                                                            <p className="text-[8px] font-medium text-white/40 uppercase tracking-wider">{formData.division || 'No Category'}</p>
+                                                                        </div>
+                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-1">R{getEntryFeeForCategory(formData.division)} <span className="text-[7px] text-white/40 font-bold ml-1">(ENTRY FEE)</span></span>
+                                                                    </div>
+
+                                                                    {loggedInPlayer && !loggedInPlayer.paid_registration && (
+                                                                        <div className="flex justify-between items-center text-padel-green">
+                                                                            <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel Temp License</span>
+                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{FEES.TEMPORARY_LICENSE}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    
+                                                                    {/* Partner Section - Conditional */}
+                                                                    {hasPartner && partnerProfile && (
+                                                                        <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
+                                                                            <div className="flex justify-between items-start gap-4">
+                                                                                <div className="space-y-0.5">
+                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} (Partner)</p>
+                                                                                    <p className="text-[8px] font-medium text-white/40 uppercase tracking-wider">{formData.division || 'Category'}</p>
+                                                                                </div>
+                                                                                <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-1">R{getEntryFeeForCategory(formData.division)} <span className="text-[7px] text-white/40 font-bold ml-1">(ENTRY FEE)</span></span>
+                                                                            </div>
+
+                                                                            {payForPartner && !partnerProfile.paid_registration && (
+                                                                                <div className="flex justify-between items-center text-padel-green">
+                                                                                    <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel Temp License</span>
+                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{FEES.TEMPORARY_LICENSE}</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Bottom Action Area */}
+                                                            <div className="pt-4 border-t border-white/20">
+                                                                {isAlreadyRegistered ? (
+                                                                    <div className="flex items-center justify-between gap-4 py-2 w-full">
+                                                                        <div className="flex flex-col">
+                                                                            <div className="flex items-center gap-2 text-padel-green">
+                                                                                <CheckCircle size={16} />
+                                                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] italic text-padel-green">Registration Confirmed</p>
+                                                                            </div>
+                                                                            <p className="text-[9px] text-white/40 font-bold uppercase mt-1 tracking-wider">You're all set for this event!</p>
+                                                                        </div>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setShowRegistrationModal(false)}
+                                                                            className="h-12 px-10 bg-white/10 text-white rounded-xl hover:bg-white/20 hover:scale-[1.02] active:scale-95 transition-all duration-300 font-black uppercase tracking-[0.1em] text-[10px] border border-white/5"
+                                                                        >
+                                                                            Close
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                                                                        <div className="space-y-0.5">
+                                                                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-padel-green">Total to Pay</p>
+                                                                            <div className="flex items-baseline gap-2">
+                                                                                <p className="text-3xl font-black tracking-tighter leading-none">R {calculateTotalAmount()}</p>
+                                                                                <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-white/30 whitespace-nowrap">SECURE VIA PAYSTACK</p>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={handleRegister}
+                                                                            disabled={isSubmitting}
+                                                                            className="h-14 px-6 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-xl shadow-padel-green/20 disabled:opacity-50 font-black uppercase tracking-[0.1em] text-[10px] flex-1 md:flex-none"
+                                                                        >
+                                                                            <CreditCard className="w-5 h-5" />
+                                                                            <span>Pay Now</span>
+                                                                        </button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                )}
-
-                                                {isAlreadyRegistered && (
-                                                    <p className="text-red-500 text-xs font-bold text-center bg-red-50 py-2 rounded-lg border border-red-100">
-                                                        You have already registered for this event.
-                                                    </p>
-                                                )}
-
-                                                <button
-                                                    type="button"
-                                                    onClick={handleRegister}
-                                                    disabled={isSubmitting || isAlreadyRegistered}
-                                                    className="w-full bg-slate-900 text-padel-green font-bold py-4 rounded-xl shadow-lg hover:bg-padel-green hover:text-black transition-all mt-4 flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
-                                                >
-                                                    {isSubmitting ? (
-                                                        <Loader className="w-5 h-5 animate-spin" />
-                                                    ) : (
-                                                        <>
-                                                            <CreditCard className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                                                            {isAlreadyRegistered ? 'Already Registered' : `Pay ${event.entry_fee ? `R${event.entry_fee}` : 'Now'} via Paystack`}
-                                                        </>
-                                                    )}
-                                                </button>
-                                                <p className="text-center text-[10px] text-gray-400 font-bold uppercase tracking-widest">Secured by Paystack · ZAR</p>
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div className="text-center py-8">
-                                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                                    <CheckCircle className="w-10 h-10 text-green-600" />
+                                            <div className="flex-1 flex flex-col items-center justify-center py-16 px-8 text-center bg-[#0F172A] relative overflow-hidden">
+                                                {/* Ambient Glows */}
+                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
+                                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
+
+                                                <div className="relative mb-10">
+                                                    <div className="w-28 h-28 bg-padel-green/20 rounded-full flex items-center justify-center mx-auto relative z-10 animate-in zoom-in duration-500 delay-150 shadow-2xl shadow-padel-green/40">
+                                                        <CheckCircle className="w-14 h-14 text-padel-green" />
+                                                    </div>
+                                                    <div className="absolute inset-0 bg-padel-green/30 blur-2xl rounded-full scale-110 animate-pulse" />
                                                 </div>
-                                                <h4 className="text-2xl font-bold text-slate-900 mb-2">Payment Successful!</h4>
-                                                <p className="text-slate-500 mb-6">You're registered for <strong>{event.event_name}</strong>. See you on the court!</p>
-                                                <button
-                                                    onClick={() => { 
-                                                        setIsModalOpen(false); 
-                                                        setRegStep(1);
-                                                        setFormData({ full_name: '', email: '', phone: '', partner_name: '', division: '' });
-                                                        setIsAlreadyRegistered(true);
-                                                    }}
-                                                    className="w-full bg-padel-green text-black font-bold py-4 rounded-xl shadow-lg hover:bg-black hover:text-padel-green transition-all"
-                                                >
-                                                    Close
-                                                </button>
+
+                                                <h3 className="text-4xl font-black text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
+                                                    Registration <br />
+                                                    <span className="text-padel-green">Confirmed</span>
+                                                </h3>
+                                                
+                                                <p className="text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
+                                                    You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>. 
+                                                    Your payment was confirmed and your profile is updated.
+                                                </p>
+
+                                                <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
+                                                    <button 
+                                                        onClick={() => { 
+                                                            setIsModalOpen(false); 
+                                                            window.location.reload(); 
+                                                        }} 
+                                                        className="w-full h-16 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/30 hover:scale-[1.03] active:scale-95"
+                                                    >
+                                                        <span>Close & Refresh</span>
+                                                        <ArrowRight className="w-4 h-4" />
+                                                    </button>
+                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Data Syncing Complete</p>
+                                                </div>
                                             </div>
                                         )}
 
