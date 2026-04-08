@@ -1,187 +1,578 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { Trophy, Calendar, Users, MapPin, ChevronRight, PlayCircle, Star, Shield, Info, AlertCircle, ArrowRight } from 'lucide-react';
+import { Trophy, Calendar, Users, MapPin, ChevronRight, Search, Activity, Swords, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const KitKatLeague = () => {
-    const [activeTab, setActiveTab] = useState('overview');
+    const [activeTab, setActiveTab] = useState('standings');
+    const [playerSearch, setPlayerSearch] = useState('');
 
+    // --- MOCK DATA ---
+    const kitkatRed = '#D41B2C';
+
+    const teamsData = [
+        { id: 1, name: 'Atholl Aces', short: 'ATH', captain: 'Aidan Carrazedo', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b09a94af4c02884956a_Atholl_Aces_logo-removebg-preview.png" alt="Atholl Aces" className="w-[80%] h-[80%] object-contain" />, color: 'from-slate-100 to-white', border: 'border-slate-200', text: 'text-slate-800' },
+        { id: 2, name: 'Brooklyn Bulls', short: 'BRK', captain: 'Jason Blakey-Milner', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69c15bd74d8842d49b6e3138_69b82ae370117be1208331f4_1%20Background%20Removed.png" alt="Brooklyn Bulls" className="w-[80%] h-[80%] object-contain" />, color: 'from-amber-50 to-white', border: 'border-amber-200', text: 'text-amber-900' },
+        { id: 3, name: 'Centurion Cobras', short: 'CEN', captain: 'Chevaan Davids', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bd298c58b1f696a6e9a_Centurion_Cobras-removebg-preview.png" alt="Centurion Cobras" className="w-[80%] h-[80%] object-contain" />, color: 'from-emerald-50 to-white', border: 'border-emerald-200', text: 'text-emerald-900' },
+        { id: 4, name: 'Hyde Park Falcons', short: 'HYD', captain: 'Tremayne Mitchell', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54ba2a0c4023c604ff56a_Hyde_Park_Falcons-removebg-preview.png" alt="Hyde Park Falcons" className="w-[80%] h-[80%] object-contain" />, color: 'from-sky-50 to-white', border: 'border-sky-200', text: 'text-sky-900' },
+        { id: 5, name: 'Melrose Mavericks', short: 'MEL', captain: 'Adam van Harte', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bae98c58b1f696a4edc_Melrose_Mavericks-removebg-preview.png" alt="Melrose Mavericks" className="w-[80%] h-[80%] object-contain" />, color: 'from-purple-50 to-white', border: 'border-purple-200', text: 'text-purple-900' },
+        { id: 6, name: 'Menlyn Sharks', short: 'MEN', captain: 'Richard Ashforth', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b926c9d03a0f10fd583_Menlyn_Sharks-removebg-preview.png" alt="Menlyn Sharks" className="w-[80%] h-[80%] object-contain" />, color: 'from-blue-50 to-white', border: 'border-blue-200', text: 'text-blue-900' },
+        { id: 7, name: 'Sandton Stallions', short: 'SAN', captain: 'Warren Khun', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bc698c58b1f696a6693_Sandton_Stallions-removebg-preview.png" alt="Sandton Stallions" className="w-[80%] h-[80%] object-contain" />, color: 'from-orange-50 to-white', border: 'border-orange-200', text: 'text-orange-900' },
+        { id: 8, name: 'Waterfall Wolves', short: 'WAT', captain: 'Luan Krige', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bb99d1abc9ebacedafb_Waterfall_Wolves-removebg-preview.png" alt="Waterfall Wolves" className="w-[80%] h-[80%] object-contain" />, color: 'from-stone-100 to-white', border: 'border-stone-200', text: 'text-stone-800' },
+    ];
+
+    const standingsData = [
+        { rank: 1, team: teamsData[0], played: 14, won: 11, lost: 3, points: 33, streak: ['W', 'W', 'W', 'L', 'W'] },
+        { rank: 2, team: teamsData[3], played: 14, won: 10, lost: 4, points: 30, streak: ['W', 'L', 'W', 'W', 'W'] },
+        { rank: 3, team: teamsData[1], played: 14, won: 9, lost: 5, points: 27, streak: ['L', 'W', 'W', 'L', 'W'] },
+        { rank: 4, team: teamsData[7], played: 14, won: 8, lost: 6, points: 24, streak: ['W', 'L', 'L', 'W', 'L'] },
+        { rank: 5, team: teamsData[6], played: 14, won: 7, lost: 7, points: 21, streak: ['L', 'L', 'W', 'W', 'L'] },
+        { rank: 6, team: teamsData[2], played: 14, won: 5, lost: 9, points: 15, streak: ['L', 'W', 'L', 'L', 'L'] },
+        { rank: 7, team: teamsData[5], played: 14, won: 4, lost: 10, points: 12, streak: ['L', 'L', 'L', 'W', 'L'] },
+        { rank: 8, team: teamsData[4], played: 14, won: 2, lost: 12, points: 6, streak: ['L', 'L', 'L', 'L', 'L'] },
+    ];
+
+    const fixturesData = [
+        { id: 1, date: 'June 2nd, 2026', time: '18:00', team1: teamsData[0], team2: teamsData[5], venue: 'Center Court', status: 'upcoming' },
+        { id: 2, date: 'June 2nd, 2026', time: '19:30', team1: teamsData[6], team2: teamsData[7], venue: 'Court 2', status: 'upcoming' },
+        { id: 3, date: 'June 3rd, 2026', time: '18:00', team1: teamsData[2], team2: teamsData[4], venue: 'Center Court', status: 'upcoming' },
+        { id: 4, date: 'June 3rd, 2026', time: '19:30', team1: teamsData[1], team2: teamsData[3], venue: 'Court 3', status: 'upcoming' },
+    ];
+
+    // RAW PLAYER DATA FROM kitkatpadel.com
+    const rawPlayers = [
+        { name: "Aadil Vally", team: "Centurion Cobras" },
+        { name: "Adam van Harte", team: "Centurion Cobras" },
+        { name: "Ahmed Motala", team: "Menlyn Sharks" },
+        { name: "Aidan Carrazedo", team: "Menlyn Sharks" },
+        { name: "Albert Charles Vos", team: "Brooklyn Bulls" },
+        { name: "Amaan Tayob", team: "Atholl Aces" },
+        { name: "Arek Michniewicz", team: "Sandton Stallions" },
+        { name: "Arushen Govender", team: "Waterfall Wolves" },
+        { name: "Ayaaz Omar", team: "Centurion Cobras" },
+        { name: "Ben Jugmohan", team: "Sandton Stallions" },
+        { name: "Brandon Peters", team: "Sandton Stallions" },
+        { name: "Chevaan Davids", team: "Melrose Mavericks" },
+        { name: "Colby Paxinos", team: "Menlyn Sharks" },
+        { name: "Constantinos Pavlou", team: "Atholl Aces" },
+        { name: "Cristiano Da Costa", team: "Brooklyn Bulls" },
+        { name: "David James Allardice", team: "Waterfall Wolves" },
+        { name: "Dean Thomas Nortier", team: "Centurion Cobras" },
+        { name: "Derek Jackson Alexander", team: "Hyde Park Falcons" },
+        { name: "Dillan Parau", team: "Atholl Aces" },
+        { name: "Dillon van der Haer", team: "Menlyn Sharks" },
+        { name: "Dimitri Sayegh", team: "Melrose Mavericks" },
+        { name: "Dudley Stephen Smith", team: "Brooklyn Bulls" },
+        { name: "Dylan Gonçalves Carneiro", team: "Centurion Cobras" },
+        { name: "Egmond Van heerden", team: "Centurion Cobras" },
+        { name: "Eras Labuschagne", team: "Hyde Park Falcons" },
+        { name: "Farhaan Sayanvala", team: "Atholl Aces" },
+        { name: "Fayzaan Anverali", team: "Brooklyn Bulls" },
+        { name: "Frans Christiaan van der Walt", team: "Menlyn Sharks" },
+        { name: "Garren Kent", team: "Sandton Stallions" },
+        { name: "Gary Pilz", team: "Brooklyn Bulls" },
+        { name: "Grey lee", team: "Waterfall Wolves" },
+        { name: "Gustav Neuper Hefer", team: "Melrose Mavericks" },
+        { name: "Hamza Peer", team: "Hyde Park Falcons" },
+        { name: "Hendrik Petrus", team: "Centurion Cobras" },
+        { name: "Imraan Karanie", team: "Brooklyn Bulls" },
+        { name: "Isa Choonara", team: "Melrose Mavericks" },
+        { name: "James Sweeney", team: "Waterfall Wolves" },
+        { name: "Jamey Sutherland", team: "Menlyn Sharks" },
+        { name: "Jared van Harn", team: "Sandton Stallions" },
+        { name: "Jarryd Sauer", team: "Waterfall Wolves" },
+        { name: "Jason Blakey-Milner", team: "Waterfall Wolves" },
+        { name: "Jason Hewitt", team: "Menlyn Sharks" },
+        { name: "Jason Michael Raw", team: "Centurion Cobras" },
+        { name: "Joel Van Rensburg", team: "Melrose Mavericks" },
+        { name: "Jonathan Boyton Lee", team: "Hyde Park Falcons" },
+        { name: "Joshua Benjamin Van Rensburg", team: "Sandton Stallions" },
+        { name: "Joshua Wade Heath", team: "Waterfall Wolves" },
+        { name: "Juan-Louis Van Antwerpen", team: "Melrose Mavericks" },
+        { name: "Justin Ryan Brivik", team: "Hyde Park Falcons" },
+        { name: "Keagan Rooy", team: "Brooklyn Bulls" },
+        { name: "Kyle Olivier", team: "Hyde Park Falcons" },
+        { name: "Lee Aronson", team: "Waterfall Wolves" },
+        { name: "Lineshen Moodley", team: "Sandton Stallions" },
+        { name: "Logan Repko", team: "Sandton Stallions" },
+        { name: "Luan Krige", team: "Brooklyn Bulls" },
+        { name: "Luca Milan Radmanovic", team: "Centurion Cobras" },
+        { name: "Ludwig Gostmann", team: "Melrose Mavericks" },
+        { name: "Matias Parada Gonzalez", team: "Hyde Park Falcons" },
+        { name: "Michael Sephepe", team: "Atholl Aces" },
+        { name: "Michael Veliades", team: "Sandton Stallions" },
+        { name: "Mohamed Al Fayaad Cassim", team: "Waterfall Wolves" },
+        { name: "Mohammed Noormohamed", team: "Melrose Mavericks" },
+        { name: "Momsi Mather", team: "Hyde Park Falcons" },
+        { name: "Mondrean Hattingh", team: "Melrose Mavericks" },
+        { name: "Muhammed Arabi", team: "Melrose Mavericks" },
+        { name: "Mujaahid Rajah", team: "Waterfall Wolves" },
+        { name: "Muzaffar Khan", team: "Atholl Aces" },
+        { name: "Nicholas Keevy", team: "Brooklyn Bulls" },
+        { name: "Nikhil Joshi", team: "Centurion Cobras" },
+        { name: "Paul John Anderson", team: "Brooklyn Bulls" },
+        { name: "Pierre le grange", team: "Menlyn Sharks" },
+        { name: "Riaz Amod", team: "Atholl Aces" },
+        { name: "Richard Ashforth", team: "Hyde Park Falcons" },
+        { name: "Riyaadh Farid Motani", team: "Atholl Aces" },
+        { name: "Sa'ad Mather", team: "Hyde Park Falcons" },
+        { name: "Sajid Abdulla", team: "Centurion Cobras" },
+        { name: "Sameer Mohamed", team: "Melrose Mavericks" },
+        { name: "Sayed Ally", team: "Brooklyn Bulls" },
+        { name: "Shaheen Amra", team: "Waterfall Wolves" },
+        { name: "Shaun Brookes", team: "Atholl Aces" },
+        { name: "Shaun Robert Leagas", team: "Hyde Park Falcons" },
+        { name: "Shuaib Hassen", team: "Brooklyn Bulls" },
+        { name: "Steven Morne Loock", team: "Atholl Aces" },
+        { name: "Swuelibanzi Best Ndebele", team: "Atholl Aces" },
+        { name: "Tiaan Erasmus", team: "Sandton Stallions" },
+        { name: "Tiesh Chuang", team: "Menlyn Sharks" },
+        { name: "Tremayne Mitchell", team: "Sandton Stallions" },
+        { name: "Vaughan Hunter", team: "Sandton Stallions" },
+        { name: "Warren Khun", team: "Atholl Aces" },
+        { name: "Wasim Ebrahim", team: "Centurion Cobras" },
+        { name: "Wasim Tayob", team: "Waterfall Wolves" },
+        { name: "Yasser Assamo", team: "Hyde Park Falcons" },
+        { name: "Zaid Hassim", team: "Melrose Mavericks" },
+        { name: "Zaid Patel", team: "Menlyn Sharks" },
+        { name: "Zeeshan Ahmed Ismail", team: "Menlyn Sharks" },
+        { name: "Zidane Adamjee", team: "Menlyn Sharks" }
+    ];
+
+    const playersWithDetails = useMemo(() => {
+        return rawPlayers.map(player => {
+            const teamObj = teamsData.find(t => t.name === player.team) || teamsData[0];
+            return {
+                ...player,
+                teamData: teamObj
+            };
+        });
+    }, []);
+
+    const filteredPlayers = useMemo(() => {
+        if (!playerSearch) return playersWithDetails;
+        return playersWithDetails.filter(p => 
+            p.name.toLowerCase().includes(playerSearch.toLowerCase()) ||
+            p.team.toLowerCase().includes(playerSearch.toLowerCase())
+        );
+    }, [playerSearch, playersWithDetails]);
+
+    // ANIMATION VARIANTS
     const containerVariants = {
         hidden: { opacity: 0 },
-        visible: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.1,
-                delayChildren: 0.2
-            }
-        }
+        visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 }}
     };
 
     const itemVariants = {
         hidden: { opacity: 0, y: 20 },
-        visible: {
-            opacity: 1,
-            y: 0,
-            transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
-        }
+        visible: { opacity: 1, y: 0, transition: { duration: 0.5, ease: [0.16, 1, 0.3, 1] } }
     };
 
-    const stats = [
-        { label: 'Expected Teams', value: '32+', icon: Users },
-        { label: 'Prize Pool', value: 'R 25k+', icon: Trophy },
-        { label: 'Venues', value: 'Multiple', icon: MapPin },
-        { label: 'Season', value: '2026/27', icon: Calendar },
-    ];
+    const floatVariants = {
+        animate: { y: [-5, 5, -5], transition: { duration: 4, repeat: Infinity, ease: "easeInOut" } }
+    };
 
-    const tabs = [
-        { id: 'overview', label: 'Overview', icon: Info },
-        { id: 'schedule', label: 'Schedule', icon: Calendar },
-        { id: 'divisions', label: 'Divisions', icon: Shield },
-        { id: 'registration', label: 'Registration', icon: Star },
-    ];
+    // COMPONENTS
+    const Podium = ({ topTeams }) => (
+        <div className="flex justify-center items-end h-[250px] sm:h-[350px] md:h-[400px] mb-12 sm:mb-16 gap-2 sm:gap-4 md:gap-6 pt-4 sm:pt-10">
+            {/* 2nd Place */}
+            <motion.div 
+                initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+                className="w-1/3 max-w-[160px] flex flex-col items-center relative"
+            >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center text-3xl md:text-5xl mb-2 sm:mb-4 border-2 sm:border-4 border-slate-300 shadow-xl z-10">
+                    {topTeams[1].team.logo}
+                </div>
+                <div className="text-center mb-2 sm:mb-4 min-h-[30px] sm:min-h-[40px]">
+                    <p className="font-bold text-slate-800 text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate w-20 sm:w-24 md:w-full">{topTeams[1].team.short}</p>
+                    <p className="text-slate-500 font-black text-sm sm:text-lg md:text-xl">{topTeams[1].points} <span className="text-[10px] sm:text-xs text-slate-400">pts</span></p>
+                </div>
+                <div className="w-full h-[80px] sm:h-[120px] md:h-[160px] bg-slate-100 rounded-t-xl sm:rounded-t-2xl border-x-2 border-t-2 border-slate-200 relative overflow-hidden flex justify-center pt-2 sm:pt-4 shadow-inner">
+                    <span className="text-2xl sm:text-4xl font-black text-slate-300">2</span>
+                </div>
+            </motion.div>
+
+            {/* 1st Place */}
+            <motion.div 
+                initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }}
+                className="w-1/3 max-w-[180px] flex flex-col items-center relative z-20"
+            >
+                <div className="absolute -top-4 sm:-top-6 text-amber-400 animate-pulse drop-shadow-md">
+                    <Trophy className="w-6 h-6 sm:w-10 sm:h-10" />
+                </div>
+                <motion.div variants={floatVariants} animate="animate" className="w-16 h-16 sm:w-20 sm:h-20 md:w-28 md:h-28 bg-white rounded-full flex items-center justify-center text-4xl md:text-6xl mb-2 sm:mb-4 border-2 sm:border-4 border-amber-400 shadow-[0_5px_15px_rgba(251,191,36,0.3)] sm:shadow-[0_10px_30px_rgba(251,191,36,0.3)] z-10">
+                    {topTeams[0].team.logo}
+                </motion.div>
+                <div className="text-center mb-2 sm:mb-4 min-h-[30px] sm:min-h-[40px]">
+                    <p className="font-black text-slate-900 text-[11px] sm:text-sm md:text-base tracking-widest uppercase truncate w-24 sm:w-28 md:w-full">{topTeams[0].team.short}</p>
+                    <p className="text-[#D41B2C] font-black text-base sm:text-xl md:text-2xl">{topTeams[0].points} <span className="text-[10px] sm:text-xs text-slate-400">pts</span></p>
+                </div>
+                <div className="w-full h-[120px] sm:h-[160px] md:h-[220px] bg-gradient-to-t from-slate-50 to-white rounded-t-xl sm:rounded-t-2xl border-x-2 border-t-2 border-amber-200 relative overflow-hidden flex justify-center pt-2 sm:pt-4 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
+                    <span className="text-3xl sm:text-5xl font-black text-amber-200">1</span>
+                </div>
+            </motion.div>
+
+            {/* 3rd Place */}
+            <motion.div 
+                initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
+                className="w-1/3 max-w-[160px] flex flex-col items-center relative"
+            >
+                <div className="w-12 h-12 sm:w-16 sm:h-16 md:w-24 md:h-24 bg-white rounded-full flex items-center justify-center text-3xl md:text-5xl mb-2 sm:mb-4 border-2 sm:border-4 border-orange-300 shadow-xl z-10">
+                    {topTeams[2].team.logo}
+                </div>
+                <div className="text-center mb-2 sm:mb-4 min-h-[30px] sm:min-h-[40px]">
+                    <p className="font-bold text-slate-800 text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate w-20 sm:w-24 md:w-full">{topTeams[2].team.short}</p>
+                    <p className="text-orange-400 font-black text-sm sm:text-lg md:text-xl">{topTeams[2].points} <span className="text-[10px] sm:text-xs text-slate-400">pts</span></p>
+                </div>
+                <div className="w-full h-[60px] sm:h-[90px] md:h-[120px] bg-slate-50 rounded-t-xl sm:rounded-t-2xl border-x-2 border-t-2 border-orange-100 relative overflow-hidden flex justify-center pt-2 sm:pt-4 shadow-inner">
+                    <span className="text-2xl sm:text-4xl font-black text-orange-200">3</span>
+                </div>
+            </motion.div>
+        </div>
+    );
 
     return (
-        <div className="bg-[#0A0A0A] min-h-screen text-white font-sans selection:bg-[#D41B2C] selection:text-white overflow-hidden">
-            <Navbar />
+        <div className="bg-[#FAF9F6] min-h-screen text-slate-900 font-sans selection:bg-[#D41B2C] selection:text-white">
+            <Navbar isDark={false} />
 
-            {/* Background elements */}
-            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-                <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#D41B2C]/10 blur-[150px] rounded-full" />
-                <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-white/5 blur-[120px] rounded-full" />
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
+            {/* LIGHT Background elements */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-white">
+                <div className="absolute top-[0%] left-[50%] -translate-x-1/2 w-[80%] h-[50%] bg-[#D41B2C]/5 blur-[120px] rounded-full" />
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/clean-textile.png')] opacity-[0.2]" />
             </div>
 
-            <main className="relative z-10 pt-24 md:pt-32 pb-20 container mx-auto px-6 max-w-7xl">
-                {/* Hero Section */}
+            <main className="relative z-10 pt-24 md:pt-32 pb-20 container mx-auto px-4 sm:px-6 max-w-7xl">
+                
+                {/* HERO SECTION */}
                 <motion.div
                     initial="hidden"
                     animate="visible"
                     variants={containerVariants}
-                    className="text-center mb-20"
+                    className="text-center mb-16 md:mb-24"
                 >
                     <motion.div
                         variants={itemVariants}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-[#D41B2C] text-sm font-black uppercase tracking-[0.2em] mb-8"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 text-[#D41B2C] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-6 shadow-sm bg-white"
                     >
                         <span className="w-2 h-2 rounded-full bg-[#D41B2C] animate-pulse" />
-                        Premier League Series
+                        Official Live Platform
                     </motion.div>
 
                     <motion.h1
                         variants={itemVariants}
-                        className="text-6xl md:text-8xl font-black text-white tracking-tighter uppercase mb-6 leading-none"
+                        className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter uppercase mb-2 sm:mb-6 leading-none flex flex-col sm:flex-row justify-center items-center gap-0 sm:gap-6"
                     >
-                        KIT KAT <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-white">LEAGUE</span>
+                        <span className="text-slate-900 drop-shadow-sm">KIT KAT</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600 filter drop-shadow-[0_2px_10px_rgba(212,27,44,0.2)]">LEAGUE</span>
                     </motion.h1>
 
                     <motion.p
                         variants={itemVariants}
-                        className="text-xl md:text-2xl text-gray-400 max-w-3xl mx-auto mb-12 font-medium leading-relaxed"
+                        className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 font-bold tracking-wide"
                     >
-                        The ultimate treat for padel enthusiasts. Compete in South Africa's most rewarding padel league. More than just a game, it's an experience.
+                        Padel action. Unmatched energy. Every match.
                     </motion.p>
-
-                    <motion.div
-                        variants={itemVariants}
-                        className="flex flex-wrap justify-center gap-6"
-                    >
-                        <button className="bg-[#D41B2C] text-white px-10 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-white hover:text-black hover:scale-105 transition-all shadow-2xl shadow-[#D41B2C]/20 flex items-center gap-3 group">
-                            Register Your Team
-                            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                        </button>
-                        <button className="bg-white/5 text-white border border-white/10 px-10 py-5 rounded-2xl font-black uppercase tracking-widest hover:bg-white/10 transition-all backdrop-blur-md flex items-center gap-3">
-                            View Prospectus
-                            <PlayCircle className="w-5 h-5 text-[#D41B2C]" />
-                        </button>
-                    </motion.div>
                 </motion.div>
 
-                {/* Stats Grid */}
-                <motion.div
-                    initial="hidden"
-                    whileInView="visible"
-                    viewport={{ once: true }}
-                    variants={containerVariants}
-                    className="grid grid-cols-2 lg:grid-cols-4 gap-6 mb-24"
-                >
-                    {stats.map((stat, i) => (
-                        <motion.div
-                            key={i}
-                            variants={itemVariants}
-                            className="bg-white/5 backdrop-blur-md border border-white/10 rounded-3xl p-8 hover:border-[#D41B2C]/50 transition-all group"
-                        >
-                            <stat.icon className="w-8 h-8 text-[#D41B2C] mb-6 group-hover:scale-110 transition-transform" />
-                            <h4 className="text-4xl font-black text-white mb-2">{stat.value}</h4>
-                            <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">{stat.label}</p>
-                        </motion.div>
-                    ))}
-                </motion.div>
-
-                {/* Content Tabs */}
-                <div className="mb-12">
-                    <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/5 backdrop-blur-md p-2 rounded-[2rem] border border-white/10 mb-12 max-w-fit mx-auto">
-                        {tabs.map((tab) => (
+                {/* NAVIGATION TABS */}
+                <div className="flex justify-center mb-20 md:mb-28 relative z-50">
+                    <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/60 backdrop-blur-xl p-1.5 sm:p-2 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
+                        {[
+                            { id: 'standings', label: 'Standings', icon: Trophy }, 
+                            { id: 'fixtures', label: 'Fixtures', icon: Swords },
+                            { id: 'teams', label: 'Teams', icon: Users },
+                            { id: 'players', label: 'Players', icon: User }
+                        ].map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`relative px-8 py-4 rounded-full font-black text-xs tracking-widest uppercase transition-all duration-300 flex items-center gap-3 ${
-                                    activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                className={`relative px-6 sm:px-8 py-3 rounded-full font-black text-[10px] sm:text-xs tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center flex items-center gap-2 ${
+                                    activeTab === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
                                 }`}
                             >
                                 {activeTab === tab.id && (
                                     <motion.div
                                         layoutId="kitKatTab"
-                                        className="absolute inset-0 bg-white rounded-full shadow-xl"
+                                        className="absolute inset-0 bg-[#D41B2C] rounded-full shadow-md shadow-[#D41B2C]/20"
                                         initial={false}
                                         transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                     />
                                 )}
-                                <tab.icon className={`w-4 h-4 relative z-10 ${activeTab === tab.id ? 'text-[#D41B2C]' : 'text-current'}`} />
+                                <tab.icon className={`w-4 h-4 relative z-10 ${activeTab === tab.id ? 'text-white' : 'text-slate-400'}`} />
                                 <span className="relative z-10">{tab.label}</span>
                             </button>
                         ))}
                     </div>
-
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={activeTab}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-                            className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[3rem] p-12 md:p-20 relative overflow-hidden"
-                        >
-                            {/* Decorative accent */}
-                            <div className="absolute top-0 right-0 w-64 h-64 bg-[#D41B2C]/10 blur-[100px] pointer-events-none" />
-                            
-                            {activeTab === 'overview' && (
-                                <div className="max-w-4xl mx-auto text-center">
-                                    <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-tight mb-8">Coming Soon</h2>
-                                    <p className="text-xl text-gray-400 leading-relaxed mb-12">
-                                        We are finalizing the details for the inaugural Kit Kat League. Expect a high-energy competition featuring professional match officiating, premium branding, and the largest prize pools in amateur padel history.
-                                    </p>
-                                    <div className="flex items-center justify-center gap-4 p-6 bg-[#D41B2C]/10 border border-[#D41B2C]/20 rounded-2xl max-w-md mx-auto">
-                                        <AlertCircle className="text-[#D41B2C] w-6 h-6 shrink-0" />
-                                        <p className="text-[#D41B2C] font-bold text-sm text-left">
-                                            Follow our social media for the official launch announcement and early-bird registration info.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-
-                            {activeTab !== 'overview' && (
-                                <div className="py-20 text-center">
-                                    <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-8 border border-white/10">
-                                        <div className="w-10 h-10 border-4 border-[#D41B2C] border-t-transparent rounded-full animate-spin" />
-                                    </div>
-                                    <h3 className="text-2xl font-black text-white uppercase tracking-widest mb-4">Content Incoming</h3>
-                                    <p className="text-gray-500">The platform is being updated with the latest league information.</p>
-                                </div>
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
                 </div>
+
+                {/* CONTENT AREA */}
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={activeTab}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                    >
+                        {/* ================= STANDINGS TAB ================= */}
+                        {activeTab === 'standings' && (
+                            <div className="space-y-8">
+                                <Podium topTeams={standingsData.slice(0, 3)} />
+
+                                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-200/50">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse min-w-[500px]">
+                                            <thead>
+                                                <tr className="bg-slate-50 border-b border-slate-200">
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-[#D41B2C] font-black uppercase tracking-widest text-[10px] sm:text-xs">Pos</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs">Team</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">Pld</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">W</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">L</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-900 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">Pts</th>
+                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">Form</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {standingsData.map((row, index) => (
+                                                    <motion.tr 
+                                                        initial={{ opacity: 0, x: -20 }}
+                                                        animate={{ opacity: 1, x: 0 }}
+                                                        transition={{ delay: index * 0.05 }}
+                                                        key={row.team.id} 
+                                                        className={`group hover:bg-slate-50 transition-colors ${index < 3 ? 'bg-slate-50/50' : ''}`}
+                                                    >
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 font-bold">
+                                                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
+                                                                index === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
+                                                                index === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                                                                index === 2 ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'text-slate-400'
+                                                            }`}>
+                                                                {row.rank}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-4 px-6">
+                                                            <div className="flex items-center gap-2 sm:gap-3">
+                                                                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br ${row.team.color} border ${row.team.border} flex items-center justify-center text-xl shadow-sm group-hover:scale-110 transition-transform shrink-0`}>
+                                                                    {row.team.logo}
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-slate-900 font-bold text-xs sm:text-sm md:text-base uppercase tracking-wide">{row.team.name}</p>
+                                                                    <p className="text-slate-400 text-[9px] sm:text-[10px] uppercase font-bold tracking-widest hidden xs:block">{row.team.captain}</p>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center text-slate-500 font-medium text-xs sm:text-base">{row.played}</td>
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center text-padel-green font-bold text-xs sm:text-base">{row.won}</td>
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center text-[#D41B2C] font-bold text-xs sm:text-base">{row.lost}</td>
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                            <span className="text-lg sm:text-xl font-black text-slate-900">{row.points}</span>
+                                                        </td>
+                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
+                                                            <div className="flex gap-0.5 sm:gap-1 justify-center">
+                                                                {row.streak.map((result, i) => (
+                                                                    <span key={i} className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${
+                                                                        result === 'W' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-50 text-[#D41B2C] border border-red-100'
+                                                                    }`}>
+                                                                        {result}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                    </motion.tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ================= FIXTURES TAB ================= */}
+                        {activeTab === 'fixtures' && (
+                            <div className="max-w-4xl mx-auto space-y-6">
+                                {/* Week selector mockup */}
+                                <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 mb-8 shadow-sm">
+                                    <button className="text-slate-400 hover:text-slate-900 p-2 bg-slate-50 rounded-xl transition-colors"><ChevronRight className="rotate-180" /></button>
+                                    <div className="text-center">
+                                        <p className="text-[#D41B2C] font-black text-xs uppercase tracking-[0.2em]">Matchweek 7</p>
+                                        <p className="text-slate-900 font-bold">June 2026</p>
+                                    </div>
+                                    <button className="text-slate-400 hover:text-slate-900 p-2 bg-slate-50 rounded-xl transition-colors"><ChevronRight /></button>
+                                </div>
+
+                                {fixturesData.map((fixture, i) => (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        transition={{ delay: i * 0.1 }}
+                                        key={fixture.id}
+                                        className="relative bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 hover:border-[#D41B2C]/30 hover:shadow-xl hover:shadow-[#D41B2C]/5 transition-all group overflow-hidden"
+                                    >
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-[#D41B2C]/5 blur-[50px] group-hover:bg-[#D41B2C]/10 transition-colors pointer-events-none" />
+
+                                        {/* Date/Venue Header */}
+                                        <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
+                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
+                                                <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#D41B2C]" /> {fixture.date}</span>
+                                                <span className="hidden sm:inline text-slate-300">•</span>
+                                                <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-[#D41B2C]" /> {fixture.time}</span>
+                                            </div>
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-widest bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
+                                                <MapPin className="w-3.5 h-3.5" />
+                                                {fixture.venue}
+                                            </div>
+                                        </div>
+
+                                        {/* VS Setup */}
+                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
+                                            {/* Team 1 */}
+                                            <div className="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left w-full">
+                                                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-white border ${fixture.team1.border} flex items-center justify-center text-4xl shadow-md mb-2 sm:mb-4 bg-gradient-to-br ${fixture.team1.color}`}>
+                                                    {fixture.team1.logo}
+                                                </div>
+                                                <h4 className={`text-lg sm:text-2xl font-black ${fixture.team1.text} uppercase tracking-tight`}>{fixture.team1.name}</h4>
+                                                <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase mt-0 sm:mt-1">{fixture.team1.short}</p>
+                                            </div>
+
+                                            {/* VS Badge */}
+                                            <div className="shrink-0 relative z-20 my-4 sm:my-0">
+                                                <div className="absolute inset-0 bg-[#D41B2C] blur-md opacity-20 group-hover:opacity-40 transition-opacity" />
+                                                <div className="w-12 h-12 bg-white border-2 border-[#D41B2C] rounded-full flex items-center justify-center relative shadow-sm">
+                                                    <span className="text-[#D41B2C] font-black text-sm italic">VS</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Team 2 */}
+                                            <div className="flex-1 flex flex-col items-center sm:items-end text-center sm:text-right w-full">
+                                                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-white border ${fixture.team2.border} flex items-center justify-center text-4xl shadow-md mb-2 sm:mb-4 bg-gradient-to-br ${fixture.team2.color}`}>
+                                                    {fixture.team2.logo}
+                                                </div>
+                                                <h4 className={`text-lg sm:text-2xl font-black ${fixture.team2.text} uppercase tracking-tight`}>{fixture.team2.name}</h4>
+                                                <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase mt-0 sm:mt-1">{fixture.team2.short}</p>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* ================= TEAMS TAB ================= */}
+                        {activeTab === 'teams' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {teamsData.map((team, i) => (
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}
+                                        key={team.id}
+                                        className="relative group h-64 rounded-3xl overflow-hidden cursor-pointer bg-white border border-slate-200 shadow-md hover:shadow-xl transition-all"
+                                    >
+                                        <div className={`absolute inset-0 bg-gradient-to-br ${team.color} opacity-40 group-hover:opacity-100 transition-opacity duration-500`} />
+                                        
+                                        <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
+                                            <div className="flex justify-between items-start">
+                                                <div className={`w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl border ${team.border} shadow-sm group-hover:scale-110 transition-transform duration-500`}>
+                                                    {team.logo}
+                                                </div>
+                                                <span className="text-slate-200 font-black text-4xl transform -rotate-12 group-hover:text-white transition-colors drop-shadow-sm">
+                                                    {team.short}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border border-white/50">
+                                                <p className="text-[#D41B2C] text-[10px] font-black uppercase tracking-[0.2em] mb-1">Team Captain</p>
+                                                <p className={`${team.text} font-bold text-sm mb-2`}>{team.captain}</p>
+                                                <h3 className={`${team.text} font-black text-lg sm:text-xl uppercase tracking-tight leading-none`}>{team.name}</h3>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* ================= PLAYERS TAB ================= */}
+                        {activeTab === 'players' && (
+                            <div className="space-y-8">
+                                <div className="max-w-md mx-auto">
+                                    <div className="relative">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search by player or team..."
+                                            value={playerSearch}
+                                            onChange={(e) => setPlayerSearch(e.target.value)}
+                                            className="w-full bg-white border border-slate-200 shadow-sm rounded-2xl py-4 pl-12 pr-4 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#D41B2C] focus:ring-1 focus:ring-[#D41B2C] transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                {filteredPlayers.length === 0 ? (
+                                    <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
+                                        <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No players found matching "{playerSearch}"</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                        {filteredPlayers.map((player, i) => (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ delay: (i % 20) * 0.05 }} // cap the delay so large lists load fast
+                                                key={player.name}
+                                                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-4 group cursor-default"
+                                            >
+                                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm`}>
+                                                    {/* If it's a captain, we could show a star, but we use the team logo for brand presence */}
+                                                    <span className="text-xl group-hover:scale-110 transition-transform">{player.teamData.logo}</span>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <h4 className="text-slate-900 font-bold text-sm truncate">{player.name}</h4>
+                                                    <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest truncate mt-0.5">{player.teamData.name}</p>
+                                                </div>
+                                                {/* Optionally highlight captains */}
+                                                {player.teamData.captain === player.name && (
+                                                    <div className="ml-auto bg-[#D41B2C]/10 text-[#D41B2C] text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded">
+                                                        CAP
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </motion.div>
+                </AnimatePresence>
+
+                {/* ABOUT SECTION */}
+                <motion.section 
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-100px" }}
+                    transition={{ duration: 0.6, ease: "easeOut" }}
+                    className="bg-white rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 p-6 sm:p-8 md:p-12 mt-16 sm:mt-24 text-left md:text-center relative overflow-hidden group"
+                >
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#D41B2C]/5 blur-[80px] rounded-full pointer-events-none group-hover:bg-[#D41B2C]/10 transition-colors"></div>
+                    <div className="relative z-10 max-w-4xl mx-auto">
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 uppercase tracking-tighter mb-4 sm:mb-6 leading-none">
+                            ABOUT <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600">KIT KAT</span> CASH & CARRY
+                        </h2>
+                        <div className="w-12 h-1 bg-[#D41B2C] mx-auto mb-6 sm:mb-8 rounded-full hidden md:block"></div>
+                        <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-4">
+                            Kit Kat Cash & Carry stands as a prominent force within the FMCG retail landscape, recognized for its commitment to quality, value, and customer satisfaction. As one of the leading brands in the industry, Kit Kat embodies reliability and consistency—qualities that have earned the enduring trust of a diverse and growing customer base.
+                        </p>
+                        <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-6 sm:mb-8">
+                            Our brand represents more than just a retail outlet; it reflects a promise to deliver exceptional service, competitive pricing, and a comprehensive range of products tailored for both individual shoppers and bulk buyers. The overwhelming acceptance and recognition from our valued customers affirm our position as a dependable partner in everyday retail and wholesale needs.
+                        </p>
+                        <a 
+                            href="https://kitkatgroup.com" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="inline-flex items-center justify-center w-full sm:w-auto gap-2 bg-[#D41B2C] text-white px-8 py-3.5 sm:py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs hover:bg-red-700 transition-all shadow-lg shadow-[#D41B2C]/30 hover:-translate-y-0.5"
+                        >
+                            Discover The Brand <ChevronRight className="w-4 h-4" />
+                        </a>
+                    </div>
+                </motion.section>
             </main>
         </div>
     );
