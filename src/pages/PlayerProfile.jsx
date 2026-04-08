@@ -1342,7 +1342,7 @@ const PlayerProfile = () => {
                                                             )}
 
                                                             <p className="text-[10px] text-gray-600 font-bold uppercase tracking-[0.2em] text-center pt-8">
-                                                                Only your 50 most recent SAPA transactions are displayed.
+                                                                Only your 50 most recent transactions are displayed.
                                                             </p>
                                                         </div>
                                                     )}
