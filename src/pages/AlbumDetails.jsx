@@ -174,6 +174,10 @@ const AlbumDetails = () => {
         <div className="min-h-screen bg-[#0A0D14] pt-4 md:pt-24 pb-12 relative overflow-x-hidden">
             <Helmet>
                 <title>{`${album.title} | 4M Padel Gallery`}</title>
+                <meta property="og:title" content={`${album.title} | 4M Padel Gallery`} />
+                <meta property="og:description" content={album.description || "View official tournament action shots and media highlights on 4M Padel."} />
+                <meta property="og:type" content="article" />
+                {images[0]?.image_url && <meta property="og:image" content={images[0].image_url} />}
             </Helmet>
 
             {/* Cinematic Hero Section - Full Width & Square */}

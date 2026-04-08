@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, Trophy, AlertCircle } from 'lucide-react';
+import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
@@ -1169,6 +1170,13 @@ const EventDetails = () => {
 
     return (
         <>
+            <Helmet>
+                <title>{`${event.event_name} | 4M Padel`}</title>
+                <meta property="og:title" content={`${event.event_name} | 4M Padel`} />
+                <meta property="og:description" content={`${event.event_dates} at ${event.venue}. View draws, results, and registration info on 4M Padel.`} />
+                <meta property="og:image" content={event.custom_image_url || event.image_url || tournamentHero} />
+                <meta property="og:type" content="article" />
+            </Helmet>
             <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
                 {/* Hero Section with Image */}
                 <div className="relative h-[20vh] md:h-[45vh] min-h-[140px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
