@@ -67,10 +67,12 @@ const FinancialSummaryReport = () => {
                 licensePaid: reg.players?.paid_registration || false,
                 totalPaid: playerPayments.reduce((sum, p) => sum + (p.amount || 0), 0)
             };
-        }).filter(item => 
+        })
+        .filter(item => 
             item.playerName.toLowerCase().includes(searchQuery.toLowerCase()) || 
             item.eventName.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        )
+        .sort((a, b) => a.playerName.localeCompare(b.playerName));
     }, [registrations, payments, events, searchQuery]);
 
     const playerReportData = useMemo(() => {
@@ -88,10 +90,12 @@ const FinancialSummaryReport = () => {
                 membershipPaid: !!membershipPayment,
                 totalSpent: playerPayments.reduce((sum, pay) => sum + (pay.amount || 0), 0)
             };
-        }).filter(item => 
+        })
+        .filter(item => 
             item.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
             item.email?.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        )
+        .sort((a, b) => a.name.localeCompare(b.name));
     }, [players, payments, searchQuery]);
 
     const exportToCSV = () => {
