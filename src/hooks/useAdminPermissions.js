@@ -25,7 +25,7 @@ export const useAdminPermissions = (userEmail) => {
                 const { data, error } = await supabase
                     .from('admin_sidebar_permissions')
                     .select('*')
-                    .eq('email', userEmail)
+                    .ilike('email', userEmail)
                     .single();
 
                 if (error) {

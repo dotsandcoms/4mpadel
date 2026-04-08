@@ -127,7 +127,7 @@ const AdminManager = () => {
             const { error } = await supabase
                 .from('admin_sidebar_permissions')
                 .delete()
-                .eq('email', email);
+                .ilike('email', email);
 
             if (error) throw error;
             toast.success('Admin removed');

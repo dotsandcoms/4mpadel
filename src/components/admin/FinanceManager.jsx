@@ -120,7 +120,7 @@ const FinanceManager = () => {
             const { data: player, error: fetchError } = await supabase
                 .from('players')
                 .select('id, name')
-                .eq('email', email)
+                .ilike('email', email)
                 .maybeSingle();
 
             if (fetchError) throw fetchError;

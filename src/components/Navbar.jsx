@@ -48,7 +48,7 @@ const Navbar = ({ isDark = false }) => {
       const { data } = await supabase
         .from('players')
         .select('name, rankedin_id, rank_label, points')
-        .eq('email', targetEmail)
+        .ilike('email', targetEmail)
         .maybeSingle();
 
       setPlayer(data);
@@ -92,6 +92,7 @@ const Navbar = ({ isDark = false }) => {
       dropdown: [
         { name: 'All Tournaments', href: '/calendar' },
         { name: 'Broll Pro Tour', href: '/tournaments/broll' },
+        { name: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
       ]
     },
     { name: 'Contact', href: '/contact' },

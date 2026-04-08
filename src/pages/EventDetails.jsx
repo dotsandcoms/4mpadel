@@ -282,7 +282,7 @@ const EventDetails = () => {
             const { data: playerData } = await supabase
                 .from('players')
                 .select('name, email, contact_number, category, license_type, paid_registration')
-                .eq('email', session.user.email)
+                .ilike('email', session.user.email)
                 .maybeSingle();
 
             if (playerData) {
@@ -309,7 +309,7 @@ const EventDetails = () => {
                     .from('event_registrations')
                     .select('id')
                     .eq('event_id', event.id)
-                    .eq('email', checkEmail)
+                    .ilike('email', checkEmail)
                     .eq('payment_status', 'paid')
                     .maybeSingle();
 
@@ -317,7 +317,7 @@ const EventDetails = () => {
                     .from('tournament_participants')
                     .select('id')
                     .eq('event_id', event.id)
-                    .eq('email', checkEmail)
+                    .ilike('email', checkEmail)
                     .eq('is_paid', true)
                     .maybeSingle();
 
@@ -952,7 +952,7 @@ const EventDetails = () => {
             }
 
             // 2. Record Payment Records
-            const { data: pData } = await supabase.from('players').select('id').eq('email', formData.email).maybeSingle();
+            const { data: pData } = await supabase.from('players').select('id').ilike('email', formData.email).maybeSingle();
             const playerId = pData?.id || null;
 
             const paymentsToInsert = [];

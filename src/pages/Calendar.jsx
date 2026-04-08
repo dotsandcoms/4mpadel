@@ -267,7 +267,7 @@ const Calendar = () => {
             const { data: profile } = await supabase
                 .from('players')
                 .select('*')
-                .eq('email', targetEmail)
+                .ilike('email', targetEmail)
                 .single();
 
             if (profile) {

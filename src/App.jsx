@@ -16,6 +16,7 @@ import Mens40 from './pages/Mens40';
 import AllTournaments from './pages/AllTournaments';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
+import KitKatLeague from './pages/KitKatLeague';
 
 import TournamentDraw from './pages/TournamentDraw';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
@@ -90,6 +91,7 @@ function AppContent() {
           <Route path="/calendar/:slug" element={<EventDetails />} />
           <Route path="/rankings" element={<Rankings />} />
           <Route path="/tournaments/broll" element={<Broll />} />
+          <Route path="/tournaments/kit-kat-league" element={<KitKatLeague />} />
           <Route path="/tournaments/ladies" element={<Ladies />} />
           <Route path="/tournaments/juniors" element={<Juniors />} />
           <Route path="/tournaments/mens40" element={<Mens40 />} />

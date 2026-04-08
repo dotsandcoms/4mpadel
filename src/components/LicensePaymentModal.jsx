@@ -105,7 +105,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                     if (eventDetails) {
                         const { data: { user } } = await supabase.auth.getUser();
                         if (user) {
-                            const { data: pData } = await supabase.from('players').select('id').eq('email', userEmail).maybeSingle();
+                            const { data: pData } = await supabase.from('players').select('id').ilike('email', userEmail).maybeSingle();
                             if (pData?.id) {
                                 await supabase.from('temporary_licenses').insert({
                                     player_id: pData.id,
