@@ -166,17 +166,34 @@ const UserPayments = () => {
                 if (p.id === selectedPlayer.id) {
                     const updatedPayments = p.payments.filter(pay => pay.id !== paymentId);
                     const totalPaid = updatedPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    return { ...p, payments: updatedPayments, totalPaid };
+                    
+                    // Recalculate last payment date
+                    const lastPayment = updatedPayments[0]; // Already sorted by date in initial fetch
+                    const lastPaymentDate = lastPayment 
+                        ? (lastPayment.metadata?.original_trx?.date || new Date(lastPayment.created_at).toLocaleDateString()) 
+                        : 'N/A';
+
+                    return { ...p, payments: updatedPayments, totalPaid, lastPaymentDate };
                 }
                 return p;
             }));
 
             // Sync the selected player state too
-            setSelectedPlayer(prev => ({
-                ...prev,
-                payments: prev.payments.filter(pay => pay.id !== paymentId),
-                totalPaid: prev.payments.filter(pay => pay.id !== paymentId).reduce((acc, curr) => acc + Number(curr.amount), 0)
-            }));
+            setSelectedPlayer(prev => {
+                const updatedPayments = prev.payments.filter(pay => pay.id !== paymentId);
+                const totalPaid = updatedPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
+                const lastPayment = updatedPayments[0];
+                const lastPaymentDate = lastPayment 
+                    ? (lastPayment.metadata?.original_trx?.date || new Date(lastPayment.created_at).toLocaleDateString()) 
+                    : 'N/A';
+
+                return {
+                    ...prev,
+                    payments: updatedPayments,
+                    totalPaid,
+                    lastPaymentDate
+                };
+            });
 
         } catch (err) {
             console.error("Delete error:", err);
@@ -351,10 +368,10 @@ const UserPayments = () => {
                                                         e.stopPropagation();
                                                         handleDeletePayment(pay.id);
                                                     }}
-                                                    className="p-2 text-gray-700 hover:text-red-500 transition-colors"
-                                                    title="Delete record"
+                                                    className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all"
+                                                    title="Delete record from ledger"
                                                 >
-                                                    <Trash2 size={14} />
+                                                    <Trash2 size={16} />
                                                 </button>
                                             </div>
                                         </div>
