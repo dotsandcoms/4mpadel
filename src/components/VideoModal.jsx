@@ -4,6 +4,10 @@ import { X, PlayCircle } from 'lucide-react';
 
 export const getYoutubeEmbedUrl = (url) => {
     if (!url) return null;
+    
+    // If it's already a full embed URL, just return it
+    if (url.includes('youtube.com/embed/')) return url;
+    
     let videoId = null;
 
     if (url.includes('youtu.be/')) {
@@ -13,11 +17,12 @@ export const getYoutubeEmbedUrl = (url) => {
         videoId = urlParams.get('v');
     } else if (url.includes('youtube.com/live/')) {
         videoId = url.split('live/')[1].split(/[?#]/)[0];
-    } else if (url.includes('youtube.com/embed/')) {
-        return url;
+    } else if (/^[a-zA-Z0-9_-]{11}$/.test(url)) {
+        // If it looks like a raw 11-char YouTube ID
+        videoId = url;
     }
 
-    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1` : null;
+    return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : null;
 };
 
 const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
@@ -58,10 +63,10 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
                 ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-white p-8">
                         <PlayCircle className="w-16 h-16 text-padel-green/20 mb-4" />
-                        <p className="text-xl font-bold">Unable to load live stream</p>
-                        <p className="text-gray-400 mt-2">Invalid YouTube URL or stream information.</p>
+                        <p className="text-xl font-bold">Unable to load video</p>
+                        <p className="text-gray-400 mt-2 text-center">Invalid YouTube source or video ID provided.</p>
                         <button
-                            onClick={() => window.open(videoUrl, '_blank')}
+                            onClick={() => window.open(videoUrl.includes('http') ? videoUrl : `https://youtube.com/watch?v=${videoUrl}`, '_blank')}
                             className="mt-6 px-6 py-2 bg-white text-black font-bold rounded-full hover:bg-padel-green transition-colors"
                         >
                             Open on YouTube

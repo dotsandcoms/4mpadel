@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, X, Image as ImageIcon, PlayCircle, Play, Loader } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
+import VideoModal from '../components/VideoModal';
 
 const AlbumDetails = () => {
     const { id } = useParams();
@@ -11,6 +12,13 @@ const AlbumDetails = () => {
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
+    const [activeTab, setActiveTab] = useState('photos'); // 'photos' or 'video'
+    const [youtubePlaylistUrl, setYoutubePlaylistUrl] = useState(null);
+    const [playlistVideos, setPlaylistVideos] = useState([]);
+    const [fetchingVideos, setFetchingVideos] = useState(false);
+    const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
+
+    const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
 
     useEffect(() => {
         const fetchAlbumAndImages = async () => {
@@ -37,6 +45,21 @@ const AlbumDetails = () => {
                 if (imagesError) throw imagesError;
                 setImages(imagesData || []);
 
+                // Fetch YouTube Playlist - Prioritize Album's own URL, then fallback to Event
+                if (albumData.youtube_playlist_url) {
+                    setYoutubePlaylistUrl(albumData.youtube_playlist_url);
+                } else if (albumData.event_id) {
+                    const { data: eventData } = await supabase
+                        .from('calendar')
+                        .select('youtube_playlist_url')
+                        .eq('id', albumData.event_id)
+                        .single();
+                    
+                    if (eventData?.youtube_playlist_url) {
+                        setYoutubePlaylistUrl(eventData.youtube_playlist_url);
+                    }
+                }
+
             } catch (error) {
                 console.error("Error fetching album details:", error);
             } finally {
@@ -48,6 +71,44 @@ const AlbumDetails = () => {
             fetchAlbumAndImages();
         }
     }, [id]);
+
+    useEffect(() => {
+        const fetchPlaylistItems = async () => {
+            if (!youtubePlaylistUrl) return;
+
+            const match = youtubePlaylistUrl.match(/[&?]list=([^&]+)/);
+            const playlistId = match ? match[1] : null;
+            if (!playlistId) return;
+
+            setFetchingVideos(true);
+            try {
+                const response = await fetch(
+                    `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=12&playlistId=${playlistId}&key=${YOUTUBE_API_KEY}`
+                );
+                const data = await response.json();
+                if (data.items) {
+                    setPlaylistVideos(data.items
+                        .filter(item =>
+                            item.snippet.title !== 'Deleted video' &&
+                            item.snippet.title !== 'Private video'
+                        )
+                        .map(item => ({
+                            id: item.snippet.resourceId.videoId,
+                            title: item.snippet.title,
+                            thumbnail: item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url,
+                            publishedAt: item.snippet.publishedAt
+                        }))
+                    );
+                }
+            } catch (error) {
+                console.error('Error fetching playlist videos:', error);
+            } finally {
+                setFetchingVideos(false);
+            }
+        };
+
+        fetchPlaylistItems();
+    }, [youtubePlaylistUrl, YOUTUBE_API_KEY]);
 
     // Handle Keyboard Navigation for Lightbox
     useEffect(() => {
@@ -182,42 +243,124 @@ const AlbumDetails = () => {
                                     {album.description}
                                 </p>
                             )}
+
+                            {/* Rankings-style Tab Navigation */}
+                            {youtubePlaylistUrl && (
+                                <div className="flex items-center gap-1 md:gap-2 mt-12 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto backdrop-blur-xl">
+                                    {[
+                                        { id: 'photos', label: 'Action Shots', icon: <ImageIcon className="w-3.5 h-3.5 md:w-4 md:h-4" /> },
+                                        { id: 'video', label: 'Video', icon: <PlayCircle className="w-3.5 h-3.5 md:w-4 md:h-4" /> }
+                                    ].map((tab) => (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-4 md:px-8 py-2 md:py-3 rounded-xl md:rounded-full text-[10px] md:text-xs font-black uppercase tracking-[0.2em] transition-all duration-300 ${activeTab === tab.id
+                                                ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20'
+                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                                }`}
+                                        >
+                                            {tab.icon}
+                                            <span className="truncate">{tab.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </motion.div>
                     </div>
                 </div>
             </div>
 
             <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
-
-                {/* Masonry / Grid Layout - 4 columns on mobile */}
-                {images.length === 0 ? (
-                    <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
-                        <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                        <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
-                    </div>
-                ) : (
-                    <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
-                        {images.map((img, index) => (
-                                <motion.div
-                                    key={img.id}
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    transition={{ delay: (index % 10) * 0.03, duration: 0.4 }}
-                                    whileHover={{ scale: 1.05, zIndex: 10 }}
-                                    className="break-inside-avoid relative cursor-zoom-in overflow-hidden rounded-md sm:rounded-2xl bg-slate-900 border border-white/5 shadow-sm sm:shadow-lg"
-                                    onClick={() => setSelectedImageIndex(index)}
-                                >
-                                    <img
-                                        src={img.thumbnail_url || img.image_url}
-                                        alt={img.caption || album.title}
-                                        className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110"
-                                        loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-slate-900/10 transition-colors duration-300" />
-                                </motion.div>
-                        ))}
-                    </div>
-                )}
+                <AnimatePresence mode="wait">
+                    {activeTab === 'photos' ? (
+                        <motion.div
+                            key="photos-grid"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            {/* Masonry / Grid Layout - 4 columns on mobile */}
+                            {images.length === 0 ? (
+                                <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
+                                    <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+                                    <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
+                                </div>
+                            ) : (
+                                <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
+                                    {images.map((img, index) => (
+                                        <motion.div
+                                            key={img.id}
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: (index % 10) * 0.03, duration: 0.4 }}
+                                            whileHover={{ scale: 1.05, zIndex: 10 }}
+                                            className="break-inside-avoid relative cursor-zoom-in overflow-hidden rounded-md sm:rounded-2xl bg-slate-900 border border-white/5 shadow-sm sm:shadow-lg"
+                                            onClick={() => setSelectedImageIndex(index)}
+                                        >
+                                            <img
+                                                src={img.thumbnail_url || img.image_url}
+                                                alt={img.caption || album.title}
+                                                className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110"
+                                                loading="lazy"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-slate-900/10 transition-colors duration-300" />
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            )}
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key="video-player"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            transition={{ duration: 0.3 }}
+                            className="max-w-7xl mx-auto"
+                        >
+                            {fetchingVideos ? (
+                                <div className="flex flex-col items-center justify-center py-24 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                                    <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
+                                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading highlights...</p>
+                                </div>
+                            ) : playlistVideos.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                                    {playlistVideos.map((video) => (
+                                        <motion.div
+                                            key={video.id}
+                                            whileHover={{ y: -8 }}
+                                            className="group relative cursor-pointer"
+                                            onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
+                                        >
+                                            <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 relative shadow-lg group-hover:shadow-2xl transition-all duration-500 border border-white/5">
+                                                <img 
+                                                    src={video.thumbnail} 
+                                                    alt={video.title} 
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                                                />
+                                                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
+                                                    <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
+                                                        <Play className="w-7 h-7 fill-current ml-1" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 px-2">
+                                                <h3 className="font-bold text-white line-clamp-2 group-hover:text-padel-green transition-colors leading-snug tracking-tight text-base">{video.title}</h3>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-white/10">
+                                    <PlayCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                    <h3 className="text-base font-bold text-white uppercase tracking-wider">No highlights available</h3>
+                                </div>
+                            )}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* Lightbox Modal with Swipe Support */}
@@ -299,6 +442,13 @@ const AlbumDetails = () => {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            <VideoModal
+                isOpen={videoModal.isOpen}
+                onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
+                videoUrl={videoModal.url}
+                title={videoModal.title}
+            />
         </div>
     );
 };
