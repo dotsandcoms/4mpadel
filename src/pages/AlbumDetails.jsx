@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Image as ImageIcon, PlayCircle, Play, Loader } from 'lucide-react';
+import { ArrowLeft, X, Image as ImageIcon, PlayCircle, Play, Loader, Lock, UserPlus } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import VideoModal from '../components/VideoModal';
+import AuthModal from '../components/AuthModal';
 
 const AlbumDetails = () => {
     const { id } = useParams();
@@ -17,8 +18,22 @@ const AlbumDetails = () => {
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
+    const [session, setSession] = useState(null);
+    const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     const YOUTUBE_API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY;
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            setSession(session);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            setSession(session);
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
 
     useEffect(() => {
         const fetchAlbumAndImages = async () => {
@@ -182,16 +197,16 @@ const AlbumDetails = () => {
                 </AnimatePresence>
 
                 {/* Header Content */}
-                <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16 py-12 md:py-20">
+                <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16 py-8 md:py-12">
                     <motion.div
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                     >
                         <Link
                             to="/gallery"
-                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-all mb-8 md:mb-12 group bg-black/40 backdrop-blur-xl px-6 py-3 rounded-full border border-white/10"
+                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-all mb-6 md:mb-10 group bg-black/40 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10"
                         >
-                            <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 mr-3 group-hover:scale-110 transition-transform" />
+                            <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-3 group-hover:scale-110 transition-transform" />
                             Back to Collection
                         </Link>
                     </motion.div>
@@ -200,7 +215,7 @@ const AlbumDetails = () => {
                     <div className="relative flex flex-col items-center">
                         {/* Massive Background Watermark Title (Centered Behind) */}
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none opacity-[0.03] whitespace-nowrap overflow-hidden w-full text-center z-0">
-                            <h2 className="text-[12vw] font-black text-white uppercase tracking-tighter leading-none">
+                            <h2 className="text-[10vw] font-black text-white uppercase tracking-tighter leading-none">
                                 {album.title}
                             </h2>
                         </div>
@@ -221,7 +236,7 @@ const AlbumDetails = () => {
                                     <span>Official Album</span>
                                 </motion.div>
                                 
-                                <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter uppercase leading-[0.9] transition-all drop-shadow-2xl">
+                                <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9] transition-all drop-shadow-2xl">
                                     {album.title}
                                 </h1>
                             </div>
@@ -246,7 +261,7 @@ const AlbumDetails = () => {
 
                             {/* Rankings-style Tab Navigation */}
                             {youtubePlaylistUrl && (
-                                <div className="flex items-center gap-1 md:gap-2 mt-12 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto backdrop-blur-xl">
+                                <div className="flex items-center gap-1 md:gap-2 mt-8 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto backdrop-blur-xl">
                                     {[
                                         { id: 'photos', label: 'Action Shots', icon: <ImageIcon className="w-3.5 h-3.5 md:w-4 md:h-4" /> },
                                         { id: 'video', label: 'Video', icon: <PlayCircle className="w-3.5 h-3.5 md:w-4 md:h-4" /> }
@@ -271,96 +286,141 @@ const AlbumDetails = () => {
             </div>
 
             <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
-                <AnimatePresence mode="wait">
-                    {activeTab === 'photos' ? (
-                        <motion.div
-                            key="photos-grid"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            {/* Masonry / Grid Layout - 4 columns on mobile */}
-                            {images.length === 0 ? (
-                                <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
-                                    <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                                    <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
+                {!session ? (
+                    <motion.div 
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="max-w-4xl mx-auto mt-12 mb-32 px-4"
+                    >
+                        <div className="relative group overflow-hidden rounded-[3rem] border border-white/10 bg-white/5 backdrop-blur-2xl p-10 md:p-20 text-center shadow-2xl">
+                            {/* Ambient Glows */}
+                            <div className="absolute top-0 left-1/4 w-64 h-64 bg-padel-green/10 blur-[100px] rounded-full pointer-events-none" />
+                            <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+                            <div className="relative z-10 flex flex-col items-center">
+                                <div className="w-24 h-24 bg-padel-green/10 rounded-full flex items-center justify-center text-padel-green mb-10 border border-padel-green/20">
+                                    <Lock className="w-10 h-10" />
                                 </div>
-                            ) : (
-                                <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
-                                    {images.map((img, index) => (
-                                        <motion.div
-                                            key={img.id}
-                                            initial={{ opacity: 0, scale: 0.95 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            transition={{ delay: (index % 10) * 0.03, duration: 0.4 }}
-                                            whileHover={{ scale: 1.05, zIndex: 10 }}
-                                            className="break-inside-avoid relative cursor-zoom-in overflow-hidden rounded-md sm:rounded-2xl bg-slate-900 border border-white/5 shadow-sm sm:shadow-lg"
-                                            onClick={() => setSelectedImageIndex(index)}
-                                        >
-                                            <img
-                                                src={img.thumbnail_url || img.image_url}
-                                                alt={img.caption || album.title}
-                                                className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110"
-                                                loading="lazy"
-                                            />
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-slate-900/10 transition-colors duration-300" />
-                                        </motion.div>
-                                    ))}
+                                <h2 className="text-4xl md:text-6xl font-black text-white mb-6 uppercase tracking-tighter leading-none italic">
+                                    Members <span className="text-padel-green">Only</span>
+                                </h2>
+                                <p className="text-gray-400 text-lg md:text-xl font-medium max-w-xl mx-auto mb-12 leading-relaxed">
+                                    Action shots and tournament highlights are reserved for our registered community members.
+                                </p>
+                                <div className="flex flex-col sm:flex-row items-center gap-4">
+                                    <button 
+                                        onClick={() => setIsAuthModalOpen(true)}
+                                        className="h-16 px-10 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[11px] rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/20 hover:scale-[1.03] active:scale-95 flex items-center gap-3"
+                                    >
+                                        <UserPlus className="w-4 h-4" />
+                                        <span>Create Profile to Access</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setIsAuthModalOpen(true)}
+                                        className="h-16 px-10 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[11px] rounded-2xl transition-all duration-300 border border-white/10 backdrop-blur-md"
+                                    >
+                                        Login
+                                    </button>
                                 </div>
-                            )}
-                        </motion.div>
-                    ) : (
-                        <motion.div
-                            key="video-player"
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -20 }}
-                            transition={{ duration: 0.3 }}
-                            className="max-w-7xl mx-auto"
-                        >
-                            {fetchingVideos ? (
-                                <div className="flex flex-col items-center justify-center py-24 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl">
-                                    <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
-                                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading highlights...</p>
+                                <div className="mt-12 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-padel-green shadow-[0_0_8px_rgba(151,255,14,0.5)]" />
+                                    <span>Instant Access after Registration</span>
                                 </div>
-                            ) : playlistVideos.length > 0 ? (
-                                <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
-                                    {playlistVideos.map((video) => (
-                                        <motion.div
-                                            key={video.id}
-                                            whileHover={{ y: -8 }}
-                                            className="group relative cursor-pointer"
-                                            onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
-                                        >
-                                            <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 relative shadow-lg group-hover:shadow-2xl transition-all duration-500 border border-white/5">
-                                                <img 
-                                                    src={video.thumbnail} 
-                                                    alt={video.title} 
-                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                            </div>
+                        </div>
+                    </motion.div>
+                ) : (
+                    <AnimatePresence mode="wait">
+                        {activeTab === 'photos' ? (
+                            <motion.div
+                                key="photos-grid"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                {/* Masonry / Grid Layout - 4 columns on mobile */}
+                                {images.length === 0 ? (
+                                    <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
+                                        <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+                                        <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
+                                    </div>
+                                ) : (
+                                    <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
+                                        {images.map((img, index) => (
+                                            <motion.div
+                                                key={img.id}
+                                                initial={{ opacity: 0, scale: 0.95 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                transition={{ delay: (index % 10) * 0.03, duration: 0.4 }}
+                                                whileHover={{ scale: 1.05, zIndex: 10 }}
+                                                className="break-inside-avoid relative cursor-zoom-in overflow-hidden rounded-md sm:rounded-2xl bg-slate-900 border border-white/5 shadow-sm sm:shadow-lg"
+                                                onClick={() => setSelectedImageIndex(index)}
+                                            >
+                                                <img
+                                                    src={img.thumbnail_url || img.image_url}
+                                                    alt={img.caption || album.title}
+                                                    className="w-full h-auto object-cover transition-transform duration-700 group-hover:scale-110"
+                                                    loading="lazy"
                                                 />
-                                                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
-                                                    <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
-                                                        <Play className="w-7 h-7 fill-current ml-1" />
+                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-slate-900/10 transition-colors duration-300" />
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                )}
+                            </motion.div>
+                        ) : (
+                            <motion.div
+                                key="video-player"
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                transition={{ duration: 0.3 }}
+                                className="max-w-7xl mx-auto"
+                            >
+                                {fetchingVideos ? (
+                                    <div className="flex flex-col items-center justify-center py-24 bg-white/5 rounded-[2rem] border border-white/10 backdrop-blur-xl">
+                                        <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
+                                        <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading highlights...</p>
+                                    </div>
+                                ) : playlistVideos.length > 0 ? (
+                                    <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
+                                        {playlistVideos.map((video) => (
+                                            <motion.div
+                                                key={video.id}
+                                                whileHover={{ y: -8 }}
+                                                className="group relative cursor-pointer"
+                                                onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
+                                            >
+                                                <div className="aspect-video rounded-2xl overflow-hidden bg-slate-900 relative shadow-lg group-hover:shadow-2xl transition-all duration-500 border border-white/5">
+                                                    <img 
+                                                        src={video.thumbnail} 
+                                                        alt={video.title} 
+                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
+                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
+                                                        <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
+                                                            <Play className="w-7 h-7 fill-current ml-1" />
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="mt-4 px-2">
-                                                <h3 className="font-bold text-white line-clamp-2 group-hover:text-padel-green transition-colors leading-snug tracking-tight text-base">{video.title}</h3>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-white/10">
-                                    <PlayCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                                    <h3 className="text-base font-bold text-white uppercase tracking-wider">No highlights available</h3>
-                                </div>
-                            )}
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                                <div className="mt-4 px-2">
+                                                    <h3 className="font-bold text-white line-clamp-2 group-hover:text-padel-green transition-colors leading-snug tracking-tight text-base">{video.title}</h3>
+                                                </div>
+                                            </motion.div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-20 bg-white/5 rounded-[2rem] border border-white/10">
+                                        <PlayCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                        <h3 className="text-base font-bold text-white uppercase tracking-wider">No highlights available</h3>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                )}
             </div>
 
             {/* Lightbox Modal with Swipe Support */}
@@ -448,6 +508,11 @@ const AlbumDetails = () => {
                 onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
                 videoUrl={videoModal.url}
                 title={videoModal.title}
+            />
+
+            <AuthModal 
+                isOpen={isAuthModalOpen} 
+                onClose={() => setIsAuthModalOpen(false)} 
             />
         </div>
     );

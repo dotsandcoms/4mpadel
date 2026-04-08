@@ -76,7 +76,7 @@ const Navbar = ({ isDark = false }) => {
     { name: 'Calendar', href: '/calendar' },
     { name: 'Players', href: '/players' },
     { name: 'Rankings', href: '/rankings' },
-    { name: 'Media', href: '/gallery', authRequired: true },
+    { name: 'Media', href: '/gallery' },
     {
       name: 'Academy',
       href: '#',
@@ -97,7 +97,7 @@ const Navbar = ({ isDark = false }) => {
     { name: 'Contact', href: '/contact' },
   ];
 
-  const visibleLinks = navLinks.filter(link => !link.authRequired || session);
+  const visibleLinks = navLinks;
 
   return (
     <>

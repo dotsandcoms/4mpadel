@@ -44,10 +44,10 @@ const Gallery = () => {
 
             <div className="relative z-10 w-full max-w-[1800px] mx-auto px-2 sm:px-10 lg:px-16">
                 {/* Stylistic WOW Header - Full Width Style */}
-                <div className="relative pt-0 md:pt-20 pb-10 md:pb-32 overflow-hidden">
+                <div className="relative pt-0 md:pt-12 pb-6 md:pb-16 overflow-hidden">
                     {/* Background Translucent Watermark (Now scaled for true full width) */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none w-full flex items-center justify-center -rotate-2 overflow-hidden opacity-[0.03]">
-                        <h2 className="text-[20vw] font-black text-white uppercase tracking-tighter w-full text-center leading-none whitespace-nowrap">
+                        <h2 className="text-[15vw] font-black text-white uppercase tracking-tighter w-full text-center leading-none whitespace-nowrap">
                             Moments
                         </h2>
                     </div>
@@ -64,7 +64,7 @@ const Gallery = () => {
                         <motion.h1 
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            className="text-6xl sm:text-8xl md:text-[10rem] font-black text-white tracking-tighter uppercase mb-8 leading-[0.8] drop-shadow-2xl"
+                            className="text-5xl sm:text-7xl md:text-8xl font-black text-white tracking-tighter uppercase mb-6 leading-[0.8] drop-shadow-2xl"
                         >
                             Our <span className="text-padel-green">Gallery</span>
                         </motion.h1>
