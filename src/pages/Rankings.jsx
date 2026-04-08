@@ -269,7 +269,7 @@ const Rankings = () => {
   const [localProfileMap, setLocalProfileMap] = useState({});
 
   // Search & Pagination State
-  const [activeMainTab, setActiveMainTab] = useState('overview'); // 'overview', 'leaderboards', 'rankings'
+  const [activeMainTab, setActiveMainTab] = useState('leaderboards'); // 'overview', 'leaderboards', 'rankings'
   const [activeTab, setActiveTab] = useState('men');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
