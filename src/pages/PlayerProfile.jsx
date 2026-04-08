@@ -183,28 +183,29 @@ const PlayerProfile = () => {
         const fetchTransactions = async (email) => {
             setTransactionsLoading(true);
             try {
-                const { data: { session } } = await supabase.auth.getSession();
-                const token = session?.access_token || import.meta.env.VITE_SUPABASE_ANON_KEY;
-                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
+                if (!pData) return;
 
-                const res = await fetch(`${supabaseUrl}/functions/v1/paystack-transactions?email=${encodeURIComponent(email)}`, {
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                    }
-                });
+                const { data, error } = await supabase
+                    .from('payments')
+                    .select('*, calendar(event_name)')
+                    .eq('player_id', pData.id)
+                    .order('created_at', { ascending: false });
 
-                if (!res.ok) {
-                    const text = await res.text();
-                    throw new Error(`Status ${res.status}: ${text}`);
-                }
+                if (error) throw error;
 
-                const data = await res.json();
-                if (data && data.transactions) {
-                    setTransactions(data.transactions);
+                if (data) {
+                    setTransactions(data.map(t => ({
+                        id: t.reference || t.id,
+                        date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
+                        amount: `R ${t.amount}`,
+                        status: t.status.charAt(0).toUpperCase() + t.status.slice(1),
+                        payment_type: t.payment_type,
+                        event_name: t.calendar?.event_name || t.metadata?.event_name
+                    })));
                 }
             } catch (err) {
                 console.error("Failed to fetch transactions:", err);
-                alert("Transaction error: " + err.message);
             } finally {
                 setTransactionsLoading(false);
             }
@@ -1267,15 +1268,16 @@ const PlayerProfile = () => {
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-4">
-                                                            <div className="hidden md:grid grid-cols-4 gap-4 px-6 py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                                            <div className="hidden md:grid grid-cols-5 gap-4 px-6 py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
                                                                 <div>Reference</div>
                                                                 <div>Date</div>
+                                                                <div>Type</div>
                                                                 <div>Amount</div>
                                                                 <div className="text-right">Status</div>
                                                             </div>
 
                                                             {currentTransactionsList.map((trx) => (
-                                                                <div key={trx.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-6 transition-all flex flex-col md:grid md:grid-cols-4 md:items-center gap-4">
+                                                                <div key={trx.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-6 transition-all flex flex-col md:grid md:grid-cols-5 md:items-center gap-4">
                                                                     <div className="flex flex-col text-sm border-b md:border-none border-white/5 pb-2 md:pb-0">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
                                                                         <span className="font-mono text-gray-400">{trx.id}</span>
@@ -1283,6 +1285,19 @@ const PlayerProfile = () => {
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Date</span>
                                                                         <span className="text-gray-200">{trx.date}</span>
+                                                                    </div>
+                                                                    <div className="flex flex-col text-sm">
+                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Type</span>
+                                                                        <div className="flex flex-col gap-0.5">
+                                                                            <span className="text-white font-black uppercase text-[10px] tracking-tight">
+                                                                                {trx.payment_type?.replace('_', ' ') || 'Payment'}
+                                                                            </span>
+                                                                            {trx.event_name && (
+                                                                                <span className="text-[10px] text-padel-green font-bold">
+                                                                                    {trx.event_name}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
