@@ -102,7 +102,7 @@ const PlayerProfile = () => {
             const { data: playerData, error } = await supabase
                 .from('players')
                 .select('*')
-                .eq('email', emailToFetch)
+                .ilike('email', emailToFetch)
                 .maybeSingle();
 
             if (error) {
@@ -167,7 +167,7 @@ const PlayerProfile = () => {
                 const { data: coachData } = await supabase
                     .from('coach_applications')
                     .select('*')
-                    .eq('email', emailToFetch)
+                    .ilike('email', emailToFetch)
                     .maybeSingle();
 
                 if (coachData) {
@@ -183,7 +183,7 @@ const PlayerProfile = () => {
         const fetchTransactions = async (email) => {
             setTransactionsLoading(true);
             try {
-                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
+                const { data: pData } = await supabase.from('players').select('id').ilike('email', email).maybeSingle();
                 if (!pData) return;
 
                 const { data, error } = await supabase
@@ -243,13 +243,13 @@ const PlayerProfile = () => {
                     const { data: paidRegs } = await supabase
                         .from('event_registrations')
                         .select('event_id')
-                        .eq('email', player.email)
+                        .ilike('email', player.email)
                         .eq('payment_status', 'paid');
 
                     const { data: paidParticipants } = await supabase
                         .from('tournament_participants')
                         .select('event_id')
-                        .eq('email', player.email)
+                        .ilike('email', player.email)
                         .eq('is_paid', true);
 
                     const paidEventIds = new Set([
@@ -349,7 +349,7 @@ const PlayerProfile = () => {
     const refetchPlayer = async () => {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session?.user?.email) return;
-        const { data } = await supabase.from('players').select('*').eq('email', session.user.email).maybeSingle();
+        const { data } = await supabase.from('players').select('*').ilike('email', session.user.email).maybeSingle();
         if (data) setPlayer(data);
     };
 

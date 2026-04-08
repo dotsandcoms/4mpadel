@@ -208,7 +208,7 @@ const AuthModal = ({ isOpen, onClose }) => {
             const { data: existingPlayer } = await supabase
                 .from('players')
                 .select('email')
-                .eq('email', email)
+                .ilike('email', email)
                 .maybeSingle();
                 
             if (existingPlayer) {
@@ -344,7 +344,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         if (paymentOption === 'temporary' && selectedEventId) {
                             const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
                             if (eventDetails) {
-                                const { data: pData } = await supabase.from('players').select('id').eq('email', email).maybeSingle();
+                                const { data: pData } = await supabase.from('players').select('id').ilike('email', email).maybeSingle();
                                 if (pData?.id) {
                                     await supabase.from('temporary_licenses').insert({
                                         player_id: pData.id,
