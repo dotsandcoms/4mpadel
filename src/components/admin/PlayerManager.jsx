@@ -146,13 +146,20 @@ const PlayerManager = () => {
     const registrationChartData = useMemo(() => {
         const map = {};
         players.forEach(p => {
-            const d = p.created_at ? p.created_at.split('T')[0] : null;
-            if (d) map[d] = (map[d] || 0) + 1;
+            if (!p.created_at) return;
+            const date = new Date(p.created_at);
+            const monthYear = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+            const sortKey = date.toISOString().substring(0, 7); // YYYY-MM
+
+            if (!map[sortKey]) {
+                map[sortKey] = { name: monthYear, count: 0, sortKey };
+            }
+            map[sortKey].count += 1;
         });
-        return Object.entries(map)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .slice(-14)
-            .map(([date, count]) => ({ date: date.slice(5), registrations: count }));
+
+        return Object.values(map)
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+            .map(item => ({ name: item.name, registrations: item.count }));
     }, [players]);
 
     // Categories for filter dropdown
@@ -475,19 +482,13 @@ const PlayerManager = () => {
                         <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={180}>
-                            <AreaChart data={registrationChartData}>
-                                <defs>
-                                    <linearGradient id="colorReg" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#beff00" stopOpacity={0.4} />
-                                        <stop offset="95%" stopColor="#beff00" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
+                            <BarChart data={registrationChartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Area type="monotone" dataKey="registrations" stroke="#beff00" fillOpacity={1} fill="url(#colorReg)" />
-                            </AreaChart>
+                                <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
+                            </BarChart>
                         </ResponsiveContainer>
                     )}
                 </motion.div>
