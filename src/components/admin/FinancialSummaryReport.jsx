@@ -3,9 +3,10 @@ import { supabase } from '../../supabaseClient';
 import { 
     Download, Search, Filter, Loader2, 
     CheckCircle, XCircle, AlertCircle, 
-    User, Calendar, Landmark
+    User, Calendar, Landmark, FileSpreadsheet
 } from 'lucide-react';
 import { formatCurrency } from '../../constants/fees';
+import * as XLSX from 'xlsx';
 
 const FinancialSummaryReport = () => {
     const [viewMode, setViewMode] = useState('events'); // 'players' or 'events'
@@ -136,6 +137,91 @@ const FinancialSummaryReport = () => {
         document.body.removeChild(link);
     };
 
+    const exportToExcelConsolidated = () => {
+        const wb = XLSX.utils.book_new();
+
+        // 1. Summary Sheet
+        const summaryData = [
+            ["4M PADEL CONSOLIDATED FINANCIAL REPORT"],
+            ["Generated on:", new Date().toLocaleString()],
+            [],
+            ["Metric", "Value"],
+            ["Total Revenue (All Time)", payments.reduce((s, p) => s + (p.amount || 0), 0)],
+            ["Total Players", players.length],
+            ["Full License Holders", players.filter(p => p.license_type === 'full').length],
+            ["Temp License Holders", players.filter(p => p.license_type === 'temporary').length],
+            ["Total Participants (All Events)", registrations.length],
+            [],
+            ["Revenue Breakdown"],
+            ["Event Entry Fees", payments.filter(p => p.payment_type === 'event_entry_fee').reduce((s, p) => s + (p.amount || 0), 0)],
+            ["License Fees", payments.filter(p => p.payment_type === 'temp_license' || p.payment_type === 'full_license').reduce((s, p) => s + (p.amount || 0), 0)],
+            ["Membership / Others", payments.filter(p => p.payment_type === 'membership').reduce((s, p) => s + (p.amount || 0), 0)],
+        ];
+        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+        XLSX.utils.book_append_sheet(wb, wsSummary, "Global Summary");
+
+        // 2. Global Player Ledger
+        const ledgerHeaders = ["Player Name", "Email", "License Type", "Paid Registration", "LifeTime Spent (ZAR)"];
+        const ledgerRows = playerReportData.map(p => [
+            p.name, p.email, p.licenseType, p.isPaid ? 'YES' : 'NO', p.totalSpent
+        ]);
+        const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeaders, ...ledgerRows]);
+        XLSX.utils.book_append_sheet(wb, wsLedger, "Global Player Ledger");
+
+        // 3. Master Transactions
+        const trxHeaders = ["Date", "Reference", "Player ID", "Event", "Type", "Amount", "Status"];
+        const trxRows = payments.map(p => [
+            new Date(p.created_at).toLocaleDateString(),
+            p.reference,
+            p.player_id,
+            p.calendar?.event_name || 'N/A',
+            p.payment_type,
+            p.amount,
+            p.status
+        ]);
+        const wsTrx = XLSX.utils.aoa_to_sheet([trxHeaders, ...trxRows]);
+        XLSX.utils.book_append_sheet(wb, wsTrx, "All Transactions History");
+
+        // 4. Individual Event Sheets
+        const uniqueEvents = [...new Set(registrations.map(r => r.event_id))];
+        uniqueEvents.forEach(eventId => {
+            const event = events.find(e => e.id === eventId);
+            const eventName = event?.event_name || `Event_${eventId}`;
+            const eventRegs = eventReportData.filter(r => registrations.find(reg => reg.id === r.id)?.event_id === eventId);
+            
+            if (eventRegs.length > 0) {
+                const eventHeaders = ["Player Name", "Email", "Entry Fee", "License Status", "Paid For Event (ZAR)"];
+                const eventRows = eventRegs.map(r => [
+                    r.playerName,
+                    r.email,
+                    r.entryFeePaid ? 'PAID' : 'DUE',
+                    r.licenseStatus + (r.licensePaid ? ' (Paid)' : ''),
+                    r.totalPaid
+                ]);
+                
+                // Truncate name to 31 chars for Excel sheet limit and remove invalid chars
+                const baseName = eventName.replace(/[\[\]\*\?\/\\]/g, '').substring(0, 25);
+                let finalName = baseName;
+                let counter = 1;
+
+                while (wb.SheetNames.includes(finalName)) {
+                    finalName = `${baseName.substring(0, 20)}_${counter++}`;
+                }
+
+                const wsEvent = XLSX.utils.aoa_to_sheet([
+                    [`EVENT REPORT: ${eventName}`],
+                    [`Entry Fee: R ${event?.entry_fee || 0}`],
+                    [],
+                    eventHeaders,
+                    ...eventRows
+                ]);
+                XLSX.utils.book_append_sheet(wb, wsEvent, finalName);
+            }
+        });
+
+        XLSX.writeFile(wb, `4M_Padel_Consolidated_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
@@ -178,9 +264,17 @@ const FinancialSummaryReport = () => {
                         />
                     </div>
                     <button 
+                        onClick={exportToExcelConsolidated}
+                        className="bg-padel-green/10 hover:bg-padel-green/20 text-padel-green px-4 py-2.5 rounded-xl border border-padel-green/20 transition-all group flex items-center gap-2 text-xs font-black uppercase tracking-wider shadow-lg shadow-padel-green/5"
+                        title="Export Consolidated XLSX with all event sheets"
+                    >
+                        <FileSpreadsheet size={18} className="group-hover:scale-110 transition-transform" />
+                        XLSX Report
+                    </button>
+                    <button 
                         onClick={exportToCSV}
                         className="bg-white/5 hover:bg-white/10 text-white p-2.5 rounded-xl border border-white/10 transition-all group"
-                        title="Export CSV"
+                        title="Export current view as CSV"
                     >
                         <Download size={20} className="group-hover:scale-110 transition-transform" />
                     </button>
