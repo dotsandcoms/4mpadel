@@ -11,7 +11,10 @@ import {
   ChevronRight,
   User,
   Star,
-  Award
+  Award,
+  Trophy,
+  Camera,
+  GraduationCap
 } from 'lucide-react';
 import { useSearch } from '../context/SearchContext';
 import { supabase } from '../supabaseClient';
@@ -35,8 +38,13 @@ const SearchPalette = () => {
   const staticNav = [
     { name: 'Home', href: '/', icon: ArrowRight, category: 'Site' },
     { name: 'Calendar', href: '/calendar', icon: Calendar, category: 'Site' },
+    { name: 'Broll Pro Tour', href: '/tournaments/broll', icon: Award, category: 'Tournaments' },
+    { name: 'Kit Kat League', href: '/tournaments/kit-kat-league', icon: Trophy, category: 'Tournaments' },
     { name: 'Players', href: '/players', icon: Users, category: 'Site' },
     { name: 'Rankings', href: '/rankings', icon: Star, category: 'Site' },
+    { name: 'Find a Coach', href: '/academy/coaches', icon: GraduationCap, category: 'Academy' },
+    { name: 'Coaching Videos', href: '/academy/videos', icon: BookOpen, category: 'Academy' },
+    { name: 'Media & Gallery', href: '/gallery', icon: Camera, category: 'Media' },
     { name: 'Blog', href: '/blog', icon: BookOpen, category: 'Site' },
     { name: 'Contact', href: '/contact', icon: ArrowRight, category: 'Site' },
   ];
@@ -276,9 +284,9 @@ const SearchPalette = () => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { label: 'Latest Rankings', href: '/rankings' },
+                    { label: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
                     { label: 'Upcoming Tournaments', query: 'Upcoming' },
-                    { label: 'Broll Pro Tour', query: 'Broll' },
+                    { label: 'Broll Tour Rankings', href: '/tournaments/broll' },
                     { label: 'Player Profiles', query: 'Players' }
                   ].map((suggest) => (
                     <button
