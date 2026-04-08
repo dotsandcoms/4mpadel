@@ -237,12 +237,14 @@ const PlayerProfile = () => {
                 if (filtered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url');
 
                     if (dbEvents) {
                         filtered.forEach(e => {
                             const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
                             if (match) {
+                                e.db_id = match.id;
+                                e.slug = match.slug;
                                 e.city = match.city;
                                 e.venue = match.venue;
                                 e.registered_players = match.registered_players;
@@ -1449,14 +1451,18 @@ const PlayerProfile = () => {
                                                                                             {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                                         </span>
                                                                                     </div>
-                                                                                    <a
-                                                                                        href={`https://www.rankedin.com/en/tournament/${event.id}`}
-                                                                                        target="_blank"
-                                                                                        rel="noopener noreferrer"
-                                                                                        className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all"
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            if (event.slug || event.db_id) {
+                                                                                                navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                                            } else {
+                                                                                                window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                                                            }
+                                                                                        }}
+                                                                                        className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 group/btn"
                                                                                     >
-                                                                                        <ExternalLink size={14} />
-                                                                                    </a>
+                                                                                        <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
+                                                                                    </button>
                                                                                 </div>
 
                                                                                 <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
