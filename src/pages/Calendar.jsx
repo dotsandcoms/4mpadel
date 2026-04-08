@@ -355,13 +355,24 @@ const Calendar = () => {
                 return {
                     ...pe,
                     slug: localEvent.slug,
-                    id: localEvent.id, // Use local ID if slug missing
+                    id: localEvent.id,
                     image_url: localEvent.image_url,
                     custom_image_url: localEvent.custom_image_url,
                     posterUrl: localEvent.custom_image_url || localEvent.image_url || localEvent.posterUrl,
                     venue: localEvent.venue || localEvent.clubName,
                     sapa_status: localEvent.sapa_status || pe.sapa_status,
-                    is_league: localEvent.is_league ?? pe.is_league
+                    is_league: localEvent.is_league ?? pe.is_league,
+                    live_youtube_url: localEvent.live_youtube_url,
+                    featured_live: localEvent.featured_live,
+                    youtube_playlist_url: localEvent.youtube_playlist_url,
+                    start_date: localEvent.start_date || pe.startDate,
+                    end_date: localEvent.end_date || pe.endDate,
+                    rankedin_id: localEvent.rankedin_id || pe.eventId,
+                    rankedin_url: localEvent.rankedin_url,
+                    city: localEvent.city,
+                    registered_players: localEvent.registered_players,
+                    organizer_name: localEvent.organizer_name,
+                    event_dates: localEvent.event_dates
                 };
             }
             return pe;
