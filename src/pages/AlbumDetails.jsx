@@ -325,7 +325,7 @@ const AlbumDetails = () => {
                                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px]">Loading highlights...</p>
                                 </div>
                             ) : playlistVideos.length > 0 ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+                                <div className="grid grid-cols-3 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-8">
                                     {playlistVideos.map((video) => (
                                         <motion.div
                                             key={video.id}

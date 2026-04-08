@@ -19,7 +19,8 @@ const GalleryManager = () => {
         description: '',
         is_active: true,
         cover_image_url: '',
-        event_id: ''
+        event_id: '',
+        youtube_playlist_url: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -100,7 +101,8 @@ const GalleryManager = () => {
             description: '',
             is_active: true,
             cover_image_url: '',
-            event_id: ''
+            event_id: '',
+            youtube_playlist_url: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -113,7 +115,8 @@ const GalleryManager = () => {
             description: album.description || '',
             is_active: album.is_active,
             cover_image_url: album.cover_image_url || '',
-            event_id: album.event_id || ''
+            event_id: album.event_id || '',
+            youtube_playlist_url: album.youtube_playlist_url || ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -632,6 +635,18 @@ const GalleryManager = () => {
                                                 </option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">YouTube Playlist URL (Optional)</label>
+                                        <input
+                                            type="text"
+                                            name="youtube_playlist_url"
+                                            value={albumFormData.youtube_playlist_url}
+                                            onChange={handleAlbumInputChange}
+                                            placeholder="https://www.youtube.com/playlist?list=..."
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                        />
+                                        <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-widest leading-none">Overrides linked event video if set</p>
                                     </div>
                                     <div className="flex items-center gap-3 bg-black/40 border border-white/10 p-4 rounded-lg">
                                         <input
