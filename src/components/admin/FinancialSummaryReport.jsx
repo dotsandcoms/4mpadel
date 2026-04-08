@@ -6,7 +6,8 @@ import {
     User, Calendar, Landmark, FileSpreadsheet
 } from 'lucide-react';
 import { formatCurrency } from '../../constants/fees';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const FinancialSummaryReport = () => {
     const [viewMode, setViewMode] = useState('events'); // 'players' or 'events'
@@ -137,50 +138,102 @@ const FinancialSummaryReport = () => {
         document.body.removeChild(link);
     };
 
-    const exportToExcelConsolidated = () => {
-        const wb = XLSX.utils.book_new();
+    const exportToExcelConsolidated = async () => {
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = '4M Padel Admin';
+        workbook.created = new Date();
+
+        // Helper for auto-widths
+        const setAutoWidth = (worksheet) => {
+            worksheet.columns.forEach(column => {
+                let maxColumnLength = 0;
+                column.eachCell({ includeEmpty: true }, (cell) => {
+                    const columnLength = cell.value ? cell.value.toString().length : 10;
+                    if (columnLength > maxColumnLength) {
+                        maxColumnLength = columnLength;
+                    }
+                });
+                column.width = maxColumnLength < 12 ? 12 : maxColumnLength + 5;
+            });
+        };
 
         // 1. Summary Sheet
-        const summaryData = [
-            ["4M PADEL CONSOLIDATED FINANCIAL REPORT"],
-            ["Generated on:", new Date().toLocaleString()],
+        const wsSummary = workbook.addWorksheet('Global Summary');
+        wsSummary.addRow(['4M PADEL CONSOLIDATED FINANCIAL REPORT']).font = { size: 16, bold: true };
+        wsSummary.addRow(['Generated on:', new Date().toLocaleString()]);
+        wsSummary.addRow([]);
+        
+        const summaryHeader = wsSummary.addRow(['Metric', 'Value']);
+        summaryHeader.font = { bold: true };
+        
+        const summaryRows = [
+            ['Total Revenue (All Time)', payments.reduce((s, p) => s + (p.amount || 0), 0)],
+            ['Total Players', players.length],
+            ['Full License Holders', players.filter(p => p.license_type === 'full').length],
+            ['Temp License Holders', players.filter(p => p.license_type === 'temporary').length],
+            ['Total Participants (All Events)', registrations.length],
             [],
-            ["Metric", "Value"],
-            ["Total Revenue (All Time)", payments.reduce((s, p) => s + (p.amount || 0), 0)],
-            ["Total Players", players.length],
-            ["Full License Holders", players.filter(p => p.license_type === 'full').length],
-            ["Temp License Holders", players.filter(p => p.license_type === 'temporary').length],
-            ["Total Participants (All Events)", registrations.length],
-            [],
-            ["Revenue Breakdown"],
-            ["Event Entry Fees", payments.filter(p => p.payment_type === 'event_entry_fee').reduce((s, p) => s + (p.amount || 0), 0)],
-            ["License Fees", payments.filter(p => p.payment_type === 'temp_license' || p.payment_type === 'full_license').reduce((s, p) => s + (p.amount || 0), 0)],
-            ["Membership / Others", payments.filter(p => p.payment_type === 'membership').reduce((s, p) => s + (p.amount || 0), 0)],
+            ['Revenue Breakdown'],
+            ['Event Entry Fees', payments.filter(p => p.payment_type === 'event_entry_fee').reduce((s, p) => s + (p.amount || 0), 0)],
+            ['License Fees', payments.filter(p => p.payment_type === 'temp_license' || p.payment_type === 'full_license').reduce((s, p) => s + (p.amount || 0), 0)],
+            ['Membership / Others', payments.filter(p => p.payment_type === 'membership').reduce((s, p) => s + (p.amount || 0), 0)],
         ];
-        const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
-        XLSX.utils.book_append_sheet(wb, wsSummary, "Global Summary");
+        
+        summaryRows.forEach(row => wsSummary.addRow(row));
+        wsSummary.getColumn(2).numFmt = '"R"#,##0.00';
+        wsSummary.columns = [{ width: 35 }, { width: 20 }];
 
         // 2. Global Player Ledger
-        const ledgerHeaders = ["Player Name", "Email", "License Type", "Paid Registration", "LifeTime Spent (ZAR)"];
-        const ledgerRows = playerReportData.map(p => [
-            p.name, p.email, p.licenseType, p.isPaid ? 'YES' : 'NO', p.totalSpent
-        ]);
-        const wsLedger = XLSX.utils.aoa_to_sheet([ledgerHeaders, ...ledgerRows]);
-        XLSX.utils.book_append_sheet(wb, wsLedger, "Global Player Ledger");
+        const wsLedger = workbook.addWorksheet('Global Player Ledger');
+        wsLedger.columns = [
+            { header: 'Player Name', key: 'name' },
+            { header: 'Email', key: 'email' },
+            { header: 'License Type', key: 'license' },
+            { header: 'Paid Registration', key: 'paid' },
+            { header: 'LifeTime Spent (ZAR)', key: 'spent' }
+        ];
+        
+        wsLedger.getRow(1).font = { bold: true };
+        playerReportData.forEach(p => {
+            wsLedger.addRow({
+                name: p.name,
+                email: p.email,
+                license: p.licenseType,
+                paid: p.isPaid ? 'YES' : 'NO',
+                spent: p.totalSpent
+            });
+        });
+        wsLedger.getColumn(5).numFmt = '"R"#,##0.00';
+        wsLedger.autoFilter = 'A1:E1';
+        setAutoWidth(wsLedger);
 
         // 3. Master Transactions
-        const trxHeaders = ["Date", "Reference", "Player ID", "Event", "Type", "Amount", "Status"];
-        const trxRows = payments.map(p => [
-            new Date(p.created_at).toLocaleDateString(),
-            p.reference,
-            p.player_id,
-            p.calendar?.event_name || 'N/A',
-            p.payment_type,
-            p.amount,
-            p.status
-        ]);
-        const wsTrx = XLSX.utils.aoa_to_sheet([trxHeaders, ...trxRows]);
-        XLSX.utils.book_append_sheet(wb, wsTrx, "All Transactions History");
+        const wsTrx = workbook.addWorksheet('Transactions History');
+        wsTrx.columns = [
+            { header: 'Date', key: 'date' },
+            { header: 'Reference', key: 'ref' },
+            { header: 'Player Name', key: 'playerName' },
+            { header: 'Event', key: 'event' },
+            { header: 'Type', key: 'type' },
+            { header: 'Amount', key: 'amount' },
+            { header: 'Status', key: 'status' }
+        ];
+        
+        wsTrx.getRow(1).font = { bold: true };
+        payments.forEach(p => {
+            wsTrx.addRow({
+                date: new Date(p.created_at).toLocaleDateString(),
+                ref: p.reference,
+                playerName: players.find(player => player.id === p.player_id)?.name || 'Unknown',
+                event: p.calendar?.event_name || 'N/A',
+                type: p.payment_type,
+                amount: p.amount,
+                status: p.status
+            });
+        });
+        wsTrx.getColumn(6).numFmt = '"R"#,##0.00';
+        wsTrx.autoFilter = 'A1:G1';
+        setAutoWidth(wsTrx);
 
         // 4. Individual Event Sheets
         const uniqueEvents = [...new Set(registrations.map(r => r.event_id))];
@@ -190,36 +243,39 @@ const FinancialSummaryReport = () => {
             const eventRegs = eventReportData.filter(r => registrations.find(reg => reg.id === r.id)?.event_id === eventId);
             
             if (eventRegs.length > 0) {
-                const eventHeaders = ["Player Name", "Email", "Entry Fee", "License Status", "Paid For Event (ZAR)"];
-                const eventRows = eventRegs.map(r => [
-                    r.playerName,
-                    r.email,
-                    r.entryFeePaid ? 'PAID' : 'DUE',
-                    r.licenseStatus + (r.licensePaid ? ' (Paid)' : ''),
-                    r.totalPaid
-                ]);
-                
-                // Truncate name to 31 chars for Excel sheet limit and remove invalid chars
                 const baseName = eventName.replace(/[\[\]\*\?\/\\]/g, '').substring(0, 25);
                 let finalName = baseName;
                 let counter = 1;
-
-                while (wb.SheetNames.includes(finalName)) {
+                while (workbook.worksheets.find(w => w.name === finalName)) {
                     finalName = `${baseName.substring(0, 20)}_${counter++}`;
                 }
 
-                const wsEvent = XLSX.utils.aoa_to_sheet([
-                    [`EVENT REPORT: ${eventName}`],
-                    [`Entry Fee: R ${event?.entry_fee || 0}`],
-                    [],
-                    eventHeaders,
-                    ...eventRows
-                ]);
-                XLSX.utils.book_append_sheet(wb, wsEvent, finalName);
+                const wsEvent = workbook.addWorksheet(finalName);
+                wsEvent.addRow([`EVENT REPORT: ${eventName}`]).font = { bold: true, size: 14 };
+                wsEvent.addRow([`Entry Fee: R ${event?.entry_fee || 0}`]);
+                wsEvent.addRow([]);
+                
+                const eventHeaderRow = wsEvent.addRow(["Player Name", "Email", "Entry Fee Status", "License Status", "Total Paid (ZAR)"]);
+                eventHeaderRow.font = { bold: true };
+                
+                eventRegs.forEach(r => {
+                    wsEvent.addRow([
+                        r.playerName,
+                        r.email,
+                        r.entryFeePaid ? 'PAID' : 'DUE',
+                        r.licenseStatus + (r.licensePaid ? ' (Paid)' : ''),
+                        r.totalPaid
+                    ]);
+                });
+                
+                wsEvent.getColumn(5).numFmt = '"R"#,##0.00';
+                wsEvent.autoFilter = 'A4:E4';
+                setAutoWidth(wsEvent);
             }
         });
 
-        XLSX.writeFile(wb, `4M_Padel_Consolidated_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
+        const buffer = await workbook.xlsx.writeBuffer();
+        saveAs(new Blob([buffer]), `Financial_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
     if (loading) {
