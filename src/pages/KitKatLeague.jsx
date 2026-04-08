@@ -152,7 +152,7 @@ const KitKatLeague = () => {
 
     const filteredPlayers = useMemo(() => {
         if (!playerSearch) return playersWithDetails;
-        return playersWithDetails.filter(p => 
+        return playersWithDetails.filter(p =>
             p.name.toLowerCase().includes(playerSearch.toLowerCase()) ||
             p.team.toLowerCase().includes(playerSearch.toLowerCase())
         );
@@ -161,7 +161,7 @@ const KitKatLeague = () => {
     // ANIMATION VARIANTS
     const containerVariants = {
         hidden: { opacity: 0 },
-        visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 }}
+        visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.1 } }
     };
 
     const itemVariants = {
@@ -177,7 +177,7 @@ const KitKatLeague = () => {
     const Podium = ({ topTeams }) => (
         <div className="flex justify-center items-end h-[250px] sm:h-[350px] md:h-[400px] mb-12 sm:mb-16 gap-2 sm:gap-4 md:gap-6 pt-4 sm:pt-10">
             {/* 2nd Place */}
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
                 className="w-1/3 max-w-[160px] flex flex-col items-center relative"
             >
@@ -194,7 +194,7 @@ const KitKatLeague = () => {
             </motion.div>
 
             {/* 1st Place */}
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }}
                 className="w-1/3 max-w-[180px] flex flex-col items-center relative z-20"
             >
@@ -214,7 +214,7 @@ const KitKatLeague = () => {
             </motion.div>
 
             {/* 3rd Place */}
-            <motion.div 
+            <motion.div
                 initial={{ opacity: 0, y: 50 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
                 className="w-1/3 max-w-[160px] flex flex-col items-center relative"
             >
@@ -234,16 +234,39 @@ const KitKatLeague = () => {
 
     return (
         <div className="bg-[#FAF9F6] min-h-screen text-slate-900 font-sans selection:bg-[#D41B2C] selection:text-white">
-            <Navbar isDark={false} />
+            <Navbar isDark={true} />
 
-            {/* LIGHT Background elements */}
-            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-white">
-                <div className="absolute top-[0%] left-[50%] -translate-x-1/2 w-[80%] h-[50%] bg-[#D41B2C]/5 blur-[120px] rounded-full" />
-                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/clean-textile.png')] opacity-[0.2]" />
+            {/* ENHANCED DYNAMIC BACKGROUND */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden bg-[#FAFAFA]">
+                {/* Diagonal Slash Texture */}
+                <div className="absolute top-0 left-0 w-full h-full opacity-[0.03]" style={{ backgroundImage: 'repeating-linear-gradient(45deg, #slate-900 0, #slate-900 1px, transparent 1px, transparent 24px)' }}></div>
+
+                {/* Animated Glowing Orbs */}
+                <motion.div
+                    animate={{ x: [0, 50, 0], y: [0, -30, 0], scale: [1, 1.1, 1] }}
+                    transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                    className="absolute -top-[10%] -right-[10%] w-[60%] h-[60%] bg-[#D41B2C]/10 blur-[130px] rounded-full"
+                />
+                <motion.div
+                    animate={{ x: [0, -40, 0], y: [0, 50, 0], scale: [1, 1.2, 1] }}
+                    transition={{ duration: 20, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                    className="absolute top-[30%] -left-[10%] w-[50%] h-[50%] bg-orange-500/5 blur-[120px] rounded-full"
+                />
+                <motion.div
+                    animate={{ x: [0, 30, 0], y: [0, -60, 0], scale: [1, 1.1, 1] }}
+                    transition={{ duration: 18, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+                    className="absolute -bottom-[10%] right-[10%] w-[70%] h-[70%] bg-[#D41B2C]/5 blur-[150px] rounded-full"
+                />
+
+                {/* Subtle geometric overlay texture */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.5] mix-blend-multiply" />
+
+                {/* Gradient fade to ensure contrast near bottom content */}
+                <div className="absolute bottom-0 left-0 w-full h-[40vh] bg-gradient-to-t from-[#FAFAFA] to-transparent" />
             </div>
 
             <main className="relative z-10 pt-24 md:pt-32 pb-20 container mx-auto px-4 sm:px-6 max-w-7xl">
-                
+
                 {/* HERO SECTION */}
                 <motion.div
                     initial="hidden"
@@ -261,10 +284,10 @@ const KitKatLeague = () => {
 
                     <motion.h1
                         variants={itemVariants}
-                        className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter uppercase mb-2 sm:mb-6 leading-none flex flex-col sm:flex-row justify-center items-center gap-0 sm:gap-6"
+                        className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter uppercase mb-2 sm:mb-6 leading-none flex flex-col justify-center items-center gap-1 md:gap-2"
                     >
-                        <span className="text-slate-900 drop-shadow-sm">KIT KAT</span>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600 filter drop-shadow-[0_2px_10px_rgba(212,27,44,0.2)]">LEAGUE</span>
+                        <span className="text-slate-900 drop-shadow-sm">ELITE LEAGUE</span>
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600 filter drop-shadow-[0_2px_10px_rgba(212,27,44,0.2)] text-[1.5rem] sm:text-[2.5rem] md:text-[3.5rem] tracking-widest text-center italic mt-2">BY KIT KAT</span>
                     </motion.h1>
 
                     <motion.p
@@ -279,7 +302,7 @@ const KitKatLeague = () => {
                 <div className="flex justify-center mb-20 md:mb-28 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/60 backdrop-blur-xl p-1.5 sm:p-2 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
-                            { id: 'standings', label: 'Standings', icon: Trophy }, 
+                            { id: 'standings', label: 'Standings', icon: Trophy },
                             { id: 'fixtures', label: 'Fixtures', icon: Swords },
                             { id: 'teams', label: 'Teams', icon: Users },
                             { id: 'players', label: 'Players', icon: User }
@@ -287,9 +310,8 @@ const KitKatLeague = () => {
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`relative px-6 sm:px-8 py-3 rounded-full font-black text-[10px] sm:text-xs tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center flex items-center gap-2 ${
-                                    activeTab === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-                                }`}
+                                className={`relative px-6 sm:px-8 py-3 rounded-full font-black text-[10px] sm:text-xs tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center flex items-center gap-2 ${activeTab === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                                    }`}
                             >
                                 {activeTab === tab.id && (
                                     <motion.div
@@ -336,19 +358,18 @@ const KitKatLeague = () => {
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {standingsData.map((row, index) => (
-                                                    <motion.tr 
+                                                    <motion.tr
                                                         initial={{ opacity: 0, x: -20 }}
                                                         animate={{ opacity: 1, x: 0 }}
                                                         transition={{ delay: index * 0.05 }}
-                                                        key={row.team.id} 
+                                                        key={row.team.id}
                                                         className={`group hover:bg-slate-50 transition-colors ${index < 3 ? 'bg-slate-50/50' : ''}`}
                                                     >
                                                         <td className="py-3 px-3 sm:py-4 sm:px-6 font-bold">
-                                                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${
-                                                                index === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
-                                                                index === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                                                                index === 2 ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'text-slate-400'
-                                                            }`}>
+                                                            <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${index === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
+                                                                    index === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                                                                        index === 2 ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'text-slate-400'
+                                                                }`}>
                                                                 {row.rank}
                                                             </span>
                                                         </td>
@@ -372,9 +393,8 @@ const KitKatLeague = () => {
                                                         <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
                                                             <div className="flex gap-0.5 sm:gap-1 justify-center">
                                                                 {row.streak.map((result, i) => (
-                                                                    <span key={i} className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${
-                                                                        result === 'W' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-50 text-[#D41B2C] border border-red-100'
-                                                                    }`}>
+                                                                    <span key={i} className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${result === 'W' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-50 text-[#D41B2C] border border-red-100'
+                                                                        }`}>
                                                                         {result}
                                                                     </span>
                                                                 ))}
@@ -468,7 +488,7 @@ const KitKatLeague = () => {
                                         className="relative group h-64 rounded-3xl overflow-hidden cursor-pointer bg-white border border-slate-200 shadow-md hover:shadow-xl transition-all"
                                     >
                                         <div className={`absolute inset-0 bg-gradient-to-br ${team.color} opacity-40 group-hover:opacity-100 transition-opacity duration-500`} />
-                                        
+
                                         <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
                                             <div className="flex justify-between items-start">
                                                 <div className={`w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl border ${team.border} shadow-sm group-hover:scale-110 transition-transform duration-500`}>
@@ -478,7 +498,7 @@ const KitKatLeague = () => {
                                                     {team.short}
                                                 </span>
                                             </div>
-                                            
+
                                             <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border border-white/50">
                                                 <p className="text-[#D41B2C] text-[10px] font-black uppercase tracking-[0.2em] mb-1">Team Captain</p>
                                                 <p className={`${team.text} font-bold text-sm mb-2`}>{team.captain}</p>
@@ -543,37 +563,69 @@ const KitKatLeague = () => {
                     </motion.div>
                 </AnimatePresence>
 
-                {/* ABOUT SECTION */}
-                <motion.section 
+                {/* OFFICIAL LEAGUE SPONSORS */}
+                <motion.section
                     initial={{ opacity: 0, y: 30 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     viewport={{ once: true, margin: "-100px" }}
                     transition={{ duration: 0.6, ease: "easeOut" }}
-                    className="bg-white rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 p-6 sm:p-8 md:p-12 mt-16 sm:mt-24 text-left md:text-center relative overflow-hidden group"
+                    className="mt-20 sm:mt-28 pt-10 border-t border-slate-200"
                 >
-                    <div className="absolute top-0 right-0 w-64 h-64 bg-[#D41B2C]/5 blur-[80px] rounded-full pointer-events-none group-hover:bg-[#D41B2C]/10 transition-colors"></div>
-                    <div className="relative z-10 max-w-4xl mx-auto">
-                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 uppercase tracking-tighter mb-4 sm:mb-6 leading-none">
-                            ABOUT <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600">KIT KAT</span> CASH & CARRY
-                        </h2>
-                        <div className="w-12 h-1 bg-[#D41B2C] mx-auto mb-6 sm:mb-8 rounded-full hidden md:block"></div>
-                        <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-4">
-                            Kit Kat Cash & Carry stands as a prominent force within the FMCG retail landscape, recognized for its commitment to quality, value, and customer satisfaction. As one of the leading brands in the industry, Kit Kat embodies reliability and consistency—qualities that have earned the enduring trust of a diverse and growing customer base.
-                        </p>
-                        <p className="text-slate-600 text-sm md:text-base leading-relaxed mb-6 sm:mb-8">
-                            Our brand represents more than just a retail outlet; it reflects a promise to deliver exceptional service, competitive pricing, and a comprehensive range of products tailored for both individual shoppers and bulk buyers. The overwhelming acceptance and recognition from our valued customers affirm our position as a dependable partner in everyday retail and wholesale needs.
-                        </p>
-                        <a 
-                            href="https://kitkatgroup.com" 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center justify-center w-full sm:w-auto gap-2 bg-[#D41B2C] text-white px-8 py-3.5 sm:py-4 rounded-xl font-black uppercase tracking-widest text-[10px] sm:text-xs hover:bg-red-700 transition-all shadow-lg shadow-[#D41B2C]/30 hover:-translate-y-0.5"
-                        >
-                            Discover The Brand <ChevronRight className="w-4 h-4" />
-                        </a>
+                    <div className="text-center mb-10">
+                        <h3 className="text-xs md:text-sm font-black text-slate-400 uppercase tracking-widest">Official League Sponsors</h3>
+                    </div>
+                    
+                    <div className="flex flex-wrap justify-center items-center gap-12 sm:gap-20 opacity-70 hover:opacity-100 transition-opacity duration-300 mix-blend-multiply">
+                        {/* Coca-Cola */}
+                        <img src="/images/coca-cola.svg" alt="Coca-Cola" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
+                        
+                        {/* Slow Mag */}
+                        <img src="/images/slow-mag.png" alt="Slow Mag" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
+                        
+                        {/* Steri Stumpie */}
+                        <img src="/images/steri-stumpie.png" alt="Steri Stumpie" className="h-16 sm:h-24 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
+                        
+                        {/* Babolat */}
+                        <img src="/images/babolat.png" alt="Babolat" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
                     </div>
                 </motion.section>
+
             </main>
+            {/* FULL WIDTH SPONSOR SECTION */}
+            <section className="bg-[#D41B2C] text-white py-20 sm:py-32 relative overflow-hidden border-t-8 border-red-800">
+                {/* Graphic Pattern */}
+                <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-20 mix-blend-overlay"></div>
+                <div className="absolute -top-64 -right-64 w-[500px] h-[500px] rounded-full bg-red-600/50 blur-[100px] pointer-events-none"></div>
+                <div className="absolute -bottom-64 -left-64 w-[500px] h-[500px] rounded-full bg-red-800/50 blur-[100px] pointer-events-none"></div>
+
+                <div className="container mx-auto px-4 sm:px-6 max-w-5xl relative z-10 text-center flex flex-col items-center">
+
+                    <div className="mb-10 sm:mb-14">
+                        <img 
+                            src="/images/kitkat-group-logo.png" 
+                            alt="Kit Kat Cash And Carry" 
+                            className="w-[280px] sm:w-[380px] md:w-[480px] h-auto object-contain mx-auto shadow-2xl rounded-lg"
+                        />
+                    </div>
+
+                    <p className="text-white/95 text-base sm:text-lg md:text-xl leading-relaxed mb-6 font-medium max-w-3xl drop-shadow-sm">
+                        Kit Kat Cash & Carry stands as a prominent force within the FMCG retail landscape, recognized for its commitment to quality, value, and customer satisfaction. As one of the leading brands in the industry, Kit Kat embodies reliability and consistency.
+                    </p>
+                    <p className="text-white/80 text-sm sm:text-base leading-relaxed mb-12 max-w-3xl">
+                        Our brand reflects a promise to deliver exceptional service, competitive pricing, and a comprehensive range of products tailored for both individual shoppers and bulk buyers. We remain a dependable partner in everyday retail and wholesale needs.
+                    </p>
+
+                    <a
+                        href="https://kitkatgroup.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-3 bg-white !text-red-700 px-8 sm:px-12 py-4 sm:py-5 rounded-full font-black uppercase tracking-widest text-[10px] sm:text-xs hover:scale-105 hover:bg-slate-50 hover:!text-red-800 transition-all shadow-xl group border border-transparent"
+                    >
+                        Visit KitKatGroup.com
+                        <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
+                    </a>
+                </div>
+            </section>
         </div>
     );
 };

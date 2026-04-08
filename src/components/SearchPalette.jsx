@@ -39,7 +39,7 @@ const SearchPalette = () => {
     { name: 'Home', href: '/', icon: ArrowRight, category: 'Site' },
     { name: 'Calendar', href: '/calendar', icon: Calendar, category: 'Site' },
     { name: 'Broll Pro Tour', href: '/tournaments/broll', icon: Award, category: 'Tournaments' },
-    { name: 'Kit Kat League', href: '/tournaments/kit-kat-league', icon: Trophy, category: 'Tournaments' },
+    { name: 'Kit Kat Elite Padel League', href: '/tournaments/kit-kat-league', icon: Trophy, category: 'Tournaments' },
     { name: 'Players', href: '/players', icon: Users, category: 'Site' },
     { name: 'Rankings', href: '/rankings', icon: Star, category: 'Site' },
     { name: 'Find a Coach', href: '/academy/coaches', icon: GraduationCap, category: 'Academy' },
@@ -284,7 +284,7 @@ const SearchPalette = () => {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {[
-                    { label: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
+                    { label: 'Kit Kat Elite Padel League', href: '/tournaments/kit-kat-league' },
                     { label: 'Upcoming Tournaments', query: 'Upcoming' },
                     { label: 'Broll Tour Rankings', href: '/tournaments/broll' },
                     { label: 'Player Profiles', query: 'Players' }
