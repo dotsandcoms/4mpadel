@@ -237,7 +237,25 @@ const PlayerProfile = () => {
                 if (filtered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees');
+
+                    // Fetch user's paid registrations
+                    const { data: paidRegs } = await supabase
+                        .from('event_registrations')
+                        .select('event_id')
+                        .eq('email', player.email)
+                        .eq('payment_status', 'paid');
+
+                    const { data: paidParticipants } = await supabase
+                        .from('tournament_participants')
+                        .select('event_id')
+                        .eq('email', player.email)
+                        .eq('is_paid', true);
+
+                    const paidEventIds = new Set([
+                        ...(paidRegs || []).map(r => r.event_id),
+                        ...(paidParticipants || []).map(p => p.event_id)
+                    ]);
 
                     if (dbEvents) {
                         filtered.forEach(e => {
@@ -250,6 +268,9 @@ const PlayerProfile = () => {
                                 e.registered_players = match.registered_players;
                                 e.organizer_name = match.organizer_name;
                                 e.sapa_status = match.sapa_status;
+                                e.entry_fee = match.entry_fee;
+                                e.category_fees = match.category_fees;
+                                e.isPaid = paidEventIds.has(match.id);
                             }
                         });
                     }
@@ -259,7 +280,7 @@ const PlayerProfile = () => {
             };
             fetchEvents();
         }
-    }, [player?.rankedin_id, getPlayerEventsAsync]);
+    }, [player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 
     useEffect(() => {
         if (player?.rankedin_id && activeTab === 'matches' && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
@@ -1468,6 +1489,20 @@ const PlayerProfile = () => {
                                                                                 <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
                                                                                     {event.event_name}
                                                                                 </h4>
+
+                                                                                {event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
+                                                                                    <motion.button
+                                                                                        whileHover={{ scale: 1.02 }}
+                                                                                        whileTap={{ scale: 0.98 }}
+                                                                                        onClick={() => {
+                                                                                            navigate(`/calendar/${event.slug || event.db_id}?register=true`);
+                                                                                        }}
+                                                                                        className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mb-4 group/pay"
+                                                                                    >
+                                                                                        <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
+                                                                                        Pay Event Fee
+                                                                                    </motion.button>
+                                                                                )}
                                                                             </div>
 
                                                                             <div className="relative z-10 mt-4 border-t border-white/5 pt-4">
@@ -1475,6 +1510,11 @@ const PlayerProfile = () => {
                                                                                     <span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
                                                                                         {event.sapa_status !== 'None' ? event.sapa_status : 'Upcoming'}
                                                                                     </span>
+                                                                                    {event.isPaid && (
+                                                                                        <span className="px-2 py-1 rounded-md bg-padel-green/10 border border-padel-green/30 text-padel-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-padel-green/10">
+                                                                                            <CheckCircle2 size={10} /> Paid
+                                                                                        </span>
+                                                                                    )}
                                                                                     {event.city && (
                                                                                         <span className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
                                                                                             {event.city}

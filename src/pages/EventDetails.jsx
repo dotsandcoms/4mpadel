@@ -408,6 +408,12 @@ const EventDetails = () => {
 
                 if (error) throw error;
                 setEvent(data);
+
+                // Auto-open registration modal if URL param is present
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('register') === 'true') {
+                    setIsModalOpen(true);
+                }
             } catch (error) {
                 console.error('Error fetching event details:', error);
             } finally {
