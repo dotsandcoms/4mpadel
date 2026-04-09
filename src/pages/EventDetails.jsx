@@ -352,7 +352,7 @@ const EventDetails = () => {
                     .select('id, name, email, paid_registration, license_type')
                     .ilike('email', formData.email.trim())
                     .maybeSingle();
-                
+
                 if (data) {
                     setPlayerProfileData(data);
                     setEmailCheckStatus('found');
@@ -705,7 +705,7 @@ const EventDetails = () => {
 
     const calculateTotalAmount = () => {
         let total = getEntryFeeForCategory(formData.division);
-        
+
         // Add Temp License or Full License fee if player doesn't have a valid license
         if (playerProfileData && !playerProfileData.paid_registration) {
             total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
@@ -718,7 +718,7 @@ const EventDetails = () => {
                 total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
             }
         }
-        
+
         return total;
     };
 
@@ -754,7 +754,7 @@ const EventDetails = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-        
+
         if (name === 'partner_name') {
             handlePartnerSearch(value);
         }
@@ -762,7 +762,7 @@ const EventDetails = () => {
 
     const handlePartnerSearch = (name) => {
         if (searchTimeout) clearTimeout(searchTimeout);
-        
+
         // Immediate cleanup for better UX
         setPartnerProfile(null);
         setPartnerLookupError(null);
@@ -947,7 +947,7 @@ const EventDetails = () => {
     };
     const handlePaymentSuccess = async (reference) => {
         console.log("SUCCESS CALLBACK TRIGGERED. Reference:", reference);
-        
+
         // Move to success step immediately for UX closure (matches License Modal's immediate reaction)
         setRegStep(2);
         setIsAlreadyRegistered(true);
@@ -956,7 +956,7 @@ const EventDetails = () => {
         try {
             const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
             const entryFee = getEntryFeeForCategory(formData.division);
-            
+
             // 1. Create registrations
             const registrationsToUpsert = [
                 {
@@ -986,7 +986,7 @@ const EventDetails = () => {
             console.log("Saving registrations...");
             // Ensure unique registrations by email to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
             const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [r.email.toLowerCase(), r])).values());
-            
+
             const { error: regError } = await supabase
                 .from('event_registrations')
                 .upsert(uniqueRegistrations, { onConflict: 'event_id, email' });
@@ -1031,7 +1031,7 @@ const EventDetails = () => {
                     is_test: isTestMode,
                     metadata: { paystack_ref: paystackRef }
                 });
-                
+
                 if (!isFull) {
                     // Add to temporary_licenses table
                     await supabase.from('temporary_licenses').insert({
@@ -1076,7 +1076,7 @@ const EventDetails = () => {
                         is_test: isTestMode,
                         metadata: { paystack_ref: paystackRef }
                     });
-                    
+
                     if (!isPartnerFull) {
                         // Add to temporary_licenses table
                         await supabase.from('temporary_licenses').insert({
@@ -1096,7 +1096,7 @@ const EventDetails = () => {
 
             // 3. Mark in participants list
             console.log("Updating participants...");
-            
+
             // Sync Main Player
             const mainPlayerFilters = [];
             if (playerId) mainPlayerFilters.push(`profile_id.eq.${playerId}`);
@@ -1134,7 +1134,7 @@ const EventDetails = () => {
                             .select('id, full_name, profile_id')
                             .eq('event_id', Number(event.id))
                             .ilike('full_name', `%${pName}%`);
-                        
+
                         if (nameMatch && nameMatch.length > 0) {
                             matches = nameMatch;
                         }
@@ -1156,8 +1156,8 @@ const EventDetails = () => {
                     for (const match of matches) {
                         const { error: updateError } = await supabase
                             .from('tournament_participants')
-                            .update({ 
-                                is_paid: true, 
+                            .update({
+                                is_paid: true,
                                 is_test: isTestMode,
                                 last_synced_at: new Date().toISOString()
                             })
@@ -1941,8 +1941,8 @@ const EventDetails = () => {
                                                         <ImageIcon size={14} />
                                                         <span>Official Media Available</span>
                                                     </motion.div>
-                                                    
-                                                    <motion.h2 
+
+                                                    <motion.h2
                                                         initial={{ opacity: 0, scale: 0.9 }}
                                                         animate={{ opacity: 1, scale: 1 }}
                                                         className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase mb-8 drop-shadow-2xl max-w-4xl leading-[0.9]"
@@ -1969,7 +1969,7 @@ const EventDetails = () => {
                                                             animate={{ opacity: 1, y: 0 }}
                                                             transition={{ delay: 0.2 }}
                                                         >
-                                                            <Link 
+                                                            <Link
                                                                 to={`/gallery/${albumInfo.slug || albumInfo.id}`}
                                                                 className="group relative inline-flex items-center gap-10 pl-10 pr-4 py-4 bg-padel-green text-slate-950 rounded-full font-black uppercase tracking-widest text-base hover:bg-white hover:scale-105 transition-all duration-500 shadow-[0_0_50px_rgba(150,250,50,0.3)]"
                                                             >
@@ -2112,7 +2112,7 @@ const EventDetails = () => {
                                                                 value={formData.full_name}
                                                                 onChange={handleInputChange}
                                                                 className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
-                                                                placeholder="Mark Stillerman"
+                                                                placeholder="Player Full Name"
                                                                 required
                                                             />
                                                         </div>
@@ -2172,9 +2172,9 @@ const EventDetails = () => {
                                                                         <option key={tab.Id} value={tab.Name} className="bg-[#0F172A]">{tab.Name}</option>
                                                                     ))
                                                                 ) : (
-                                                                  EVENT_CATEGORIES.map(cat => (
-                                                                    <option key={cat} value={cat} className="bg-[#0F172A]">{cat}</option>
-                                                                  ))
+                                                                    EVENT_CATEGORIES.map(cat => (
+                                                                        <option key={cat} value={cat} className="bg-[#0F172A]">{cat}</option>
+                                                                    ))
                                                                 )}
                                                             </select>
                                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
@@ -2193,7 +2193,7 @@ const EventDetails = () => {
                                                                 <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional registration</p>
                                                             </div>
                                                         </div>
-                                                        <button 
+                                                        <button
                                                             type="button"
                                                             onClick={() => {
                                                                 const newState = !hasPartner;
@@ -2304,7 +2304,7 @@ const EventDetails = () => {
                                                                                     </p>
                                                                                 </div>
                                                                             </div>
-                                                                            <button 
+                                                                            <button
                                                                                 type="button"
                                                                                 onClick={() => setPayForPartner(!payForPartner)}
                                                                                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
@@ -2335,14 +2335,14 @@ const EventDetails = () => {
                                                                                             </div>
                                                                                         </div>
                                                                                         <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
-                                                                                            <button 
+                                                                                            <button
                                                                                                 type="button"
                                                                                                 onClick={() => setPartnerLicenseChoice('temporary')}
                                                                                                 className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
                                                                                             >
                                                                                                 Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                                             </button>
-                                                                                            <button 
+                                                                                            <button
                                                                                                 type="button"
                                                                                                 onClick={() => setPartnerLicenseChoice('full')}
                                                                                                 className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
@@ -2376,14 +2376,14 @@ const EventDetails = () => {
                                                                 </div>
                                                             </div>
                                                             <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
-                                                                <button 
+                                                                <button
                                                                     type="button"
                                                                     onClick={() => setLicenseChoice('temporary')}
                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
                                                                 >
                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                 </button>
-                                                                <button 
+                                                                <button
                                                                     type="button"
                                                                     onClick={() => setLicenseChoice('full')}
                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
@@ -2399,7 +2399,7 @@ const EventDetails = () => {
                                                     <div className="bg-slate-900/50 rounded-[1.5rem] p-5 text-white overflow-hidden relative group border border-white/5">
                                                         {/* Decorative Background Glow */}
                                                         <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-padel-green/20 transition-colors duration-500" />
-                                                        
+
                                                         <div className="relative z-10 space-y-4">
                                                             {/* Itemized list for clarity */}
                                                             <div className="space-y-3">
@@ -2419,7 +2419,7 @@ const EventDetails = () => {
                                                                             <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                         </div>
                                                                     )}
-                                                                    
+
                                                                     {/* Partner Section - Conditional */}
                                                                     {hasPartner && partnerProfile && (
                                                                         <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
@@ -2504,18 +2504,18 @@ const EventDetails = () => {
                                                     Registration <br />
                                                     <span className="text-padel-green">Confirmed</span>
                                                 </h3>
-                                                
+
                                                 <p className="text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
-                                                    You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>. 
+                                                    You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>.
                                                     Your payment was confirmed and your profile is updated.
                                                 </p>
 
                                                 <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
-                                                    <button 
-                                                        onClick={() => { 
-                                                            setIsModalOpen(false); 
-                                                            window.location.reload(); 
-                                                        }} 
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsModalOpen(false);
+                                                            window.location.reload();
+                                                        }}
                                                         className="w-full h-16 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/30 hover:scale-[1.03] active:scale-95"
                                                     >
                                                         <span>Close & Refresh</span>
