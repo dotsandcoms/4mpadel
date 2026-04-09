@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download, 
-    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink
+    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -567,7 +567,28 @@ const EventFinance = ({ allowedEvents = [] }) => {
             </div>
 
             {selectedEventId && (
-                <div className="space-y-6 text-white">
+                <div className="space-y-6 text-white pt-8 border-t border-white/5">
+                    {/* Active Event Indicator */}
+                    <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">
+                                {events.find(e => e.id === selectedEventId)?.event_name}
+                            </h2>
+                            <div className="flex items-center gap-2 px-3 py-1 bg-padel-green text-black text-[10px] font-black uppercase rounded-lg shadow-lg shadow-padel-green/20">
+                                <Trophy size={12} /> Selected Tournament
+                            </div>
+                        </div>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] flex items-center gap-2">
+                            <Calendar size={12} />
+                            {new Date(events.find(e => e.id === selectedEventId)?.start_date).toLocaleDateString(undefined, { 
+                                weekday: 'long', 
+                                year: 'numeric', 
+                                month: 'long', 
+                                day: 'numeric' 
+                            })}
+                        </p>
+                    </div>
+
                     <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
                         <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
                             <div className="relative w-full sm:w-64 shrink-0">
