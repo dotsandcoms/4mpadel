@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import {
@@ -1075,6 +1075,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Homepage Featured">★</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Live Event Featured">📺</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Price Set">💳</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Recent Results Featured">🏆</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Visible on Website">👁️</th>
                                 <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
@@ -1140,6 +1141,13 @@ const CalendarManager = () => {
                                                 <PlayCircle className="w-4 h-4 text-purple-400 fill-purple-400/20 mx-auto" title="Live Featured" />
                                             ) : (
                                                 <PlayCircle className="w-4 h-4 text-gray-600 mx-auto" />
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {(event.entry_fee != null && event.entry_fee !== '') || (event.category_fees && Object.keys(event.category_fees).length > 0) ? (
+                                                <CreditCard className="w-4 h-4 text-emerald-400 mx-auto" title={`Price Set${event.entry_fee ? `: R${event.entry_fee}` : ' (Category Overrides)'}`} />
+                                            ) : (
+                                                <CreditCard className="w-4 h-4 text-gray-600 mx-auto opacity-30" title="Price Not Set" />
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-middle text-center">
