@@ -25,6 +25,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
     const [filterProfile, setFilterProfile] = useState('all');
     const [filterLicense, setFilterLicense] = useState('all');
     const [filterPayment, setFilterPayment] = useState('all');
+    const [filterDivision, setFilterDivision] = useState('all');
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -341,8 +342,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
             const selEvent = events.find(e => e.id === selectedEventId);
             if (!selEvent) return;
 
-            // Sort participants alphabetically
-            const sortedParticipants = [...localParticipants].sort((a, b) => 
+            // Use FILTERED participants for export to respect user's current view
+            const sortedParticipants = [...filteredParticipants].sort((a, b) => 
                 a.full_name.localeCompare(b.full_name)
             );
 
@@ -378,7 +379,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Class', 'System Profile', 'Email', 'License Type', 'Event Payment Status'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'License Type', 'Event Payment Status'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
             
@@ -431,6 +432,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
         }
     };
 
+    const uniqueDivisions = useMemo(() => {
+        const divisions = new Set(localParticipants.map(p => p.class_name).filter(Boolean));
+        return Array.from(divisions).sort();
+    }, [localParticipants]);
+
     const filteredParticipants = localParticipants.filter(p => {
         const matchesSearch = p.full_name.toLowerCase().includes(searchQuery.toLowerCase());
         
@@ -446,7 +452,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
             (filterPayment === 'paid' && p.is_paid) || 
             (filterPayment === 'unpaid' && !p.is_paid);
             
-        return matchesSearch && matchesProfile && matchesLicense && matchesPayment;
+        const matchesDivision = filterDivision === 'all' || p.class_name === filterDivision;
+
+        return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision;
     });
 
     return (
@@ -613,6 +621,17 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             </select>
 
                             <select 
+                                value={filterDivision}
+                                onChange={(e) => setFilterDivision(e.target.value)}
+                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
+                            >
+                                <option value="all">Division: All</option>
+                                {uniqueDivisions.map(div => (
+                                    <option key={div} value={div}>{div}</option>
+                                ))}
+                            </select>
+
+                            <select 
                                 value={filterLicense}
                                 onChange={(e) => setFilterLicense(e.target.value)}
                                 className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
@@ -657,6 +676,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             <thead className="bg-black/20 text-gray-400 text-[10px] uppercase font-black">
                                 <tr>
                                     <th className="px-6 py-4">Participant (Rankedin)</th>
+                                    <th className="px-6 py-4">Division</th>
                                     <th className="px-6 py-4">System Profile Match</th>
                                     <th className="px-6 py-4">License Status</th>
                                     <th className="px-6 py-4">Entry Fee</th>
@@ -666,7 +686,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             <tbody className="divide-y divide-white/5">
                                 {loading.matching ? (
                                     <tr>
-                                        <td colSpan="5" className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></td>
+                                        <td colSpan="6" className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></td>
                                     </tr>
                                 ) : filteredParticipants.map(p => (
                                     <tr key={p.id} className="hover:bg-white/5 transition-colors">
@@ -677,7 +697,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                     <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase rounded border border-orange-500/20">TEST</span>
                                                 )}
                                             </div>
-                                            <p className="text-gray-500 text-xs">{p.class_name}</p>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">{p.class_name}</span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             {p.players ? (
