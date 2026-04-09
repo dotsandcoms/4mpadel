@@ -7,6 +7,8 @@ import {
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import { toast } from 'sonner';
+import ExcelJS from 'exceljs';
+import logo4m from '../../assets/logo_4m_lowercase.png';
 
 const EventFinance = () => {
     const [events, setEvents] = useState([]);
@@ -19,6 +21,10 @@ const EventFinance = () => {
     const [isEventSearchOpen, setIsEventSearchOpen] = useState(false);
     const [markingPaid, setMarkingPaid] = useState(null);
     const [matchingProfile, setMatchingProfile] = useState(null); // Participant being matched
+    const [profileSearchQuery, setProfileSearchQuery] = useState('');
+    const [filterProfile, setFilterProfile] = useState('all');
+    const [filterLicense, setFilterLicense] = useState('all');
+    const [filterPayment, setFilterPayment] = useState('all');
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -48,7 +54,7 @@ const EventFinance = () => {
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee')
+                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees')
                     .order('start_date', { ascending: false });
                 setEvents(eData || []);
 
@@ -320,9 +326,118 @@ const EventFinance = () => {
         }
     };
 
-    const filteredParticipants = localParticipants.filter(p => 
-        p.full_name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const handleExportExcel = async () => {
+        try {
+            const selEvent = events.find(e => e.id === selectedEventId);
+            if (!selEvent) return;
+
+            // Sort participants alphabetically
+            const sortedParticipants = [...localParticipants].sort((a, b) => 
+                a.full_name.localeCompare(b.full_name)
+            );
+
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('Event Finance');
+
+            // Add Event Title at the top
+            const titleRow = sheet.addRow([`Event: ${selEvent.event_name}`]);
+            titleRow.font = { bold: true, size: 14 };
+            titleRow.height = 45;
+            titleRow.alignment = { vertical: 'middle' };
+            sheet.mergeCells('A1:E1');
+
+            try {
+                // Fetch the image from the bundled URL
+                const response = await fetch(logo4m);
+                const buffer = await response.arrayBuffer();
+                const imageId = workbook.addImage({
+                    buffer: buffer,
+                    extension: 'png',
+                });
+                
+                // Add the image to the sheet (tl: col 5 is column F)
+                sheet.addImage(imageId, {
+                    tl: { col: 5, row: 0 },
+                    ext: { width: 120, height: 40 }
+                });
+            } catch (imgErr) {
+                console.warn('Could not load logo for Excel export', imgErr);
+            }
+            
+            // Blank separator row
+            sheet.addRow([]);
+
+            // Add Headers
+            const headers = ['Participant Name', 'Class', 'System Profile', 'Email', 'License Type', 'Event Payment Status'];
+            const headerRow = sheet.addRow(headers);
+            headerRow.font = { bold: true };
+            
+            // Add auto-filter to header row
+            sheet.autoFilter = 'A3:F3';
+
+            // Add Data Rows
+            sortedParticipants.forEach(p => {
+                sheet.addRow([
+                    p.full_name,
+                    p.class_name || 'N/A',
+                    p.players?.name || 'Unlinked',
+                    p.players?.email || 'N/A',
+                    p.players?.license_type || 'None',
+                    p.is_paid ? 'PAID' : 'UNPAID'
+                ]);
+            });
+
+            // Expand columns to fit content
+            for (let i = 1; i <= 6; i++) {
+                const column = sheet.getColumn(i);
+                let maxLen = 0;
+                column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
+                    // Start checking length from Header row (row 3)
+                    if (rowNumber >= 3 && cell.value) {
+                        const colLen = cell.value.toString().length;
+                        if (colLen > maxLen) {
+                            maxLen = colLen;
+                        }
+                    }
+                });
+                column.width = maxLen + 2 > 10 ? maxLen + 2 : 10;
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Finance_Report_${selEvent.event_name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            toast.success("Excel report downloaded successfully");
+        } catch (err) {
+            console.error("Export error:", err);
+            toast.error("Failed to generate Excel report");
+        }
+    };
+
+    const filteredParticipants = localParticipants.filter(p => {
+        const matchesSearch = p.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const isLinked = !!p.players;
+        const matchesProfile = filterProfile === 'all' || 
+            (filterProfile === 'linked' && isLinked) || 
+            (filterProfile === 'unlinked' && !isLinked);
+            
+        const lic = p.players?.license_type || 'none';
+        const matchesLicense = filterLicense === 'all' || lic === filterLicense;
+        
+        const matchesPayment = filterPayment === 'all' || 
+            (filterPayment === 'paid' && p.is_paid) || 
+            (filterPayment === 'unpaid' && !p.is_paid);
+            
+        return matchesSearch && matchesProfile && matchesLicense && matchesPayment;
+    });
 
     return (
         <div className="space-y-6">
@@ -443,18 +558,58 @@ const EventFinance = () => {
 
             {selectedEventId && (
                 <div className="space-y-6 text-white">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <div className="relative w-full md:w-96">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Search synced participants..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-black/20 border border-white/10 rounded-xl py-3 pl-10 text-white"
-                            />
+                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+                        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
+                            <div className="relative w-full sm:w-64 shrink-0">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                                <input
+                                    type="text"
+                                    placeholder="Search synced participants..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-3 text-sm text-white focus:outline-none focus:border-padel-green"
+                                />
+                            </div>
+                            
+                            <select 
+                                value={filterProfile}
+                                onChange={(e) => setFilterProfile(e.target.value)}
+                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
+                            >
+                                <option value="all">Profiles: All</option>
+                                <option value="linked">Profiles: Linked</option>
+                                <option value="unlinked">Profiles: Unlinked</option>
+                            </select>
+
+                            <select 
+                                value={filterLicense}
+                                onChange={(e) => setFilterLicense(e.target.value)}
+                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
+                            >
+                                <option value="all">Licenses: All</option>
+                                <option value="full">Licenses: Full</option>
+                                <option value="temporary">Licenses: Temp</option>
+                                <option value="none">Licenses: None</option>
+                            </select>
+
+                            <select 
+                                value={filterPayment}
+                                onChange={(e) => setFilterPayment(e.target.value)}
+                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
+                            >
+                                <option value="all">Fees: All</option>
+                                <option value="paid">Fees: Paid</option>
+                                <option value="unpaid">Fees: Unpaid</option>
+                            </select>
                         </div>
                         <div className="flex gap-4">
+                            <button
+                                onClick={handleExportExcel}
+                                className="flex items-center gap-2 bg-[#beff00] hover:bg-[#beff00]/90 text-black px-4 py-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-lg sm:shrink-0"
+                            >
+                                <Download size={14} />
+                                Export Excel
+                            </button>
                             <div className="bg-white/5 px-4 py-2 rounded-xl text-center">
                                 <p className="text-[10px] text-gray-500 font-bold uppercase">Total Players</p>
                                 <p className="text-xl font-black text-white">{localParticipants.length}</p>
@@ -499,7 +654,7 @@ const EventFinance = () => {
                                                     <div className="flex items-center gap-2 text-padel-green font-bold text-sm">
                                                         <CheckCircle size={14} /> {p.players.name}
                                                         <button 
-                                                            onClick={() => setMatchingProfile(p)}
+                                                            onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
                                                             className="text-gray-600 hover:text-white transition-colors"
                                                         >
                                                             <Link2 size={12} />
@@ -509,7 +664,7 @@ const EventFinance = () => {
                                                 </div>
                                             ) : (
                                                 <button 
-                                                    onClick={() => setMatchingProfile(p)}
+                                                    onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
                                                     className="flex items-center gap-2 text-gray-600 hover:text-white transition-colors italic text-sm"
                                                 >
                                                     <UserPlus size={14} /> Link Profile
@@ -621,13 +776,15 @@ const EventFinance = () => {
                                         <input 
                                             type="text" placeholder="Search all players..." 
                                             className="w-full bg-black/40 border border-white/5 rounded-xl py-2 pl-10 text-sm text-white"
-                                            onChange={(e) => {
-                                                // Handle full search if needed
-                                            }}
+                                            value={profileSearchQuery}
+                                            onChange={(e) => setProfileSearchQuery(e.target.value)}
                                         />
                                     </div>
                                     <div className="grid grid-cols-1 gap-2">
-                                        {systemProfiles.slice(0, 5).map(sp => (
+                                        {systemProfiles
+                                            .filter(sp => !profileSearchQuery || (sp.name && sp.name.toLowerCase().includes(profileSearchQuery.toLowerCase())) || (sp.email && sp.email.toLowerCase().includes(profileSearchQuery.toLowerCase())))
+                                            .slice(0, profileSearchQuery ? 20 : 5)
+                                            .map(sp => (
                                             <button
                                                 key={sp.id}
                                                 onClick={() => handleMatchProfile(matchingProfile.id, sp.id)}
