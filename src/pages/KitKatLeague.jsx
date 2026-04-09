@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { Trophy, Calendar, Users, MapPin, ChevronRight, Search, Activity, Swords, User } from 'lucide-react';
 import { Link } from 'react-router-dom';
-
+import kitkatLogo from '../assets/kitkat_logo.png';
+import sapaLogo from '../assets/sapa-logo.svg';
 const KitKatLeague = () => {
     const [activeTab, setActiveTab] = useState('standings');
     const [playerSearch, setPlayerSearch] = useState('');
@@ -282,20 +283,33 @@ const KitKatLeague = () => {
                         Official Live Platform
                     </motion.div>
 
-                    <motion.h1
-                        variants={itemVariants}
-                        className="text-4xl sm:text-6xl md:text-8xl font-black tracking-tighter uppercase mb-2 sm:mb-6 leading-none flex flex-col justify-center items-center gap-1 md:gap-2"
-                    >
-                        <span className="text-slate-900 drop-shadow-sm">ELITE LEAGUE</span>
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#D41B2C] to-red-600 filter drop-shadow-[0_2px_10px_rgba(212,27,44,0.2)] text-[1.5rem] sm:text-[2.5rem] md:text-[3.5rem] tracking-widest text-center italic mt-2">BY KIT KAT</span>
-                    </motion.h1>
+                    <motion.div variants={itemVariants} className="flex justify-center mb-6">
+                        <img 
+                            src={kitkatLogo} 
+                            alt="Kit Kat Elite Padel League" 
+                            className="w-[280px] sm:w-[400px] md:w-[480px] h-auto object-contain drop-shadow-2xl"
+                        />
+                        <h1 className="sr-only">Kit Kat Elite Padel League</h1>
+                    </motion.div>
 
                     <motion.p
                         variants={itemVariants}
-                        className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-10 font-bold tracking-wide"
+                        className="text-lg md:text-xl text-slate-500 max-w-2xl mx-auto mb-8 font-bold tracking-wide"
                     >
                         Padel action. Unmatched energy. Every match.
                     </motion.p>
+                    
+                    <motion.div
+                        variants={itemVariants}
+                        className="flex items-center justify-center gap-4 mb-10 opacity-80 hover:opacity-100 transition-opacity"
+                    >
+                        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.2em] text-right">In affiliation with</p>
+                        <div className="w-px h-8 bg-slate-300"></div>
+                        <div className="flex items-center gap-2">
+                            <img src={sapaLogo} alt="SAPA" className="h-6 md:h-8 object-contain" />
+                            <span className="text-slate-800 font-medium text-xs md:text-sm uppercase tracking-widest mt-1">SAPA Premier League</span>
+                        </div>
+                    </motion.div>
                 </motion.div>
 
                 {/* NAVIGATION TABS */}
