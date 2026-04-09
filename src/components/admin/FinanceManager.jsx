@@ -10,6 +10,7 @@ import FinancialDashboard from './FinancialDashboard';
 import UserPayments from './UserPayments';
 import EventFinance from './EventFinance';
 import FinancialSummaryReport from './FinancialSummaryReport';
+import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 
 const FinanceManager = () => {
     const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'users', 'events', 'transactions', 'summary'
@@ -29,6 +30,31 @@ const FinanceManager = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
     const [syncPeriod, setSyncPeriod] = useState('30d'); // '30d', 'feb', '90d'
+
+    // Permissions logic
+    const [userEmail, setUserEmail] = useState(null);
+    const { permissions, loading: permissionsLoading } = useAdminPermissions(userEmail);
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data: { user } } = await supabase.auth.getUser();
+            setUserEmail(user?.email);
+        };
+        getUser();
+    }, []);
+
+    const financePerms = permissions?.module_permissions?.finance || {};
+    const allowedTabs = financePerms.allowedTabs || ['dashboard', 'summary', 'users', 'events', 'transactions', 'settings'];
+    const allowedEvents = financePerms.allowedEvents || [];
+
+    // Safety redirect if current tab is not allowed
+    useEffect(() => {
+        if (!permissionsLoading && permissions && permissions.role !== 'super_admin') {
+            if (!allowedTabs.includes(activeTab)) {
+                setActiveTab(allowedTabs[0] || 'dashboard');
+            }
+        }
+    }, [activeTab, allowedTabs, permissions, permissionsLoading]);
 
     const fetchPayments = useCallback(async () => {
         const { data, error } = await supabase.from('payments').select('reference');
@@ -235,7 +261,7 @@ const FinanceManager = () => {
     const currentTransactions = filteredTransactions.slice(indexOfFirstItem, indexOfLastItem);
     const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
 
-    const tabs = [
+    const allTabs = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'summary', label: 'Summary Rep', icon: FileText },
         { id: 'users', label: 'User Ledger', icon: Users },
@@ -243,6 +269,10 @@ const FinanceManager = () => {
         { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
         { id: 'settings', label: 'Settings', icon: Settings },
     ];
+
+    const tabs = permissions?.role === 'super_admin' 
+        ? allTabs 
+        : allTabs.filter(t => allowedTabs.includes(t.id));
 
     return (
         <div className="space-y-8">
@@ -285,7 +315,7 @@ const FinanceManager = () => {
 
                     {activeTab === 'users' && <UserPayments />}
                     
-                    {activeTab === 'events' && <EventFinance />}
+                    {activeTab === 'events' && <EventFinance allowedEvents={allowedEvents} />}
                     
                     {activeTab === 'transactions' && (
                         <div className="space-y-6">

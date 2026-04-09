@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 
-const EventFinance = () => {
+const EventFinance = ({ allowedEvents = [] }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
     const [localParticipants, setLocalParticipants] = useState([]);
@@ -29,7 +29,7 @@ const EventFinance = () => {
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
     const filteredEvents = useMemo(() => {
-        const sorted = [...events].sort((a, b) => {
+        let sorted = [...events].sort((a, b) => {
             const dateA = new Date(a.start_date);
             const dateB = new Date(b.start_date);
             const today = new Date();
@@ -45,9 +45,14 @@ const EventFinance = () => {
             return dateB - dateA; // Past: Most recent first
         });
 
+        // Filter by allowedEvents permissions if any
+        if (allowedEvents && allowedEvents.length > 0) {
+            sorted = sorted.filter(e => allowedEvents.includes(e.id));
+        }
+
         if (!eventSearch) return sorted;
         return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
-    }, [events, eventSearch]);
+    }, [events, eventSearch, allowedEvents]);
     useEffect(() => {
         const fetchInitialData = async () => {
             setLoading(prev => ({ ...prev, events: true }));
@@ -90,8 +95,13 @@ const EventFinance = () => {
     }, []);
 
     useEffect(() => {
-        if (selectedEventId) fetchParticipants(selectedEventId);
-    }, [selectedEventId, fetchParticipants]);
+        if (selectedEventId) {
+            fetchParticipants(selectedEventId);
+        } else if (allowedEvents && allowedEvents.length > 0 && filteredEvents.length > 0 && !selectedEventId) {
+            // Auto-select first event if locked by permissions
+            setSelectedEventId(filteredEvents[0].id);
+        }
+    }, [selectedEventId, fetchParticipants, allowedEvents, filteredEvents]);
 
     // 3. Sync from Rankedin (Core Engine)
     const runSyncForEvent = async (eventId, rId, eventName) => {

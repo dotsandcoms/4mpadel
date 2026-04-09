@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { supabase } from '../../supabaseClient';
 import { Shield, Plus, Trash2, Edit2, X, Check, Search, Filter, AlertCircle, Key } from 'lucide-react';
 import { toast } from 'sonner';
@@ -20,8 +21,12 @@ const AdminManager = () => {
         email: '',
         role: 'custom',
         allowed_tabs: [],
+        module_permissions: {},
         selectedPlayer: null
     });
+
+    const [allEvents, setAllEvents] = useState([]);
+    const [eventSelectorSearch, setEventSelectorSearch] = useState('');
 
     const ALL_MODULES = [
         { id: 'players', label: 'Players' },
@@ -35,7 +40,21 @@ const AdminManager = () => {
 
     useEffect(() => {
         fetchAdmins();
+        fetchAllEvents();
     }, []);
+
+    const fetchAllEvents = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('calendar')
+                .select('id, event_name')
+                .order('start_date', { ascending: false });
+            if (error) throw error;
+            setAllEvents(data || []);
+        } catch (err) {
+            console.error('Error fetching events:', err);
+        }
+    };
 
     // Player search effect with debounce
     useEffect(() => {
@@ -104,7 +123,8 @@ const AdminManager = () => {
                 .upsert({
                     email: formData.email,
                     role: formData.role,
-                    allowed_tabs: formData.role === 'super_admin' ? [] : formData.allowed_tabs
+                    allowed_tabs: formData.role === 'super_admin' ? [] : formData.allowed_tabs,
+                    module_permissions: formData.role === 'super_admin' ? {} : formData.module_permissions
                 });
 
             if (error) throw error;
@@ -112,7 +132,8 @@ const AdminManager = () => {
             toast.success(editingAdmin ? 'Permissions updated' : 'Admin added');
             setIsModalOpen(false);
             setEditingAdmin(null);
-            setFormData({ email: '', role: 'custom', allowed_tabs: [] });
+            setFormData({ email: '', role: 'custom', allowed_tabs: [], module_permissions: {} });
+            setEventSelectorSearch('');
             fetchAdmins();
         } catch (err) {
             console.error('Error saving admin:', err);
@@ -172,7 +193,8 @@ const AdminManager = () => {
                         setEditingAdmin(null);
                         setPlayerSearchTerm('');
                         setPlayerSearchResults([]);
-                        setFormData({ email: '', role: 'custom', allowed_tabs: [], selectedPlayer: null });
+                        setEventSelectorSearch('');
+                        setFormData({ email: '', role: 'custom', allowed_tabs: [], module_permissions: {}, selectedPlayer: null });
                         setIsModalOpen(true);
                     }}
                     className="flex items-center gap-2 bg-padel-green text-black px-6 py-3 rounded-xl font-bold hover:scale-105 transition-all shadow-lg shadow-padel-green/20"
@@ -261,6 +283,7 @@ const AdminManager = () => {
                                                             email: admin.email,
                                                             role: admin.role,
                                                             allowed_tabs: admin.allowed_tabs || [],
+                                                            module_permissions: admin.module_permissions || {},
                                                             selectedPlayer: null
                                                         });
                                                         setIsModalOpen(true);
@@ -289,7 +312,7 @@ const AdminManager = () => {
             {isModalOpen && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
                     <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setIsModalOpen(false)} />
-                    <div className="bg-[#1E293B] border border-white/10 w-full max-w-xl rounded-3xl overflow-hidden relative z-10 shadow-2xl">
+                    <div className="bg-[#1E293B] border border-white/10 w-full max-w-xl rounded-3xl overflow-hidden relative z-10 shadow-2xl max-h-[90vh] flex flex-col">
                         <div className="p-6 border-b border-white/10 flex items-center justify-between">
                             <h2 className="text-xl font-bold text-white">
                                 {editingAdmin ? 'Edit Permissions' : 'Add New Admin'}
@@ -299,7 +322,8 @@ const AdminManager = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSave} className="p-6 space-y-6">
+                        <form onSubmit={handleSave} className="flex-1 overflow-hidden flex flex-col">
+                            <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar">
                             <div className="space-y-4">
                                 {!editingAdmin && (
                                     <div className="relative">
@@ -387,25 +411,174 @@ const AdminManager = () => {
                                 </div>
 
                                 {formData.role === 'custom' && (
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Allowed Modules</label>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            {ALL_MODULES.map(module => (
-                                                <button
-                                                    key={module.id}
-                                                    type="button"
-                                                    onClick={() => toggleTab(module.id)}
-                                                    className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
-                                                        formData.allowed_tabs.includes(module.id)
-                                                            ? 'bg-padel-green/10 border-padel-green text-padel-green'
-                                                            : 'bg-black/30 border-white/5 text-gray-400 hover:border-white/20'
-                                                    }`}
-                                                >
-                                                    <span className="font-medium">{module.label}</span>
-                                                    {formData.allowed_tabs.includes(module.id) && <Check size={16} />}
-                                                </button>
-                                            ))}
+                                    <div className="space-y-6">
+                                        <div>
+                                            <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Allowed Modules</label>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {ALL_MODULES.map(module => (
+                                                    <button
+                                                        key={module.id}
+                                                        type="button"
+                                                        onClick={() => toggleTab(module.id)}
+                                                        className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+                                                            formData.allowed_tabs.includes(module.id)
+                                                                ? 'bg-padel-green/10 border-padel-green text-padel-green'
+                                                                : 'bg-black/30 border-white/5 text-gray-400 hover:border-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className="font-medium">{module.label}</span>
+                                                        {formData.allowed_tabs.includes(module.id) && <Check size={16} />}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
+
+                                        {/* Finance Sub-permissions */}
+                                        {formData.allowed_tabs.includes('finance') && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3"
+                                            >
+                                                <div className="flex items-center gap-2 text-padel-green mb-1">
+                                                    <Shield size={16} />
+                                                    <span className="text-xs font-black uppercase tracking-widest">Finance Granular Access</span>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Restrict to Tabs</label>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {[
+                                                            { id: 'dashboard', label: 'Dashboard' },
+                                                            { id: 'users', label: 'User Payments' },
+                                                            { id: 'events', label: 'Event Finance' },
+                                                            { id: 'transactions', label: 'Transactions' },
+                                                            { id: 'summary', label: 'Summary Report' }
+                                                        ].map(tab => {
+                                                            const isChecked = formData.module_permissions.finance?.allowedTabs?.includes(tab.id) ?? true;
+                                                            return (
+                                                                <button
+                                                                    key={tab.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        const current = formData.module_permissions.finance?.allowedTabs ?? ['dashboard', 'users', 'events', 'transactions', 'summary'];
+                                                                        const next = isChecked 
+                                                                            ? current.filter(id => id !== tab.id)
+                                                                            : [...current, tab.id];
+                                                                        setFormData(prev => ({
+                                                                            ...prev,
+                                                                            module_permissions: {
+                                                                                ...prev.module_permissions,
+                                                                                finance: {
+                                                                                    ...prev.module_permissions.finance,
+                                                                                    allowedTabs: next
+                                                                                }
+                                                                            }
+                                                                        }));
+                                                                    }}
+                                                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                                                                        isChecked 
+                                                                            ? 'bg-padel-green text-black border-padel-green' 
+                                                                            : 'bg-white/5 text-gray-500 border-white/10 hover:border-white/20'
+                                                                    }`}
+                                                                >
+                                                                    {tab.label}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase">Restrict to Specific Events</label>
+                                                    <div className="space-y-3">
+                                                        <div className="relative">
+                                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={12} />
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Search events by name..."
+                                                                value={eventSelectorSearch}
+                                                                onChange={(e) => setEventSelectorSearch(e.target.value)}
+                                                                className="w-full bg-black/40 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-white text-xs focus:outline-none focus:border-padel-green"
+                                                            />
+                                                        </div>
+
+                                                        {eventSelectorSearch.length > 0 && (
+                                                            <div className="bg-black/40 border border-white/10 rounded-xl overflow-hidden max-h-[150px] overflow-y-auto divide-y divide-white/5">
+                                                                {allEvents
+                                                                    .filter(e => 
+                                                                        e.event_name.toLowerCase().includes(eventSelectorSearch.toLowerCase()) && 
+                                                                        !(formData.module_permissions.finance?.allowedEvents || []).includes(e.id)
+                                                                    )
+                                                                    .map(event => (
+                                                                        <button
+                                                                            key={event.id}
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const current = formData.module_permissions.finance?.allowedEvents ?? [];
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    module_permissions: {
+                                                                                        ...prev.module_permissions,
+                                                                                        finance: {
+                                                                                            ...prev.module_permissions.finance,
+                                                                                            allowedEvents: [...current, event.id]
+                                                                                        }
+                                                                                    }
+                                                                                }));
+                                                                                setEventSelectorSearch('');
+                                                                            }}
+                                                                            className="w-full px-4 py-2 text-left hover:bg-white/5 text-[10px] text-gray-300 transition-colors"
+                                                                        >
+                                                                            {event.event_name}
+                                                                        </button>
+                                                                    ))}
+                                                                {allEvents.filter(e => 
+                                                                    e.event_name.toLowerCase().includes(eventSelectorSearch.toLowerCase()) && 
+                                                                    !(formData.module_permissions.finance?.allowedEvents || []).includes(e.id)
+                                                                ).length === 0 && (
+                                                                    <div className="px-4 py-3 text-[10px] text-gray-600 italic">No matching events found</div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {formData.module_permissions.finance?.allowedEvents?.map(eventId => {
+                                                                const event = allEvents.find(e => e.id === eventId);
+                                                                return (
+                                                                    <div key={eventId} className="bg-white/5 border border-white/10 pl-3 pr-1 py-1 rounded-lg flex items-center gap-2 group">
+                                                                        <span className="text-[10px] text-gray-400 font-bold max-w-[150px] truncate">
+                                                                            {event?.event_name || 'Unknown Event'}
+                                                                        </span>
+                                                                        <button 
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                setFormData(prev => ({
+                                                                                    ...prev,
+                                                                                    module_permissions: {
+                                                                                        ...prev.module_permissions,
+                                                                                        finance: {
+                                                                                            ...prev.module_permissions.finance,
+                                                                                            allowedEvents: prev.module_permissions.finance.allowedEvents.filter(id => id !== eventId)
+                                                                                        }
+                                                                                    }
+                                                                                }));
+                                                                            }}
+                                                                            className="p-1 hover:text-red-500 text-gray-600 transition-colors"
+                                                                        >
+                                                                            <X size={12} />
+                                                                        </button>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {(!formData.module_permissions.finance?.allowedEvents || formData.module_permissions.finance.allowedEvents.length === 0) && (
+                                                                <span className="text-[10px] text-gray-600 italic">No event restrictions (Full Access)</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </motion.div>
+                                        )}
                                     </div>
                                 )}
 
@@ -438,14 +611,17 @@ const AdminManager = () => {
                                     </div>
                                 )}
                             </div>
+                        </div>
 
+                        <div className="p-6 border-t border-white/10 bg-black/20">
                             <button
                                 type="submit"
-                                className="w-full bg-padel-green text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-padel-green/20 mt-4"
+                                className="w-full bg-padel-green text-black font-bold py-4 rounded-xl hover:scale-[1.02] transition-all shadow-lg shadow-padel-green/20"
                             >
                                 {editingAdmin ? 'Update Permissions' : 'Grant Permissions'}
                             </button>
-                        </form>
+                        </div>
+                    </form>
                     </div>
                 </div>
             )}
