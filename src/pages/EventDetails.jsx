@@ -272,6 +272,11 @@ const EventDetails = () => {
     const [searchTimeout, setSearchTimeout] = useState(null);
     const [paymentReference, setPaymentReference] = useState('');
 
+    const [emailCheckStatus, setEmailCheckStatus] = useState('idle'); // 'idle', 'checking', 'found', 'not_found'
+    const [playerProfileData, setPlayerProfileData] = useState(null);
+    const [licenseChoice, setLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
+    const [partnerLicenseChoice, setPartnerLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
+
     // Prefill form from logged-in player profile when modal opens
     useEffect(() => {
         if (!isModalOpen) return;
@@ -331,6 +336,39 @@ const EventDetails = () => {
         };
         prefillFromSession();
     }, [isModalOpen, event?.id]);
+
+    // Debounced email lookup
+    useEffect(() => {
+        const checkEmail = async () => {
+            if (!formData.email || formData.email.length < 5 || !formData.email.includes('@')) {
+                setEmailCheckStatus('idle');
+                setPlayerProfileData(null);
+                return;
+            }
+            setEmailCheckStatus('checking');
+            try {
+                const { data } = await supabase
+                    .from('players')
+                    .select('id, name, email, paid_registration, license_type')
+                    .ilike('email', formData.email.trim())
+                    .maybeSingle();
+                
+                if (data) {
+                    setPlayerProfileData(data);
+                    setEmailCheckStatus('found');
+                } else {
+                    setPlayerProfileData(null);
+                    setEmailCheckStatus('not_found');
+                }
+            } catch (err) {
+                console.error("Email lookup error:", err);
+                setEmailCheckStatus('idle');
+            }
+        };
+
+        const timeoutId = setTimeout(checkEmail, 400); // 400ms debounce
+        return () => clearTimeout(timeoutId);
+    }, [formData.email]);
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
@@ -668,16 +706,16 @@ const EventDetails = () => {
     const calculateTotalAmount = () => {
         let total = getEntryFeeForCategory(formData.division);
         
-        // Add Temp License fee if player doesn't have a valid license
-        if (loggedInPlayer && !loggedInPlayer.paid_registration) {
-            total += FEES.TEMPORARY_LICENSE;
+        // Add Temp License or Full License fee if player doesn't have a valid license
+        if (playerProfileData && !playerProfileData.paid_registration) {
+            total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
         }
 
         // Add Partner costs if paying for them and partner registration is enabled
         if (hasPartner && payForPartner && partnerProfile) {
             total += getEntryFeeForCategory(formData.division); // Same division assumed for partners usually
             if (!partnerProfile.paid_registration) {
-                total += FEES.TEMPORARY_LICENSE;
+                total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
             }
         }
         
@@ -703,9 +741,11 @@ const EventDetails = () => {
             partner_id: partnerProfile?.id,
             division: formData.division,
             is_test: isTestMode,
-            includes_license: loggedInPlayer && !loggedInPlayer.paid_registration,
+            includes_license: playerProfileData && !playerProfileData.paid_registration,
+            license_type: licenseChoice,
             paying_for_partner: hasPartner && payForPartner,
-            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration
+            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
+            partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
         }
     };
 
@@ -769,6 +809,11 @@ const EventDetails = () => {
         // Validation — must be synchronous to avoid popup blocking/redirects
         if (!formData.full_name.trim() || !formData.email.trim()) {
             toast.error('Please fill in your name and email.');
+            return;
+        }
+
+        if (emailCheckStatus === 'not_found') {
+            toast.error('Profile not found. Please create a profile first.');
             return;
         }
 
@@ -971,28 +1016,33 @@ const EventDetails = () => {
             });
 
             // Main Player: License (if applicable)
-            if (loggedInPlayer && !loggedInPlayer.paid_registration) {
+            if (playerProfileData && !playerProfileData.paid_registration) {
+                const isFull = licenseChoice === 'full';
+                const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+
                 paymentsToInsert.push({
                     player_id: playerId,
                     event_id: event.id,
-                    amount: FEES.TEMPORARY_LICENSE,
+                    amount: licenseAmount,
                     status: 'success',
-                    payment_type: 'temp_license',
+                    payment_type: isFull ? 'full_license' : 'temp_license',
                     payment_method: 'paystack',
                     reference: `License - ${formData.full_name}`,
                     is_test: isTestMode,
                     metadata: { paystack_ref: paystackRef }
                 });
                 
-                // Add to temporary_licenses table
-                await supabase.from('temporary_licenses').insert({
-                    player_id: playerId,
-                    event_id: event.id,
-                    event_name: event.event_name,
-                    event_date: event.start_date
-                });
+                if (!isFull) {
+                    // Add to temporary_licenses table
+                    await supabase.from('temporary_licenses').insert({
+                        player_id: playerId,
+                        event_id: event.id,
+                        event_name: event.event_name,
+                        event_date: event.start_date
+                    });
+                }
 
-                await supabase.from('players').update({ paid_registration: true, approved: true, license_type: 'temporary' }).eq('id', playerId);
+                await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isFull ? 'full' : 'temporary' }).eq('id', playerId);
             }
 
             // Partner side
@@ -1010,29 +1060,34 @@ const EventDetails = () => {
                     metadata: { paystack_ref: paystackRef, paid_by: formData.email }
                 });
 
-                // Partner: License (if applicable)
+                // Partner License
                 if (!partnerProfile.paid_registration) {
+                    const isPartnerFull = partnerLicenseChoice === 'full';
+                    const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+
                     paymentsToInsert.push({
                         player_id: partnerProfile.id,
                         event_id: event.id,
-                        amount: FEES.TEMPORARY_LICENSE,
+                        amount: partnerLicenseAmount,
                         status: 'success',
-                        payment_type: 'temp_license',
+                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
                         payment_method: 'paystack',
-                        reference: `License - ${partnerProfile.name} (Paid by ${formData.full_name})`,
+                        reference: `Partner License - ${partnerProfile.name}`,
                         is_test: isTestMode,
-                        metadata: { paystack_ref: paystackRef, paid_by: formData.email }
+                        metadata: { paystack_ref: paystackRef }
                     });
+                    
+                    if (!isPartnerFull) {
+                        // Add to temporary_licenses table
+                        await supabase.from('temporary_licenses').insert({
+                            player_id: partnerProfile.id,
+                            event_id: event.id,
+                            event_name: event.event_name,
+                            event_date: event.start_date
+                        });
+                    }
 
-                    // Add to temporary_licenses table for partner
-                    await supabase.from('temporary_licenses').insert({
-                        player_id: partnerProfile.id,
-                        event_id: event.id,
-                        event_name: event.event_name,
-                        event_date: event.start_date
-                    });
-
-                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: 'temporary' }).eq('id', partnerProfile.id);
+                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerProfile.id);
                 }
             }
 
@@ -2066,17 +2121,23 @@ const EventDetails = () => {
                                                     <div className="space-y-1.5">
                                                         <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
                                                         <div className="relative">
-                                                            <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                            <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
                                                             <input
                                                                 type="email"
                                                                 name="email"
                                                                 value={formData.email}
                                                                 onChange={handleInputChange}
-                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
                                                                 placeholder="email@example.com"
                                                                 required
                                                             />
+                                                            {emailCheckStatus === 'checking' && (
+                                                                <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                                                            )}
                                                         </div>
+                                                        {emailCheckStatus === 'not_found' && (
+                                                            <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest bg-red-500/10 py-1.5 px-3 rounded-lg border border-red-500/20 inline-block mt-1">Profile not found. Please create a profile first.</p>
+                                                        )}
                                                     </div>
 
                                                     <div className="space-y-1.5">
@@ -2226,37 +2287,112 @@ const EventDetails = () => {
                                                                 </div>
 
                                                                 {partnerProfile && (
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, y: 5 }}
-                                                                        animate={{ opacity: 1, y: 0 }}
-                                                                        className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
-                                                                    >
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
-                                                                                <CreditCard className="w-5 h-5" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
-                                                                                <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
-                                                                                    R{getEntryFeeForCategory(formData.division)} (Entry Fee) {partnerProfile.paid_registration ? '(License valid)' : `(+ R${FEES.TEMPORARY_LICENSE} Temp License)`}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={() => setPayForPartner(!payForPartner)}
-                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
+                                                                    <>
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: 5 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
                                                                         >
-                                                                            <span
-                                                                                aria-hidden="true"
-                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
-                                                                            />
-                                                                        </button>
-                                                                    </motion.div>
+                                                                            <div className="flex items-center gap-3">
+                                                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
+                                                                                    <CreditCard className="w-5 h-5" />
+                                                                                </div>
+                                                                                <div>
+                                                                                    <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
+                                                                                    <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
+                                                                                        R{getEntryFeeForCategory(formData.division)} (Entry Fee) {partnerProfile.paid_registration ? '(License valid)' : `(+ License Required)`}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                            <button 
+                                                                                type="button"
+                                                                                onClick={() => setPayForPartner(!payForPartner)}
+                                                                                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
+                                                                            >
+                                                                                <span
+                                                                                    aria-hidden="true"
+                                                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                                />
+                                                                            </button>
+                                                                        </motion.div>
+
+                                                                        <AnimatePresence>
+                                                                            {payForPartner && !partnerProfile.paid_registration && (
+                                                                                <motion.div
+                                                                                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                                                                                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                    className="overflow-hidden"
+                                                                                >
+                                                                                    <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                                                <CreditCard size={16} />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
+                                                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                                                            <button 
+                                                                                                type="button"
+                                                                                                onClick={() => setPartnerLicenseChoice('temporary')}
+                                                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                            >
+                                                                                                Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                                            </button>
+                                                                                            <button 
+                                                                                                type="button"
+                                                                                                onClick={() => setPartnerLicenseChoice('full')}
+                                                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                            >
+                                                                                                Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </motion.div>
+                                                                            )}
+                                                                        </AnimatePresence>
+                                                                    </>
                                                                 )}
                                                             </motion.div>
                                                         )}
                                                     </AnimatePresence>
+
+                                                    {playerProfileData && !playerProfileData.paid_registration && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, y: 5 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                    <CreditCard size={16} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
+                                                                    <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setLicenseChoice('temporary')}
+                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                >
+                                                                    Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                </button>
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => setLicenseChoice('full')}
+                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                >
+                                                                    Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                </button>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
                                                 </div>
 
                                                 <div className="pt-4 border-t border-white/10">
@@ -2277,10 +2413,10 @@ const EventDetails = () => {
                                                                         <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-1">R{getEntryFeeForCategory(formData.division)} <span className="text-[7px] text-white/40 font-bold ml-1">(ENTRY FEE)</span></span>
                                                                     </div>
 
-                                                                    {loggedInPlayer && !loggedInPlayer.paid_registration && (
+                                                                    {playerProfileData && !playerProfileData.paid_registration && (
                                                                         <div className="flex justify-between items-center text-padel-green">
-                                                                            <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel Temp License</span>
-                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{FEES.TEMPORARY_LICENSE}</span>
+                                                                            <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                         </div>
                                                                     )}
                                                                     
@@ -2297,8 +2433,8 @@ const EventDetails = () => {
 
                                                                             {payForPartner && !partnerProfile.paid_registration && (
                                                                                 <div className="flex justify-between items-center text-padel-green">
-                                                                                    <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel Temp License</span>
-                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{FEES.TEMPORARY_LICENSE}</span>
+                                                                                    <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -2338,8 +2474,8 @@ const EventDetails = () => {
                                                                         <button
                                                                             type="button"
                                                                             onClick={handleRegister}
-                                                                            disabled={isSubmitting}
-                                                                            className="h-14 px-6 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-xl shadow-padel-green/20 disabled:opacity-50 font-black uppercase tracking-[0.1em] text-[10px] flex-1 md:flex-none"
+                                                                            disabled={isSubmitting || emailCheckStatus === 'not_found'}
+                                                                            className="h-14 px-6 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-xl shadow-padel-green/20 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.1em] text-[10px] flex-1 md:flex-none"
                                                                         >
                                                                             <CreditCard className="w-5 h-5" />
                                                                             <span>Pay Now</span>
