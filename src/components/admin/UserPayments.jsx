@@ -8,7 +8,8 @@ import {
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 
-const UserPayments = () => {
+const UserPayments = ({ allowedEvents = [] }) => {
+    const isRestricted = allowedEvents.length > 0;
     const [players, setPlayers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -20,18 +21,28 @@ const UserPayments = () => {
             setLoading(true);
             try {
                 // Fetch players with their payments
-                const { data, error } = await supabase
+                let query = supabase
                     .from('players')
                     .select('*, payments(*, calendar(event_name))');
+
+                const { data, error } = await query;
                 
                 if (error) throw error;
                 
                 // Process data to calculate summary stats per player
                 const processed = (data || []).map(p => {
-                    const totalPaid = (p.payments || []).reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    let playerPayments = p.payments || [];
                     
-                    // Sort payments by the actual payment date (fallback to created_at if metadata is missing)
-                    const sortedPayments = (p.payments || []).sort((a, b) => {
+                    if (isRestricted) {
+                        playerPayments = playerPayments.filter(pay => allowedEvents.includes(pay.event_id));
+                    }
+
+                    if (playerPayments.length === 0 && isRestricted) return null;
+
+                    const totalPaid = playerPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    
+                    // Sort payments by the actual payment date
+                    const sortedPayments = playerPayments.sort((a, b) => {
                         const dateA = new Date(a.metadata?.original_trx?.rawDate || a.created_at);
                         const dateB = new Date(b.metadata?.original_trx?.rawDate || b.created_at);
                         return dateB - dateA;
@@ -44,9 +55,9 @@ const UserPayments = () => {
                         ...p,
                         totalPaid,
                         lastPaymentDate: effectiveDate,
-                        payments: sortedPayments // Keep them sorted for the detail view
+                        payments: sortedPayments
                     };
-                });
+                }).filter(Boolean);
                 setPlayers(processed);
             } catch (err) {
                 console.error("Fetch error:", err);
@@ -110,10 +121,16 @@ const UserPayments = () => {
 
     const handleExportDetailedLedger = async () => {
         toast.promise(async () => {
-            const { data, error } = await supabase
+            let query = supabase
                 .from('payments')
                 .select('*, players(name, email), calendar(event_name)')
                 .order('created_at', { ascending: false });
+            
+            if (isRestricted) {
+                query = query.in('event_id', allowedEvents);
+            }
+
+            const { data, error } = await query;
 
             if (error) throw error;
 

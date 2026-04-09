@@ -32,7 +32,7 @@ const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
     </motion.div>
 );
 
-const FinancialDashboard = () => {
+const FinancialDashboard = ({ allowedEvents = [] }) => {
     const [stats, setStats] = useState({
         totalRevenue: 0,
         eventRevenue: 0,
@@ -44,20 +44,30 @@ const FinancialDashboard = () => {
     const [pieData, setPieData] = useState([]);
     const [loading, setLoading] = useState(true);
 
+    const isRestricted = allowedEvents.length > 0;
+
     useEffect(() => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch all successful payments
-                const { data: payments } = await supabase
+                // 1. Fetch relevant payments
+                let query = supabase
                     .from('payments')
                     .select('*')
                     .eq('status', 'success');
+                
+                if (isRestricted) {
+                    query = query.in('event_id', allowedEvents);
+                }
+
+                const { data: payments, error } = await query;
+
+                if (error) throw error;
 
                 if (payments) {
                     const total = payments.reduce((acc, curr) => acc + Number(curr.amount), 0);
                     const eventRev = payments.filter(p => p.payment_type === 'event_entry_fee').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    const licRev = payments.filter(p => p.payment_type !== 'event_entry_fee').reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    const licRev = payments.filter(p => !['event_entry_fee'].includes(p.payment_type)).reduce((acc, curr) => acc + Number(curr.amount), 0);
                     
                     setStats(prev => ({
                         ...prev,
@@ -85,19 +95,21 @@ const FinancialDashboard = () => {
                         return { name: m, revenue: monthRev };
                     });
                     setChartData(monthlyData);
+
+                    // 2. Fetch Player Stats (Unique players in these payments)
+                    const uniquePlayers = new Set(payments.map(p => p.player_id)).size;
+                    setStats(prev => ({ ...prev, activePlayers: uniquePlayers }));
                 }
 
-                // 2. Fetch Player Stats
-                const { count } = await supabase.from('players').select('*', { count: 'exact', head: true });
-                setStats(prev => ({ ...prev, activePlayers: count || 0 }));
-
+            } catch (err) {
+                console.error('Error fetching filtered dashboard data:', err);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchDashboardData();
-    }, []);
+    }, [allowedEvents, isRestricted]);
 
     if (loading) {
         return (

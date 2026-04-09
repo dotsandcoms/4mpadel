@@ -160,12 +160,27 @@ const AdminManager = () => {
     };
 
     const toggleTab = (tabId) => {
-        setFormData(prev => ({
-            ...prev,
-            allowed_tabs: prev.allowed_tabs.includes(tabId)
+        setFormData(prev => {
+            const isRemoving = prev.allowed_tabs.includes(tabId);
+            const nextAllowedTabs = isRemoving
                 ? prev.allowed_tabs.filter(id => id !== tabId)
-                : [...prev.allowed_tabs, tabId]
-        }));
+                : [...prev.allowed_tabs, tabId];
+
+            // If enabling finance, seed defaults if they don't exist
+            let nextModulePerms = { ...prev.module_permissions };
+            if (!isRemoving && tabId === 'finance' && !nextModulePerms.finance) {
+                nextModulePerms.finance = {
+                    allowedTabs: ['events'],
+                    allowedEvents: []
+                };
+            }
+
+            return {
+                ...prev,
+                allowed_tabs: nextAllowedTabs,
+                module_permissions: nextModulePerms
+            };
+        });
     };
 
     const generateStrongPassword = () => {

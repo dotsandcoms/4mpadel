@@ -9,7 +9,8 @@ import { formatCurrency } from '../../constants/fees';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-const FinancialSummaryReport = () => {
+const FinancialSummaryReport = ({ allowedEvents = [] }) => {
+    const isRestricted = allowedEvents.length > 0;
     const [viewMode, setViewMode] = useState('events'); // 'players' or 'events'
     const [loading, setLoading] = useState(true);
     const [players, setPlayers] = useState([]);
@@ -29,9 +30,15 @@ const FinancialSummaryReport = () => {
                     { data: eventData }
                 ] = await Promise.all([
                     supabase.from('players').select('id, name, email, license_type, paid_registration, approved'),
-                    supabase.from('payments').select('*, calendar(event_name)'),
-                    supabase.from('tournament_participants').select('*, players(name, email, license_type, paid_registration)'),
-                    supabase.from('calendar').select('id, event_name, entry_fee, start_date')
+                    isRestricted 
+                        ? supabase.from('payments').select('*, calendar(event_name)').in('event_id', allowedEvents)
+                        : supabase.from('payments').select('*, calendar(event_name)'),
+                    isRestricted
+                        ? supabase.from('tournament_participants').select('*, players(name, email, license_type, paid_registration)').in('event_id', allowedEvents)
+                        : supabase.from('tournament_participants').select('*, players(name, email, license_type, paid_registration)'),
+                    isRestricted
+                        ? supabase.from('calendar').select('id, event_name, entry_fee, start_date').in('id', allowedEvents)
+                        : supabase.from('calendar').select('id, event_name, entry_fee, start_date')
                 ]);
 
                 setPlayers(pData || []);

@@ -43,15 +43,29 @@ const FinanceManager = () => {
         getUser();
     }, []);
 
-    const financePerms = permissions?.module_permissions?.finance || {};
-    const allowedTabs = financePerms.allowedTabs || ['dashboard', 'summary', 'users', 'events', 'transactions', 'settings'];
-    const allowedEvents = financePerms.allowedEvents || [];
+    const financePerms = permissions?.module_permissions?.finance;
+    
+    // SAFE FALLBACK: If granular perms exist but we haven't specified tabs, 
+    // default to showing everything BUT the Dashboard and Settings (protects totals).
+    const defaultRestrictedTabs = ['summary', 'users', 'events', 'transactions'];
+    const defaultFullTabs = ['dashboard', 'summary', 'users', 'events', 'transactions', 'settings'];
+
+    const allowedTabs = financePerms 
+        ? (financePerms.allowedTabs || ['events']) 
+        : defaultFullTabs;
+        
+    const allowedEvents = financePerms?.allowedEvents || [];
 
     // Safety redirect if current tab is not allowed
     useEffect(() => {
         if (!permissionsLoading && permissions && permissions.role !== 'super_admin') {
+            // Find first available tab if current one is banned
             if (!allowedTabs.includes(activeTab)) {
-                setActiveTab(allowedTabs[0] || 'dashboard');
+                // If dashboard is banned and currently active, jump to the first permitted item
+                const firstAvailable = allowedTabs[0] || '';
+                if (firstAvailable) {
+                    setActiveTab(firstAvailable);
+                }
             }
         }
     }, [activeTab, allowedTabs, permissions, permissionsLoading]);
@@ -274,6 +288,15 @@ const FinanceManager = () => {
         ? allTabs 
         : allTabs.filter(t => allowedTabs.includes(t.id));
 
+    if (permissionsLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+                <Loader2 className="w-10 h-10 text-padel-green animate-spin" />
+                <p className="text-gray-500 font-bold uppercase tracking-widest text-[10px]">Verifying Permissions...</p>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-8">
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 pb-2 border-b border-white/5">
@@ -309,13 +332,13 @@ const FinanceManager = () => {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                 >
-                    {activeTab === 'dashboard' && <FinancialDashboard />}
+                    {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={allowedEvents} />}
                     
-                    {activeTab === 'summary' && <FinancialSummaryReport />}
+                    {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={allowedEvents} />}
 
-                    {activeTab === 'users' && <UserPayments />}
+                    {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={allowedEvents} />}
                     
-                    {activeTab === 'events' && <EventFinance allowedEvents={allowedEvents} />}
+                    {activeTab === 'events' && allowedTabs.includes('events') && <EventFinance allowedEvents={allowedEvents} />}
                     
                     {activeTab === 'transactions' && (
                         <div className="space-y-6">

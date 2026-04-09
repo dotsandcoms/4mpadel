@@ -17,10 +17,10 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
     ];
 
     const menuItems = allMenuItems.filter(item => {
-        if (!permissions) return item.id === 'dashboard'; // Default to only dashboard if loading
+        if (!permissions) return false; 
         if (permissions.role === 'super_admin') return true;
         if (item.superAdminOnly) return false;
-        if (item.id === 'dashboard') return true;
+        
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(item.id);
     });
 
