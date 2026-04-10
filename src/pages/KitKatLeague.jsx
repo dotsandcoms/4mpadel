@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import kitkatLogo from '../assets/kitkat_logo.png';
 import sapaLogo from '../assets/sapa-logo.svg';
 const KitKatLeague = () => {
-    const [activeTab, setActiveTab] = useState('standings');
+    const [activeTab, setActiveTab] = useState('teams');
     const [playerSearch, setPlayerSearch] = useState('');
 
     // --- MOCK DATA ---
@@ -300,9 +300,9 @@ const KitKatLeague = () => {
                 <div className="flex justify-center mb-20 md:mb-28 relative z-50">
                     <div className="flex w-full md:w-auto bg-white/60 backdrop-blur-xl p-1.5 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 mx-auto max-w-[95vw] md:max-w-fit">
                         {[
+                            { id: 'teams', label: 'Teams', icon: Users },
                             { id: 'standings', label: 'Standings', icon: Trophy },
-                            { id: 'fixtures', label: 'Fixtures', icon: Swords },
-                            { id: 'teams', label: 'Teams', icon: Users }
+                            { id: 'fixtures', label: 'Fixtures', icon: Swords }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
