@@ -490,16 +490,24 @@ const KitKatLeague = () => {
                                             initial={{ opacity: 0, scale: 0.8 }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             transition={{ delay: idx * 0.05 }}
-                                            className="group relative cursor-default"
+                                            className="group relative cursor-pointer"
                                             title={team.name}
+                                            onClick={() => {
+                                                if (playerSearch === team.name) {
+                                                    setPlayerSearch('');
+                                                } else {
+                                                    setPlayerSearch(team.name);
+                                                    // Optional: scroll to search bar area if needed
+                                                }
+                                            }}
                                         >
-                                            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white border ${team.border} flex items-center justify-center p-2 shadow-sm bg-gradient-to-br ${team.color} transition-all duration-300 group-hover:scale-110 group-hover:shadow-md`}>
-                                                <div className="w-full h-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
+                                            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white border ${playerSearch === team.name ? 'border-[#D41B2C] ring-4 ring-[#D41B2C]/20 scale-110 shadow-lg' : team.border} flex items-center justify-center p-2 shadow-sm bg-gradient-to-br ${team.color} transition-all duration-300 group-hover:scale-110 group-hover:shadow-md`}>
+                                                <div className={`w-full h-full flex items-center justify-center ${playerSearch === team.name ? 'opacity-100' : 'opacity-70'} group-hover:opacity-100 transition-opacity`}>
                                                     {team.logo}
                                                 </div>
                                             </div>
-                                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                <div className="bg-slate-900 text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded whitespace-nowrap">
+                                            <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 transition-opacity pointer-events-none ${playerSearch === team.name ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+                                                <div className={`${playerSearch === team.name ? 'bg-[#D41B2C]' : 'bg-slate-900'} text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded whitespace-nowrap`}>
                                                     {team.short}
                                                 </div>
                                             </div>
