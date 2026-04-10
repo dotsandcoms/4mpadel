@@ -204,14 +204,23 @@ const EventFinance = ({ allowedEvents = [] }) => {
             }
             
             // Step 5: Cleanup Stale Participants (REMOVALS & DUPLICATE FIX)
-            // Any participant in our DB that is NOT in the fresh Rankedin list is removed.
+            // We fetch the current state and explicitly delete any ID not in the fresh list.
+            const { data: currentInDb } = await supabase
+                .from('tournament_participants')
+                .select('id, rankedin_participant_id')
+                .eq('event_id', eventId);
+            
             const validIds = externalParticipants.map(p => p.rankedin_participant_id);
-            if (validIds.length > 0) {
+            const toDelete = (currentInDb || [])
+                .filter(row => !validIds.includes(String(row.rankedin_participant_id)))
+                .map(row => row.id);
+            
+            if (toDelete.length > 0) {
+                console.info(`Cleaning up ${toDelete.length} stale/duplicate entries for event ${eventId}...`);
                 const { error: deleteError } = await supabase
                     .from('tournament_participants')
                     .delete()
-                    .eq('event_id', eventId)
-                    .not('rankedin_participant_id', 'in', validIds);
+                    .in('id', toDelete);
                 
                 if (deleteError) {
                     console.error('Sync Cleanup Error:', deleteError);
