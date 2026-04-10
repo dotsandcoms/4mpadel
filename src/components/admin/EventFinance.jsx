@@ -601,17 +601,17 @@ const EventFinance = ({ allowedEvents = [] }) => {
             {selectedEventId && (
                 <div className="space-y-6 text-white pt-8 border-t border-white/5">
                     {/* Active Event Indicator */}
-                    <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-3xl font-black text-white uppercase tracking-tighter italic">
+                    <div className="flex flex-col gap-2">
+                        <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                            <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white uppercase tracking-tighter italic leading-none truncate max-w-full">
                                 {events.find(e => e.id === selectedEventId)?.event_name}
                             </h2>
-                            <div className="flex items-center gap-2 px-3 py-1 bg-padel-green text-black text-[10px] font-black uppercase rounded-lg shadow-lg shadow-padel-green/20">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-padel-green text-black text-[9px] sm:text-[10px] font-black uppercase rounded-lg shadow-lg shadow-padel-green/20 w-fit shrink-0">
                                 <Trophy size={12} /> Selected Tournament
                             </div>
                         </div>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-[0.3em] flex items-center gap-2">
-                            <Calendar size={12} />
+                        <p className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] flex items-center gap-2">
+                            <Calendar size={12} className="shrink-0" />
                             {new Date(events.find(e => e.id === selectedEventId)?.start_date).toLocaleDateString(undefined, { 
                                 weekday: 'long', 
                                 year: 'numeric', 
@@ -621,189 +621,285 @@ const EventFinance = ({ allowedEvents = [] }) => {
                         </p>
                     </div>
 
-                    <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-                        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
-                            <div className="relative w-full sm:w-64 shrink-0">
+                    <div className="flex flex-col gap-6">
+                        {/* Search & Filters Grid */}
+                        <div className="flex flex-col lg:flex-row gap-4">
+                            <div className="relative w-full lg:w-72 shrink-0">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                                 <input
                                     type="text"
                                     placeholder="Search synced participants..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl py-2 pl-9 pr-3 text-sm text-white focus:outline-none focus:border-padel-green"
+                                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-10 pr-3 text-sm text-white focus:outline-none focus:border-padel-green font-bold"
                                 />
                             </div>
-                            
-                            <select 
-                                value={filterProfile}
-                                onChange={(e) => setFilterProfile(e.target.value)}
-                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
-                            >
-                                <option value="all">Profiles: All</option>
-                                <option value="linked">Profiles: Linked</option>
-                                <option value="unlinked">Profiles: Unlinked</option>
-                            </select>
 
-                            <select 
-                                value={filterDivision}
-                                onChange={(e) => setFilterDivision(e.target.value)}
-                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
-                            >
-                                <option value="all">Division: All</option>
-                                {uniqueDivisions.map(div => (
-                                    <option key={div} value={div}>{div}</option>
-                                ))}
-                            </select>
+                            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3 w-full">
+                                <select 
+                                    value={filterProfile}
+                                    onChange={(e) => setFilterProfile(e.target.value)}
+                                    className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
+                                >
+                                    <option value="all">Profiles: All</option>
+                                    <option value="linked">Profiles: Linked</option>
+                                    <option value="unlinked">Profiles: Unlinked</option>
+                                </select>
 
-                            <select 
-                                value={filterLicense}
-                                onChange={(e) => setFilterLicense(e.target.value)}
-                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
-                            >
-                                <option value="all">Licenses: All</option>
-                                <option value="full">Licenses: Full</option>
-                                <option value="temporary">Licenses: Temp</option>
-                                <option value="none">Licenses: None</option>
-                            </select>
+                                <select 
+                                    value={filterDivision}
+                                    onChange={(e) => setFilterDivision(e.target.value)}
+                                    className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
+                                >
+                                    <option value="all">Division: All</option>
+                                    {uniqueDivisions.map(div => (
+                                        <option key={div} value={div}>{div}</option>
+                                    ))}
+                                </select>
 
-                            <select 
-                                value={filterPayment}
-                                onChange={(e) => setFilterPayment(e.target.value)}
-                                className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[38px] cursor-pointer"
-                            >
-                                <option value="all">Fees: All</option>
-                                <option value="paid">Fees: Paid</option>
-                                <option value="unpaid">Fees: Unpaid</option>
-                            </select>
+                                <select 
+                                    value={filterLicense}
+                                    onChange={(e) => setFilterLicense(e.target.value)}
+                                    className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
+                                >
+                                    <option value="all">Licenses: All</option>
+                                    <option value="full">Licenses: Full</option>
+                                    <option value="temporary">Licenses: Temp</option>
+                                    <option value="none">Licenses: None</option>
+                                </select>
+
+                                <select 
+                                    value={filterPayment}
+                                    onChange={(e) => setFilterPayment(e.target.value)}
+                                    className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
+                                >
+                                    <option value="all">Fees: All</option>
+                                    <option value="paid">Fees: Paid</option>
+                                    <option value="unpaid">Fees: Unpaid</option>
+                                </select>
+                            </div>
                         </div>
-                        <div className="flex gap-4">
+
+                        {/* Top Stats & Export */}
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                             <button
                                 onClick={handleExportExcel}
-                                className="flex items-center gap-2 bg-[#beff00] hover:bg-[#beff00]/90 text-black px-4 py-2 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-lg sm:shrink-0"
+                                className="flex items-center justify-center gap-2 bg-[#beff00] hover:bg-[#beff00]/90 text-black px-6 py-3 rounded-xl transition-all font-black text-[10px] uppercase tracking-widest shadow-lg sm:shrink-0 order-2 sm:order-1"
                             >
                                 <Download size={14} />
                                 Export Excel
                             </button>
-                            <div className="bg-white/5 px-4 py-2 rounded-xl text-center">
-                                <p className="text-[10px] text-gray-500 font-bold uppercase">Total Players</p>
-                                <p className="text-xl font-black text-white">{localParticipants.length}</p>
-                            </div>
-                            <div className="bg-padel-green/10 px-4 py-2 rounded-xl text-center border border-padel-green/20">
-                                <p className="text-[10px] text-padel-green font-bold uppercase">Paid</p>
-                                <p className="text-xl font-black text-padel-green">{localParticipants.filter(p => p.is_paid).length}</p>
+                            
+                            <div className="flex gap-3 flex-1 order-1 sm:order-2">
+                                <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 flex flex-row sm:flex-col justify-between items-center sm:items-start">
+                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Total Players</p>
+                                    <p className="text-xl font-black text-white leading-none">{localParticipants.length}</p>
+                                </div>
+                                <div className="flex-1 bg-padel-green/5 p-3 rounded-xl border border-padel-green/10 flex flex-row sm:flex-col justify-between items-center sm:items-start text-padel-green">
+                                    <p className="text-[9px] font-black uppercase tracking-widest">Paid</p>
+                                    <p className="text-xl font-black leading-none">{localParticipants.filter(p => p.is_paid).length}</p>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-black/20 text-gray-400 text-[10px] uppercase font-black">
-                                <tr>
-                                    <th className="px-6 py-4">Participant (Rankedin)</th>
-                                    <th className="px-6 py-4">Division</th>
-                                    <th className="px-6 py-4">System Profile Match</th>
-                                    <th className="px-6 py-4">License Status</th>
-                                    <th className="px-6 py-4">Entry Fee</th>
-                                    <th className="px-6 py-4 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {loading.matching ? (
+                        {/* DESKTOP TABLE VIEW */}
+                        <div className="hidden lg:block overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-black/20 text-gray-400 text-[10px] uppercase font-black">
                                     <tr>
-                                        <td colSpan="6" className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></td>
+                                        <th className="px-6 py-4">Participant (Rankedin)</th>
+                                        <th className="px-6 py-4">Division</th>
+                                        <th className="px-6 py-4">System Profile Match</th>
+                                        <th className="px-6 py-4">License Status</th>
+                                        <th className="px-6 py-4">Entry Fee</th>
+                                        <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
-                                ) : filteredParticipants.map(p => (
-                                    <tr key={p.id} className="hover:bg-white/5 transition-colors">
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <p className="font-bold text-white">{p.full_name}</p>
-                                                {p.is_test && (
-                                                    <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase rounded border border-orange-500/20">TEST</span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">{p.class_name}</span>
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            {p.players ? (
-                                                <div className="flex flex-col">
-                                                    <div className="flex items-center gap-2 text-padel-green font-bold text-sm">
-                                                        <CheckCircle size={14} /> {p.players.name}
-                                                        <button 
-                                                            onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
-                                                            className="text-gray-600 hover:text-white transition-colors"
-                                                        >
-                                                            <Link2 size={12} />
-                                                        </button>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {loading.matching ? (
+                                        <tr>
+                                            <td colSpan="6" className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></td>
+                                        </tr>
+                                    ) : filteredParticipants.length === 0 ? (
+                                        <tr>
+                                            <td colSpan="6" className="py-12 text-center text-gray-500 font-bold italic">No matching participants found</td>
+                                        </tr>
+                                    ) : filteredParticipants.map(p => (
+                                        <tr key={p.id} className="hover:bg-white/5 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-bold text-white">{p.full_name}</p>
+                                                    {p.is_test && (
+                                                        <span className="px-1.5 py-0.5 bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase rounded border border-orange-500/20">TEST</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">{p.class_name}</span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                {p.players ? (
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2 text-padel-green font-bold text-sm">
+                                                            <CheckCircle size={14} /> {p.players.name}
+                                                            <button 
+                                                                onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
+                                                                className="text-gray-600 hover:text-white transition-colors"
+                                                            >
+                                                                <Link2 size={12} />
+                                                            </button>
+                                                        </div>
+                                                        <span className="text-[10px] text-gray-500 ml-6 font-bold truncate max-w-[150px]">{p.players.email}</span>
                                                     </div>
-                                                    <span className="text-[10px] text-gray-500 ml-6 font-bold truncate max-w-[150px]">{p.players.email}</span>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
+                                                        className="flex items-center gap-2 text-gray-600 hover:text-white transition-colors italic text-sm"
+                                                    >
+                                                        <UserPlus size={14} /> Link Profile
+                                                    </button>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {p.players ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md max-w-fit uppercase ${
+                                                            p.players.license_type === 'full' ? 'bg-padel-green/10 text-padel-green border border-padel-green/20' :
+                                                            p.players.license_type === 'temporary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                            'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                        }`}>
+                                                            {p.players.license_type || 'None'}
+                                                        </span>
+                                                        {!p.players.paid_registration && (
+                                                            <span className="text-[8px] text-red-500 font-bold uppercase">Payment Required</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-gray-600 text-[10px] font-bold uppercase italic">Unlinked</span>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                {p.is_paid ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit">PAID</span>
+                                                        <span className="text-[8px] text-gray-500 italic">Confirmed</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-[10px] font-black border border-red-500/10 max-w-fit">UNPAID</span>
+                                                        <span className="text-[8px] text-gray-600 italic">No record</span>
+                                                    </div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                {p.is_paid ? (
+                                                    <button
+                                                        onClick={() => handleUnmarkPaid(p)}
+                                                        disabled={markingPaid === p.id}
+                                                        className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-red-400/50 hover:text-red-500 transition-colors"
+                                                    >
+                                                        {markingPaid === p.id ? <Loader2 size={10} className="animate-spin" /> : <XCircle size={10} />}
+                                                        Unmark
+                                                    </button>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => handleMarkAsPaid(p)}
+                                                        disabled={markingPaid === p.id}
+                                                        className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-white/5 hover:bg-padel-green hover:text-black px-4 py-2.5 rounded-xl border border-white/10 transition-all"
+                                                    >
+                                                        {markingPaid === p.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                                                        {markingPaid === p.id ? '...' : 'Mark Entry Paid'}
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* MOBILE CARD VIEW */}
+                        <div className="lg:hidden divide-y divide-white/5">
+                            {loading.matching ? (
+                                <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></div>
+                            ) : filteredParticipants.length === 0 ? (
+                                <div className="py-12 text-center text-gray-500 font-bold italic">No matching participants</div>
+                            ) : filteredParticipants.map(p => (
+                                <div key={p.id} className="p-5 space-y-4 hover:bg-white/5 transition-colors">
+                                    <div className="flex justify-between items-start">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <p className="font-bold text-white text-base truncate">{p.full_name}</p>
+                                                {p.is_test && <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase rounded">TEST</span>}
+                                            </div>
+                                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1 truncate">{p.class_name}</p>
+                                        </div>
+                                        <div className="shrink-0">
+                                            {p.is_paid ? (
+                                                <span className="bg-padel-green/10 text-padel-green px-3 py-1.5 rounded-full text-[10px] font-black border border-padel-green/20">PAID</span>
+                                            ) : (
+                                                <span className="bg-red-500/10 text-red-400 px-3 py-1.5 rounded-full text-[10px] font-black border border-red-500/10">UNPAID</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">System Profile</p>
+                                            {p.players ? (
+                                                <div className="flex items-center gap-1.5 text-padel-green font-bold text-xs truncate">
+                                                    <CheckCircle size={12} className="shrink-0" />
+                                                    <span className="truncate">{p.players.name}</span>
                                                 </div>
                                             ) : (
                                                 <button 
                                                     onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
-                                                    className="flex items-center gap-2 text-gray-600 hover:text-white transition-colors italic text-sm"
+                                                    className="flex items-center gap-1.5 text-gray-500 hover:text-white transition-colors italic text-xs"
                                                 >
-                                                    <UserPlus size={14} /> Link Profile
+                                                    <UserPlus size={12} /> Link
                                                 </button>
                                             )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {p.players ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <span className={`text-[10px] font-black px-2 py-1 rounded-md max-w-fit uppercase ${
-                                                        p.players.license_type === 'full' ? 'bg-padel-green/10 text-padel-green border border-padel-green/20' :
-                                                        p.players.license_type === 'temporary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                                        'bg-red-500/10 text-red-400 border border-red-500/20'
-                                                    }`}>
-                                                        {p.players.license_type || 'None'}
-                                                    </span>
-                                                    {!p.players.paid_registration && (
-                                                        <span className="text-[8px] text-red-500 font-bold uppercase">Payment Required</span>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <span className="text-gray-600 text-[10px] font-bold uppercase italic">Unlinked</span>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            {p.is_paid ? (
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit">PAID</span>
-                                                    <span className="text-[8px] text-gray-500 italic">Confirmed</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-[10px] font-black border border-red-500/10 max-w-fit">UNPAID</span>
-                                                    <span className="text-[8px] text-gray-600 italic">No record</span>
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            {p.is_paid ? (
-                                                <button
-                                                    onClick={() => handleUnmarkPaid(p)}
-                                                    disabled={markingPaid === p.id}
-                                                    className="inline-flex items-center gap-1 text-[9px] font-black uppercase text-red-400/50 hover:text-red-500 transition-colors"
-                                                >
-                                                    {markingPaid === p.id ? <Loader2 size={10} className="animate-spin" /> : <XCircle size={10} />}
-                                                    Unmark
-                                                </button>
-                                            ) : (
-                                                <button
-                                                    onClick={() => handleMarkAsPaid(p)}
-                                                    disabled={markingPaid === p.id}
-                                                    className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-white/5 hover:bg-padel-green hover:text-black px-3 py-2 rounded-lg border border-white/10 transition-all font-medium"
-                                                >
-                                                    {markingPaid === p.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
-                                                    {markingPaid === p.id ? '...' : 'Mark Entry Paid'}
-                                                </button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">License Status</p>
+                                            <div className="flex flex-col">
+                                                <span className={`text-[9px] font-black uppercase tracking-wider ${
+                                                    p.players?.license_type === 'full' ? 'text-padel-green' :
+                                                    p.players?.license_type === 'temporary' ? 'text-blue-400' :
+                                                    'text-red-400'
+                                                }`}>
+                                                    {p.players?.license_type || 'No License'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-2">
+                                        {p.is_paid ? (
+                                            <button
+                                                onClick={() => handleUnmarkPaid(p)}
+                                                disabled={markingPaid === p.id}
+                                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-red-500/10 text-red-400/60 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 transition-all font-medium"
+                                            >
+                                                {markingPaid === p.id ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                                                Unmark Received
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => handleMarkAsPaid(p)}
+                                                disabled={markingPaid === p.id}
+                                                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-padel-green/10 hover:bg-padel-green text-padel-green hover:text-black border border-padel-green/20 transition-all text-xs font-black uppercase tracking-widest shadow-xl shadow-padel-green/5"
+                                            >
+                                                {markingPaid === p.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                                                Confirm Payment
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
             )}
