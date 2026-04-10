@@ -98,7 +98,7 @@ const PlayerManager = () => {
         setLoading(true);
         const { data, error } = await supabase
             .from('players')
-            .select('*')
+            .select('*, temporary_licenses(event_name, event_date)')
             .order('created_at', { ascending: false });
 
         if (error) {
@@ -555,17 +555,24 @@ const PlayerManager = () => {
                         </thead>
                         <tbody>
                             {loading ? (
-                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">Loading...</td></tr>
+                                <tr><td colSpan="8" className="text-center py-12 text-gray-500">Loading...</td></tr>
                             ) : currentPlayers.length === 0 ? (
-                                <tr><td colSpan="7" className="text-center py-12 text-gray-500">No players match your filters</td></tr>
+                                <tr><td colSpan="8" className="text-center py-12 text-gray-500">No players match your filters</td></tr>
                             ) : (
                                 currentPlayers.map(player => (
                                     <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                                         <td className="py-3 px-4 font-medium text-white">{player.name}</td>
                                         <td className="py-3 px-4">
-                                            <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${player.paid_registration ? (player.license_type === 'full' ? 'bg-padel-green/20 text-padel-green' : 'bg-blue-500/20 text-blue-400') : 'bg-amber-500/20 text-amber-400'}`}>
-                                                {player.paid_registration ? (player.license_type === 'full' ? 'Full' : 'Temp') : 'Unpaid'}
-                                            </span>
+                                            <div className="flex flex-col gap-1">
+                                                <span className={`w-fit px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${player.paid_registration ? (player.license_type === 'full' ? 'bg-padel-green/20 text-padel-green' : 'bg-blue-500/20 text-blue-400') : 'bg-amber-500/20 text-amber-400'}`}>
+                                                    {player.paid_registration ? (player.license_type === 'full' ? 'Full' : 'Temp') : 'Unpaid'}
+                                                </span>
+                                                {player.license_type === 'temporary' && player.temporary_licenses?.[0] && (
+                                                    <span className="text-[9px] text-blue-500 font-bold uppercase truncate max-w-[120px] block" title={player.temporary_licenses[0].event_name}>
+                                                        {player.temporary_licenses[0].event_name}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
 
                                         <td className="py-3 px-4">
