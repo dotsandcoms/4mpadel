@@ -202,6 +202,21 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     successCount++;
                 }
             }
+            
+            // Step 5: Cleanup Stale Participants (REMOVALS & DUPLICATE FIX)
+            // Any participant in our DB that is NOT in the fresh Rankedin list is removed.
+            const validIds = externalParticipants.map(p => p.rankedin_participant_id);
+            if (validIds.length > 0) {
+                const { error: deleteError } = await supabase
+                    .from('tournament_participants')
+                    .delete()
+                    .eq('event_id', eventId)
+                    .not('rankedin_participant_id', 'in', validIds);
+                
+                if (deleteError) {
+                    console.error('Sync Cleanup Error:', deleteError);
+                }
+            }
 
             return { success: successCount, error: errorCount };
         } catch (err) {
