@@ -20,18 +20,19 @@ serve(async (req) => {
         )
 
         // 1. Find all expired temporary licenses
-        // Where event_date is BEFORE the current timestamp.
+        // We use the date string to expire ONLY when the current date is AFTER the event date.
+        const today = new Date().toISOString().split('T')[0];
+
         const { data: expiredLicenses, error: fetchError } = await supabaseAdmin
             .from('temporary_licenses')
             .select('player_id')
-            .lt('event_date', new Date().toISOString())
+            .lt('event_date', today);
 
         if (fetchError) {
             throw new Error(`Failed to fetch expired licenses: ${fetchError.message}`)
         }
 
         let expiredCount = 0;
-        const playerIdsFromExpired = [];
 
         // 1. Pass 1: Handle date-expired licenses
         if (expiredLicenses && expiredLicenses.length > 0) {
@@ -56,44 +57,18 @@ serve(async (req) => {
                 .from('temporary_licenses')
                 .delete()
                 .in('player_id', playerIds)
-                .lt('event_date', new Date().toISOString());
+                .lt('event_date', today);
 
             if (deleteError) {
                 throw new Error(`Failed to clean up expired licenses: ${deleteError.message}`);
             }
         }
 
-        // 4. RECONCILIATION PASS: Find any player marked as 'temporary' who has ZERO records in temporary_licenses
-        // This catches orphaned statuses (like the 2 extra users reported).
-        const { data: allActiveTempLicenses } = await supabaseAdmin
-            .from('temporary_licenses')
-            .select('player_id')
-        
-        const activePlayerIds = new Set((allActiveTempLicenses || []).map(l => l.player_id))
+        // Pass 2: The aggressive reconciliation pass was removed to prevent manual syncs 
+        // without event IDs from being cleared. Temporary licenses now only expire 
+        // if they have an EXPLICIT record in the temporary_licenses table that has expired.
+        let reconciledCount = 0;
 
-        const { data: allTempPlayers } = await supabaseAdmin
-            .from('players')
-            .select('id')
-            .eq('license_type', 'temporary')
-
-        const orphanedPlayerIds = (allTempPlayers || [])
-            .filter(p => !activePlayerIds.has(p.id))
-            .map(p => p.id)
-
-        let reconciledCount = 0
-        if (orphanedPlayerIds.length > 0) {
-            const { data: reconciledPlayers, error: reconError } = await supabaseAdmin
-                .from('players')
-                .update({ license_type: 'none', paid_registration: false })
-                .in('id', orphanedPlayerIds)
-                .select('id')
-            
-            if (reconError) {
-                console.error("Reconciliation update failed:", reconError.message)
-            } else {
-                reconciledCount = reconciledPlayers?.length || 0
-            }
-        }
 
         return new Response(
             JSON.stringify({

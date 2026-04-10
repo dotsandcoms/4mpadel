@@ -48,7 +48,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                 try {
                     const { data: events, error } = await supabase
                         .from('calendar')
-                        .select('id, event_name, start_date')
+                        .select('id, event_name, start_date, end_date')
                         .gte('start_date', new Date().toISOString())
                         .order('start_date', { ascending: true });
 
@@ -76,6 +76,9 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             }
         }
 
+        const isTemp = amountInRands < 450;
+        const eventDetails = isTemp ? upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString()) : null;
+
         return {
             reference: `${(new Date()).getTime()}-${amountInRands}`,
             email: userEmail || '',
@@ -83,8 +86,12 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             publicKey: PAYSTACK_PUBLIC_KEY,
             currency: 'ZAR',
             metadata: {
-                license_type: amountInRands >= 450 ? 'full' : 'temporary',
-                source: 'web_license_modal'
+                license_type: isTemp ? 'temporary' : 'full',
+                source: 'web_license_modal',
+                ...(isTemp && eventDetails ? {
+                    event_id: eventDetails.id,
+                    event_name: eventDetails.event_name
+                } : {})
             },
             ...nameParams
         };
@@ -111,7 +118,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                                     player_id: pData.id,
                                     event_id: eventDetails.id,
                                     event_name: eventDetails.event_name || 'Calendar Event',
-                                    event_date: eventDetails.start_date
+                                    event_date: eventDetails.end_date || eventDetails.start_date
                                 });
                             }
                         }
@@ -186,21 +193,26 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                             <div className="w-full flex-col rounded-xl bg-white/5 border border-white/10 transition-all">
                                 <button
                                     onClick={() => {
-                                        if (showTempOptions && selectedEventId) {
-                                            runPayment(handleTemporaryLicensePay, 'temporary');
+                                        if (showTempOptions) {
+                                            if (selectedEventId) {
+                                                runPayment(handleTemporaryLicensePay, 'temporary');
+                                            }
                                         } else {
                                             setShowTempOptions(true);
                                         }
                                     }}
-                                    disabled={loading || !isPaystackConfigured() || (showTempOptions && !selectedEventId && upcomingEvents.length > 0)}
-                                    className="w-full flex items-center justify-between p-4 hover:bg-white/10 transition-all group rounded-xl"
+                                    disabled={loading || !isPaystackConfigured() || (showTempOptions && (!selectedEventId || upcomingEvents.length === 0))}
+                                    className="w-full flex items-center justify-between p-4 hover:bg-white/10 transition-all group rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <div className="text-left">
                                         <p className="text-white font-bold">Buy Temporary License</p>
                                         <p className="text-gray-400 text-xs">{formatCurrency(FEES.TEMPORARY_LICENSE)}</p>
                                     </div>
-                                    <div className={`text-black font-black px-4 py-2 rounded-lg text-sm transition-transform ${(!showTempOptions || selectedEventId) ? 'bg-padel-green group-hover:scale-105' : 'bg-gray-500'}`}>
-                                        {loading ? 'Processing...' : (showTempOptions ? 'Pay For Event' : 'Select Event')}
+                                    <div className={`text-black font-black px-4 py-2 rounded-lg text-sm transition-transform ${(!showTempOptions || (selectedEventId && upcomingEvents.length > 0)) ? 'bg-padel-green group-hover:scale-105' : 'bg-gray-500'}`}>
+                                        {loading ? 'Processing...' : (
+                                            !showTempOptions ? 'Select Event' : 
+                                            (upcomingEvents.length === 0 ? 'Unavailable' : (selectedEventId ? 'Pay For Event' : 'Select Event'))
+                                        )}
                                     </div>
                                 </button>
 

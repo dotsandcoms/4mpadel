@@ -212,6 +212,31 @@ const FinanceManager = () => {
                 }
             }]);
 
+            // CRITICAL: Ensure temporary license record exists to prevent scavenger cleanup
+            if (licenseType === 'temporary' && enrichedEventId) {
+                const { data: existingTempLic } = await supabase
+                    .from('temporary_licenses')
+                    .select('id')
+                    .eq('player_id', player.id)
+                    .eq('event_id', enrichedEventId)
+                    .maybeSingle();
+                
+                if (!existingTempLic) {
+                    const { data: eventData } = await supabase
+                        .from('calendar')
+                        .select('start_date, end_date')
+                        .eq('id', enrichedEventId)
+                        .maybeSingle();
+
+                    await supabase.from('temporary_licenses').insert({
+                        player_id: player.id,
+                        event_id: enrichedEventId,
+                        event_name: enrichedEventName || 'Calendar Event',
+                        event_date: eventData?.end_date || eventData?.start_date || new Date().toISOString()
+                    });
+                }
+            }
+
             await fetchTransactions();
         } catch (err) {
             console.error("Sync error:", err);
