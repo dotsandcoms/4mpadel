@@ -821,33 +821,44 @@ const EventFinance = ({ allowedEvents = [] }) => {
                         </div>
 
                         {/* MOBILE CARD VIEW */}
-                        <div className="lg:hidden divide-y divide-white/5">
+                        <div className="lg:hidden p-4 space-y-4">
                             {loading.matching ? (
                                 <div className="py-20 text-center"><Loader2 className="animate-spin mx-auto text-padel-green" /></div>
                             ) : filteredParticipants.length === 0 ? (
                                 <div className="py-12 text-center text-gray-500 font-bold italic">No matching participants</div>
                             ) : filteredParticipants.map(p => (
-                                <div key={p.id} className="p-5 space-y-4 hover:bg-white/5 transition-colors">
-                                    <div className="flex justify-between items-start">
+                                <div 
+                                    key={p.id} 
+                                    className={`relative overflow-hidden rounded-2xl border transition-all duration-300 ${
+                                        p.is_paid 
+                                        ? 'bg-padel-green/5 border-padel-green/20' 
+                                        : 'bg-[#1E293B]/80 border-white/5 shadow-xl'
+                                    }`}
+                                >
+                                    {/* Top Status Bar */}
+                                    <div className="p-5 pb-0 flex justify-between items-start mb-4">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <p className="font-bold text-white text-base truncate">{p.full_name}</p>
-                                                {p.is_test && <span className="px-1 py-0.5 bg-orange-500/20 text-orange-400 text-[8px] font-black uppercase rounded">TEST</span>}
+                                                <p className="font-extrabold text-white text-lg truncate tracking-tight">{p.full_name}</p>
+                                                {p.is_test && <span className="px-1.5 py-0.5 bg-orange-500 text-white text-[7px] font-black uppercase rounded shrink-0">TEST</span>}
                                             </div>
-                                            <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest mt-1 truncate">{p.class_name}</p>
+                                            <p className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 truncate opacity-70">{p.class_name}</p>
                                         </div>
-                                        <div className="shrink-0">
-                                            {p.is_paid ? (
-                                                <span className="bg-padel-green/10 text-padel-green px-3 py-1.5 rounded-full text-[10px] font-black border border-padel-green/20">PAID</span>
-                                            ) : (
-                                                <span className="bg-red-500/10 text-red-400 px-3 py-1.5 rounded-full text-[10px] font-black border border-red-500/10">UNPAID</span>
-                                            )}
+                                        <div className="shrink-0 ml-4">
+                                            <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
+                                                p.is_paid 
+                                                ? 'bg-padel-green text-black border-padel-green' 
+                                                : 'bg-red-500/10 text-red-500 border-red-500/20'
+                                            }`}>
+                                                {p.is_paid ? 'PAID' : 'UNPAID'}
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                                        <div className="space-y-1">
-                                            <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">System Profile</p>
+                                    {/* Info Grid */}
+                                    <div className={`mx-5 p-4 rounded-xl grid grid-cols-2 gap-6 ${p.is_paid ? 'bg-black/20' : 'bg-black/40'}`}>
+                                        <div className="space-y-1.5">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">System Profile</p>
                                             {p.players ? (
                                                 <div className="flex items-center gap-1.5 text-padel-green font-bold text-xs truncate">
                                                     <CheckCircle size={12} className="shrink-0" />
@@ -856,19 +867,19 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                             ) : (
                                                 <button 
                                                     onClick={() => { setMatchingProfile(p); setProfileSearchQuery(''); }}
-                                                    className="flex items-center gap-1.5 text-gray-500 hover:text-white transition-colors italic text-xs"
+                                                    className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors italic text-xs font-medium"
                                                 >
-                                                    <UserPlus size={12} /> Link
+                                                    <UserPlus size={12} /> Link Profile
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="space-y-1">
-                                            <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest">License Status</p>
+                                        <div className="space-y-1.5">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">License</p>
                                             <div className="flex flex-col">
-                                                <span className={`text-[9px] font-black uppercase tracking-wider ${
-                                                    p.players?.license_type === 'full' ? 'text-padel-green' :
-                                                    p.players?.license_type === 'temporary' ? 'text-blue-400' :
-                                                    'text-red-400'
+                                                <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                                    p.players?.license_type === 'full' ? 'text-padel-green font-black' :
+                                                    p.players?.license_type === 'temporary' ? 'text-sky-400 font-black' :
+                                                    'text-red-500 font-bold'
                                                 }`}>
                                                     {p.players?.license_type || 'No License'}
                                                 </span>
@@ -876,24 +887,25 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                         </div>
                                     </div>
 
-                                    <div className="pt-2">
+                                    {/* Actions */}
+                                    <div className="p-5 pt-4">
                                         {p.is_paid ? (
                                             <button
                                                 onClick={() => handleUnmarkPaid(p)}
                                                 disabled={markingPaid === p.id}
-                                                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border border-red-500/10 text-red-400/60 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 transition-all font-medium"
+                                                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl border border-red-500/10 text-red-500/40 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/5 transition-all"
                                             >
                                                 {markingPaid === p.id ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
-                                                Unmark Received
+                                                Revoke Payment Record
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={() => handleMarkAsPaid(p)}
                                                 disabled={markingPaid === p.id}
-                                                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-padel-green/10 hover:bg-padel-green text-padel-green hover:text-black border border-padel-green/20 transition-all text-xs font-black uppercase tracking-widest shadow-xl shadow-padel-green/5"
+                                                className="w-full flex items-center justify-center gap-2 py-4 rounded-xl bg-padel-green text-black hover:scale-[1.02] active:scale-[0.98] transition-all text-xs font-black uppercase tracking-[0.1em] shadow-xl shadow-padel-green/10"
                                             >
                                                 {markingPaid === p.id ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-                                                Confirm Payment
+                                                {markingPaid === p.id ? 'Processing...' : 'Confirm Cash Received'}
                                             </button>
                                         )}
                                     </div>
