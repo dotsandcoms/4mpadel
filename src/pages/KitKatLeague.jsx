@@ -13,14 +13,14 @@ const KitKatLeague = () => {
     const kitkatRed = '#D41B2C';
 
     const teamsData = [
-        { id: 1, name: 'Atholl Aces', short: 'ATH', captain: 'Aidan Carrazedo', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b09a94af4c02884956a_Atholl_Aces_logo-removebg-preview.png" alt="Atholl Aces" className="w-[80%] h-[80%] object-contain" />, color: 'from-slate-100 to-white', border: 'border-slate-200', text: 'text-slate-800' },
-        { id: 2, name: 'Brooklyn Bulls', short: 'BRK', captain: 'Jason Blakey-Milner', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69c15bd74d8842d49b6e3138_69b82ae370117be1208331f4_1%20Background%20Removed.png" alt="Brooklyn Bulls" className="w-[80%] h-[80%] object-contain" />, color: 'from-amber-50 to-white', border: 'border-amber-200', text: 'text-amber-900' },
-        { id: 3, name: 'Centurion Cobras', short: 'CEN', captain: 'Chevaan Davids', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bd298c58b1f696a6e9a_Centurion_Cobras-removebg-preview.png" alt="Centurion Cobras" className="w-[80%] h-[80%] object-contain" />, color: 'from-emerald-50 to-white', border: 'border-emerald-200', text: 'text-emerald-900' },
-        { id: 4, name: 'Hyde Park Falcons', short: 'HYD', captain: 'Tremayne Mitchell', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54ba2a0c4023c604ff56a_Hyde_Park_Falcons-removebg-preview.png" alt="Hyde Park Falcons" className="w-[80%] h-[80%] object-contain" />, color: 'from-sky-50 to-white', border: 'border-sky-200', text: 'text-sky-900' },
-        { id: 5, name: 'Melrose Mavericks', short: 'MEL', captain: 'Adam van Harte', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bae98c58b1f696a4edc_Melrose_Mavericks-removebg-preview.png" alt="Melrose Mavericks" className="w-[80%] h-[80%] object-contain" />, color: 'from-purple-50 to-white', border: 'border-purple-200', text: 'text-purple-900' },
-        { id: 6, name: 'Menlyn Sharks', short: 'MEN', captain: 'Richard Ashforth', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b926c9d03a0f10fd583_Menlyn_Sharks-removebg-preview.png" alt="Menlyn Sharks" className="w-[80%] h-[80%] object-contain" />, color: 'from-blue-50 to-white', border: 'border-blue-200', text: 'text-blue-900' },
-        { id: 7, name: 'Sandton Stallions', short: 'SAN', captain: 'Warren Khun', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bc698c58b1f696a6693_Sandton_Stallions-removebg-preview.png" alt="Sandton Stallions" className="w-[80%] h-[80%] object-contain" />, color: 'from-orange-50 to-white', border: 'border-orange-200', text: 'text-orange-900' },
-        { id: 8, name: 'Waterfall Wolves', short: 'WAT', captain: 'Luan Krige', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bb99d1abc9ebacedafb_Waterfall_Wolves-removebg-preview.png" alt="Waterfall Wolves" className="w-[80%] h-[80%] object-contain" />, color: 'from-stone-100 to-white', border: 'border-stone-200', text: 'text-stone-800' },
+        { id: 1, name: 'Atholl Aces', short: 'ATH', captain: 'Warren Kuhn', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b09a94af4c02884956a_Atholl_Aces_logo-removebg-preview.png" alt="Atholl Aces" className="w-[80%] h-[80%] object-contain" />, color: 'from-slate-100 to-white', border: 'border-slate-200', text: 'text-slate-800' },
+        { id: 2, name: 'Brooklyn Bulls', short: 'BRK', captain: 'Luan Krige', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69c15bd74d8842d49b6e3138_69b82ae370117be1208331f4_1%20Background%20Removed.png" alt="Brooklyn Bulls" className="w-[80%] h-[80%] object-contain" />, color: 'from-amber-50 to-white', border: 'border-amber-200', text: 'text-amber-900' },
+        { id: 3, name: 'Centurion Cobras', short: 'CEN', captain: 'Adam Van Harte', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bd298c58b1f696a6e9a_Centurion_Cobras-removebg-preview.png" alt="Centurion Cobras" className="w-[80%] h-[80%] object-contain" />, color: 'from-emerald-50 to-white', border: 'border-emerald-200', text: 'text-emerald-900' },
+        { id: 4, name: 'Hyde Park Falcons', short: 'HYD', captain: 'Richard Ashforth', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54ba2a0c4023c604ff56a_Hyde_Park_Falcons-removebg-preview.png" alt="Hyde Park Falcons" className="w-[80%] h-[80%] object-contain" />, color: 'from-sky-50 to-white', border: 'border-sky-200', text: 'text-sky-900' },
+        { id: 5, name: 'Melrose Mavericks', short: 'MEL', captain: 'Chevaan Davids', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bae98c58b1f696a4edc_Melrose_Mavericks-removebg-preview.png" alt="Melrose Mavericks" className="w-[80%] h-[80%] object-contain" />, color: 'from-purple-50 to-white', border: 'border-purple-200', text: 'text-purple-900' },
+        { id: 6, name: 'Menlyn Sharks', short: 'MEN', captain: 'Zaidy Patel', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b926c9d03a0f10fd583_Menlyn_Sharks-removebg-preview.png" alt="Menlyn Sharks" className="w-[80%] h-[80%] object-contain" />, color: 'from-blue-50 to-white', border: 'border-blue-200', text: 'text-blue-900' },
+        { id: 7, name: 'Sandton Stallions', short: 'SAN', captain: 'Tremayne Mitchell', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bc698c58b1f696a6693_Sandton_Stallions-removebg-preview.png" alt="Sandton Stallions" className="w-[80%] h-[80%] object-contain" />, color: 'from-orange-50 to-white', border: 'border-orange-200', text: 'text-orange-900' },
+        { id: 8, name: 'Waterfall Wolves', short: 'WAT', captain: 'Jason Blakey-Milner', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bb99d1abc9ebacedafb_Waterfall_Wolves-removebg-preview.png" alt="Waterfall Wolves" className="w-[80%] h-[80%] object-contain" />, color: 'from-stone-100 to-white', border: 'border-stone-200', text: 'text-stone-800' },
     ];
 
     const standingsData = [
@@ -43,102 +43,72 @@ const KitKatLeague = () => {
 
     // RAW PLAYER DATA FROM kitkatpadel.com
     const rawPlayers = [
-        { name: "Aadil Vally", team: "Centurion Cobras" },
-        { name: "Adam van Harte", team: "Centurion Cobras" },
-        { name: "Ahmed Motala", team: "Menlyn Sharks" },
-        { name: "Aidan Carrazedo", team: "Menlyn Sharks" },
-        { name: "Albert Charles Vos", team: "Brooklyn Bulls" },
-        { name: "Amaan Tayob", team: "Atholl Aces" },
-        { name: "Arek Michniewicz", team: "Sandton Stallions" },
-        { name: "Arushen Govender", team: "Waterfall Wolves" },
-        { name: "Ayaaz Omar", team: "Centurion Cobras" },
-        { name: "Ben Jugmohan", team: "Sandton Stallions" },
-        { name: "Brandon Peters", team: "Sandton Stallions" },
-        { name: "Chevaan Davids", team: "Melrose Mavericks" },
-        { name: "Colby Paxinos", team: "Menlyn Sharks" },
-        { name: "Constantinos Pavlou", team: "Atholl Aces" },
-        { name: "Cristiano Da Costa", team: "Brooklyn Bulls" },
-        { name: "David James Allardice", team: "Waterfall Wolves" },
-        { name: "Dean Thomas Nortier", team: "Centurion Cobras" },
-        { name: "Derek Jackson Alexander", team: "Hyde Park Falcons" },
-        { name: "Dillan Parau", team: "Atholl Aces" },
-        { name: "Dillon van der Haer", team: "Menlyn Sharks" },
-        { name: "Dimitri Sayegh", team: "Melrose Mavericks" },
-        { name: "Dudley Stephen Smith", team: "Brooklyn Bulls" },
-        { name: "Dylan Gonçalves Carneiro", team: "Centurion Cobras" },
-        { name: "Egmond Van heerden", team: "Centurion Cobras" },
-        { name: "Eras Labuschagne", team: "Hyde Park Falcons" },
-        { name: "Farhaan Sayanvala", team: "Atholl Aces" },
-        { name: "Fayzaan Anverali", team: "Brooklyn Bulls" },
-        { name: "Frans Christiaan van der Walt", team: "Menlyn Sharks" },
-        { name: "Garren Kent", team: "Sandton Stallions" },
-        { name: "Gary Pilz", team: "Brooklyn Bulls" },
-        { name: "Grey lee", team: "Waterfall Wolves" },
-        { name: "Gustav Neuper Hefer", team: "Melrose Mavericks" },
-        { name: "Hamza Peer", team: "Hyde Park Falcons" },
-        { name: "Hendrik Petrus", team: "Centurion Cobras" },
-        { name: "Imraan Karanie", team: "Brooklyn Bulls" },
-        { name: "Isa Choonara", team: "Melrose Mavericks" },
-        { name: "James Sweeney", team: "Waterfall Wolves" },
-        { name: "Jamey Sutherland", team: "Menlyn Sharks" },
-        { name: "Jared van Harn", team: "Sandton Stallions" },
-        { name: "Jarryd Sauer", team: "Waterfall Wolves" },
-        { name: "Jason Blakey-Milner", team: "Waterfall Wolves" },
-        { name: "Jason Hewitt", team: "Menlyn Sharks" },
-        { name: "Jason Michael Raw", team: "Centurion Cobras" },
-        { name: "Joel Van Rensburg", team: "Melrose Mavericks" },
-        { name: "Jonathan Boyton Lee", team: "Hyde Park Falcons" },
-        { name: "Joshua Benjamin Van Rensburg", team: "Sandton Stallions" },
-        { name: "Joshua Wade Heath", team: "Waterfall Wolves" },
-        { name: "Juan-Louis Van Antwerpen", team: "Melrose Mavericks" },
-        { name: "Justin Ryan Brivik", team: "Hyde Park Falcons" },
-        { name: "Keagan Rooy", team: "Brooklyn Bulls" },
-        { name: "Kyle Olivier", team: "Hyde Park Falcons" },
-        { name: "Lee Aronson", team: "Waterfall Wolves" },
-        { name: "Lineshen Moodley", team: "Sandton Stallions" },
-        { name: "Logan Repko", team: "Sandton Stallions" },
-        { name: "Luan Krige", team: "Brooklyn Bulls" },
-        { name: "Luca Milan Radmanovic", team: "Centurion Cobras" },
-        { name: "Ludwig Gostmann", team: "Melrose Mavericks" },
-        { name: "Matias Parada Gonzalez", team: "Hyde Park Falcons" },
-        { name: "Michael Sephepe", team: "Atholl Aces" },
-        { name: "Michael Veliades", team: "Sandton Stallions" },
-        { name: "Mohamed Al Fayaad Cassim", team: "Waterfall Wolves" },
-        { name: "Mohammed Noormohamed", team: "Melrose Mavericks" },
-        { name: "Momsi Mather", team: "Hyde Park Falcons" },
-        { name: "Mondrean Hattingh", team: "Melrose Mavericks" },
-        { name: "Muhammed Arabi", team: "Melrose Mavericks" },
-        { name: "Mujaahid Rajah", team: "Waterfall Wolves" },
-        { name: "Muzaffar Khan", team: "Atholl Aces" },
-        { name: "Nicholas Keevy", team: "Brooklyn Bulls" },
-        { name: "Nikhil Joshi", team: "Centurion Cobras" },
-        { name: "Paul John Anderson", team: "Brooklyn Bulls" },
-        { name: "Pierre le grange", team: "Menlyn Sharks" },
-        { name: "Riaz Amod", team: "Atholl Aces" },
-        { name: "Richard Ashforth", team: "Hyde Park Falcons" },
-        { name: "Riyaadh Farid Motani", team: "Atholl Aces" },
-        { name: "Sa'ad Mather", team: "Hyde Park Falcons" },
-        { name: "Sajid Abdulla", team: "Centurion Cobras" },
-        { name: "Sameer Mohamed", team: "Melrose Mavericks" },
-        { name: "Sayed Ally", team: "Brooklyn Bulls" },
-        { name: "Shaheen Amra", team: "Waterfall Wolves" },
-        { name: "Shaun Brookes", team: "Atholl Aces" },
-        { name: "Shaun Robert Leagas", team: "Hyde Park Falcons" },
-        { name: "Shuaib Hassen", team: "Brooklyn Bulls" },
-        { name: "Steven Morne Loock", team: "Atholl Aces" },
-        { name: "Swuelibanzi Best Ndebele", team: "Atholl Aces" },
-        { name: "Tiaan Erasmus", team: "Sandton Stallions" },
-        { name: "Tiesh Chuang", team: "Menlyn Sharks" },
-        { name: "Tremayne Mitchell", team: "Sandton Stallions" },
-        { name: "Vaughan Hunter", team: "Sandton Stallions" },
-        { name: "Warren Khun", team: "Atholl Aces" },
-        { name: "Wasim Ebrahim", team: "Centurion Cobras" },
-        { name: "Wasim Tayob", team: "Waterfall Wolves" },
-        { name: "Yasser Assamo", team: "Hyde Park Falcons" },
-        { name: "Zaid Hassim", team: "Melrose Mavericks" },
-        { name: "Zaid Patel", team: "Menlyn Sharks" },
-        { name: "Zeeshan Ahmed Ismail", team: "Menlyn Sharks" },
-        { name: "Zidane Adamjee", team: "Menlyn Sharks" }
+        { "name": "Zaidy Patel", "team": "Menlyn Sharks" },
+        { "name": "Pierre Le grange", "team": "Menlyn Sharks" },
+        { "name": "Jason Hewitt", "team": "Menlyn Sharks" },
+        { "name": "Jamey Sutherland", "team": "Menlyn Sharks" },
+        { "name": "Aidan Carrazedo", "team": "Menlyn Sharks" },
+        { "name": "Dillon van der Haer", "team": "Menlyn Sharks" },
+        { "name": "Kenan Staphorst", "team": "Menlyn Sharks" },
+        { "name": "Warren Kuhn", "team": "Atholl Aces" },
+        { "name": "Farhaan Sayanvala", "team": "Atholl Aces" },
+        { "name": "Steven Loock", "team": "Atholl Aces" },
+        { "name": "Riyaadh Motani", "team": "Atholl Aces" },
+        { "name": "Shaun Brookes", "team": "Atholl Aces" },
+        { "name": "Dillan Parau", "team": "Atholl Aces" },
+        { "name": "Luan Krige", "team": "Brooklyn Bulls" },
+        { "name": "Charl Vos", "team": "Brooklyn Bulls" },
+        { "name": "Keagan Rooy", "team": "Brooklyn Bulls" },
+        { "name": "Paul Anderson", "team": "Brooklyn Bulls" },
+        { "name": "Dudley Smith", "team": "Brooklyn Bulls" },
+        { "name": "Nicholas Keevy", "team": "Brooklyn Bulls" },
+        { "name": "Gary Pilz", "team": "Brooklyn Bulls" },
+        { "name": "Cristiano Da Costa", "team": "Brooklyn Bulls" },
+        { "name": "Shuaib Hassen", "team": "Brooklyn Bulls" },
+        { "name": "Richard Ashforth", "team": "Hyde Park Falcons" },
+        { "name": "Shaun Leagas", "team": "Hyde Park Falcons" },
+        { "name": "Yasser Assamo", "team": "Hyde Park Falcons" },
+        { "name": "Kyle Olivier", "team": "Hyde Park Falcons" },
+        { "name": "Justin Brivik", "team": "Hyde Park Falcons" },
+        { "name": "Mohammed Mather", "team": "Hyde Park Falcons" },
+        { "name": "Derek Alexander", "team": "Hyde Park Falcons" },
+        { "name": "Eras Labuschagne", "team": "Hyde Park Falcons" },
+        { "name": "Hamza Peer", "team": "Hyde Park Falcons" },
+        { "name": "Jonathan Boynton-Lee", "team": "Hyde Park Falcons" },
+        { "name": "Chevaan Davids", "team": "Melrose Mavericks" },
+        { "name": "Joel Van Rensburg", "team": "Melrose Mavericks" },
+        { "name": "Juan-Louis Van Antwerpen", "team": "Melrose Mavericks" },
+        { "name": "Gustav Hefer", "team": "Melrose Mavericks" },
+        { "name": "Zaid Hassim", "team": "Melrose Mavericks" },
+        { "name": "Sameer Mohamed", "team": "Melrose Mavericks" },
+        { "name": "Muhammed Arabi", "team": "Melrose Mavericks" },
+        { "name": "Mondrean Hattingh", "team": "Melrose Mavericks" },
+        { "name": "Ludwig Gostmann", "team": "Melrose Mavericks" },
+        { "name": "Dimitri Sayegh", "team": "Melrose Mavericks" },
+        { "name": "Isa Choonara", "team": "Melrose Mavericks" },
+        { "name": "Tremayne Mitchell", "team": "Sandton Stallions" },
+        { "name": "Joshua Van Rensburg", "team": "Sandton Stallions" },
+        { "name": "Tiaan Erasmus", "team": "Sandton Stallions" },
+        { "name": "Brendon Peters", "team": "Sandton Stallions" },
+        { "name": "Ben Jugmohan", "team": "Sandton Stallions" },
+        { "name": "Arek Michniewicz", "team": "Sandton Stallions" },
+        { "name": "Lineshen Moodley", "team": "Sandton Stallions" },
+        { "name": "Jason Blakey-Milner", "team": "Waterfall Wolves" },
+        { "name": "Joshua Heath", "team": "Waterfall Wolves" },
+        { "name": "David Allardice", "team": "Waterfall Wolves" },
+        { "name": "Jarryd Sauer", "team": "Waterfall Wolves" },
+        { "name": "Lee Aronson", "team": "Waterfall Wolves" },
+        { "name": "Arushen Govender", "team": "Waterfall Wolves" },
+        { "name": "James Sweeney", "team": "Waterfall Wolves" },
+        { "name": "Adam Van Harte", "team": "Centurion Cobras" },
+        { "name": "Egmond Van heerden", "team": "Centurion Cobras" },
+        { "name": "Dean Nortier", "team": "Centurion Cobras" },
+        { "name": "Nikhil Joshi", "team": "Centurion Cobras" },
+        { "name": "Dylan Carneiro", "team": "Centurion Cobras" },
+        { "name": "HP Luus", "team": "Centurion Cobras" },
+        { "name": "Jason Raw", "team": "Centurion Cobras" },
+        { "name": "Sajid Abdulla", "team": "Centurion Cobras" },
+        { "name": "Ayaaz Omar", "team": "Centurion Cobras" }
     ];
 
     const playersWithDetails = useMemo(() => {
@@ -158,6 +128,20 @@ const KitKatLeague = () => {
             p.team.toLowerCase().includes(playerSearch.toLowerCase())
         );
     }, [playerSearch, playersWithDetails]);
+
+    const groupedPlayers = useMemo(() => {
+        const groups = {};
+        teamsData.forEach(team => {
+            const teamPlayers = filteredPlayers.filter(p => p.team === team.name);
+            if (teamPlayers.length > 0) {
+                groups[team.id] = {
+                    team,
+                    players: teamPlayers.sort((a, b) => a.name.localeCompare(b.name))
+                };
+            }
+        });
+        return Object.values(groups);
+    }, [filteredPlayers]);
 
     // ANIMATION VARIANTS
     const containerVariants = {
@@ -284,9 +268,9 @@ const KitKatLeague = () => {
                     </motion.div>
 
                     <motion.div variants={itemVariants} className="flex justify-center mb-6">
-                        <img 
-                            src={kitkatLogo} 
-                            alt="Kit Kat Elite Padel League" 
+                        <img
+                            src={kitkatLogo}
+                            alt="Kit Kat Elite Padel League"
                             className="w-[280px] sm:w-[400px] md:w-[480px] h-auto object-contain drop-shadow-2xl"
                         />
                         <h1 className="sr-only">Kit Kat Elite Padel League</h1>
@@ -298,7 +282,7 @@ const KitKatLeague = () => {
                     >
                         Padel action. Unmatched energy. Every match.
                     </motion.p>
-                    
+
                     <motion.div
                         variants={itemVariants}
                         className="flex items-center justify-center gap-4 mb-10 opacity-80 hover:opacity-100 transition-opacity"
@@ -314,17 +298,16 @@ const KitKatLeague = () => {
 
                 {/* NAVIGATION TABS */}
                 <div className="flex justify-center mb-20 md:mb-28 relative z-50">
-                    <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/60 backdrop-blur-xl p-1.5 sm:p-2 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
+                    <div className="flex w-full md:w-auto bg-white/60 backdrop-blur-xl p-1.5 rounded-[2rem] border border-slate-200 shadow-xl shadow-slate-200/50 mx-auto max-w-[95vw] md:max-w-fit">
                         {[
                             { id: 'standings', label: 'Standings', icon: Trophy },
                             { id: 'fixtures', label: 'Fixtures', icon: Swords },
-                            { id: 'teams', label: 'Teams', icon: Users },
-                            { id: 'players', label: 'Players', icon: User }
+                            { id: 'teams', label: 'Teams', icon: Users }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`relative px-6 sm:px-8 py-3 rounded-full font-black text-[10px] sm:text-xs tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center flex items-center gap-2 ${activeTab === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+                                className={`relative flex-1 md:flex-none px-2 sm:px-8 py-3 rounded-full font-black text-[9px] xs:text-[10px] sm:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${activeTab === tab.id ? 'text-white' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
                                     }`}
                             >
                                 {activeTab === tab.id && (
@@ -335,7 +318,7 @@ const KitKatLeague = () => {
                                         transition={{ type: "spring", stiffness: 400, damping: 30 }}
                                     />
                                 )}
-                                <tab.icon className={`w-4 h-4 relative z-10 ${activeTab === tab.id ? 'text-white' : 'text-slate-400'}`} />
+                                <tab.icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 relative z-10 ${activeTab === tab.id ? 'text-white' : 'text-slate-400'}`} />
                                 <span className="relative z-10">{tab.label}</span>
                             </button>
                         ))}
@@ -381,8 +364,8 @@ const KitKatLeague = () => {
                                                     >
                                                         <td className="py-3 px-3 sm:py-4 sm:px-6 font-bold">
                                                             <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${index === 0 ? 'bg-amber-100 text-amber-600 border border-amber-200' :
-                                                                    index === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200' :
-                                                                        index === 2 ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'text-slate-400'
+                                                                index === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200' :
+                                                                    index === 2 ? 'bg-orange-100 text-orange-600 border border-orange-200' : 'text-slate-400'
                                                                 }`}>
                                                                 {row.rank}
                                                             </span>
@@ -492,41 +475,38 @@ const KitKatLeague = () => {
                             </div>
                         )}
 
-                        {/* ================= TEAMS TAB ================= */}
+                        {/* ================= TEAMS & PLAYERS TAB ================= */}
                         {activeTab === 'teams' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {teamsData.map((team, i) => (
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: i * 0.05 }}
-                                        key={team.id}
-                                        className="relative group h-64 rounded-3xl overflow-hidden cursor-pointer bg-white border border-slate-200 shadow-md hover:shadow-xl transition-all"
-                                    >
-                                        <div className={`absolute inset-0 bg-gradient-to-br ${team.color} opacity-40 group-hover:opacity-100 transition-opacity duration-500`} />
-
-                                        <div className="absolute inset-0 p-6 flex flex-col justify-between z-10">
-                                            <div className="flex justify-between items-start">
-                                                <div className={`w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-3xl border ${team.border} shadow-sm group-hover:scale-110 transition-transform duration-500`}>
+                            <div className="space-y-12">
+                                {/* Team Quick Select Logos */}
+                                <motion.div 
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className="flex flex-wrap justify-center gap-3 sm:gap-4 md:gap-6 mb-8"
+                                >
+                                    {teamsData.map((team, idx) => (
+                                        <motion.div
+                                            key={team.id}
+                                            initial={{ opacity: 0, scale: 0.8 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            className="group relative cursor-default"
+                                            title={team.name}
+                                        >
+                                            <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl bg-white border ${team.border} flex items-center justify-center p-2 shadow-sm bg-gradient-to-br ${team.color} transition-all duration-300 group-hover:scale-110 group-hover:shadow-md`}>
+                                                <div className="w-full h-full flex items-center justify-center opacity-80 group-hover:opacity-100 transition-opacity">
                                                     {team.logo}
                                                 </div>
-                                                <span className="text-slate-200 font-black text-4xl transform -rotate-12 group-hover:text-white transition-colors drop-shadow-sm">
+                                            </div>
+                                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                <div className="bg-slate-900 text-white text-[8px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded whitespace-nowrap">
                                                     {team.short}
-                                                </span>
+                                                </div>
                                             </div>
+                                        </motion.div>
+                                    ))}
+                                </motion.div>
 
-                                            <div className="bg-white/80 backdrop-blur-sm p-4 rounded-2xl border border-white/50">
-                                                <p className="text-[#D41B2C] text-[10px] font-black uppercase tracking-[0.2em] mb-1">Team Captain</p>
-                                                <p className={`${team.text} font-bold text-sm mb-2`}>{team.captain}</p>
-                                                <h3 className={`${team.text} font-black text-lg sm:text-xl uppercase tracking-tight leading-none`}>{team.name}</h3>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </div>
-                        )}
-
-                        {/* ================= PLAYERS TAB ================= */}
-                        {activeTab === 'players' && (
-                            <div className="space-y-8">
                                 <div className="max-w-md mx-auto">
                                     <div className="relative">
                                         <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
@@ -540,34 +520,59 @@ const KitKatLeague = () => {
                                     </div>
                                 </div>
 
-                                {filteredPlayers.length === 0 ? (
+                                {groupedPlayers.length === 0 ? (
                                     <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 shadow-sm">
                                         <p className="text-slate-500 font-bold uppercase tracking-widest text-sm">No players found matching "{playerSearch}"</p>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                        {filteredPlayers.map((player, i) => (
+                                    <div className="space-y-12">
+                                        {groupedPlayers.map((group, groupIdx) => (
                                             <motion.div
-                                                initial={{ opacity: 0, y: 10 }}
+                                                key={group.team.id}
+                                                initial={{ opacity: 0, y: 20 }}
                                                 animate={{ opacity: 1, y: 0 }}
-                                                transition={{ delay: (i % 20) * 0.05 }} // cap the delay so large lists load fast
-                                                key={player.name}
-                                                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-4 group cursor-default"
+                                                transition={{ delay: groupIdx * 0.1 }}
+                                                className="space-y-6"
                                             >
-                                                <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm`}>
-                                                    {/* If it's a captain, we could show a star, but we use the team logo for brand presence */}
-                                                    <span className="text-xl group-hover:scale-110 transition-transform">{player.teamData.logo}</span>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <h4 className="text-slate-900 font-bold text-sm truncate">{player.name}</h4>
-                                                    <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest truncate mt-0.5">{player.teamData.name}</p>
-                                                </div>
-                                                {/* Optionally highlight captains */}
-                                                {player.teamData.captain === player.name && (
-                                                    <div className="ml-auto bg-[#D41B2C]/10 text-[#D41B2C] text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded">
-                                                        CAP
+                                                {/* Team Header Bar */}
+                                                <div className="flex items-center gap-4 group">
+                                                    <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white border ${group.team.border} flex items-center justify-center text-2xl md:text-3xl shadow-sm bg-gradient-to-br ${group.team.color}`}>
+                                                        {group.team.logo}
                                                     </div>
-                                                )}
+                                                    <div>
+                                                        <h3 className={`${group.team.text} font-black text-lg md:text-2xl uppercase tracking-tight`}>{group.team.name}</h3>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">Captain: {group.team.captain}</p>
+                                                            <span className="w-1 h-1 bg-slate-300 rounded-full"></span>
+                                                            <p className="text-slate-400 text-[10px] md:text-xs font-bold uppercase tracking-widest">{group.players.length} Players</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                                    {group.players.map((player, i) => (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, scale: 0.95 }}
+                                                            animate={{ opacity: 1, scale: 1 }}
+                                                            transition={{ delay: (groupIdx * 0.1) + (i % 10) * 0.03 }}
+                                                            key={player.name}
+                                                            className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-4 group cursor-default"
+                                                        >
+                                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm`}>
+                                                                <span className="text-lg group-hover:scale-110 transition-transform">{player.teamData.logo}</span>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <h4 className="text-slate-900 font-bold text-sm truncate">{player.name}</h4>
+                                                                <p className="text-slate-500 text-[10px] uppercase font-black tracking-widest truncate mt-0.5">{player.teamData.short}</p>
+                                                            </div>
+                                                            {player.teamData.captain === player.name && (
+                                                                <div className="ml-auto bg-[#D41B2C]/10 text-[#D41B2C] text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded">
+                                                                    CAP
+                                                                </div>
+                                                            )}
+                                                        </motion.div>
+                                                    ))}
+                                                </div>
                                             </motion.div>
                                         ))}
                                     </div>
@@ -588,17 +593,17 @@ const KitKatLeague = () => {
                     <div className="text-center mb-10">
                         <h3 className="text-xs md:text-sm font-black text-slate-400 uppercase tracking-widest">Official League Sponsors</h3>
                     </div>
-                    
+
                     <div className="flex flex-wrap justify-center items-center gap-12 sm:gap-20 opacity-70 hover:opacity-100 transition-opacity duration-300 mix-blend-multiply">
                         {/* Coca-Cola */}
                         <img src="/images/coca-cola.svg" alt="Coca-Cola" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
-                        
+
                         {/* Slow Mag */}
                         <img src="/images/slow-mag.png" alt="Slow Mag" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
-                        
+
                         {/* Steri Stumpie */}
                         <img src="/images/steri-stumpie.png" alt="Steri Stumpie" className="h-16 sm:h-24 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
-                        
+
                         {/* Babolat */}
                         <img src="/images/babolat.png" alt="Babolat" className="h-12 sm:h-20 object-contain grayscale hover:grayscale-0 transition-all duration-300" />
                     </div>
@@ -615,9 +620,9 @@ const KitKatLeague = () => {
                 <div className="container mx-auto px-4 sm:px-6 max-w-5xl relative z-10 text-center flex flex-col items-center">
 
                     <div className="mb-10 sm:mb-14">
-                        <img 
-                            src="/images/kitkat-group-logo.png" 
-                            alt="Kit Kat Cash And Carry" 
+                        <img
+                            src="/images/kitkat-group-logo.png"
+                            alt="Kit Kat Cash And Carry"
                             className="w-[280px] sm:w-[380px] md:w-[480px] h-auto object-contain mx-auto shadow-2xl rounded-lg"
                         />
                     </div>
