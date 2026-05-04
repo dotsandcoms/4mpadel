@@ -105,6 +105,50 @@ const PlayerManager = () => {
             console.error('Error fetching players:', error);
             showToast('Failed to fetch players', 'error');
         } else {
+            // Identify and fix stale temporary licenses
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            const stalePlayerIds = (data || [])
+                .filter(p => {
+                    if (p.license_type !== 'temporary') return false;
+                    
+                    // If no temp license records, it's stale
+                    if (!p.temporary_licenses || p.temporary_licenses.length === 0) return true;
+                    
+                    // If all temp license records are in the past, it's stale
+                    // We check if there's ANY active or future license
+                    const hasActive = p.temporary_licenses.some(tl => {
+                        const eventDate = new Date(tl.event_date);
+                        return eventDate >= today;
+                    });
+                    
+                    return !hasActive;
+                })
+                .map(p => p.id);
+
+            if (stalePlayerIds.length > 0) {
+                console.log(`Found ${stalePlayerIds.length} stale temporary licenses. Updating...`);
+                const { error: updateError } = await supabase
+                    .from('players')
+                    .update({ 
+                        license_type: 'none', 
+                        paid_registration: false 
+                    })
+                    .in('id', stalePlayerIds);
+                
+                if (!updateError) {
+                    // Update local data so the UI reflects it immediately
+                    data.forEach(p => {
+                        if (stalePlayerIds.includes(p.id)) {
+                            p.license_type = 'none';
+                            p.paid_registration = false;
+                        }
+                    });
+                    showToast(`Cleaned up ${stalePlayerIds.length} expired temporary licenses`, 'info');
+                }
+            }
+
             setPlayers(data || []);
         }
         setLoading(false);

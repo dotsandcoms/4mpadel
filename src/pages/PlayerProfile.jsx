@@ -120,7 +120,31 @@ const PlayerProfile = () => {
                         .maybeSingle();
 
                     if (tempLicenseData) {
-                        setTempLicenseDetails(tempLicenseData);
+                        const eventDate = new Date(tempLicenseData.event_date);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        if (eventDate < today) {
+                            // License has expired!
+                            console.log('Temporary license expired, resetting status...');
+                            await supabase
+                                .from('players')
+                                .update({ license_type: 'none', paid_registration: false })
+                                .eq('id', playerData.id);
+                            
+                            // Update local state
+                            setPlayer(prev => ({ ...prev, license_type: 'none', paid_registration: false }));
+                            setTempLicenseDetails(null);
+                        } else {
+                            setTempLicenseDetails(tempLicenseData);
+                        }
+                    } else {
+                        // Marked as temporary but no record found - clean up
+                        await supabase
+                            .from('players')
+                            .update({ license_type: 'none', paid_registration: false })
+                            .eq('id', playerData.id);
+                        setPlayer(prev => ({ ...prev, license_type: 'none', paid_registration: false }));
                     }
                 }
 
