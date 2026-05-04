@@ -507,35 +507,39 @@ const KitKatLeague = () => {
                                         </div>
 
                                         {/* VS Setup */}
-                                        <div className="flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
+                                        <div className="flex items-center justify-between gap-3 sm:gap-6 relative z-10">
                                             {/* Team 1 */}
-                                            <div className="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left w-full">
-                                                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-white border ${fixture.team1.border} flex items-center justify-center text-4xl shadow-md mb-2 sm:mb-4 bg-gradient-to-br ${fixture.team1.color}`}>
+                                            <div className="flex-1 flex flex-row items-center gap-3 sm:flex-col sm:items-start text-left min-w-0">
+                                                <div className={`w-10 h-10 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-white border ${fixture.team1.border} flex items-center justify-center text-xl sm:text-4xl shadow-md mb-0 sm:mb-4 bg-gradient-to-br ${fixture.team1.color} shrink-0`}>
                                                     {fixture.team1.logo}
                                                 </div>
-                                                <h4 className={`text-lg sm:text-2xl font-black ${fixture.team1.text} uppercase tracking-tight`}>{fixture.team1.name}</h4>
-                                                <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase mt-0 sm:mt-1">{fixture.team1.short}</p>
+                                                <div className="min-w-0">
+                                                    <h4 className={`text-xs sm:text-2xl font-black ${fixture.team1.text} uppercase tracking-tight truncate`}>{fixture.team1.name}</h4>
+                                                    <p className="text-slate-400 text-[8px] sm:text-xs font-bold uppercase truncate">{fixture.team1.short}</p>
+                                                </div>
                                             </div>
 
                                             {/* VS Badge */}
-                                            <div className="shrink-0 relative z-20 my-4 sm:my-0">
+                                            <div className="shrink-0 relative z-20 mx-1 sm:mx-0">
                                                 <div className="absolute inset-0 bg-[#D41B2C] blur-md opacity-20 group-hover:opacity-40 transition-opacity" />
-                                                <div className="w-12 h-12 bg-white border-2 border-[#D41B2C] rounded-full flex items-center justify-center relative shadow-sm">
+                                                <div className="w-10 h-10 sm:w-14 sm:h-14 bg-white border-2 border-[#D41B2C] rounded-full flex items-center justify-center relative shadow-sm shrink-0">
                                                     {fixture.status === 'finished' ? (
-                                                        <span className="text-[#D41B2C] font-black text-sm">{fixture.team1Score} - {fixture.team2Score}</span>
+                                                        <span className="text-[#D41B2C] font-black text-[10px] sm:text-base whitespace-nowrap">{fixture.team1Score} - {fixture.team2Score}</span>
                                                     ) : (
-                                                        <span className="text-[#D41B2C] font-black text-sm italic">VS</span>
+                                                        <span className="text-[#D41B2C] font-black text-xs sm:text-base italic">VS</span>
                                                     )}
                                                 </div>
                                             </div>
 
                                             {/* Team 2 */}
-                                            <div className="flex-1 flex flex-col items-center sm:items-end text-center sm:text-right w-full">
-                                                <div className={`w-14 h-14 sm:w-20 sm:h-20 rounded-2xl bg-white border ${fixture.team2.border} flex items-center justify-center text-4xl shadow-md mb-2 sm:mb-4 bg-gradient-to-br ${fixture.team2.color}`}>
+                                            <div className="flex-1 flex flex-row-reverse items-center gap-3 sm:flex-col sm:items-end text-right min-w-0">
+                                                <div className={`w-10 h-10 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-white border ${fixture.team2.border} flex items-center justify-center text-xl sm:text-4xl shadow-md mb-0 sm:mb-4 bg-gradient-to-br ${fixture.team2.color} shrink-0`}>
                                                     {fixture.team2.logo}
                                                 </div>
-                                                <h4 className={`text-lg sm:text-2xl font-black ${fixture.team2.text} uppercase tracking-tight`}>{fixture.team2.name}</h4>
-                                                <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase mt-0 sm:mt-1">{fixture.team2.short}</p>
+                                                <div className="min-w-0">
+                                                    <h4 className={`text-xs sm:text-2xl font-black ${fixture.team2.text} uppercase tracking-tight truncate`}>{fixture.team2.name}</h4>
+                                                    <p className="text-slate-400 text-[8px] sm:text-xs font-bold uppercase truncate">{fixture.team2.short}</p>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -562,43 +566,43 @@ const KitKatLeague = () => {
 
                                                         {subMatchesData[fixture.id] && subMatchesData[fixture.id].map((game, gIdx) => (
                                                             <div key={game.Id} className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 group/game hover:bg-slate-100 transition-colors">
-                                                                <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
+                                                                <div className="flex items-center justify-between gap-2 sm:gap-4">
                                                                     {/* Player Pair 1 */}
-                                                                    <div className="flex flex-col gap-1">
-                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                    <div className="flex-1 flex flex-col gap-0.5 min-w-0">
+                                                                        <span className={`text-[9px] sm:text-[11px] font-black uppercase tracking-wider truncate ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
                                                                             {game.Challenger.Name}
                                                                         </span>
-                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                        <span className={`text-[9px] sm:text-[11px] font-black uppercase tracking-wider truncate ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
                                                                             {game.Challenger.Player2Name}
                                                                         </span>
                                                                     </div>
-
+                                                                    
                                                                     {/* Game Score */}
-                                                                    <div className="flex flex-col items-center justify-center">
-                                                                        <div className="bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-3">
-                                                                            <span className={`font-black text-sm ${game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
+                                                                    <div className="flex flex-col items-center justify-center shrink-0">
+                                                                        <div className="bg-white px-2 sm:px-4 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-2 sm:gap-3">
+                                                                            <span className={`font-black text-xs sm:text-sm ${game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
                                                                                 {game.MatchResult?.Score?.FirstParticipantScore}
                                                                             </span>
                                                                             <div className="w-px h-3 bg-slate-200" />
-                                                                            <span className={`font-black text-sm ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
+                                                                            <span className={`font-black text-xs sm:text-sm ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
                                                                                 {game.MatchResult?.Score?.SecondParticipantScore}
                                                                             </span>
                                                                         </div>
-                                                                        <div className="flex gap-2 mt-1.5">
+                                                                        <div className="flex gap-1 sm:gap-2 mt-1">
                                                                             {game.MatchResult?.Score?.DetailedScoring?.map((set, sIdx) => (
-                                                                                <span key={sIdx} className="text-[9px] font-bold text-slate-400 italic">
+                                                                                <span key={sIdx} className="text-[7px] sm:text-[9px] font-bold text-slate-400 italic">
                                                                                     {set.FirstParticipantScore}-{set.SecondParticipantScore}
                                                                                 </span>
                                                                             ))}
                                                                         </div>
                                                                     </div>
-
+                                                                    
                                                                     {/* Player Pair 2 */}
-                                                                    <div className="flex flex-col gap-1 text-right">
-                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                    <div className="flex-1 flex flex-col gap-0.5 text-right min-w-0">
+                                                                        <span className={`text-[9px] sm:text-[11px] font-black uppercase tracking-wider truncate ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
                                                                             {game.Challenged.Name}
                                                                         </span>
-                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                        <span className={`text-[9px] sm:text-[11px] font-black uppercase tracking-wider truncate ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
                                                                             {game.Challenged.Player2Name}
                                                                         </span>
                                                                     </div>
