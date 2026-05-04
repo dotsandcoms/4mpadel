@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import kitkatLogo from '../assets/kitkat_logo.png';
 import sapaLogo from '../assets/sapa-logo.svg';
 import { useRankedin } from '../hooks/useRankedin';
+import { supabase } from '../supabaseClient';
 
 const kitkatRed = '#D41B2C';
 
@@ -26,6 +27,7 @@ const KitKatLeague = () => {
     const { getTeamLeagueStandings, getTeamLeagueTeams, getTeamMatchResults } = useRankedin();
     const [teamsData, setTeamsData] = useState([]);
     const [rawPlayers, setRawPlayers] = useState([]);
+    const [supabasePlayers, setSupabasePlayers] = useState([]);
     const [standingsData, setStandingsData] = useState([]);
     const [fixturesData, setFixturesData] = useState([]);
     const [selectedRound, setSelectedRound] = useState(1);
@@ -63,6 +65,16 @@ const KitKatLeague = () => {
                 
                 setTeamsData(dynamicTeams);
                 setRawPlayers(dynamicPlayers);
+            }
+
+            // 1b. Fetch players from Supabase to get profile images
+            const { data: dbPlayers } = await supabase
+                .from('players')
+                .select('name, image_url, id')
+                .eq('approved', true);
+            
+            if (dbPlayers) {
+                setSupabasePlayers(dbPlayers);
             }
 
             // 2. Fetch Standings & Fixtures
@@ -147,12 +159,14 @@ const KitKatLeague = () => {
     const playersWithDetails = useMemo(() => {
         return rawPlayers.map(player => {
             const teamObj = teamsData.find(t => t.name === player.team) || teamsData[0];
+            const dbPlayer = supabasePlayers.find(p => p.name.toLowerCase() === player.name.toLowerCase());
             return {
                 ...player,
-                teamData: teamObj
+                teamData: teamObj,
+                image_url: dbPlayer?.image_url || null
             };
         });
-    }, [rawPlayers, teamsData]);
+    }, [rawPlayers, teamsData, supabasePlayers]);
 
     const filteredPlayers = useMemo(() => {
         if (!playerSearch) return playersWithDetails;
@@ -705,8 +719,12 @@ const KitKatLeague = () => {
                                                             key={player.name}
                                                             className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-4 group cursor-default"
                                                         >
-                                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm`}>
-                                                                <span className="text-lg group-hover:scale-110 transition-transform">{player.teamData.logo}</span>
+                                                            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}>
+                                                                {player.image_url ? (
+                                                                    <img src={player.image_url} alt={player.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                ) : (
+                                                                    <span className="text-lg group-hover:scale-110 transition-transform">{player.teamData.logo}</span>
+                                                                )}
                                                             </div>
                                                             <div className="min-w-0">
                                                                 <h4 className="text-slate-900 font-bold text-sm truncate">{player.name}</h4>
