@@ -283,7 +283,7 @@ const KitKatLeague = () => {
                 <div className="absolute bottom-0 left-0 w-full h-[40vh] bg-gradient-to-t from-[#FAFAFA] to-transparent" />
             </div>
 
-            <main className="relative z-10 pt-24 md:pt-32 pb-20 container mx-auto px-4 sm:px-6 max-w-7xl">
+            <main className="relative z-10 pt-12 md:pt-32 pb-20 container mx-auto px-4 sm:px-6 max-w-7xl">
 
                 {/* HERO SECTION */}
                 <motion.div
@@ -294,13 +294,13 @@ const KitKatLeague = () => {
                 >
                     <motion.div
                         variants={itemVariants}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 text-[#D41B2C] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-6 shadow-sm bg-white"
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-slate-200 text-[#D41B2C] text-xs md:text-sm font-black uppercase tracking-[0.2em] mb-4 md:mb-6 shadow-sm bg-white"
                     >
                         <span className="w-2 h-2 rounded-full bg-[#D41B2C] animate-pulse" />
                         Official Live Platform
                     </motion.div>
 
-                    <motion.div variants={itemVariants} className="flex justify-center mb-6">
+                    <motion.div variants={itemVariants} className="flex justify-center mb-4 md:mb-6">
                         <img
                             src={kitkatLogo}
                             alt="Kit Kat Elite Padel League"
@@ -383,7 +383,6 @@ const KitKatLeague = () => {
                                                     <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">W</th>
                                                     <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">L</th>
                                                     <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-900 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">Pts</th>
-                                                    <th className="py-3 px-3 sm:py-4 sm:px-6 text-slate-500 font-black uppercase tracking-widest text-[10px] sm:text-xs text-center">Form</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
@@ -420,16 +419,7 @@ const KitKatLeague = () => {
                                                         <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
                                                             <span className="text-lg sm:text-xl font-black text-slate-900">{row.points}</span>
                                                         </td>
-                                                        <td className="py-3 px-3 sm:py-4 sm:px-6 text-center">
-                                                            <div className="flex gap-0.5 sm:gap-1 justify-center">
-                                                                {row.streak.map((result, i) => (
-                                                                    <span key={i} className={`w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-black ${result === 'W' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-50 text-[#D41B2C] border border-red-100'
-                                                                        }`}>
-                                                                        {result}
-                                                                    </span>
-                                                                ))}
-                                                            </div>
-                                                        </td>
+
                                                     </motion.tr>
                                                 ))}
                                             </tbody>
