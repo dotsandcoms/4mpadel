@@ -87,7 +87,7 @@ const Navbar = ({ isDark = false }) => {
       ]
     },
     {
-      name: 'Tournaments',
+      name: 'Events',
       href: '#',
       dropdown: [
         { name: 'All Tournaments', href: '/calendar' },
