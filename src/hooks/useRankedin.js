@@ -39,7 +39,77 @@ export const useRankedin = () => {
     }, []);
 
     /**
+     * Fetches standings and fixtures for a team league.
+     * @param {string|number} teamleagueId 
+     * @param {string|number} poolId 
+     * @returns {Promise<Object>} Standings and matches data
+     */
+    const getTeamLeagueStandings = useCallback(async (teamleagueId, poolId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(
+                `${API_BASE}/teamleague/GetStandingsSectionAsync?teamleagueId=${teamleagueId}&poolid=${poolId}&language=en`
+            );
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            const data = await response.json();
+            return data;
+        } catch (err) {
+            console.error("Rankedin TeamLeague Standings fetch error:", err);
+            setError(err.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
+     * Fetches teams and players for a team league.
+     * @param {string|number} poolId 
+     * @returns {Promise<Array>} Array of teams
+     */
+    const getTeamLeagueTeams = useCallback(async (poolId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(
+                `${API_BASE}/teamleague/GetPoolTeamsAsync?poolid=${poolId}&language=en`
+            );
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            return await response.json();
+        } catch (err) {
+            console.error("Rankedin TeamLeague Teams fetch error:", err);
+            setError(err.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
+     * Fetches individual game results for a team match.
+     * @param {string|number} teamMatchId 
+     * @returns {Promise<Array>} Array of matches
+     */
+    const getTeamMatchResults = useCallback(async (teamMatchId) => {
+        try {
+            const response = await fetch(
+                `${API_BASE}/teamleague/GetTeamLeagueTeamsMatchesAsync?teamMatchId=${teamMatchId}&language=en`
+            );
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            const data = await response.json();
+            // Data is usually an array of sections, the first one contains the matches
+            return data[0]?.Matches?.Matches || [];
+        } catch (err) {
+            console.error("Rankedin TeamMatch Results fetch error:", err);
+            return [];
+        }
+    }, []);
+
+    /**
      * Fetches the upcoming tournaments for SAPA.
+
+
      * @returns {Promise<Array>} Array of upcoming tournament objects
      */
     const getUpcomingOrganisationEvents = useCallback(async () => {
@@ -602,7 +672,10 @@ export const useRankedin = () => {
         getTournamentMatches,
         getTournamentParticipants,
         getTournamentPlayerTabs,
-        getPlayerMatches
+        getPlayerMatches,
+        getTeamLeagueStandings,
+        getTeamLeagueTeams,
+        getTeamMatchResults
     };
 };
 

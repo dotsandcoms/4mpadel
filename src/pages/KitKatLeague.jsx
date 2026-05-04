@@ -1,115 +1,148 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { Trophy, Calendar, Users, MapPin, ChevronRight, Search, Activity, Swords, User } from 'lucide-react';
+import { Trophy, Calendar, Users, MapPin, ChevronRight, Search, Activity, Swords, User, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import kitkatLogo from '../assets/kitkat_logo.png';
 import sapaLogo from '../assets/sapa-logo.svg';
+import { useRankedin } from '../hooks/useRankedin';
+
+const kitkatRed = '#D41B2C';
+
+const TEAM_VISUALS = {
+    'Atholl Aces': { name: 'Atholl Aces', short: 'ATH', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b09a94af4c02884956a_Atholl_Aces_logo-removebg-preview.png" alt="Atholl Aces" className="w-[80%] h-[80%] object-contain" />, color: 'from-slate-100 to-white', border: 'border-slate-200', text: 'text-slate-800' },
+    'Brooklyn Bulls': { name: 'Brooklyn Bulls', short: 'BRK', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69c15bd74d8842d49b6e3138_69b82ae370117be1208331f4_1%20Background%20Removed.png" alt="Brooklyn Bulls" className="w-[80%] h-[80%] object-contain" />, color: 'from-amber-50 to-white', border: 'border-amber-200', text: 'text-amber-900' },
+    'Centurion Cobras': { name: 'Centurion Cobras', short: 'CEN', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bd298c58b1f696a6e9a_Centurion_Cobras-removebg-preview.png" alt="Centurion Cobras" className="w-[80%] h-[80%] object-contain" />, color: 'from-emerald-50 to-white', border: 'border-emerald-200', text: 'text-emerald-900' },
+    'Hyde Park Falcons': { name: 'Hyde Park Falcons', short: 'HYD', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54ba2a0c4023c604ff56a_Hyde_Park_Falcons-removebg-preview.png" alt="Hyde Park Falcons" className="w-[80%] h-[80%] object-contain" />, color: 'from-sky-50 to-white', border: 'border-sky-200', text: 'text-sky-900' },
+    'Melrose Mavericks': { name: 'Melrose Mavericks', short: 'MEL', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bae98c58b1f696a4edc_Melrose_Mavericks-removebg-preview.png" alt="Melrose Mavericks" className="w-[80%] h-[80%] object-contain" />, color: 'from-purple-50 to-white', border: 'border-purple-200', text: 'text-purple-900' },
+    'Menlyn Sharks': { name: 'Menlyn Sharks', short: 'MEN', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b926c9d03a0f10fd583_Menlyn_Sharks-removebg-preview.png" alt="Menlyn Sharks" className="w-[80%] h-[80%] object-contain" />, color: 'from-blue-50 to-white', border: 'border-blue-200', text: 'text-blue-900' },
+    'Sandton Stallions': { name: 'Sandton Stallions', short: 'SAN', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bc698c58b1f696a6693_Sandton_Stallions-removebg-preview.png" alt="Sandton Stallions" className="w-[80%] h-[80%] object-contain" />, color: 'from-orange-50 to-white', border: 'border-orange-200', text: 'text-orange-900' },
+    'Waterfall Wolves': { name: 'Waterfall Wolves', short: 'WAT', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bb99d1abc9ebacedafb_Waterfall_Wolves-removebg-preview.png" alt="Waterfall Wolves" className="w-[80%] h-[80%] object-contain" />, color: 'from-stone-100 to-white', border: 'border-stone-200', text: 'text-stone-800' },
+};
+
 const KitKatLeague = () => {
     const [activeTab, setActiveTab] = useState('teams');
     const [playerSearch, setPlayerSearch] = useState('');
+    const { getTeamLeagueStandings, getTeamLeagueTeams, getTeamMatchResults } = useRankedin();
+    const [teamsData, setTeamsData] = useState([]);
+    const [rawPlayers, setRawPlayers] = useState([]);
+    const [standingsData, setStandingsData] = useState([]);
+    const [fixturesData, setFixturesData] = useState([]);
+    const [selectedRound, setSelectedRound] = useState(1);
+    const [maxRound, setMaxRound] = useState(1);
+    const [expandedMatchId, setExpandedMatchId] = useState(null);
+    const [subMatchesData, setSubMatchesData] = useState({});
+    const [loadingMatches, setLoadingMatches] = useState({});
 
-    // --- MOCK DATA ---
-    const kitkatRed = '#D41B2C';
+    useEffect(() => {
+        const fetchLiveLeagueData = async () => {
+            // 1. Fetch Teams & Players
+            const teamsAPI = await getTeamLeagueTeams(12616);
+            let dynamicTeams = [];
+            let dynamicPlayers = [];
+            
+            if (teamsAPI) {
+                dynamicTeams = teamsAPI.map((t, index) => {
+                    const visuals = TEAM_VISUALS[t.Name] || TEAM_VISUALS['Atholl Aces'];
+                    const captain = t.Players ? t.Players.find(p => p.IsCaptain) : null;
+                    return {
+                        id: t.Id || index,
+                        name: t.Name,
+                        captain: captain ? captain.Name : '',
+                        ...visuals
+                    };
+                });
+                
+                teamsAPI.forEach(t => {
+                    if (t.Players) {
+                        t.Players.forEach(p => {
+                            dynamicPlayers.push({ name: p.Name, team: t.Name, url: p.Url });
+                        });
+                    }
+                });
+                
+                setTeamsData(dynamicTeams);
+                setRawPlayers(dynamicPlayers);
+            }
 
-    const teamsData = [
-        { id: 1, name: 'Atholl Aces', short: 'ATH', captain: 'Warren Kuhn', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b09a94af4c02884956a_Atholl_Aces_logo-removebg-preview.png" alt="Atholl Aces" className="w-[80%] h-[80%] object-contain" />, color: 'from-slate-100 to-white', border: 'border-slate-200', text: 'text-slate-800' },
-        { id: 2, name: 'Brooklyn Bulls', short: 'BRK', captain: 'Luan Krige', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69c15bd74d8842d49b6e3138_69b82ae370117be1208331f4_1%20Background%20Removed.png" alt="Brooklyn Bulls" className="w-[80%] h-[80%] object-contain" />, color: 'from-amber-50 to-white', border: 'border-amber-200', text: 'text-amber-900' },
-        { id: 3, name: 'Centurion Cobras', short: 'CEN', captain: 'Adam Van Harte', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bd298c58b1f696a6e9a_Centurion_Cobras-removebg-preview.png" alt="Centurion Cobras" className="w-[80%] h-[80%] object-contain" />, color: 'from-emerald-50 to-white', border: 'border-emerald-200', text: 'text-emerald-900' },
-        { id: 4, name: 'Hyde Park Falcons', short: 'HYD', captain: 'Richard Ashforth', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54ba2a0c4023c604ff56a_Hyde_Park_Falcons-removebg-preview.png" alt="Hyde Park Falcons" className="w-[80%] h-[80%] object-contain" />, color: 'from-sky-50 to-white', border: 'border-sky-200', text: 'text-sky-900' },
-        { id: 5, name: 'Melrose Mavericks', short: 'MEL', captain: 'Chevaan Davids', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bae98c58b1f696a4edc_Melrose_Mavericks-removebg-preview.png" alt="Melrose Mavericks" className="w-[80%] h-[80%] object-contain" />, color: 'from-purple-50 to-white', border: 'border-purple-200', text: 'text-purple-900' },
-        { id: 6, name: 'Menlyn Sharks', short: 'MEN', captain: 'Zaidy Patel', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54b926c9d03a0f10fd583_Menlyn_Sharks-removebg-preview.png" alt="Menlyn Sharks" className="w-[80%] h-[80%] object-contain" />, color: 'from-blue-50 to-white', border: 'border-blue-200', text: 'text-blue-900' },
-        { id: 7, name: 'Sandton Stallions', short: 'SAN', captain: 'Tremayne Mitchell', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bc698c58b1f696a6693_Sandton_Stallions-removebg-preview.png" alt="Sandton Stallions" className="w-[80%] h-[80%] object-contain" />, color: 'from-orange-50 to-white', border: 'border-orange-200', text: 'text-orange-900' },
-        { id: 8, name: 'Waterfall Wolves', short: 'WAT', captain: 'Jason Blakey-Milner', logo: <img src="https://cdn.prod.website-files.com/69b6a6d1000a9da16f9d86ec/69d54bb99d1abc9ebacedafb_Waterfall_Wolves-removebg-preview.png" alt="Waterfall Wolves" className="w-[80%] h-[80%] object-contain" />, color: 'from-stone-100 to-white', border: 'border-stone-200', text: 'text-stone-800' },
-    ];
+            // 2. Fetch Standings & Fixtures
+            const data = await getTeamLeagueStandings(940, 12616);
+            if (!data) return;
 
-    const standingsData = [
-        { rank: 1, team: teamsData[0], played: 14, won: 11, lost: 3, points: 33, streak: ['W', 'W', 'W', 'L', 'W'] },
-        { rank: 2, team: teamsData[3], played: 14, won: 10, lost: 4, points: 30, streak: ['W', 'L', 'W', 'W', 'W'] },
-        { rank: 3, team: teamsData[1], played: 14, won: 9, lost: 5, points: 27, streak: ['L', 'W', 'W', 'L', 'W'] },
-        { rank: 4, team: teamsData[7], played: 14, won: 8, lost: 6, points: 24, streak: ['W', 'L', 'L', 'W', 'L'] },
-        { rank: 5, team: teamsData[6], played: 14, won: 7, lost: 7, points: 21, streak: ['L', 'L', 'W', 'W', 'L'] },
-        { rank: 6, team: teamsData[2], played: 14, won: 5, lost: 9, points: 15, streak: ['L', 'W', 'L', 'L', 'L'] },
-        { rank: 7, team: teamsData[5], played: 14, won: 4, lost: 10, points: 12, streak: ['L', 'L', 'L', 'W', 'L'] },
-        { rank: 8, team: teamsData[4], played: 14, won: 2, lost: 12, points: 6, streak: ['L', 'L', 'L', 'L', 'L'] },
-    ];
+            const teamsList = dynamicTeams.length > 0 ? dynamicTeams : Object.values(TEAM_VISUALS);
 
-    const fixturesData = [
-        { id: 1, date: 'June 2nd, 2026', time: '18:00', team1: teamsData[0], team2: teamsData[5], venue: 'Center Court', status: 'upcoming' },
-        { id: 2, date: 'June 2nd, 2026', time: '19:30', team1: teamsData[6], team2: teamsData[7], venue: 'Court 2', status: 'upcoming' },
-        { id: 3, date: 'June 3rd, 2026', time: '18:00', team1: teamsData[2], team2: teamsData[4], venue: 'Center Court', status: 'upcoming' },
-        { id: 4, date: 'June 3rd, 2026', time: '19:30', team1: teamsData[1], team2: teamsData[3], venue: 'Court 3', status: 'upcoming' },
-    ];
+            if (data.Standings && data.Standings.ScoresViewModels) {
+                const mappedStandings = data.Standings.ScoresViewModels.map((item, index) => {
+                    const matchedTeam = teamsList.find(t => t.name === item.ParticipantName) || teamsList[0];
+                    return {
+                        id: item.ParticipantId || index,
+                        rank: item.Standing,
+                        team: matchedTeam,
+                        played: item.Played,
+                        won: item.Wins,
+                        lost: item.Losses,
+                        points: item.MatchPoints,
+                        streak: ['-'] // Rankedin doesn't provide streak in this API
+                    };
+                });
+                setStandingsData(mappedStandings);
+            }
 
-    // RAW PLAYER DATA FROM kitkatpadel.com
-    const rawPlayers = [
-        { "name": "Zaidy Patel", "team": "Menlyn Sharks" },
-        { "name": "Pierre Le grange", "team": "Menlyn Sharks" },
-        { "name": "Jason Hewitt", "team": "Menlyn Sharks" },
-        { "name": "Jamey Sutherland", "team": "Menlyn Sharks" },
-        { "name": "Aidan Carrazedo", "team": "Menlyn Sharks" },
-        { "name": "Dillon van der Haer", "team": "Menlyn Sharks" },
-        { "name": "Kenan Staphorst", "team": "Menlyn Sharks" },
-        { "name": "Warren Kuhn", "team": "Atholl Aces" },
-        { "name": "Farhaan Sayanvala", "team": "Atholl Aces" },
-        { "name": "Steven Loock", "team": "Atholl Aces" },
-        { "name": "Riyaadh Motani", "team": "Atholl Aces" },
-        { "name": "Shaun Brookes", "team": "Atholl Aces" },
-        { "name": "Dillan Parau", "team": "Atholl Aces" },
-        { "name": "Luan Krige", "team": "Brooklyn Bulls" },
-        { "name": "Charl Vos", "team": "Brooklyn Bulls" },
-        { "name": "Keagan Rooy", "team": "Brooklyn Bulls" },
-        { "name": "Paul Anderson", "team": "Brooklyn Bulls" },
-        { "name": "Dudley Smith", "team": "Brooklyn Bulls" },
-        { "name": "Nicholas Keevy", "team": "Brooklyn Bulls" },
-        { "name": "Gary Pilz", "team": "Brooklyn Bulls" },
-        { "name": "Cristiano Da Costa", "team": "Brooklyn Bulls" },
-        { "name": "Shuaib Hassen", "team": "Brooklyn Bulls" },
-        { "name": "Richard Ashforth", "team": "Hyde Park Falcons" },
-        { "name": "Shaun Leagas", "team": "Hyde Park Falcons" },
-        { "name": "Yasser Assamo", "team": "Hyde Park Falcons" },
-        { "name": "Kyle Olivier", "team": "Hyde Park Falcons" },
-        { "name": "Justin Brivik", "team": "Hyde Park Falcons" },
-        { "name": "Mohammed Mather", "team": "Hyde Park Falcons" },
-        { "name": "Derek Alexander", "team": "Hyde Park Falcons" },
-        { "name": "Eras Labuschagne", "team": "Hyde Park Falcons" },
-        { "name": "Hamza Peer", "team": "Hyde Park Falcons" },
-        { "name": "Jonathan Boynton-Lee", "team": "Hyde Park Falcons" },
-        { "name": "Chevaan Davids", "team": "Melrose Mavericks" },
-        { "name": "Joel Van Rensburg", "team": "Melrose Mavericks" },
-        { "name": "Juan-Louis Van Antwerpen", "team": "Melrose Mavericks" },
-        { "name": "Gustav Hefer", "team": "Melrose Mavericks" },
-        { "name": "Zaid Hassim", "team": "Melrose Mavericks" },
-        { "name": "Sameer Mohamed", "team": "Melrose Mavericks" },
-        { "name": "Muhammed Arabi", "team": "Melrose Mavericks" },
-        { "name": "Mondrean Hattingh", "team": "Melrose Mavericks" },
-        { "name": "Ludwig Gostmann", "team": "Melrose Mavericks" },
-        { "name": "Dimitri Sayegh", "team": "Melrose Mavericks" },
-        { "name": "Isa Choonara", "team": "Melrose Mavericks" },
-        { "name": "Tremayne Mitchell", "team": "Sandton Stallions" },
-        { "name": "Joshua Van Rensburg", "team": "Sandton Stallions" },
-        { "name": "Tiaan Erasmus", "team": "Sandton Stallions" },
-        { "name": "Brendon Peters", "team": "Sandton Stallions" },
-        { "name": "Ben Jugmohan", "team": "Sandton Stallions" },
-        { "name": "Arek Michniewicz", "team": "Sandton Stallions" },
-        { "name": "Lineshen Moodley", "team": "Sandton Stallions" },
-        { "name": "Jason Blakey-Milner", "team": "Waterfall Wolves" },
-        { "name": "Joshua Heath", "team": "Waterfall Wolves" },
-        { "name": "David Allardice", "team": "Waterfall Wolves" },
-        { "name": "Jarryd Sauer", "team": "Waterfall Wolves" },
-        { "name": "Lee Aronson", "team": "Waterfall Wolves" },
-        { "name": "Arushen Govender", "team": "Waterfall Wolves" },
-        { "name": "James Sweeney", "team": "Waterfall Wolves" },
-        { "name": "Adam Van Harte", "team": "Centurion Cobras" },
-        { "name": "Egmond Van heerden", "team": "Centurion Cobras" },
-        { "name": "Dean Nortier", "team": "Centurion Cobras" },
-        { "name": "Nikhil Joshi", "team": "Centurion Cobras" },
-        { "name": "Dylan Carneiro", "team": "Centurion Cobras" },
-        { "name": "HP Luus", "team": "Centurion Cobras" },
-        { "name": "Jason Raw", "team": "Centurion Cobras" },
-        { "name": "Sajid Abdulla", "team": "Centurion Cobras" },
-        { "name": "Ayaaz Omar", "team": "Centurion Cobras" }
-    ];
+            if (data.MatchesSectionModel && data.MatchesSectionModel.Rounds) {
+                const mappedFixtures = [];
+                let foundMaxRound = 1;
+                data.MatchesSectionModel.Rounds.forEach(round => {
+                    const roundNum = round.RoundNumber || 1;
+                    if (roundNum > foundMaxRound) foundMaxRound = roundNum;
+
+                    if (round.Matches) {
+                        round.Matches.forEach((match, index) => {
+                            const team1Match = teamsList.find(t => t.name === match.Team1.Name) || teamsList[0];
+                            const team2Match = teamsList.find(t => t.name === match.Team2.Name) || teamsList[0];
+                            const timeParts = match.Details?.Time ? match.Details.Time.split(' ') : [];
+                            
+                            mappedFixtures.push({
+                                id: match.MatchId || index,
+                                round: roundNum,
+                                date: match.Details?.Date || 'TBD',
+                                time: timeParts.length > 1 ? timeParts[1] : 'TBD',
+                                team1: team1Match,
+                                team2: team2Match,
+                                venue: match.Details?.LocationName || 'TBD',
+                                status: match.Team1.Result !== null ? 'finished' : 'upcoming',
+                                team1Score: match.Team1.Result,
+                                team2Score: match.Team2.Result
+                            });
+                        });
+                    }
+                });
+                setFixturesData(mappedFixtures);
+                setMaxRound(foundMaxRound);
+                
+                // Default to Matchweek 4 as requested
+                setSelectedRound(4);
+            }
+        };
+
+        fetchLiveLeagueData();
+    }, [getTeamLeagueTeams, getTeamLeagueStandings]);
+
+    const handleToggleMatch = async (matchId) => {
+        if (expandedMatchId === matchId) {
+            setExpandedMatchId(null);
+            return;
+        }
+
+        setExpandedMatchId(matchId);
+
+        // Fetch sub-matches if not already loaded
+        if (!subMatchesData[matchId]) {
+            setLoadingMatches(prev => ({ ...prev, [matchId]: true }));
+            const results = await getTeamMatchResults(matchId);
+            setSubMatchesData(prev => ({ ...prev, [matchId]: results }));
+            setLoadingMatches(prev => ({ ...prev, [matchId]: false }));
+        }
+    };
 
     const playersWithDetails = useMemo(() => {
         return rawPlayers.map(player => {
@@ -119,7 +152,7 @@ const KitKatLeague = () => {
                 teamData: teamObj
             };
         });
-    }, []);
+    }, [rawPlayers, teamsData]);
 
     const filteredPlayers = useMemo(() => {
         if (!playerSearch) return playersWithDetails;
@@ -141,7 +174,7 @@ const KitKatLeague = () => {
             }
         });
         return Object.values(groups);
-    }, [filteredPlayers]);
+    }, [filteredPlayers, teamsData]);
 
     // ANIMATION VARIANTS
     const containerVariants = {
@@ -337,7 +370,7 @@ const KitKatLeague = () => {
                         {/* ================= STANDINGS TAB ================= */}
                         {activeTab === 'standings' && (
                             <div className="space-y-8">
-                                <Podium topTeams={standingsData.slice(0, 3)} />
+                                {standingsData.length >= 3 && <Podium topTeams={standingsData.slice(0, 3)} />}
 
                                 <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xl shadow-slate-200/50">
                                     <div className="overflow-x-auto">
@@ -359,7 +392,7 @@ const KitKatLeague = () => {
                                                         initial={{ opacity: 0, x: -20 }}
                                                         animate={{ opacity: 1, x: 0 }}
                                                         transition={{ delay: index * 0.05 }}
-                                                        key={row.team.id}
+                                                        key={`standing-${row.id}-${index}`}
                                                         className={`group hover:bg-slate-50 transition-colors ${index < 3 ? 'bg-slate-50/50' : ''}`}
                                                     >
                                                         <td className="py-3 px-3 sm:py-4 sm:px-6 font-bold">
@@ -409,23 +442,45 @@ const KitKatLeague = () => {
                         {/* ================= FIXTURES TAB ================= */}
                         {activeTab === 'fixtures' && (
                             <div className="max-w-4xl mx-auto space-y-6">
-                                {/* Week selector mockup */}
+                                {/* Week selector */}
                                 <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 mb-8 shadow-sm">
-                                    <button className="text-slate-400 hover:text-slate-900 p-2 bg-slate-50 rounded-xl transition-colors"><ChevronRight className="rotate-180" /></button>
+                                    <button 
+                                        onClick={() => setSelectedRound(prev => Math.max(1, prev - 1))}
+                                        disabled={selectedRound === 1}
+                                        className={`p-2 rounded-xl transition-colors ${selectedRound === 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-900 bg-slate-50'}`}
+                                    >
+                                        <ChevronRight className="rotate-180" />
+                                    </button>
                                     <div className="text-center">
-                                        <p className="text-[#D41B2C] font-black text-xs uppercase tracking-[0.2em]">Matchweek 7</p>
-                                        <p className="text-slate-900 font-bold">June 2026</p>
+                                        <p className="text-[#D41B2C] font-black text-xs uppercase tracking-[0.2em]">Matchweek {selectedRound}</p>
+                                        <p className="text-slate-900 font-bold">2026 Season</p>
                                     </div>
-                                    <button className="text-slate-400 hover:text-slate-900 p-2 bg-slate-50 rounded-xl transition-colors"><ChevronRight /></button>
+                                    <button 
+                                        onClick={() => setSelectedRound(prev => Math.min(maxRound, prev + 1))}
+                                        disabled={selectedRound === maxRound}
+                                        className={`p-2 rounded-xl transition-colors ${selectedRound === maxRound ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-900 bg-slate-50'}`}
+                                    >
+                                        <ChevronRight />
+                                    </button>
                                 </div>
 
-                                {fixturesData.map((fixture, i) => (
+                                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 mb-8 flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#D41B2C] shadow-sm shrink-0">
+                                        <Activity className="w-4 h-4" />
+                                    </div>
+                                    <p className="text-slate-600 text-xs sm:text-sm font-medium">
+                                        <span className="font-bold text-slate-900">Pro Tip:</span> Click on any fixture card below to reveal the detailed set scores and individual game results.
+                                    </p>
+                                </div>
+
+                                {fixturesData.filter(f => f.round === selectedRound).map((fixture, i) => (
                                     <motion.div
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         transition={{ delay: i * 0.1 }}
                                         key={fixture.id}
-                                        className="relative bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 hover:border-[#D41B2C]/30 hover:shadow-xl hover:shadow-[#D41B2C]/5 transition-all group overflow-hidden"
+                                        onClick={() => handleToggleMatch(fixture.id)}
+                                        className={`relative bg-white border rounded-3xl p-6 sm:p-8 hover:shadow-xl transition-all group overflow-hidden cursor-pointer ${expandedMatchId === fixture.id ? 'border-[#D41B2C] shadow-lg shadow-[#D41B2C]/5' : 'border-slate-200 hover:border-[#D41B2C]/30 hover:shadow-[#D41B2C]/5'}`}
                                     >
                                         <div className="absolute top-0 right-0 w-32 h-32 bg-[#D41B2C]/5 blur-[50px] group-hover:bg-[#D41B2C]/10 transition-colors pointer-events-none" />
 
@@ -433,12 +488,21 @@ const KitKatLeague = () => {
                                         <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-6">
                                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs font-bold uppercase tracking-widest text-slate-500">
                                                 <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-[#D41B2C]" /> {fixture.date}</span>
-                                                <span className="hidden sm:inline text-slate-300">•</span>
-                                                <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-[#D41B2C]" /> {fixture.time}</span>
+                                                {fixture.time !== '00:00' && (
+                                                    <>
+                                                        <span className="hidden sm:inline text-slate-300">•</span>
+                                                        <span className="flex items-center gap-1.5"><Activity className="w-3.5 h-3.5 text-[#D41B2C]" /> {fixture.time}</span>
+                                                    </>
+                                                )}
                                             </div>
-                                            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-widest bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
-                                                <MapPin className="w-3.5 h-3.5" />
-                                                {fixture.venue}
+                                            <div className="flex items-center gap-3">
+                                                {fixture.venue && fixture.venue.trim() !== 'TBD' && (
+                                                    <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-widest bg-slate-50 py-1.5 px-3 rounded-lg border border-slate-100">
+                                                        <MapPin className="w-3.5 h-3.5" />
+                                                        {fixture.venue}
+                                                    </div>
+                                                )}
+                                                <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform duration-300 ${expandedMatchId === fixture.id ? 'rotate-180 text-[#D41B2C]' : ''}`} />
                                             </div>
                                         </div>
 
@@ -457,7 +521,11 @@ const KitKatLeague = () => {
                                             <div className="shrink-0 relative z-20 my-4 sm:my-0">
                                                 <div className="absolute inset-0 bg-[#D41B2C] blur-md opacity-20 group-hover:opacity-40 transition-opacity" />
                                                 <div className="w-12 h-12 bg-white border-2 border-[#D41B2C] rounded-full flex items-center justify-center relative shadow-sm">
-                                                    <span className="text-[#D41B2C] font-black text-sm italic">VS</span>
+                                                    {fixture.status === 'finished' ? (
+                                                        <span className="text-[#D41B2C] font-black text-sm">{fixture.team1Score} - {fixture.team2Score}</span>
+                                                    ) : (
+                                                        <span className="text-[#D41B2C] font-black text-sm italic">VS</span>
+                                                    )}
                                                 </div>
                                             </div>
 
@@ -470,6 +538,83 @@ const KitKatLeague = () => {
                                                 <p className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase mt-0 sm:mt-1">{fixture.team2.short}</p>
                                             </div>
                                         </div>
+
+                                        {/* Expandable Section */}
+                                        <AnimatePresence>
+                                            {expandedMatchId === fixture.id && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="mt-8 pt-8 border-t border-slate-100 space-y-4">
+                                                        <div className="flex items-center justify-between mb-4">
+                                                            <h5 className="text-[#D41B2C] font-black text-xs uppercase tracking-widest">Match Breakdown</h5>
+                                                            {loadingMatches[fixture.id] && (
+                                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                                    <div className="w-3 h-3 border-2 border-slate-200 border-t-[#D41B2C] rounded-full animate-spin" />
+                                                                    Loading Games...
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {subMatchesData[fixture.id] && subMatchesData[fixture.id].map((game, gIdx) => (
+                                                            <div key={game.Id} className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 group/game hover:bg-slate-100 transition-colors">
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 items-center gap-4">
+                                                                    {/* Player Pair 1 */}
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                            {game.Challenger.Name}
+                                                                        </span>
+                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                            {game.Challenger.Player2Name}
+                                                                        </span>
+                                                                    </div>
+
+                                                                    {/* Game Score */}
+                                                                    <div className="flex flex-col items-center justify-center">
+                                                                        <div className="bg-white px-4 py-1.5 rounded-full border border-slate-200 shadow-sm flex items-center gap-3">
+                                                                            <span className={`font-black text-sm ${game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
+                                                                                {game.MatchResult?.Score?.FirstParticipantScore}
+                                                                            </span>
+                                                                            <div className="w-px h-3 bg-slate-200" />
+                                                                            <span className={`font-black text-sm ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-[#D41B2C]' : 'text-slate-400'}`}>
+                                                                                {game.MatchResult?.Score?.SecondParticipantScore}
+                                                                            </span>
+                                                                        </div>
+                                                                        <div className="flex gap-2 mt-1.5">
+                                                                            {game.MatchResult?.Score?.DetailedScoring?.map((set, sIdx) => (
+                                                                                <span key={sIdx} className="text-[9px] font-bold text-slate-400 italic">
+                                                                                    {set.FirstParticipantScore}-{set.SecondParticipantScore}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {/* Player Pair 2 */}
+                                                                    <div className="flex flex-col gap-1 text-right">
+                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                            {game.Challenged.Name}
+                                                                        </span>
+                                                                        <span className={`text-[11px] font-black uppercase tracking-wider ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                                            {game.Challenged.Player2Name}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+
+                                                        {!loadingMatches[fixture.id] && (!subMatchesData[fixture.id] || subMatchesData[fixture.id].length === 0) && (
+                                                            <div className="text-center py-6">
+                                                                <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em]">Detailed game results not available yet</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </motion.div>
                                 ))}
                             </div>
