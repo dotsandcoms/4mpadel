@@ -564,6 +564,10 @@ export const useRankedin = () => {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
             const data = await response.json();
+            
+            if (data.Teams && data.Teams.length > 0) {
+                return data.Teams.map(team => ({ Participant: team }));
+            }
             return data.Participants || [];
         } catch (err) {
             console.error('Error fetching tournament participants:', err);

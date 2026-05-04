@@ -1752,10 +1752,54 @@ const EventDetails = () => {
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
                                                                         {clsParticipants.map((item, pIdx) => {
                                                                             const p = item.Participant || {};
+                                                                            const isTeam = p.Players && p.Players.length > 0 && !p.FirstPlayer;
                                                                             const fPlayer = p.FirstPlayer || {};
                                                                             const sPlayer = p.SecondPlayer || {};
                                                                             const seed = p.Seed;
                                                                             const rank = item.Ranking;
+
+                                                                            if (isTeam) {
+                                                                                return (
+                                                                                    <motion.div
+                                                                                        key={pIdx}
+                                                                                        initial={{ opacity: 0, y: 10 }}
+                                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                                        transition={{ delay: pIdx * 0.05 }}
+                                                                                        className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group col-span-1 md:col-span-2 lg:col-span-3"
+                                                                                    >
+                                                                                        <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
+                                                                                            <div className="flex items-center gap-3">
+                                                                                                {p.Image && (
+                                                                                                    <div className="w-10 h-10 rounded-full overflow-hidden bg-white border border-gray-100 shrink-0 shadow-sm">
+                                                                                                        <img src={p.Image} alt={p.Name} className="w-full h-full object-cover" />
+                                                                                                    </div>
+                                                                                                )}
+                                                                                                <div>
+                                                                                                    <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">{p.Name}</h3>
+                                                                                                    {rank && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mt-0.5">Rank: {rank}</span>}
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex flex-col items-end">
+                                                                                                <span className="bg-padel-green/10 border border-padel-green/20 text-padel-green text-[10px] font-black px-3 py-1 rounded-full uppercase">{p.Players.length} Players</span>
+                                                                                                {seed && <span className="bg-slate-900 text-padel-green text-[9px] font-black px-2 py-0.5 rounded-full uppercase mt-2">Seed {seed}</span>}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                                            {p.Players.map((player, idx) => (
+                                                                                                <div key={idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-padel-green/30 transition-colors">
+                                                                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-50 shrink-0">
+                                                                                                        <img src={player.Image || "https://cdn.rankedin.com/images/rin_logo_sm.png"} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                    </div>
+                                                                                                    <div className="flex flex-col min-w-0">
+                                                                                                        <span className="font-bold text-slate-700 text-sm truncate">{player.Name}</span>
+                                                                                                        {player.Rating && <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rating: {player.Rating}</span>}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </motion.div>
+                                                                                );
+                                                                            }
 
                                                                             return (
                                                                                 <motion.div
