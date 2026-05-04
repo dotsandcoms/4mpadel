@@ -1391,16 +1391,24 @@ const EventDetails = () => {
 
                                     {!isEventPassed && (
                                         <div className="space-y-4">
-                                            <motion.a
-                                                whileHover={{ scale: 1.02 }}
-                                                whileTap={{ scale: 0.98 }}
-                                                href={event.rankedin_url || `https://www.rankedin.com/`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
-                                            >
-                                                Register Now
-                                            </motion.a>
+                                            {slug === 'guardrisk-north-vs-south-2026' ? (
+                                                <div
+                                                    className="flex items-center justify-center w-full bg-padel-green text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
+                                                >
+                                                    Invitation Only
+                                                </div>
+                                            ) : (
+                                                <motion.a
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    href={event.rankedin_url || `https://www.rankedin.com/`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
+                                                >
+                                                    Register Now
+                                                </motion.a>
+                                            )}
 
                                             {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured */}
                                             {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
