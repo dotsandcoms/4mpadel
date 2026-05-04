@@ -225,6 +225,7 @@ const EventDetails = () => {
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const [participants, setParticipants] = useState({});
     const [playerDivisions, setPlayerDivisions] = useState([]);
+    const [fourMPlayers, setFourMPlayers] = useState({});
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
 
@@ -609,6 +610,29 @@ const EventDetails = () => {
 
         fetchParticipantsData();
     }, [activeTab, event, getTournamentParticipants, getTournamentPlayerTabs, playerDivisions]);
+
+    useEffect(() => {
+        const fetchFourMPlayers = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('name, rankedin_id, image_url')
+                    .not('image_url', 'is', null);
+
+                if (data && !error) {
+                    const lookup = {};
+                    data.forEach(p => {
+                        if (p.rankedin_id) lookup[p.rankedin_id] = p.image_url;
+                        if (p.name) lookup[p.name.toLowerCase()] = p.image_url;
+                    });
+                    setFourMPlayers(lookup);
+                }
+            } catch (err) {
+                console.error("Error fetching 4M players:", err);
+            }
+        };
+        fetchFourMPlayers();
+    }, []);
 
     useEffect(() => {
         const fetchAlbumPhotos = async () => {
@@ -1758,6 +1782,15 @@ const EventDetails = () => {
                                                                             const seed = p.Seed;
                                                                             const rank = item.Ranking;
 
+                                                                            const getProfileImage = (playerObj) => {
+                                                                                if (!playerObj) return null;
+                                                                                const rId = playerObj.RankedinId || playerObj.Id?.toString();
+                                                                                const pName = (playerObj.Name || '').toLowerCase();
+                                                                                if (rId && fourMPlayers[rId]) return fourMPlayers[rId];
+                                                                                if (pName && fourMPlayers[pName]) return fourMPlayers[pName];
+                                                                                return playerObj.Image;
+                                                                            };
+
                                                                             if (isTeam) {
                                                                                 return (
                                                                                     <motion.div
@@ -1788,7 +1821,7 @@ const EventDetails = () => {
                                                                                             {p.Players.map((player, idx) => (
                                                                                                 <div key={idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-padel-green/30 transition-colors">
                                                                                                     <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-50 shrink-0">
-                                                                                                        <img src={player.Image || "https://cdn.rankedin.com/images/rin_logo_sm.png"} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                        <img src={getProfileImage(player) || "https://cdn.rankedin.com/images/rin_logo_sm.png"} alt={player.Name} className="w-full h-full object-cover" />
                                                                                                     </div>
                                                                                                     <div className="flex flex-col min-w-0">
                                                                                                         <span className="font-bold text-slate-700 text-sm truncate">{player.Name}</span>
@@ -1821,15 +1854,23 @@ const EventDetails = () => {
 
                                                                                     <div className="space-y-3">
                                                                                         <div className="flex items-center gap-3">
-                                                                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors">
-                                                                                                <User className="w-4 h-4" />
+                                                                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors overflow-hidden shrink-0">
+                                                                                                {getProfileImage(fPlayer) ? (
+                                                                                                    <img src={getProfileImage(fPlayer)} alt={fPlayer.Name} className="w-full h-full object-cover" />
+                                                                                                ) : (
+                                                                                                    <User className="w-4 h-4" />
+                                                                                                )}
                                                                                             </div>
                                                                                             <span className="font-bold text-slate-700">{fPlayer.Name}</span>
                                                                                         </div>
                                                                                         {sPlayer.Name && (
                                                                                             <div className="flex items-center gap-3">
-                                                                                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors">
-                                                                                                    <User className="w-4 h-4" />
+                                                                                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors overflow-hidden shrink-0">
+                                                                                                    {getProfileImage(sPlayer) ? (
+                                                                                                        <img src={getProfileImage(sPlayer)} alt={sPlayer.Name} className="w-full h-full object-cover" />
+                                                                                                    ) : (
+                                                                                                        <User className="w-4 h-4" />
+                                                                                                    )}
                                                                                                 </div>
                                                                                                 <span className="font-bold text-slate-700">{sPlayer.Name}</span>
                                                                                             </div>
