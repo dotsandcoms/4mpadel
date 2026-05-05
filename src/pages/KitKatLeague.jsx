@@ -7,6 +7,7 @@ import kitkatLogo from '../assets/kitkat_logo.png';
 import sapaLogo from '../assets/sapa-logo.svg';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
+import PlayerModal from '../components/PlayerModal';
 
 const kitkatRed = '#D41B2C';
 
@@ -35,8 +36,18 @@ const KitKatLeague = () => {
     const [expandedMatchId, setExpandedMatchId] = useState(null);
     const [subMatchesData, setSubMatchesData] = useState({});
     const [loadingMatches, setLoadingMatches] = useState({});
+    const [selectedPlayer, setSelectedPlayer] = useState(null);
+    const [userEmail, setUserEmail] = useState(null);
 
     useEffect(() => {
+        const fetchUser = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.email) {
+                setUserEmail(session.user.email);
+            }
+        };
+        fetchUser();
+
         const fetchLiveLeagueData = async () => {
             // 1. Fetch Teams & Players
             const teamsAPI = await getTeamLeagueTeams(12616);
@@ -67,10 +78,10 @@ const KitKatLeague = () => {
                 setRawPlayers(dynamicPlayers);
             }
 
-            // 1b. Fetch players from Supabase to get profile images
+            // 1b. Fetch players from Supabase to get profile images & full info for modals
             const { data: dbPlayers } = await supabase
                 .from('players')
-                .select('name, image_url, id')
+                .select('*')
                 .eq('approved', true);
             
             if (dbPlayers) {
@@ -162,8 +173,10 @@ const KitKatLeague = () => {
             const dbPlayer = supabasePlayers.find(p => p.name.toLowerCase() === player.name.toLowerCase());
             return {
                 ...player,
+                ...dbPlayer, // Spread full DB profile over the Rankedin data
                 teamData: teamObj,
-                image_url: dbPlayer?.image_url || null
+                image_url: dbPlayer?.image_url || null,
+                has_profile: !!dbPlayer
             };
         });
     }, [rawPlayers, teamsData, supabasePlayers]);
@@ -717,7 +730,8 @@ const KitKatLeague = () => {
                                                             animate={{ opacity: 1, scale: 1 }}
                                                             transition={{ delay: (groupIdx * 0.1) + (i % 10) * 0.03 }}
                                                             key={player.name}
-                                                            className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-slate-200 transition-all flex items-center gap-4 group cursor-default"
+                                                            onClick={() => player.has_profile && setSelectedPlayer(player)}
+                                                            className={`bg-white p-4 rounded-2xl border border-slate-100 shadow-sm transition-all flex items-center gap-4 group ${player.has_profile ? 'hover:shadow-md hover:border-[#D41B2C]/30 cursor-pointer' : 'cursor-default'}`}
                                                         >
                                                             <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${player.teamData.color} border ${player.teamData.border} flex items-center justify-center shrink-0 shadow-sm overflow-hidden`}>
                                                                 {player.image_url ? (
@@ -775,6 +789,18 @@ const KitKatLeague = () => {
                 </motion.section>
 
             </main>
+
+            {/* Player Modal */}
+            <AnimatePresence>
+                {selectedPlayer && (
+                    <PlayerModal
+                        player={selectedPlayer}
+                        onClose={() => setSelectedPlayer(null)}
+                        userEmail={userEmail}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* FULL WIDTH SPONSOR SECTION */}
             <section className="bg-[#D41B2C] text-white py-20 sm:py-32 relative overflow-hidden border-t-8 border-red-800">
                 {/* Graphic Pattern */}
