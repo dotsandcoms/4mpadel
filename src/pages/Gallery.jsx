@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Image as ImageIcon, ArrowLeft } from 'lucide-react';
+import { Image as ImageIcon, ArrowLeft, Instagram } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 
 const Gallery = () => {
@@ -114,7 +114,7 @@ const Gallery = () => {
                                             <img
                                                 src={album.cover_image_url}
                                                 alt={album.title}
-                                                className="w-full h-full object-cover transition-transform duration-[1.5s] group-hover:scale-110"
+                                                className="w-full h-full object-cover object-top transition-transform duration-[1.5s] group-hover:scale-110"
                                                 loading="lazy"
                                             />
                                         ) : (
@@ -137,17 +137,31 @@ const Gallery = () => {
                                             <h3 className="text-lg md:text-5xl font-black text-white leading-[1] uppercase tracking-tighter mb-2 md:mb-6 group-hover:text-white transition-colors line-clamp-2">
                                                 {album.title}
                                             </h3>
-                                            <div className="flex items-center gap-2 text-gray-500 font-black text-[7px] md:text-xs uppercase tracking-[0.3em] group-hover:text-padel-green transition-all duration-500">
-                                                <span>Enter</span>
-                                                <ArrowLeft className="w-3 h-3 md:w-5 md:h-5 rotate-180 group-hover:translate-x-2 transition-transform duration-500" />
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 text-gray-500 font-black text-[7px] md:text-xs uppercase tracking-[0.3em] group-hover:text-padel-green transition-all duration-500">
+                                                    <span>Enter</span>
+                                                    <ArrowLeft className="w-3 h-3 md:w-5 md:h-5 rotate-180 group-hover:translate-x-2 transition-transform duration-500" />
+                                                </div>
+
+                                                {album.photographer_name && (
+                                                    <div className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors">
+                                                        <p className="text-[7px] md:text-[10px] font-bold uppercase tracking-widest hidden sm:block opacity-60">Photos by</p>
+                                                        <a 
+                                                            href={album.photographer_instagram ? `https://instagram.com/${album.photographer_instagram.replace('@', '')}` : '#'}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="flex items-center gap-1.5 text-[7px] md:text-[10px] font-black uppercase tracking-widest text-padel-green/80 hover:text-padel-green transition-all"
+                                                        >
+                                                            {album.photographer_instagram && <Instagram size={10} className="md:w-3 md:h-3" />}
+                                                            {album.photographer_name}
+                                                        </a>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
-                                        {/* Floating Action Button */}
-                                        <div className="absolute top-4 right-4 md:top-8 md:right-8 w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-white/10 backdrop-blur-xl border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 transform translate-y-4 group-hover:translate-y-0 shadow-2xl">
-                                            <ImageIcon size={18} className="text-padel-green" />
                                         </div>
-                                    </div>
                                     
                                     {album.description && (
                                         <div className="p-4 md:p-10 pt-2 flex-grow bg-slate-900/40 hidden md:block">

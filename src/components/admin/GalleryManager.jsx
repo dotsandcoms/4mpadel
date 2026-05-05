@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, UploadCloud, Loader2, ArrowLeft, RefreshCw } from 'lucide-react';
+import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, UploadCloud, Loader2, ArrowLeft, RefreshCw, CheckCircle2, CheckCircle, Circle, Instagram } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 
@@ -10,6 +10,7 @@ const GalleryManager = () => {
     const [events, setEvents] = useState([]); // Fetch calendar events
     const [loading, setLoading] = useState(true);
     const [selectedAlbum, setSelectedAlbum] = useState(null); // If null, show albums list. If set, show images for this album.
+    const [selectedImages, setSelectedImages] = useState([]); // Array of image IDs for bulk actions
 
     // Album Modal State
     const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
@@ -21,7 +22,9 @@ const GalleryManager = () => {
         cover_image_url: '',
         event_id: '',
         youtube_playlist_url: '',
-        slug: ''
+        slug: '',
+        photographer_name: '',
+        photographer_instagram: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -104,7 +107,9 @@ const GalleryManager = () => {
             cover_image_url: '',
             event_id: '',
             youtube_playlist_url: '',
-            slug: ''
+            slug: '',
+            photographer_name: '',
+            photographer_instagram: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -119,7 +124,9 @@ const GalleryManager = () => {
             cover_image_url: album.cover_image_url || '',
             event_id: album.event_id || '',
             youtube_playlist_url: album.youtube_playlist_url || '',
-            slug: album.slug || ''
+            slug: album.slug || '',
+            photographer_name: album.photographer_name || '',
+            photographer_instagram: album.photographer_instagram || ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -341,6 +348,81 @@ const GalleryManager = () => {
         }
     };
 
+    const toggleImageSelection = (id) => {
+        setSelectedImages(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+        );
+    };
+
+    const selectAllImages = () => {
+        if (selectedImages.length === images.length) {
+            setSelectedImages([]);
+        } else {
+            setSelectedImages(images.map(img => img.id));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedImages.length === 0) return;
+        if (!window.confirm(`Are you sure you want to delete ${selectedImages.length} images?`)) return;
+
+        try {
+            setLoadingImages(true);
+            
+            // Get URLs for storage deletion
+            const imagesToDelete = images.filter(img => selectedImages.includes(img.id));
+            const storagePaths = [];
+            
+            imagesToDelete.forEach(img => {
+                const fullParts = img.image_url.split('/gallery/');
+                const thumbParts = img.thumbnail_url?.split('/gallery/');
+                if (fullParts.length === 2) storagePaths.push(fullParts[1]);
+                if (thumbParts?.length === 2) storagePaths.push(thumbParts[1]);
+            });
+
+            // 1. Delete from Storage
+            if (storagePaths.length > 0) {
+                const { error: storageError } = await supabase.storage.from('gallery').remove(storagePaths);
+                if (storageError) console.error("Storage deletion error:", storageError);
+            }
+
+            // 2. Delete from DB
+            const { error: dbError } = await supabase
+                .from('gallery_images')
+                .delete()
+                .in('id', selectedImages);
+
+            if (dbError) throw dbError;
+
+            toast.success(`${selectedImages.length} images deleted`);
+            setSelectedImages([]);
+            fetchImages(selectedAlbum.id);
+        } catch (err) {
+            console.error("Bulk delete error:", err);
+            toast.error('Failed to delete selected images');
+        } finally {
+            setLoadingImages(false);
+        }
+    };
+
+    const handleSetAsCover = async (imageUrl) => {
+        try {
+            const { error } = await supabase
+                .from('albums')
+                .update({ cover_image_url: imageUrl })
+                .eq('id', selectedAlbum.id);
+
+            if (error) throw error;
+            
+            setSelectedAlbum(prev => ({ ...prev, cover_image_url: imageUrl }));
+            toast.success('Album cover updated');
+            fetchAlbums(); // refresh main list
+        } catch (err) {
+            console.error("Error setting cover:", err);
+            toast.error('Failed to update cover image');
+        }
+    };
+
     const handleDeleteImage = async (id, filePath) => {
         if (!window.confirm('Are you sure you want to delete this image?')) return;
         try {
@@ -388,7 +470,24 @@ const GalleryManager = () => {
                             </p>
                         </div>
                     </div>
-                    <div>
+                    <div className="flex items-center gap-3">
+                        {images.length > 0 && (
+                            <button
+                                onClick={selectAllImages}
+                                className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-gray-400 hover:text-white transition-all border border-white/5 text-sm font-bold"
+                            >
+                                {selectedImages.length === images.length ? 'Deselect All' : 'Select All'}
+                            </button>
+                        )}
+                        {selectedImages.length > 0 && (
+                            <button
+                                onClick={handleBulkDelete}
+                                className="px-4 py-2 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all border border-red-500/20 text-sm font-bold flex items-center gap-2"
+                            >
+                                <Trash2 size={16} />
+                                Delete Selected ({selectedImages.length})
+                            </button>
+                        )}
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -457,14 +556,39 @@ const GalleryManager = () => {
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {images.map(img => (
-                            <div key={img.id} className="relative group bg-slate-900 border border-white/5 rounded-xl overflow-hidden aspect-square">
+                            <div 
+                                key={img.id} 
+                                className={`relative group border-2 rounded-xl overflow-hidden aspect-square transition-all duration-300 ${selectedImages.includes(img.id) ? 'border-padel-green ring-4 ring-padel-green/20' : 'border-white/5 bg-slate-900'}`}
+                            >
                                 <img 
                                     src={img.thumbnail_url || img.image_url} 
                                     alt="Gallery" 
-                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${selectedImages.includes(img.id) ? 'opacity-70' : ''}`} 
                                     loading="lazy"
                                 />
+                                
+                                {/* Selection Checkbox */}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); toggleImageSelection(img.id); }}
+                                    className={`absolute top-2 left-2 z-20 p-1.5 rounded-lg transition-all ${selectedImages.includes(img.id) ? 'bg-padel-green text-black' : 'bg-black/40 text-white/50 hover:text-white border border-white/10 opacity-0 group-hover:opacity-100'}`}
+                                >
+                                    {selectedImages.includes(img.id) ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                                </button>
+
+                                {selectedAlbum.cover_image_url === img.image_url && (
+                                    <div className="absolute top-2 right-2 z-20 bg-padel-green text-black px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter">
+                                        Cover
+                                    </div>
+                                )}
+
                                 <div className="absolute inset-0 bg-black/60 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                    <button
+                                        onClick={() => handleSetAsCover(img.image_url)}
+                                        className={`p-2 rounded-lg transition-colors flex items-center gap-2 text-xs font-bold ${selectedAlbum.cover_image_url === img.image_url ? 'bg-padel-green text-black cursor-default' : 'bg-white/10 hover:bg-padel-green hover:text-black text-white'}`}
+                                        title="Set as Cover"
+                                    >
+                                        <ImageIcon size={18} />
+                                    </button>
                                     <button
                                         onClick={() => window.open(img.image_url, '_blank')}
                                         className="p-2 bg-white/10 hover:bg-white/20 rounded-lg text-white transition-colors"
@@ -525,7 +649,7 @@ const GalleryManager = () => {
                         >
                             <div className="h-48 relative border-b border-white/10 bg-black/50 flex items-center justify-center">
                                 {album.cover_image_url ? (
-                                    <img src={album.cover_image_url} alt={album.title} className="w-full h-full object-cover" />
+                                    <img src={album.cover_image_url} alt={album.title} className="w-full h-full object-cover object-top" />
                                 ) : (
                                     <ImageIcon className="w-12 h-12 text-gray-500" />
                                 )}
@@ -553,6 +677,12 @@ const GalleryManager = () => {
                                         </div>
                                     )}
                                     <p className="text-sm text-gray-400 line-clamp-2 mb-4">{album.description || 'No description'}</p>
+                                    {album.photographer_name && (
+                                        <div className="flex items-center gap-1.5 text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">
+                                            {album.photographer_instagram ? <Instagram size={10} className="text-padel-green" /> : <ImageIcon size={10} />}
+                                            <span className="line-clamp-1">Photos by {album.photographer_name}</span>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex justify-between items-center pt-4 border-t border-white/10">
@@ -671,6 +801,33 @@ const GalleryManager = () => {
                                                 </option>
                                             ))}
                                         </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Photographer Name</label>
+                                            <input
+                                                type="text"
+                                                name="photographer_name"
+                                                value={albumFormData.photographer_name}
+                                                onChange={handleAlbumInputChange}
+                                                placeholder="e.g. John Doe"
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Instagram Handle</label>
+                                            <div className="relative">
+                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-bold">@</span>
+                                                <input
+                                                    type="text"
+                                                    name="photographer_instagram"
+                                                    value={albumFormData.photographer_instagram}
+                                                    onChange={handleAlbumInputChange}
+                                                    placeholder="username"
+                                                    className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">YouTube Playlist URL (Optional)</label>
