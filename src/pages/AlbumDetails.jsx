@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, X, Image as ImageIcon, PlayCircle, Play, Loader, Lock, UserPlus } from 'lucide-react';
+import { ArrowLeft, X, Image as ImageIcon, PlayCircle, Play, Loader, Lock, UserPlus, Instagram } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import VideoModal from '../components/VideoModal';
 import AuthModal from '../components/AuthModal';
@@ -260,6 +260,20 @@ const AlbumDetails = () => {
                                     <span className="text-padel-green">{images.length}</span>
                                     <span className="opacity-40">MOMENTS CAPTURED</span>
                                 </div>
+                                {album.photographer_name && (
+                                    <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                                        <span className="opacity-40">PHOTOS BY</span>
+                                        <a 
+                                            href={album.photographer_instagram ? `https://instagram.com/${album.photographer_instagram.replace('@', '')}` : '#'}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-padel-green hover:text-white transition-colors flex items-center gap-2"
+                                        >
+                                            {album.photographer_instagram && <Instagram size={14} />}
+                                            {album.photographer_name}
+                                        </a>
+                                    </div>
+                                )}
                             </div>
 
                             {album.description && (
@@ -295,51 +309,7 @@ const AlbumDetails = () => {
             </div>
 
             <div className="w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
-                {!session ? (
-                    <motion.div 
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="max-w-4xl mx-auto mt-12 mb-32 px-4"
-                    >
-                        <div className="relative group overflow-hidden rounded-[3rem] border border-white/10 bg-white/5 backdrop-blur-2xl p-10 md:p-20 text-center shadow-2xl">
-                            {/* Ambient Glows */}
-                            <div className="absolute top-0 left-1/4 w-64 h-64 bg-padel-green/10 blur-[100px] rounded-full pointer-events-none" />
-                            <div className="absolute bottom-0 right-1/4 w-64 h-64 bg-blue-500/10 blur-[100px] rounded-full pointer-events-none" />
-
-                            <div className="relative z-10 flex flex-col items-center">
-                                <div className="w-24 h-24 bg-padel-green/10 rounded-full flex items-center justify-center text-padel-green mb-10 border border-padel-green/20">
-                                    <Lock className="w-10 h-10" />
-                                </div>
-                                <h2 className="text-4xl md:text-6xl font-black text-white mb-6 uppercase tracking-tighter leading-none italic">
-                                    Members <span className="text-padel-green">Only</span>
-                                </h2>
-                                <p className="text-gray-400 text-lg md:text-xl font-medium max-w-xl mx-auto mb-12 leading-relaxed">
-                                    Action shots and tournament highlights are reserved for our registered community members.
-                                </p>
-                                <div className="flex flex-col sm:flex-row items-center gap-4">
-                                    <button 
-                                        onClick={() => setIsAuthModalOpen(true)}
-                                        className="h-16 px-10 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[11px] rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/20 hover:scale-[1.03] active:scale-95 flex items-center gap-3"
-                                    >
-                                        <UserPlus className="w-4 h-4" />
-                                        <span>Create Profile to Access</span>
-                                    </button>
-                                    <button 
-                                        onClick={() => setIsAuthModalOpen(true)}
-                                        className="h-16 px-10 bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest text-[11px] rounded-2xl transition-all duration-300 border border-white/10 backdrop-blur-md"
-                                    >
-                                        Login
-                                    </button>
-                                </div>
-                                <div className="mt-12 flex items-center gap-3 text-[10px] font-black uppercase tracking-[0.3em] text-gray-500">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-padel-green shadow-[0_0_8px_rgba(151,255,14,0.5)]" />
-                                    <span>Instant Access after Registration</span>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                ) : (
-                    <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait">
                         {activeTab === 'photos' ? (
                             <motion.div
                                 key="photos-grid"
@@ -428,8 +398,7 @@ const AlbumDetails = () => {
                                 )}
                             </motion.div>
                         )}
-                    </AnimatePresence>
-                )}
+                </AnimatePresence>
             </div>
 
             {/* Lightbox Modal with Swipe Support */}

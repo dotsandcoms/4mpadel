@@ -36,14 +36,25 @@ import { supabase } from './supabaseClient';
 import { SearchProvider } from './context/SearchContext';
 import SearchPalette from './components/SearchPalette';
 
+import MembersOnlyModal from './components/MembersOnlyModal';
+
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [session, setSession] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
 
   useEffect(() => {
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
     // Listen for auth state changes to handle magic links, recovery links, etc.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('App: Auth Event:', event);
+      setSession(session);
 
       // SIGNED_IN can happen via magic link OR normal login
       // INITIAL_SESSION occurs on page load if a session already exists
@@ -74,6 +85,12 @@ function AppContent() {
 
   const isHeroRoute = location.pathname === '/' || location.pathname.startsWith('/calendar/');
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
+  const isHomePage = location.pathname === '/';
+  
+  // Routes that should always be accessible even if not logged in
+  const isPublicRoute = isHomePage || location.pathname === '/reset-password' || location.pathname === '/contact';
+
+  const showMembersOnly = !loading && !session && !isPublicRoute;
 
   return (
     <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
@@ -118,6 +135,7 @@ function AppContent() {
           style: { background: '#CCFF00', color: 'black', border: 'none', fontWeight: 'bold' }
         }}
       />
+      <MembersOnlyModal isOpen={showMembersOnly} />
     </div>
   );
 }
