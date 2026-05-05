@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
@@ -13,7 +14,11 @@ if (!supabaseUrl || !supabaseKey) {
     process.exit(1);
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+    realtime: {
+        transport: WebSocket,
+    },
+});
 
 const SAPA_ORG_ID = '11331';
 const API_BASE = 'https://api.rankedin.com/v1';

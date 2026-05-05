@@ -1,5 +1,6 @@
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -22,7 +23,11 @@ if (!rankedinPassword) console.error("Missing RANKEDIN_PASSWORD.");
 if (!supabaseUrl || !supabaseKey) {
     process.exit(1);
 }
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+    realtime: {
+        transport: WebSocket,
+    },
+});
 
 async function loginToRankedin(page) {
     if (!rankedinEmail || !rankedinPassword) return false;
