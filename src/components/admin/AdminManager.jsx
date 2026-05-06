@@ -233,14 +233,14 @@ const AdminManager = () => {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="text-left bg-black/20">
-                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider">Admin Email</th>
-                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider">Role</th>
-                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider">Allowed Modules</th>
-                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider text-right">Actions</th>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-[#111827] text-left">
+                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Admin Email</th>
+                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Role</th>
+                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider sticky top-0 bg-[#111827]">Allowed Modules</th>
+                                <th className="px-6 py-4 text-gray-400 font-bold uppercase text-xs tracking-wider text-right sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">

@@ -423,18 +423,18 @@ const CoachManager = () => {
 
             {/* Applications Table */}
             <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-black/50 text-gray-400 border-b border-white/10">
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Applicant</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Gender</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[120px]">City</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[150px]">Location</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Applied Date</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center">Socials</th>
-                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px] sticky top-0 bg-[#111827]">Applicant</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Gender</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[120px] sticky top-0 bg-[#111827]">City</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[150px] sticky top-0 bg-[#111827]">Location</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Applied Date</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center sticky top-0 bg-[#111827]">Socials</th>
+                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody>

@@ -1063,22 +1063,22 @@ const CalendarManager = () => {
 
             {/* Events Table Container */}
             <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-black/50 text-gray-400 border-b border-white/10">
-                                <th className="py-3 px-4 font-semibold text-xs uppercase w-48">Dates</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px]">Event Name</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Source</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Location</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="League">L</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Homepage Featured">★</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Live Event Featured">📺</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Price Set">💳</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Recent Results Featured">🏆</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500" title="Visible on Website">👁️</th>
-                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
+                                <th className="py-3 px-4 font-semibold text-xs uppercase w-48 sticky top-0 bg-[#111827]">Dates</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase min-w-[200px] sticky top-0 bg-[#111827]">Event Name</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Source</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Location</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Homepage Featured">★</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Live Event Featured">📺</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Price Set">💳</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Recent Results Featured">🏆</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Visible on Website">👁️</th>
+                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody>

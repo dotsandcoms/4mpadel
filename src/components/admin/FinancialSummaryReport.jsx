@@ -350,24 +350,24 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
 
             {/* Report Table */}
             <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-black/40 text-gray-400 text-[10px] uppercase font-black tracking-widest">
+                        <thead className="sticky top-0 z-10">
                             {viewMode === 'events' ? (
-                                <tr>
-                                    <th className="px-6 py-5">Player</th>
-                                    <th className="px-6 py-5">Event</th>
-                                    <th className="px-6 py-5 text-center">License</th>
-                                    <th className="px-6 py-5 text-center">Entry Fee</th>
-                                    <th className="px-6 py-5 text-right">Total Paid</th>
+                                <tr className="bg-[#111827] text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-white/10">
+                                    <th className="px-6 py-5 sticky top-0 bg-[#111827]">Player</th>
+                                    <th className="px-6 py-5 sticky top-0 bg-[#111827]">Event</th>
+                                    <th className="px-6 py-5 text-center sticky top-0 bg-[#111827]">License</th>
+                                    <th className="px-6 py-5 text-center sticky top-0 bg-[#111827]">Entry Fee</th>
+                                    <th className="px-6 py-5 text-right sticky top-0 bg-[#111827]">Total Paid</th>
                                 </tr>
                             ) : (
-                                <tr>
-                                    <th className="px-6 py-5">Player</th>
-                                    <th className="px-6 py-5">License Type</th>
-                                    <th className="px-6 py-5 text-center">Status</th>
-                                    <th className="px-6 py-5 text-center">Account Setup</th>
-                                    <th className="px-6 py-5 text-right">Lifetime Spent</th>
+                                <tr className="bg-[#111827] text-gray-400 text-[10px] uppercase font-black tracking-widest border-b border-white/10">
+                                    <th className="px-6 py-5 sticky top-0 bg-[#111827]">Player</th>
+                                    <th className="px-6 py-5 sticky top-0 bg-[#111827]">License Type</th>
+                                    <th className="px-6 py-5 text-center sticky top-0 bg-[#111827]">Status</th>
+                                    <th className="px-6 py-5 text-center sticky top-0 bg-[#111827]">Account Setup</th>
+                                    <th className="px-6 py-5 text-right sticky top-0 bg-[#111827]">Lifetime Spent</th>
                                 </tr>
                             )}
                         </thead>

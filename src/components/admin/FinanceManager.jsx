@@ -430,16 +430,16 @@ const FinanceManager = () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead className="bg-black/20 text-gray-500 text-[10px] uppercase font-black tracking-widest">
-                                            <tr>
-                                                <th className="px-6 py-4">Ref</th>
-                                                <th className="px-6 py-4">User</th>
-                                                <th className="px-6 py-4">Date</th>
-                                                <th className="px-6 py-4">Amount</th>
-                                                <th className="px-6 py-4">Status</th>
-                                                <th className="px-6 py-4"></th>
+                                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead className="sticky top-0 z-10">
+                                            <tr className="bg-[#111827] text-gray-500 text-[10px] uppercase font-black tracking-widest border-b border-white/10">
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]">Ref</th>
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]">User</th>
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]">Date</th>
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]">Amount</th>
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]">Status</th>
+                                                <th className="px-6 py-4 sticky top-0 bg-[#111827]"></th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">

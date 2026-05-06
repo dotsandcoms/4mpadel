@@ -250,19 +250,19 @@ const UserPayments = ({ allowedEvents = [] }) => {
 
             {/* Players Ledger Table */}
             <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-[2.5rem] border border-white/10 overflow-hidden shadow-2xl">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead className="bg-black/20 text-gray-400 text-[10px] uppercase font-black tracking-[0.2em]">
-                            <tr>
-                                <th className="px-8 py-6 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-[#111827] text-gray-400 text-[10px] uppercase font-black tracking-[0.2em] border-b border-white/10">
+                                <th className="px-8 py-6 cursor-pointer hover:text-white transition-colors sticky top-0 bg-[#111827]" onClick={() => handleSort('name')}>
                                     <div className="flex items-center gap-2">Player <ArrowUpDown size={12} /></div>
                                 </th>
-                                <th className="px-8 py-6">License Status</th>
-                                <th className="px-8 py-6 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('totalPaid')}>
+                                <th className="px-8 py-6 sticky top-0 bg-[#111827]">License Status</th>
+                                <th className="px-8 py-6 cursor-pointer hover:text-white transition-colors sticky top-0 bg-[#111827]" onClick={() => handleSort('totalPaid')}>
                                     <div className="flex items-center gap-2">Total Paid (R) <ArrowUpDown size={12} /></div>
                                 </th>
-                                <th className="px-8 py-6">Last Transaction</th>
-                                <th className="px-8 py-6 text-right">Actions</th>
+                                <th className="px-8 py-6 sticky top-0 bg-[#111827]">Last Transaction</th>
+                                <th className="px-8 py-6 text-right sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">

@@ -622,18 +622,18 @@ const PlayerManager = () => {
 
             {/* Players Table */}
             <div className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="bg-black/50 text-gray-400 border-b border-white/10">
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Name</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">License</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Status</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Last Activity</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Category</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Club</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase">Points</th>
-                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase">Actions</th>
+                <div className="overflow-x-auto max-h-[60vh] overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 z-10">
+                            <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Name</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">License</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Last Activity</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Category</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Club</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Points</th>
+                                <th className="py-3 px-4 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
                             </tr>
                         </thead>
                         <tbody>

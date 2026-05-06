@@ -237,17 +237,17 @@ const TournamentManager = () => {
             </div>
 
             {/* Event Table */}
-            <div className="overflow-x-auto rounded-lg border border-white/10 relative min-h-[400px]">
+            <div className="overflow-x-auto rounded-lg border border-white/10 relative min-h-[400px] max-h-[60vh] overflow-y-auto custom-scrollbar">
                 <table className="w-full text-left border-collapse">
-                    <thead>
-                        <tr className="bg-black/50 text-gray-400 border-b border-white/10">
-                            <th className="py-3 px-4 font-semibold text-sm">Date</th>
-                            <th className="py-3 px-4 font-semibold text-sm">Event</th>
-                            <th className="py-3 px-4 font-semibold text-sm">City/Venue</th>
-                            <th className="py-3 px-4 font-semibold text-sm">Organiser</th>
-                            <th className="py-3 px-4 font-semibold text-sm">Category</th>
-                            <th className="py-3 px-4 font-semibold text-sm">Status</th>
-                            <th className="py-3 px-4 text-right font-semibold text-sm">Actions</th>
+                    <thead className="sticky top-0 z-10">
+                        <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">Date</th>
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">Event</th>
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">City/Venue</th>
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">Organiser</th>
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">Category</th>
+                            <th className="py-3 px-4 font-semibold text-sm sticky top-0 bg-[#111827]">Status</th>
+                            <th className="py-3 px-4 text-right font-semibold text-sm sticky top-0 bg-[#111827]">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
