@@ -143,9 +143,9 @@ const Gallery = () => {
                                                     <ArrowLeft className="w-3 h-3 md:w-5 md:h-5 rotate-180 group-hover:translate-x-2 transition-transform duration-500" />
                                                 </div>
 
-                                                {album.photographer_name && (
+                                                {(album.photographer_name || album.photographer_instagram) && (
                                                     <div className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors">
-                                                        <p className="text-[7px] md:text-[10px] font-bold uppercase tracking-widest hidden sm:block opacity-60">Photos by</p>
+                                                        <p className="text-[7px] md:text-[10px] font-bold uppercase tracking-widest hidden sm:block text-white">Photos by</p>
                                                         <a 
                                                             href={album.photographer_instagram ? `https://instagram.com/${album.photographer_instagram.replace('@', '')}` : '#'}
                                                             target="_blank"
@@ -154,7 +154,7 @@ const Gallery = () => {
                                                             className="flex items-center gap-1.5 text-[7px] md:text-[10px] font-black uppercase tracking-widest text-padel-green/80 hover:text-padel-green transition-all"
                                                         >
                                                             {album.photographer_instagram && <Instagram size={10} className="md:w-3 md:h-3" />}
-                                                            {album.photographer_name}
+                                                            {album.photographer_instagram || album.photographer_name}
                                                         </a>
                                                     </div>
                                                 )}

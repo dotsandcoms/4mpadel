@@ -262,7 +262,7 @@ const AlbumDetails = () => {
                                 </div>
                                 {album.photographer_name && (
                                     <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
-                                        <span className="opacity-40">PHOTOS BY</span>
+                                        <span className="text-white">PHOTOS BY</span>
                                         <a 
                                             href={album.photographer_instagram ? `https://instagram.com/${album.photographer_instagram.replace('@', '')}` : '#'}
                                             target="_blank"
@@ -270,7 +270,7 @@ const AlbumDetails = () => {
                                             className="text-padel-green hover:text-white transition-colors flex items-center gap-2"
                                         >
                                             {album.photographer_instagram && <Instagram size={14} />}
-                                            {album.photographer_name}
+                                            {album.photographer_instagram || album.photographer_name}
                                         </a>
                                     </div>
                                 )}
