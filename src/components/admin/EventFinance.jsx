@@ -740,19 +740,19 @@ const EventFinance = ({ allowedEvents = [] }) => {
                         </div>
                     </div>
 
-                    <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10 overflow-hidden">
+                    <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10">
                         {/* DESKTOP TABLE VIEW */}
-                        <div className="hidden lg:block overflow-x-auto">
+                        <div className="hidden lg:block overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-white/5 rounded-2xl">
                             <table className="w-full text-left border-collapse">
-                                <thead className="bg-black/20 text-gray-400 text-[10px] uppercase font-black">
-                                    <tr>
-                                        <th className="px-6 py-4">Participant (Rankedin)</th>
-                                        <th className="px-6 py-4">Division</th>
-                                        <th className="px-6 py-4">System Profile Match</th>
-                                        <th className="px-6 py-4">Contact Number</th>
-                                        <th className="px-6 py-4">License Status</th>
-                                        <th className="px-6 py-4">Entry Fee</th>
-                                        <th className="px-6 py-4 text-right">Actions</th>
+                                <thead className="sticky top-0 z-20">
+                                    <tr className="bg-[#1E293B]">
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Participant (Rankedin)</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Division</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">System Profile Match</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Contact Number</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">License Status</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Entry Fee</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
