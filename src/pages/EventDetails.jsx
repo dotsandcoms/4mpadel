@@ -254,7 +254,8 @@ const EventDetails = () => {
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
     const [loggedInPlayer, setLoggedInPlayer] = useState(null);
-    const [isAlreadyRegistered, setIsAlreadyRegistered] = useState(false);
+    const [isRegistered, setIsRegistered] = useState(false);
+    const [isPaid, setIsPaid] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -328,15 +329,94 @@ const EventDetails = () => {
                     .maybeSingle();
 
                 if (reg || part) {
-                    setIsAlreadyRegistered(true);
+                    setIsPaid(true);
                 }
             }
-
             // Generate a stable payment reference for this registration attempt
             setPaymentReference(`REGEV-${event.id}-${Date.now()}`);
         };
         prefillFromSession();
     }, [isModalOpen, event?.id]);
+
+    // Check registration on mount/email change
+    useEffect(() => {
+        if (!event) return;
+        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+        
+        const checkStatus = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.user) return;
+
+            const userEmail = session.user.email.toLowerCase().trim();
+            
+            // Fetch profile for name and Rankedin ID matching
+            const { data: profile } = await supabase
+                .from('players')
+                .select('name, rankedin_id')
+                .ilike('email', userEmail)
+                .maybeSingle();
+            
+            const userName = profile?.name?.toLowerCase().trim();
+            const userRID = profile?.rankedin_id;
+            
+            // 1. Check Payment Status (Local DB)
+            const { data: reg } = await supabase
+                .from('event_registrations')
+                .select('id')
+                .eq('event_id', event.id)
+                .ilike('email', userEmail)
+                .eq('payment_status', 'paid')
+                .maybeSingle();
+
+            const { data: part } = await supabase
+                .from('tournament_participants')
+                .select('id')
+                .eq('event_id', event.id)
+                .ilike('email', userEmail)
+                .eq('is_paid', true)
+                .maybeSingle();
+
+            if (reg || part) {
+                setIsPaid(true);
+            }
+
+            // 2. Check Registration Status (Rankedin Live Player List)
+            if (rId) {
+                try {
+                    const divisions = await getTournamentPlayerTabs(rId);
+                    let found = false;
+                    for (const cls of divisions) {
+                        const teams = await getTournamentParticipants(rId, cls.Id);
+                        found = teams.some(t => {
+                            const p = t.Participant || t;
+                            const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
+                            
+                            if (players.length === 0 && (p.FirstPlayer || p.SecondPlayer)) {
+                                players.push(...[p.FirstPlayer, p.SecondPlayer].filter(Boolean));
+                            }
+                            if (players.length === 0) players.push(p);
+
+                            return players.some(player => {
+                                const pEmail = (player.Email || '').toLowerCase();
+                                const pName = (player.Name || player.FullName || '').toLowerCase().trim();
+                                const pRID = player.RankedinId?.toString() || player.Id?.toString();
+                                
+                                return (pEmail && pEmail === userEmail) || 
+                                       (userRID && pRID === userRID?.toString()) ||
+                                       (userName && pName === userName);
+                            });
+                        });
+                        if (found) break;
+                    }
+                    setIsRegistered(found);
+                } catch (e) {
+                    console.error("Registration check failed:", e);
+                    if (part) setIsRegistered(true);
+                }
+            }
+        };
+        checkStatus();
+    }, [event?.id, getTournamentParticipants, getTournamentPlayerTabs]);
 
     // Debounced email lookup
     useEffect(() => {
@@ -841,7 +921,7 @@ const EventDetails = () => {
             return;
         }
 
-        if (isAlreadyRegistered) {
+        if (isPaid) {
             toast.error('You are already registered for this event!');
             return;
         }
@@ -974,7 +1054,8 @@ const EventDetails = () => {
 
         // Move to success step immediately for UX closure (matches License Modal's immediate reaction)
         setRegStep(2);
-        setIsAlreadyRegistered(true);
+        setIsPaid(true);
+        setIsRegistered(true);
         toast.success("Payment Received! Recording your registration...");
 
         try {
@@ -1391,7 +1472,17 @@ const EventDetails = () => {
 
                                     {!isEventPassed && (
                                         <div className="space-y-4">
-                                            {slug === 'guardrisk-north-vs-south-2026' ? (
+                                            {isRegistered ? (
+                                                <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-slate-900 w-full shadow-xl shadow-slate-200 border border-white/5">
+                                                    <div className="w-10 h-10 rounded-full bg-padel-green flex items-center justify-center text-slate-900 shadow-lg shadow-padel-green/40">
+                                                        <CheckCircle size={24} strokeWidth={3} />
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] mb-1">Registered on Rankedin</p>
+                                                        <p className="text-xs font-bold text-white leading-tight">You're on the player list! Good luck on the court.</p>
+                                                    </div>
+                                                </div>
+                                            ) : slug === 'guardrisk-north-vs-south-2026' ? (
                                                 <div
                                                     className="flex items-center justify-center w-full bg-padel-green text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
                                                 >
@@ -1410,8 +1501,8 @@ const EventDetails = () => {
                                                 </motion.a>
                                             )}
 
-                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured */}
-                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
+                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND not already paid */}
+                                            {!isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
                                                 <motion.button
                                                     whileHover={{ scale: 1.02 }}
                                                     whileTap={{ scale: 0.98 }}
@@ -1421,6 +1512,13 @@ const EventDetails = () => {
                                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>
                                                     Pay Entry Fee
                                                 </motion.button>
+                                            )}
+                                            
+                                            {isPaid && (
+                                                <div className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl border border-white/10 shadow-lg uppercase tracking-[0.2em] text-[10px]">
+                                                    <CheckCircle size={16} strokeWidth={3} />
+                                                    Payment Received
+                                                </div>
                                             )}
 
                                             <div className="relative">
@@ -1533,21 +1631,38 @@ const EventDetails = () => {
                                 if (!isEventPassed) {
                                     return (
                                         <div className="flex gap-2">
-                                            <a
-                                                href={event.rankedin_url || `https://www.rankedin.com/`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                            >
-                                                Register
-                                            </a>
-                                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
-                                                <button
-                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                    className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                                >
-                                                    Pay Entry Fee
-                                                </button>
+                                            {isRegistered && isPaid ? (
+                                                <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
+                                                    <CheckCircle size={14} className="text-padel-green" />
+                                                    <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Paid</span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    {!isRegistered && (
+                                                        <a
+                                                            href={event.rankedin_url || `https://www.rankedin.com/`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                                        >
+                                                            Register
+                                                        </a>
+                                                    )}
+                                                    {isRegistered && !isPaid && (
+                                                        <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
+                                                            <CheckCircle size={14} className="text-padel-green" />
+                                                            <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Registered</span>
+                                                        </div>
+                                                    )}
+                                                    {!isPaid && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                                                        <button
+                                                            onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                            className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                                        >
+                                                            Pay Entry Fee
+                                                        </button>
+                                                    )}
+                                                </>
                                             )}
                                         </div>
                                     );
@@ -2537,7 +2652,7 @@ const EventDetails = () => {
 
                                                             {/* Bottom Action Area */}
                                                             <div className="pt-4 border-t border-white/20">
-                                                                {isAlreadyRegistered ? (
+                                                                {isPaid ? (
                                                                     <div className="flex items-center justify-between gap-4 py-2 w-full">
                                                                         <div className="flex flex-col">
                                                                             <div className="flex items-center gap-2 text-padel-green">
