@@ -159,12 +159,13 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
             // Step 3: Fetch existing participants and PAID registrations
             const [{ data: existingRows }, { data: paidRegs }] = await Promise.all([
-                supabase.from('tournament_participants').select('id, rankedin_participant_id').eq('event_id', eventId),
+                supabase.from('tournament_participants').select('id, rankedin_participant_id, is_paid').eq('event_id', eventId),
                 supabase.from('event_registrations').select('full_name, email, payment_status').eq('event_id', eventId).eq('payment_status', 'paid')
             ]);
 
-            const existingMap = new Map((existingRows || []).map(r => [r.rankedin_participant_id, r.id]));
+            const existingMap = new Map((existingRows || []).map(r => [r.rankedin_participant_id, r]));
             const paidRegNames = new Set((paidRegs || []).map(r => r.full_name.toLowerCase().trim()));
+            const paidRegEmails = new Set((paidRegs || []).map(r => r.email?.toLowerCase().trim()).filter(Boolean));
 
             console.info(`Found ${paidRegNames.size} paid registrations in system for ${eventName}. Checking for matches...`);
 
@@ -173,13 +174,21 @@ const EventFinance = ({ allowedEvents = [] }) => {
                 // Auto-match system profile
                 const nameLower = p.full_name.toLowerCase().trim();
                 let autoProfileId = null;
+                let matchedEmail = null;
                 const matchedProfile = systemProfiles.find(sp => 
                     sp.name && (sp.name.toLowerCase().includes(nameLower) || nameLower.includes(sp.name.toLowerCase()))
                 );
-                if (matchedProfile) autoProfileId = matchedProfile.id;
+                if (matchedProfile) {
+                    autoProfileId = matchedProfile.id;
+                    matchedEmail = matchedProfile.email?.toLowerCase().trim();
+                }
 
-                // SPECIAL FIX: Check if this player already PAID in our system
-                const alreadyPaidInSystem = paidRegNames.has(nameLower);
+                // SPECIAL FIX: Check if this player already PAID in our system (Name or Email match)
+                const alreadyPaidInSystem = paidRegNames.has(nameLower) || (matchedEmail && paidRegEmails.has(matchedEmail));
+
+                const existingRecord = existingMap.get(p.rankedin_participant_id);
+                const currentMetadata = existingRecord?.metadata || {};
+                const isManualUnpaid = currentMetadata.manual_unpaid === true;
 
                 const participantData = {
                     event_id: eventId,
@@ -187,12 +196,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     full_name: p.full_name,
                     class_name: p.class_name,
                     ...(autoProfileId ? { profile_id: autoProfileId } : {}),
-                    ...(alreadyPaidInSystem ? { is_paid: true } : {}) // AUTO-MARK PAID if registration exists
+                    ...(alreadyPaidInSystem && !isManualUnpaid ? { is_paid: true } : {}) // RESPECT MANUAL UNMARK
                 };
 
-                const existingId = existingMap.get(p.rankedin_participant_id);
-                const { error: dbError } = existingId 
-                    ? await supabase.from('tournament_participants').update(participantData).eq('id', existingId)
+                const { error: dbError } = existingRecord 
+                    ? await supabase.from('tournament_participants').update(participantData).eq('id', existingRecord.id)
                     : await supabase.from('tournament_participants').insert(participantData);
 
                 if (dbError) {
@@ -296,10 +304,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
         const amountToCharge = selEvent.entry_fee || 0;
         
         try {
-            // Update local participant table
+            // Update local participant table - also clear manual_unpaid flag
+            const newMetadata = { ...(participant.metadata || {}), manual_unpaid: false };
             const { error: pError } = await supabase
                 .from('tournament_participants')
-                .update({ is_paid: true })
+                .update({ is_paid: true, metadata: newMetadata })
                 .eq('id', participant.id);
             if (pError) throw pError;
 
@@ -326,19 +335,46 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
     // 5. Unmark as Paid (Correcting Errors)
     const handleUnmarkPaid = async (participant) => {
-        if (!confirm(`Are you sure you want to unmark ${participant.full_name} as paid? This will not delete the payment record but will reset their status for this event.`)) return;
+        if (!confirm(`Are you sure you want to unmark ${participant.full_name} as paid? This will also update any linked registration records to 'unpaid' and ensure the sync doesn't re-mark them.`)) return;
         
         setMarkingPaid(participant.id);
         try {
+            // 1. Update the participant status + set manual override in metadata
+            const newMetadata = { ...(participant.metadata || {}), manual_unpaid: true };
             const { error: pError } = await supabase
                 .from('tournament_participants')
-                .update({ is_paid: false })
+                .update({ is_paid: false, metadata: newMetadata })
                 .eq('id', participant.id);
             if (pError) throw pError;
+
+            // 2. Also try to update system registration records to prevent re-sync issues
+            const searchName = participant.full_name.trim();
+            const searchEmail = participant.players?.email?.toLowerCase().trim();
+
+            let regQuery = supabase
+                .from('event_registrations')
+                .update({ payment_status: 'unpaid' })
+                .eq('event_id', selectedEventId);
+            
+            if (searchEmail) {
+                regQuery = regQuery.or(`full_name.ilike.%${searchName}%,email.ilike.${searchEmail}`);
+            } else {
+                regQuery = regQuery.ilike('full_name', `%${searchName}%`);
+            }
+
+            await regQuery;
+
+            // 3. Update any manual payment records for this participant
+            await supabase
+                .from('payments')
+                .update({ status: 'cancelled' })
+                .eq('event_id', selectedEventId)
+                .contains('metadata', { participant_id: participant.id });
 
             toast.success(`Reset ${participant.full_name} status to unpaid`);
             fetchParticipants(selectedEventId);
         } catch (err) {
+            console.error("Unmark error:", err);
             toast.error("Failed to reset status");
         } finally {
             setMarkingPaid(null);
@@ -713,6 +749,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                         <th className="px-6 py-4">Participant (Rankedin)</th>
                                         <th className="px-6 py-4">Division</th>
                                         <th className="px-6 py-4">System Profile Match</th>
+                                        <th className="px-6 py-4">Contact Number</th>
                                         <th className="px-6 py-4">License Status</th>
                                         <th className="px-6 py-4">Entry Fee</th>
                                         <th className="px-6 py-4 text-right">Actions</th>
@@ -753,9 +790,6 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                             </button>
                                                         </div>
                                                         <span className="text-[10px] text-gray-500 ml-6 font-bold truncate max-w-[150px]">{p.players.email}</span>
-                                                        {p.players.contact_number && (
-                                                            <span className="text-[10px] text-gray-400 ml-6 font-medium tracking-tight italic">{p.players.contact_number}</span>
-                                                        )}
                                                     </div>
                                                 ) : (
                                                     <button 
@@ -765,6 +799,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                         <UserPlus size={14} /> Link Profile
                                                     </button>
                                                 )}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-gray-300 font-mono text-[11px]">{p.players?.contact_number || '-'}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {p.players ? (
@@ -860,8 +897,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     </div>
 
                                     {/* Info Grid */}
-                                    <div className={`mx-5 p-4 rounded-xl grid grid-cols-2 gap-6 ${p.is_paid ? 'bg-black/20' : 'bg-black/40'}`}>
-                                        <div className="space-y-1.5">
+                                    <div className={`mx-5 p-4 rounded-xl grid grid-cols-2 gap-4 ${p.is_paid ? 'bg-black/20' : 'bg-black/40'}`}>
+                                        <div className="space-y-1">
                                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">System Profile</p>
                                             {p.players ? (
                                                 <div className="flex items-center gap-1.5 text-padel-green font-bold text-xs truncate">
@@ -877,17 +914,23 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Contact</p>
+                                            <p className="text-[10px] text-white font-mono">{p.players?.contact_number || '-'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Division</p>
+                                            <p className="text-[10px] text-gray-300 font-bold uppercase truncate">{p.class_name}</p>
+                                        </div>
+                                        <div className="space-y-1">
                                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">License</p>
-                                            <div className="flex flex-col">
-                                                <span className={`text-[10px] font-black uppercase tracking-widest ${
-                                                    p.players?.license_type === 'full' ? 'text-padel-green font-black' :
-                                                    p.players?.license_type === 'temporary' ? 'text-sky-400 font-black' :
-                                                    'text-red-500 font-bold'
-                                                }`}>
-                                                    {p.players?.license_type || 'No License'}
-                                                </span>
-                                            </div>
+                                            <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                                p.players?.license_type === 'full' ? 'text-padel-green' :
+                                                p.players?.license_type === 'temporary' ? 'text-sky-400' :
+                                                'text-red-500'
+                                            }`}>
+                                                {p.players?.license_type || 'No License'}
+                                            </span>
                                         </div>
                                     </div>
 

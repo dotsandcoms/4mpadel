@@ -41,7 +41,9 @@ serve(async (req) => {
 
         // Check Admin Permissions
         let isAuthorized = false;
-        if (SUPER_ADMINS.includes(user.email)) {
+        const userEmailLower = user.email?.toLowerCase();
+        
+        if (SUPER_ADMINS.some(email => email.toLowerCase() === userEmailLower)) {
             isAuthorized = true;
         } else {
             const { data: adminData } = await supabaseAdmin
@@ -50,8 +52,12 @@ serve(async (req) => {
                 .ilike('email', user.email)
                 .single();
 
-            if (adminData && adminData.allowed_tabs && adminData.allowed_tabs.includes('players')) {
-                isAuthorized = true;
+            if (adminData) {
+                if (adminData.role === 'super_admin') {
+                    isAuthorized = true;
+                } else if (adminData.allowed_tabs && adminData.allowed_tabs.includes('players')) {
+                    isAuthorized = true;
+                }
             }
         }
 
