@@ -130,7 +130,7 @@ const Gallery = () => {
                                             <div className="flex items-center gap-2 md:gap-3 mb-2 md:mb-5">
                                                 <div className="px-2 md:px-4 py-0.5 md:py-1.5 rounded-full bg-padel-green/10 border border-padel-green/30 backdrop-blur-xl">
                                                     <p className="text-padel-green text-[7px] md:text-[11px] font-black uppercase tracking-[0.2em] whitespace-nowrap">
-                                                        {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                                        {new Date(album.album_date || album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                                                     </p>
                                                 </div>
                                             </div>

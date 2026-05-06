@@ -253,7 +253,7 @@ const AlbumDetails = () => {
                             <div className="flex flex-wrap items-center justify-center gap-4 text-white/40 font-black text-[9px] sm:text-xs uppercase tracking-[0.3em]">
                                 <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
                                     <span className="text-padel-green font-black">
-                                        {new Date(album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
+                                        {new Date(album.album_date || album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                                     </span>
                                 </div>
                                 <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">

@@ -24,7 +24,8 @@ const GalleryManager = () => {
         youtube_playlist_url: '',
         slug: '',
         photographer_name: '',
-        photographer_instagram: ''
+        photographer_instagram: '',
+        album_date: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -109,7 +110,8 @@ const GalleryManager = () => {
             youtube_playlist_url: '',
             slug: '',
             photographer_name: '',
-            photographer_instagram: ''
+            photographer_instagram: '',
+            album_date: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -126,7 +128,8 @@ const GalleryManager = () => {
             youtube_playlist_url: album.youtube_playlist_url || '',
             slug: album.slug || '',
             photographer_name: album.photographer_name || '',
-            photographer_instagram: album.photographer_instagram || ''
+            photographer_instagram: album.photographer_instagram || '',
+            album_date: album.album_date ? album.album_date.substring(0, 10) : ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -137,7 +140,8 @@ const GalleryManager = () => {
             // Clean up empty string to null for event_id foreign key
             const submissionData = {
                 ...albumFormData,
-                event_id: albumFormData.event_id === '' ? null : albumFormData.event_id
+                event_id: albumFormData.event_id === '' ? null : albumFormData.event_id,
+                album_date: albumFormData.album_date === '' ? null : albumFormData.album_date
             };
 
             if (editingAlbum) {
@@ -726,7 +730,7 @@ const GalleryManager = () => {
                             initial={{ scale: 0.95, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.95, opacity: 0 }}
-                            className="bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
+                            className="bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col"
                         >
                             <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
                                 <h3 className="text-2xl font-bold text-white">
@@ -740,7 +744,7 @@ const GalleryManager = () => {
                                 </button>
                             </div>
 
-                            <div className="p-6">
+                            <div className="p-6 overflow-y-auto custom-scrollbar">
                                 <form id="album-form" onSubmit={handleAlbumSubmit} className="space-y-4">
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Album Title</label>
@@ -785,6 +789,38 @@ const GalleryManager = () => {
                                             placeholder="Brief description of the album..."
                                             className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
                                         ></textarea>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Display Date (Optional)</label>
+                                            <input
+                                                type="date"
+                                                name="album_date"
+                                                value={albumFormData.album_date}
+                                                onChange={handleAlbumInputChange}
+                                                className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors"
+                                            />
+                                            <p className="text-[10px] text-gray-500 mt-1 italic">Overrides the automatic creation date.</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Status</label>
+                                            <div className="flex items-center h-[50px]">
+                                                <label className="flex items-center cursor-pointer gap-3">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="checkbox"
+                                                            name="is_active"
+                                                            checked={albumFormData.is_active}
+                                                            onChange={handleAlbumInputChange}
+                                                            className="sr-only"
+                                                        />
+                                                        <div className={`block w-10 h-6 rounded-full transition-colors ${albumFormData.is_active ? 'bg-padel-green' : 'bg-gray-600'}`}></div>
+                                                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${albumFormData.is_active ? 'translate-x-4' : ''}`}></div>
+                                                    </div>
+                                                    <span className="text-sm font-bold text-white">{albumFormData.is_active ? 'Active' : 'Hidden'}</span>
+                                                </label>
+                                            </div>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
