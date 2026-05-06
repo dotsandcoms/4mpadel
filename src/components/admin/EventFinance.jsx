@@ -66,7 +66,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
                 const { data: pData } = await supabase
                     .from('players')
-                    .select('id, name, email, license_type, paid_registration');
+                    .select('id, name, email, contact_number, license_type, paid_registration');
                 setSystemProfiles(pData || []);
             } finally {
                 setLoading(prev => ({ ...prev, events: false }));
@@ -82,7 +82,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
         try {
             const { data, error } = await supabase
                 .from('tournament_participants')
-                .select('*, players(id, name, email, license_type, paid_registration)')
+                .select('*, players(id, name, email, contact_number, license_type, paid_registration)')
                 .eq('event_id', eventId)
                 .order('full_name');
             if (error) throw error;
@@ -379,7 +379,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
             titleRow.font = { bold: true, size: 14 };
             titleRow.height = 45;
             titleRow.alignment = { vertical: 'middle' };
-            sheet.mergeCells('A1:E1');
+            sheet.mergeCells('A1:G1');
 
             try {
                 // Fetch the image from the bundled URL
@@ -403,12 +403,12 @@ const EventFinance = ({ allowedEvents = [] }) => {
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'License Type', 'Event Payment Status'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
             
             // Add auto-filter to header row
-            sheet.autoFilter = 'A3:F3';
+            sheet.autoFilter = 'A3:G3';
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
@@ -417,13 +417,14 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     p.class_name || 'N/A',
                     p.players?.name || 'Unlinked',
                     p.players?.email || 'N/A',
+                    p.players?.contact_number || 'N/A',
                     p.players?.license_type || 'None',
                     p.is_paid ? 'PAID' : 'UNPAID'
                 ]);
             });
 
             // Expand columns to fit content
-            for (let i = 1; i <= 6; i++) {
+            for (let i = 1; i <= 7; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
@@ -752,6 +753,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                             </button>
                                                         </div>
                                                         <span className="text-[10px] text-gray-500 ml-6 font-bold truncate max-w-[150px]">{p.players.email}</span>
+                                                        {p.players.contact_number && (
+                                                            <span className="text-[10px] text-gray-400 ml-6 font-medium tracking-tight italic">{p.players.contact_number}</span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <button 
