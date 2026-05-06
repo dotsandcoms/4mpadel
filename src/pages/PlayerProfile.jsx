@@ -372,8 +372,13 @@ const PlayerProfile = () => {
 
     const refetchPlayer = async () => {
         const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user?.email) return;
-        const { data } = await supabase.from('players').select('*').ilike('email', session.user.email).maybeSingle();
+        
+        // Use impersonated email if available
+        const testEmail = sessionStorage.getItem('admin_test_login_email');
+        const emailToFetch = testEmail || session?.user?.email;
+        
+        if (!emailToFetch) return;
+        const { data } = await supabase.from('players').select('*').ilike('email', emailToFetch).maybeSingle();
         if (data) setPlayer(data);
     };
 
@@ -434,6 +439,64 @@ const PlayerProfile = () => {
             await refetchPlayer();
         } catch (error) {
             showMessage(error.message, 'error');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleSelectRanking = async (ranking) => {
+        if (!player) return;
+        setSaving(true);
+        try {
+            // Store the identifier for the preferred ranking
+            // Format: Org|AgeGroup|MatchType
+            const rankingId = `${ranking.org}|${ranking.age_group}|${ranking.match_type}`;
+            
+            const { error } = await supabase
+                .from('players')
+                .update({
+                    preferred_ranking: rankingId,
+                    rank_label: ranking.rank.toString(),
+                    points: parseInt(ranking.points) || 0
+                })
+                .eq('id', player.id);
+
+            if (error) throw error;
+            
+            // Optimistically update local state so header reflects change immediately
+            setPlayer(prev => ({
+                ...prev,
+                preferred_ranking: rankingId,
+                rank_label: ranking.rank.toString(),
+                points: parseInt(ranking.points) || 0
+            }));
+
+            showMessage(`Primary ranking updated to ${ranking.org} (${ranking.age_group})`, 'success');
+            await refetchPlayer();
+        } catch (error) {
+            console.error("Failed to update ranking:", error);
+            // If the column doesn't exist yet, we still update the labels but won't persist the preference
+            if (error.code === '42703') { // undefined_column
+                 const { error: retryError } = await supabase
+                    .from('players')
+                    .update({
+                        rank_label: ranking.rank.toString(),
+                        points: parseInt(ranking.points) || 0
+                    })
+                    .eq('id', player.id);
+                 if (retryError) throw retryError;
+                 
+                 setPlayer(prev => ({
+                    ...prev,
+                    rank_label: ranking.rank.toString(),
+                    points: parseInt(ranking.points) || 0
+                 }));
+
+                 showMessage(`Primary ranking updated temporarily.`, 'success');
+                 await refetchPlayer();
+            } else {
+                showMessage(error.message, 'error');
+            }
         } finally {
             setSaving(false);
         }
@@ -765,6 +828,51 @@ const PlayerProfile = () => {
                                                                 />
                                                             </div>
                                                         </div>
+                                                    </div>
+                                                )}
+
+                                                {player.rankings && Array.isArray(player.rankings) && player.rankings.length > 0 && (
+                                                    <div className="bg-white/5 rounded-2xl p-4 border border-white/5 space-y-4">
+                                                        <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Organizational Rankings</p>
+                                                        <div className="space-y-2">
+                                                            {player.rankings.map((r, i) => {
+                                                                const isPreferred = player.preferred_ranking === `${r.org}|${r.age_group}|${r.match_type}` || (i === 0 && !player.preferred_ranking);
+                                                                const isBroll = r.org?.toLowerCase().includes('broll');
+                                                                
+                                                                return (
+                                                                    <div 
+                                                                        key={i} 
+                                                                        onClick={() => handleSelectRanking(r)}
+                                                                        className={`group/rank relative p-3 rounded-xl border transition-all cursor-pointer ${isPreferred ? 'bg-padel-green/10 border-padel-green/30' : 'bg-black/20 border-white/5 hover:border-white/20'}`}
+                                                                    >
+                                                                        <div className="flex justify-between items-start gap-2">
+                                                                            <div className="min-w-0">
+                                                                                <p className={`text-[8px] font-black uppercase tracking-widest ${isBroll ? 'text-red-500' : 'text-padel-green'}`}>
+                                                                                    {r.org}
+                                                                                </p>
+                                                                                <p className="text-xs font-bold text-white truncate uppercase tracking-tight">{r.age_group || r.division || 'Open'}</p>
+                                                                                <p className="text-[8px] text-gray-500 font-bold uppercase">{r.match_type}</p>
+                                                                            </div>
+                                                                            <div className="text-right shrink-0">
+                                                                                <div className="flex items-baseline justify-end gap-0.5">
+                                                                                    <span className="text-[8px] font-black text-padel-green">#</span>
+                                                                                    <span className="text-sm font-black text-white">{r.rank}</span>
+                                                                                </div>
+                                                                                <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">{r.points} PTS</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {isPreferred && (
+                                                                            <div className="absolute -top-1 -right-1">
+                                                                                <div className="bg-padel-green text-black rounded-full p-0.5 shadow-lg">
+                                                                                    <CheckCircle2 size={10} />
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                        <p className="text-[8px] text-gray-600 font-bold uppercase tracking-widest text-center">Click a ranking to set as primary</p>
                                                     </div>
                                                 )}
 

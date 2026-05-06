@@ -57,7 +57,7 @@ async function syncCategory(type, ageGroup, categoryName) {
             if (rankedinId) {
                 const { data: idMatch } = await supabase
                     .from('players')
-                    .select('id, name')
+                    .select('id, name, preferred_ranking')
                     .eq('rankedin_id', rankedinId.toString())
                     .eq('approved', true)
                     .maybeSingle();
@@ -71,7 +71,7 @@ async function syncCategory(type, ageGroup, categoryName) {
             if (!playerToUpdate) {
                 const { data: nameMatches } = await supabase
                     .from('players')
-                    .select('id, name')
+                    .select('id, name, preferred_ranking')
                     .ilike('name', `%${name}%`)
                     .eq('approved', true);
 
@@ -82,6 +82,17 @@ async function syncCategory(type, ageGroup, categoryName) {
             }
 
             if (playerToUpdate) {
+                // If the player has a preferred ranking set that is NOT this one, skip updating the label/points
+                // (Since this script only syncs SAPA Main Ranking ID 15809)
+                if (playerToUpdate.preferred_ranking && !playerToUpdate.preferred_ranking.includes('SAPA')) {
+                    console.log(`Skipping label/points update for ${name} (Has preferred ranking: ${playerToUpdate.preferred_ranking})`);
+                    // We still update the rankedin_id if missing
+                    if (!playerToUpdate.rankedin_id && rankedinId) {
+                         await supabase.from('players').update({ rankedin_id: rankedinId.toString() }).eq('id', playerToUpdate.id);
+                    }
+                    skipCount++;
+                    continue;
+                }
                 const updateData = {
                     points: points,
                     rank_label: rank.toString(),

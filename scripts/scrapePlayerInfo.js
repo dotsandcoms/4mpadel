@@ -239,10 +239,38 @@ async function scrapePlayer(browser, player) {
         let finalPoints = 0;
 
         if (rankings.length > 0) {
-            finalRank = (rankings.find(r => r.org.includes('SAPA'))?.rank || 'Unranked').toString();
-            finalPoints = parseInt(rankings.find(r => r.org.includes('SAPA'))?.points) || 0;
+            // Find all SAPA rankings
+            const sapaRankings = rankings.filter(r => r.org?.toUpperCase().includes('SAPA'));
+            
+            // Try to find the preferred ranking if set
+            let selectedRanking = null;
+            if (player.preferred_ranking) {
+                selectedRanking = rankings.find(r => `${r.org}|${r.age_group}|${r.match_type}` === player.preferred_ranking);
+            }
+
+            // If no preferred ranking found (or not set), pick the best SAPA ranking
+            if (!selectedRanking && sapaRankings.length > 0) {
+                // Sort by rank ascending (best rank first)
+                sapaRankings.sort((a, b) => {
+                    const rA = parseInt(a.rank) || 9999;
+                    const rB = parseInt(b.rank) || 9999;
+                    return rA - rB;
+                });
+                selectedRanking = sapaRankings[0];
+            }
+
+            // If still no SAPA ranking, pick the first available one
+            if (!selectedRanking) {
+                selectedRanking = rankings[0];
+            }
+
+            if (selectedRanking) {
+                finalRank = selectedRanking.rank.toString();
+                finalPoints = parseInt(selectedRanking.points) || 0;
+                console.log(`Selected ${selectedRanking.org} (${selectedRanking.age_group}) - Rank: ${finalRank}, Points: ${finalPoints}`);
+            }
         } else {
-            console.log("No SAPA rankings found in HTML. Trying API fallback...");
+            console.log("No rankings found in HTML. Trying API fallback...");
             try {
                 const apiRes = await fetch(`https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=15809&rankingType=3&ageGroup=82&weekFromNow=0&language=en&skip=0&take=50&query=${encodeURIComponent(player.name)}`);
                 const apiData = await apiRes.json();
@@ -295,7 +323,7 @@ async function run() {
 
     const filterPlayer = process.argv.includes('--player') ? process.argv[process.argv.indexOf('--player') + 1] : null;
 
-    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id').eq('approved', true).eq('paid_registration', true);
+    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking').eq('approved', true).eq('paid_registration', true);
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
