@@ -1484,9 +1484,20 @@ const PlayerProfile = () => {
                                                                         textColor = 'group-hover:text-blue-400';
                                                                     }
 
+                                                                    const needsPayment = event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
+
                                                                     return (
                                                                         <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
                                                                             <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
+                                                                            
+                                                                            {event.isPaid && (
+                                                                                <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
+                                                                                    <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
+                                                                                        <CheckCircle2 size={8} strokeWidth={4} />
+                                                                                        PAID
+                                                                                    </div>
+                                                                                </div>
+                                                                            )}
 
                                                                             <div className="relative z-10 flex-1">
                                                                                 <div className="flex justify-between items-start mb-4">
@@ -1514,14 +1525,14 @@ const PlayerProfile = () => {
                                                                                     {event.event_name}
                                                                                 </h4>
 
-                                                                                {event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
+                                                                                {needsPayment && (
                                                                                     <motion.button
                                                                                         whileHover={{ scale: 1.02 }}
                                                                                         whileTap={{ scale: 0.98 }}
                                                                                         onClick={() => {
                                                                                             navigate(`/calendar/${event.slug || event.db_id}?register=true`);
                                                                                         }}
-                                                                                        className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mb-4 group/pay"
+                                                                                        className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
                                                                                     >
                                                                                         <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
                                                                                         Pay Event Fee
@@ -1529,44 +1540,7 @@ const PlayerProfile = () => {
                                                                                 )}
                                                                             </div>
 
-                                                                            <div className="relative z-10 mt-4 border-t border-white/5 pt-4">
-                                                                                <div className="flex flex-wrap gap-2 mb-3">
-                                                                                    <span className={`px-2 py-1 rounded-md border text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
-                                                                                        {event.sapa_status !== 'None' ? event.sapa_status : 'Upcoming'}
-                                                                                    </span>
-                                                                                    {event.isPaid && (
-                                                                                        <span className="px-2 py-1 rounded-md bg-padel-green/10 border border-padel-green/30 text-padel-green text-[10px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm shadow-padel-green/10">
-                                                                                            <CheckCircle2 size={10} /> Paid
-                                                                                        </span>
-                                                                                    )}
-                                                                                    {event.city && (
-                                                                                        <span className="px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
-                                                                                            {event.city}
-                                                                                        </span>
-                                                                                    )}
-                                                                                    {event.registered_players > 0 && (
-                                                                                        <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/10 px-2 py-1 rounded-md">
-                                                                                            <Users className="w-3 h-3 text-padel-green" />
-                                                                                            <span className="text-white font-bold text-[10px] leading-none">{event.registered_players}</span>
-                                                                                            <span className="text-[9px] uppercase tracking-tighter text-gray-400 font-bold leading-none">Registered</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                                <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-gray-400 text-xs font-medium">
-                                                                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                                                        <MapPin className="w-3.5 h-3.5 text-padel-green/50 shrink-0" />
-                                                                                        <span className="truncate" title={event.venue || 'Location to be confirmed'}>
-                                                                                            {event.venue || 'Location to be confirmed'}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    {event.organizer_name && (
-                                                                                        <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full shrink-0">
-                                                                                            <Shield className="w-3 h-3 text-gray-400" />
-                                                                                            <span className="text-white font-bold text-[10px]">{event.organizer_name}</span>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
+                                                                            
                                                                         </div>
                                                                     );
                                                                 })}
