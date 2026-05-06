@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
@@ -26,6 +26,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const navigate = useNavigate();
+    const location = useLocation();
 
     // Form states
     const [step, setStep] = useState(1);
@@ -108,7 +109,12 @@ const AuthModal = ({ isOpen, onClose }) => {
             setTimeout(() => {
                 setMessage(null);
                 onClose();
-                navigate('/profile');
+                
+                // Determine redirect path based on where the user logged in from
+                const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
+                const targetPath = isAdminContext ? '/admin' : '/profile';
+                
+                navigate(targetPath);
             }, 2500);
         }
     };

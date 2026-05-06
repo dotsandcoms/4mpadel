@@ -789,7 +789,6 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                                 <Link2 size={12} />
                                                             </button>
                                                         </div>
-                                                        <span className="text-[10px] text-gray-500 ml-6 font-bold truncate max-w-[150px]">{p.players.email}</span>
                                                     </div>
                                                 ) : (
                                                     <button 
