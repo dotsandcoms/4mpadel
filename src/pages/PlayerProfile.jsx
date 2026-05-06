@@ -451,12 +451,14 @@ const PlayerProfile = () => {
             // Store the identifier for the preferred ranking
             // Format: Org|AgeGroup|MatchType
             const rankingId = `${ranking.org}|${ranking.age_group}|${ranking.match_type}`;
+            const rankingLabel = `${ranking.org} - ${ranking.age_group || 'Open'}`;
             
             const { error } = await supabase
                 .from('players')
                 .update({
                     preferred_ranking: rankingId,
                     rank_label: ranking.rank.toString(),
+                    active_ranking_label: rankingLabel,
                     points: parseInt(ranking.points) || 0
                 })
                 .eq('id', player.id);
@@ -468,10 +470,11 @@ const PlayerProfile = () => {
                 ...prev,
                 preferred_ranking: rankingId,
                 rank_label: ranking.rank.toString(),
+                active_ranking_label: rankingLabel,
                 points: parseInt(ranking.points) || 0
             }));
 
-            showMessage(`Primary ranking updated to ${ranking.org} (${ranking.age_group})`, 'success');
+            showMessage(`Primary ranking updated to ${rankingLabel}`, 'success');
             await refetchPlayer();
         } catch (error) {
             console.error("Failed to update ranking:", error);
@@ -702,9 +705,16 @@ const PlayerProfile = () => {
                                         </h1>
                                         <div className="flex flex-wrap items-center gap-3">
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
-                                                <span className="text-sm md:text-xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0">
-                                                    <Trophy className="w-4 h-4 md:w-6 md:h-6 text-yellow-500" /> #{player.rank_label}
-                                                </span>
+                                                <div className="flex flex-col items-start gap-1 md:gap-1.5">
+                                                    <span className="text-sm md:text-xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0">
+                                                        <Trophy className="w-4 h-4 md:w-6 md:h-6 text-yellow-500" /> #{player.rank_label}
+                                                    </span>
+                                                    {player.active_ranking_label && (
+                                                        <span className="text-[7px] md:text-[9px] text-white/30 font-black uppercase tracking-[0.15em] whitespace-nowrap pl-2 md:pl-4">
+                                                            {player.active_ranking_label}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                             {player.points !== undefined && (
                                                 <span className="text-[10px] md:text-base text-padel-green font-black flex items-center bg-padel-green/5 border border-padel-green/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0 uppercase tracking-wider">

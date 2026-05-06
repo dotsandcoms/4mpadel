@@ -53,7 +53,7 @@ const Navbar = ({ isDark = false }) => {
 
       const { data } = await supabase
         .from('players')
-        .select('name, rankedin_id, rank_label, points')
+        .select('name, rankedin_id, rank_label, points, active_ranking_label')
         .ilike('email', targetEmail)
         .maybeSingle();
 
@@ -154,9 +154,16 @@ const Navbar = ({ isDark = false }) => {
 
                 <div className="flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-3 sm:pl-4 ml-0.5 sm:ml-1">
                   {player.rank_label && player.rank_label !== 'Unranked' && (
-                    <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-yellow-500/5">
-                      <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-500" />
-                      <span className="text-yellow-500 font-black text-[10px] sm:text-[11px]">#{player.rank_label}</span>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-yellow-500/5">
+                        <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-500" />
+                        <span className="text-yellow-500 font-black text-[10px] sm:text-[11px]">#{player.rank_label}</span>
+                      </div>
+                      {player.active_ranking_label && (
+                        <span className="text-[5.5px] sm:text-[7px] font-black text-white/30 uppercase tracking-widest whitespace-nowrap">
+                          {player.active_ranking_label}
+                        </span>
+                      )}
                     </div>
                   )}
                   {player.points !== undefined && (

@@ -237,6 +237,7 @@ async function scrapePlayer(browser, player) {
 
         let finalRank = 'Unranked';
         let finalPoints = 0;
+        let finalLabel = null;
 
         if (rankings.length > 0) {
             // Find all SAPA rankings
@@ -267,6 +268,7 @@ async function scrapePlayer(browser, player) {
             if (selectedRanking) {
                 finalRank = selectedRanking.rank.toString();
                 finalPoints = parseInt(selectedRanking.points) || 0;
+                finalLabel = `${selectedRanking.org} - ${selectedRanking.age_group || 'Open'}`;
                 console.log(`Selected ${selectedRanking.org} (${selectedRanking.age_group}) - Rank: ${finalRank}, Points: ${finalPoints}`);
             }
         } else {
@@ -278,6 +280,7 @@ async function scrapePlayer(browser, player) {
                 if (p) {
                     finalRank = p.Standing.toString();
                     finalPoints = parseInt(p.ParticipantPoints?.Points) || 0;
+                    finalLabel = "SAPA RANKING - Men's Open"; // Default for API fallback
                     console.log(`API Found - Rank: ${finalRank}, Points: ${finalPoints}`);
                 }
             } catch (e) {
@@ -294,9 +297,10 @@ async function scrapePlayer(browser, player) {
             rankings: rankings,
             rankedin_id: basics.rid || extractedRid,
             rankedin_profile_url: profileUrl,
-            // Add these two
+            // Add these
             rank_label: finalRank,
-            points: finalPoints
+            points: finalPoints,
+            active_ranking_label: finalLabel
         };
 
         if (player.id) {
@@ -323,7 +327,7 @@ async function run() {
 
     const filterPlayer = process.argv.includes('--player') ? process.argv[process.argv.indexOf('--player') + 1] : null;
 
-    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking').eq('approved', true).eq('paid_registration', true);
+    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking, active_ranking_label').eq('approved', true).eq('paid_registration', true);
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
