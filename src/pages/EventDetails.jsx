@@ -2292,9 +2292,9 @@ const EventDetails = () => {
                                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-4"
+                                className="fixed inset-0 z-[1100] flex items-start md:items-center justify-center pointer-events-none p-4 md:p-8"
                             >
-                                <div className="bg-[#0F172A] w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto overflow-hidden border border-white/10">
+                                <div className="bg-[#0F172A] w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
                                     {/* Modal Header */}
                                     <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                         <h3 className="text-white font-bold text-lg">
@@ -2306,7 +2306,7 @@ const EventDetails = () => {
                                     </div>
 
                                     {/* Modal Content */}
-                                    <div className="p-6">
+                                    <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
                                         {regStep === 1 ? (
                                             <div className="space-y-5">
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
