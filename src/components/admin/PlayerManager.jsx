@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Image as ImageIcon, Upload } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PieChart,
@@ -48,6 +48,9 @@ const PlayerManager = () => {
     const [currentPlayer, setCurrentPlayer] = useState(null);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [toasts, setToasts] = useState([]);
+    const [resetPasswordPlayer, setResetPasswordPlayer] = useState(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [resetLoading, setResetLoading] = useState(false);
 
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
@@ -112,17 +115,17 @@ const PlayerManager = () => {
             const stalePlayerIds = (data || [])
                 .filter(p => {
                     if (p.license_type !== 'temporary') return false;
-                    
+
                     // If no temp license records, it's stale
                     if (!p.temporary_licenses || p.temporary_licenses.length === 0) return true;
-                    
+
                     // If all temp license records are in the past, it's stale
                     // We check if there's ANY active or future license
                     const hasActive = p.temporary_licenses.some(tl => {
                         const eventDate = new Date(tl.event_date);
                         return eventDate >= today;
                     });
-                    
+
                     return !hasActive;
                 })
                 .map(p => p.id);
@@ -131,12 +134,12 @@ const PlayerManager = () => {
                 console.log(`Found ${stalePlayerIds.length} stale temporary licenses. Updating...`);
                 const { error: updateError } = await supabase
                     .from('players')
-                    .update({ 
-                        license_type: 'none', 
-                        paid_registration: false 
+                    .update({
+                        license_type: 'none',
+                        paid_registration: false
                     })
                     .in('id', stalePlayerIds);
-                
+
                 if (!updateError) {
                     // Update local data so the UI reflects it immediately
                     data.forEach(p => {
@@ -310,6 +313,42 @@ const PlayerManager = () => {
         }
     };
 
+    const handleResetPassword = async (player) => {
+        setResetPasswordPlayer(player);
+        setNewPassword('');
+    };
+
+    const submitPasswordReset = async (e) => {
+        e.preventDefault();
+        if (!newPassword || newPassword.length < 6) {
+            showToast('Password must be at least 6 characters', 'error');
+            return;
+        }
+
+        setResetLoading(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('admin-set-password', {
+                body: { email: resetPasswordPlayer.email, newPassword: newPassword },
+            });
+
+            if (error) {
+                throw new Error(error.message || 'Error from edge function');
+            }
+
+            if (data?.error) {
+                throw new Error(data.error);
+            }
+
+            showToast(`Password successfully updated for ${resetPasswordPlayer.name}`);
+            setResetPasswordPlayer(null);
+        } catch (error) {
+            console.error('Password reset error:', error);
+            showToast('Failed to reset password: ' + error.message, 'error');
+        } finally {
+            setResetLoading(false);
+        }
+    };
+
     const handleTestLogin = (player) => {
         sessionStorage.setItem('admin_test_login_email', player.email);
         showToast('Now testing as ' + player.name + '.');
@@ -428,7 +467,7 @@ const PlayerManager = () => {
     return (
         <div className="space-y-8 pb-12">
             {/* Toast Container */}
-            <div className="fixed bottom-6 right-6 z-[1100] flex flex-col gap-2 pointer-events-none">
+            <div className="fixed bottom-6 right-6 z-[99999] flex flex-col gap-2 pointer-events-none">
                 <AnimatePresence>
                     {toasts.map(toast => (
                         <motion.div
@@ -637,6 +676,13 @@ const PlayerManager = () => {
                                         <td className="py-3 px-4 text-right">
                                             <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                                                 <button
+                                                    onClick={() => handleResetPassword(player)}
+                                                    title="Reset Password"
+                                                    className="p-1.5 bg-purple-500/10 text-purple-400 rounded-lg hover:bg-purple-500 hover:text-white"
+                                                >
+                                                    <Key size={14} />
+                                                </button>
+                                                <button
                                                     onClick={() => handleTestLogin(player)}
                                                     title="Test Login (Impersonate)"
                                                     className="p-1.5 bg-amber-500/10 text-amber-500 rounded-lg hover:bg-amber-500 hover:text-black"
@@ -690,7 +736,7 @@ const PlayerManager = () => {
                 </div>
             </div>
 
-            {/* Edit Modal */}
+            {/* Modals */}
             <AnimatePresence>
                 {isEditing && (
                     <motion.div
@@ -784,17 +830,17 @@ const PlayerManager = () => {
                                                     <label className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition-all cursor-pointer ${uploadingImage ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-white text-black hover:bg-padel-green shadow-lg shadow-white/5'}`}>
                                                         <Upload size={14} />
                                                         {uploadingImage ? 'Uploading...' : 'Upload Photo'}
-                                                        <input 
-                                                            type="file" 
-                                                            accept="image/*" 
-                                                            onChange={handleImageUpload} 
-                                                            disabled={uploadingImage} 
-                                                            className="hidden" 
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            onChange={handleImageUpload}
+                                                            disabled={uploadingImage}
+                                                            className="hidden"
                                                         />
                                                     </label>
-                                                    
+
                                                     {formData.image_url && (
-                                                        <button 
+                                                        <button
                                                             type="button"
                                                             onClick={() => setFormData({ ...formData, image_url: '' })}
                                                             className="px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-all border border-red-500/20"
@@ -822,11 +868,11 @@ const PlayerManager = () => {
                                     </div>
                                     <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-6 bg-black/20 p-4 rounded-xl border border-white/5">
                                         <label className="flex items-center gap-2 cursor-pointer group">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={formData.approved} 
-                                                onChange={e => setFormData({ ...formData, approved: e.target.checked })} 
-                                                className="w-5 h-5 rounded border-white/20 bg-black text-padel-green focus:ring-padel-green cursor-pointer" 
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.approved}
+                                                onChange={e => setFormData({ ...formData, approved: e.target.checked })}
+                                                className="w-5 h-5 rounded border-white/20 bg-black text-padel-green focus:ring-padel-green cursor-pointer"
                                             />
                                             <div className="flex flex-col">
                                                 <span className="text-white font-bold text-sm group-hover:text-padel-green transition-colors">Approved</span>
@@ -847,13 +893,13 @@ const PlayerManager = () => {
                                                     <button
                                                         key={opt.id}
                                                         type="button"
-                                                        onClick={() => setFormData({ 
-                                                            ...formData, 
-                                                            license_type: opt.id, 
-                                                            paid_registration: opt.id !== 'none' 
+                                                        onClick={() => setFormData({
+                                                            ...formData,
+                                                            license_type: opt.id,
+                                                            paid_registration: opt.id !== 'none'
                                                         })}
-                                                        className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${formData.license_type === opt.id 
-                                                            ? `${opt.color} ${opt.id === 'full' ? 'text-black' : 'text-white'} border-white/20 shadow-lg` 
+                                                        className={`py-2 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all border ${formData.license_type === opt.id
+                                                            ? `${opt.color} ${opt.id === 'full' ? 'text-black' : 'text-white'} border-white/20 shadow-lg`
                                                             : 'bg-black/40 text-gray-500 border-white/5 hover:border-white/10'}`}
                                                     >
                                                         {opt.label}
@@ -862,11 +908,59 @@ const PlayerManager = () => {
                                             </div>
                                         </div>
                                     </div>
-
                                 </div>
                                 <div className="flex gap-3 justify-end pt-4 border-t border-white/10">
                                     <button type="button" onClick={() => setIsEditing(false)} className="bg-gray-700 text-white px-6 py-2 rounded-lg font-bold hover:bg-gray-600">Cancel</button>
                                     <button type="submit" className="bg-padel-green text-black px-6 py-2 rounded-lg font-bold hover:bg-white">Save</button>
+                                </div>
+                            </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+
+                {resetPasswordPlayer && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="bg-[#1E293B] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl"
+                        >
+                            <div className="flex justify-between items-center p-6 border-b border-white/10">
+                                <h3 className="text-xl font-bold text-white">Reset Password</h3>
+                                <button onClick={() => setResetPasswordPlayer(null)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                            </div>
+                            <form onSubmit={submitPasswordReset} className="p-6">
+                                <p className="text-sm text-gray-400 mb-4">
+                                    Manually set a new password for <strong className="text-white">{resetPasswordPlayer.name}</strong>. They will use this new password to log in.
+                                </p>
+                                <div className="mb-6">
+                                    <label className="block text-gray-400 text-sm mb-2 font-medium">New Password</label>
+                                    <input
+                                        type="text"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        placeholder="e.g. Padel@2026!"
+                                        className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white focus:border-padel-green outline-none"
+                                        required
+                                        minLength={6}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-2">
+                                        Must include: uppercase, lowercase, number, and special character.
+                                    </p>
+                                </div>
+                                <div className="flex justify-end gap-3">
+                                    <button type="button" onClick={() => setResetPasswordPlayer(null)} className="px-5 py-2.5 rounded-xl font-bold text-white hover:bg-white/5 transition-colors">
+                                        Cancel
+                                    </button>
+                                    <button disabled={resetLoading} type="submit" className="px-5 py-2.5 bg-purple-500 text-white rounded-xl font-bold hover:bg-purple-400 transition-colors disabled:opacity-50 flex items-center gap-2">
+                                        {resetLoading ? 'Saving...' : <><Key size={16} /> Set Password</>}
+                                    </button>
                                 </div>
                             </form>
                         </motion.div>
