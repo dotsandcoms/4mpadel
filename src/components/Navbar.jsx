@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Trophy, Search } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Search, Bell } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
 import { useSearch } from '../context/SearchContext';
+import { usePendingPayments } from '../hooks/usePendingPayments';
 import AuthModal from './AuthModal';
 
 const Navbar = ({ isDark = false }) => {
@@ -13,10 +14,15 @@ const Navbar = ({ isDark = false }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [session, setSession] = useState(null);
   const [player, setPlayer] = useState(null);
   const { toggleSearch } = useSearch();
   const location = useLocation();
+  const { pendingPayments } = usePendingPayments(
+    sessionStorage.getItem('admin_test_login_email') || session?.user?.email,
+    player?.rankedin_id
+  );
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -201,6 +207,70 @@ const Navbar = ({ isDark = false }) => {
               <Search className={`w-4 h-4 group-hover:scale-110 transition-transform ${isDark ? 'group-hover:text-[#F40020]' : 'group-hover:text-padel-green'}`} />
             </button>
 
+            {/* Notifications */}
+            {session && (
+              <div className="relative">
+                <button
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className={`p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
+                  title="Notifications"
+                >
+                  <motion.div
+                    animate={pendingPayments.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                    transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
+                  >
+                    <Bell className={`w-4 h-4 group-hover:scale-110 transition-transform ${isDark ? 'group-hover:text-[#F40020]' : 'group-hover:text-padel-green'}`} />
+                  </motion.div>
+                  {pendingPayments.length > 0 && (
+                    <span className="absolute top-0 right-0 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                  )}
+                </button>
+
+                {/* Notifications Dropdown */}
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl z-[60] overflow-hidden ${isDark ? 'bg-white border border-slate-200' : 'bg-black/95 backdrop-blur-xl border border-white/10'}`}
+                    >
+                      <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
+                        <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
+                        {pendingPayments.length > 0 && (
+                          <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                            {pendingPayments.length} Pending
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {pendingPayments.length > 0 ? (
+                          pendingPayments.map(payment => (
+                            <a
+                              key={payment.id}
+                              href={`/calendar/${payment.slug}?register=true`}
+                              className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                            >
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`${isDark ? 'text-[#F40020]' : 'text-padel-green'} font-bold`}>{payment.name}</span>.</p>
+                              <p className={`text-[10px] mt-2 uppercase tracking-widest font-bold ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Click to pay now</p>
+                            </a>
+                          ))
+                        ) : (
+                          <div className={`p-6 text-center text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                            No new notifications
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
             {session ? (
               <div className="flex items-center gap-4 ml-2">
                 <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900 hover:!text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
@@ -229,6 +299,66 @@ const Navbar = ({ isDark = false }) => {
             >
               <Search className="w-5 h-5" />
             </button>
+            {session && (
+              <div className="relative">
+                <button
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className={`p-2 rounded-full ${isDark ? 'text-slate-900' : 'text-white'}`}
+                >
+                  <motion.div
+                    animate={pendingPayments.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                    transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
+                  >
+                    <Bell className="w-5 h-5" />
+                  </motion.div>
+                  {pendingPayments.length > 0 && (
+                    <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-black/50"></span>
+                    </span>
+                  )}
+                </button>
+                
+                {/* Mobile Notifications Dropdown */}
+                <AnimatePresence>
+                  {isNotificationsOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      className={`absolute top-full right-0 mt-4 w-72 rounded-2xl shadow-2xl z-[60] overflow-hidden ${isDark ? 'bg-white border border-slate-200' : 'bg-[#0F172A] border border-white/10'}`}
+                    >
+                      <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
+                        <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
+                        {pendingPayments.length > 0 && (
+                          <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                            {pendingPayments.length} Pending
+                          </span>
+                        )}
+                      </div>
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {pendingPayments.length > 0 ? (
+                          pendingPayments.map(payment => (
+                            <a
+                              key={payment.id}
+                              href={`/calendar/${payment.slug}?register=true`}
+                              className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                            >
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`${isDark ? 'text-[#F40020]' : 'text-padel-green'} font-bold`}>{payment.name}</span>.</p>
+                            </a>
+                          ))
+                        ) : (
+                          <div className={`p-6 text-center text-xs ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>
+                            No new notifications
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
             <button
               className={`p-2 ${isDark ? 'text-slate-900' : 'text-white'}`}
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
