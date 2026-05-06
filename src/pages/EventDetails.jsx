@@ -342,23 +342,23 @@ const EventDetails = () => {
     useEffect(() => {
         if (!event) return;
         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-        
+
         const checkStatus = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.user) return;
 
             const userEmail = session.user.email.toLowerCase().trim();
-            
+
             // Fetch profile for name and Rankedin ID matching
             const { data: profile } = await supabase
                 .from('players')
                 .select('name, rankedin_id')
                 .ilike('email', userEmail)
                 .maybeSingle();
-            
+
             const userName = profile?.name?.toLowerCase().trim();
             const userRID = profile?.rankedin_id;
-            
+
             // 1. Check Payment Status (Local DB)
             const { data: reg } = await supabase
                 .from('event_registrations')
@@ -390,7 +390,7 @@ const EventDetails = () => {
                         found = teams.some(t => {
                             const p = t.Participant || t;
                             const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
-                            
+
                             if (players.length === 0 && (p.FirstPlayer || p.SecondPlayer)) {
                                 players.push(...[p.FirstPlayer, p.SecondPlayer].filter(Boolean));
                             }
@@ -400,10 +400,10 @@ const EventDetails = () => {
                                 const pEmail = (player.Email || '').toLowerCase();
                                 const pName = (player.Name || player.FullName || '').toLowerCase().trim();
                                 const pRID = player.RankedinId?.toString() || player.Id?.toString();
-                                
-                                return (pEmail && pEmail === userEmail) || 
-                                       (userRID && pRID === userRID?.toString()) ||
-                                       (userName && pName === userName);
+
+                                return (pEmail && pEmail === userEmail) ||
+                                    (userRID && pRID === userRID?.toString()) ||
+                                    (userName && pName === userName);
                             });
                         });
                         if (found) break;
@@ -1513,7 +1513,7 @@ const EventDetails = () => {
                                                     Pay Entry Fee
                                                 </motion.button>
                                             )}
-                                            
+
                                             {isPaid && (
                                                 <div className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl border border-white/10 shadow-lg uppercase tracking-[0.2em] text-[10px]">
                                                     <CheckCircle size={16} strokeWidth={3} />
@@ -2298,7 +2298,7 @@ const EventDetails = () => {
                                     {/* Modal Header */}
                                     <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                         <h3 className="text-white font-bold text-lg">
-                                            {regStep === 1 ? 'Event Registration' : 'Registration Successful'}
+                                            {regStep === 1 ? 'Event Payment' : 'Payment Successful'}
                                         </h3>
                                         <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
                                             <X className="w-6 h-6" />
