@@ -105,6 +105,8 @@ async function syncRankedin() {
             const sDate = re.startDate || re.StartDate || '';
             const eDate = re.endDate || re.EndDate || sDate;
             const isLeague = re.type === 2;
+            const evState = re.eventState || re.EventState || re.state || re.State;
+            const isCancelled = evState === 2;
 
             if (!evName) continue; // Skip truly blank events
 
@@ -285,6 +287,16 @@ async function syncRankedin() {
                     needsUpdate = true;
                 }
 
+                // Handle cancellation state
+                if (isCancelled && existingEvent.is_visible !== false) {
+                    updates.is_visible = false;
+                    needsUpdate = true;
+                } else if (!isCancelled && existingEvent.is_visible === false) {
+                    // Re-enable if no longer cancelled
+                    updates.is_visible = true;
+                    needsUpdate = true;
+                }
+
                 if (needsUpdate) {
                     const { error } = await supabase.from('calendar').update(updates).eq('id', existingEvent.id);
                     if (error) {
@@ -318,7 +330,7 @@ async function syncRankedin() {
                     featured_live: false,
                     live_youtube_url: '',
                     youtube_playlist_url: '',
-                    is_visible: true
+                    is_visible: !isCancelled
                 }]);
 
                 if (error) {

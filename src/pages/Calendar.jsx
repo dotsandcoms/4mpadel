@@ -300,7 +300,7 @@ const Calendar = () => {
         try {
             setPersonalLoading(true);
             const data = await getPlayerEventsAsync(userProfile.rankedin_id);
-            setPersonalEvents(data || []);
+            setPersonalEvents((data || []).filter(e => e.state !== 2));
         } catch (err) {
             console.error('Error fetching personal events:', err);
         } finally {

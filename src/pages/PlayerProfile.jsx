@@ -252,10 +252,10 @@ const PlayerProfile = () => {
         if (player?.rankedin_id) {
             const fetchEvents = async () => {
                 const events = await getPlayerEventsAsync(player.rankedin_id);
-                // Filter for upcoming events and sort by date
+                // Filter for upcoming events and sort by date, excluding cancelled events (state 2)
                 const now = new Date();
                 const filtered = (events || [])
-                    .filter(e => new Date(e.start_date) >= now)
+                    .filter(e => new Date(e.start_date) >= now && e.state !== 2)
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
 
                 if (filtered.length > 0) {

@@ -288,7 +288,8 @@ export const useRankedin = () => {
                     start_date: e.StartDate,
                     end_date: e.EndDate || e.StartDate,
                     slug: e.Link ? e.Link.split('/').pop() : null,
-                    eventId: e.Id // For EventCard external link logic
+                    eventId: e.Id, // For EventCard external link logic
+                    state: e.State
                 };
             });
         } catch (err) {
