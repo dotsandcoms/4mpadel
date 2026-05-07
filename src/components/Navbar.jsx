@@ -97,6 +97,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
       href: '#',
       dropdown: [
         { name: 'All Tournaments', href: '/calendar' },
+        { name: 'My Calendar', href: '/calendar?tab=my-calendar' },
         { name: 'Broll Pro Tour', href: '/tournaments/broll' },
         { name: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
         { name: 'North vs South', href: '/tournaments/north-vs-south' },

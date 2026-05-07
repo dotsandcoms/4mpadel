@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers, User, PlayCircle, Video, Trophy, Shield } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import sapaLogo from '../assets/sapa-logo.svg';
 import { GitBranch } from 'lucide-react';
@@ -204,6 +204,9 @@ const CalendarEventItem = ({ event, index }) => {
 };
 
 const Calendar = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialTab = searchParams.get('tab') || 'upcoming';
+
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -214,8 +217,15 @@ const Calendar = () => {
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
     const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
-    const [activeTab, setActiveTab] = useState('upcoming'); // 'upcoming', 'past', 'all', 'my-calendar'
+    const [activeTab, setActiveTab] = useState(initialTab); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
+
+    useEffect(() => {
+        const tab = searchParams.get('tab');
+        if (tab && tab !== activeTab) {
+            setActiveTab(tab);
+        }
+    }, [searchParams]);
 
     const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
@@ -272,11 +282,6 @@ const Calendar = () => {
 
             if (profile) {
                 setUserProfile(profile);
-
-                // If user is eligible for "My Calendar", set it as default
-                if (profile.paid_registration && profile.approved) {
-                    setActiveTab('my-calendar');
-                }
 
                 // Track activity if it's the real user
                 if (!impersonationEmail && profile.email === session?.user?.email) {
@@ -585,14 +590,17 @@ const Calendar = () => {
                 <div className="flex justify-center mb-10 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-[2rem] border border-white/10 shadow-xl shadow-black/20 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
-                            ...(userProfile && userProfile.paid_registration && userProfile.approved ? [{ id: 'my-calendar', label: 'My Calendar' }] : []),
+                            ...(activeTab === 'my-calendar' ? [{ id: 'my-calendar', label: 'My Calendar' }] : []),
                             { id: 'upcoming', label: 'Upcoming' },
                             { id: 'past', label: 'Past Events' },
                             { id: 'all', label: 'All Events' }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
+                                onClick={() => {
+                                    setActiveTab(tab.id);
+                                    setSearchParams({ tab: tab.id });
+                                }}
                                 className={`relative px-4 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-black text-[10px] sm:text-[11px] md:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center ${activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
                                     }`}
                             >
