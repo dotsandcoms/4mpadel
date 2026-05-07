@@ -7,7 +7,7 @@ import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, Ar
 // ── Assets ────────────────────────────────────────────────────────────────────
 import nvsLogo from '../assets/nvs/official_logo.png';
 import heroImg from '../assets/nvs/hero.png';
-import actionImg from '../assets/nvs/action.png';
+import actionImg from '../assets/nvs/action_male.jpg';
 import venueImg from '../assets/nvs/venue.png';
 
 // ── Sponsor Assets ─────────────────────────────────────────────────────────────
@@ -487,7 +487,7 @@ const NorthVsSouth = () => {
               ))}
             </div>
             <div className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 leading-tight">
-              36 Elite<br />Players
+              56 Elite<br />Players
             </div>
           </div>
           <h4 className="font-black text-xs md:text-sm uppercase tracking-wider mb-2">Invitation Only</h4>
@@ -573,19 +573,19 @@ const NorthVsSouth = () => {
               className="flex flex-col items-center"
             >
               <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em] text-magenta mb-8 md:mb-12" style={{ color: MAGENTA }}>Title Sponsor</p>
-              
-              <a 
-                href="https://guardrisk.co.za/" 
-                target="_blank" 
+
+              <a
+                href="https://guardrisk.co.za/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="relative mb-8 md:mb-16 block group"
               >
                 <div className="absolute inset-0 bg-magenta/5 blur-3xl rounded-full group-hover:bg-magenta/10 transition-colors" style={{ background: `${MAGENTA}05` }} />
-                <motion.img 
+                <motion.img
                   whileHover={{ scale: 1.05 }}
-                  src={new URL('../assets/sponsors/Gaurdrisk-Logo.png', import.meta.url).href} 
-                  alt="Guardrisk" 
-                  className="relative z-10 h-16 md:h-32 w-auto object-contain transition-transform" 
+                  src={new URL('../assets/sponsors/Gaurdrisk-Logo.png', import.meta.url).href}
+                  alt="Guardrisk"
+                  className="relative z-10 h-16 md:h-32 w-auto object-contain transition-transform"
                 />
               </a>
 
