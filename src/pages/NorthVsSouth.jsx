@@ -309,15 +309,15 @@ const PlayerModal = ({ player, onClose }) => {
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }}
-        className="bg-white rounded-[32px] md:rounded-[48px] overflow-hidden max-w-2xl w-full shadow-2xl relative max-h-[90vh] flex flex-col"
+        className="bg-white rounded-[32px] md:rounded-[48px] overflow-hidden max-w-2xl w-[92%] md:w-full shadow-2xl relative max-h-[80vh] md:max-h-[90vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
-        <button onClick={onClose} className="absolute top-4 right-4 md:top-8 md:right-8 z-10 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-all">
+        <button onClick={onClose} className="absolute top-4 right-4 md:top-8 md:right-8 z-20 w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/5 hover:bg-black/10 flex items-center justify-center transition-all">
           <X className="w-5 h-5 md:w-6 md:h-6 text-black" />
         </button>
 
         <div className="flex flex-col md:flex-row h-full overflow-y-auto">
-          <div className="w-full md:w-1/2 aspect-square md:aspect-auto relative bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
+          <div className="w-full md:w-1/2 aspect-[4/5] md:aspect-auto relative bg-gray-100 flex items-center justify-center overflow-hidden shrink-0">
             {finalImage === PLACEHOLDER_SVG ? (
               <div className="w-full h-full bg-gray-50 flex items-center justify-center p-12 md:p-20">
                 <img src={PLACEHOLDER_SVG} alt="Placeholder" className="w-full h-full object-contain opacity-20" />
@@ -331,7 +331,7 @@ const PlayerModal = ({ player, onClose }) => {
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent md:hidden" />
           </div>
 
-          <div className="w-full md:w-1/2 p-8 md:p-14 flex flex-col justify-center">
+          <div className="w-full md:w-1/2 p-6 md:p-14 flex flex-col justify-center">
             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-magenta mb-3 md:mb-4" style={{ color: MAGENTA }}>Tournament Pro</p>
             <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tighter italic mb-4 md:mb-6 leading-none">{player.name}</h2>
             <div className="w-12 h-1 bg-gold mb-6 md:mb-8" style={{ background: GOLD }} />
