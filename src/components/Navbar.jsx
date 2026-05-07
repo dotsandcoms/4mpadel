@@ -9,7 +9,7 @@ import { useSearch } from '../context/SearchContext';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import AuthModal from './AuthModal';
 
-const Navbar = ({ isDark = false }) => {
+const Navbar = ({ isDark = false, accentColor }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileMenus, setExpandedMobileMenus] = useState([]);
@@ -99,6 +99,7 @@ const Navbar = ({ isDark = false }) => {
         { name: 'All Tournaments', href: '/calendar' },
         { name: 'Broll Pro Tour', href: '/tournaments/broll' },
         { name: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
+        { name: 'North vs South', href: '/tournaments/north-vs-south' },
       ]
     },
     { name: 'Contact', href: '/contact' },
@@ -144,7 +145,7 @@ const Navbar = ({ isDark = false }) => {
             {session && player && (
               <div className={`${isMobileMenuOpen ? 'flex' : 'hidden sm:flex'} items-center gap-3 sm:gap-4 ml-0 sm:ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
                 <div className="flex flex-col">
-                  <span className={`leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter ${isDark ? 'text-[#F40020]' : 'text-padel-green'}`}>{player.name}</span>
+                  <span className={`leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter`} style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{player.name}</span>
                   {player.rankedin_id && (
                     <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
                       ID: {player.rankedin_id}
@@ -182,7 +183,15 @@ const Navbar = ({ isDark = false }) => {
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
-                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? '!text-slate-700 hover:!text-[#F40020]' : 'text-white/80 hover:text-padel-green'}`}
+                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? '!text-slate-700' : 'text-white/80 hover:text-padel-green'}`}
+                  style={isDark && accentColor ? { color: link.dropdown ? undefined : undefined } : {}}
+                  onMouseEnter={(e) => {
+                    if (isDark && accentColor) e.target.style.setProperty('color', accentColor, 'important');
+                    else if (isDark) e.target.style.setProperty('color', '#F40020', 'important');
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isDark) e.target.style.setProperty('color', '', 'important');
+                  }}
                 >
                   {link.name}
                   {link.dropdown && <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />}
@@ -211,7 +220,12 @@ const Navbar = ({ isDark = false }) => {
               className={`p-2 rounded-full transition-all duration-300 group ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
               title="Search (Cmd+K)"
             >
-              <Search className={`w-4 h-4 group-hover:scale-110 transition-transform ${isDark ? 'group-hover:text-[#F40020]' : 'group-hover:text-padel-green'}`} />
+              <Search 
+                className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} 
+                style={isDark ? { color: 'inherit' } : {}}
+                onMouseEnter={(e) => { if (isDark) e.target.style.color = accentColor || '#F40020' }}
+                onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
+              />
             </button>
 
             {/* Notifications */}
@@ -226,7 +240,11 @@ const Navbar = ({ isDark = false }) => {
                     animate={pendingPayments.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
                     transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
                   >
-                    <Bell className={`w-4 h-4 group-hover:scale-110 transition-transform ${isDark ? 'group-hover:text-[#F40020]' : 'group-hover:text-padel-green'}`} />
+                    <Bell 
+                      className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} 
+                      onMouseEnter={(e) => { if (isDark) e.target.style.color = accentColor || '#F40020' }}
+                      onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
+                    />
                   </motion.div>
                   {pendingPayments.length > 0 && (
                     <span className="absolute top-0 right-0 flex h-2 w-2">
@@ -262,7 +280,7 @@ const Navbar = ({ isDark = false }) => {
                               className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                             >
                               <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
-                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`${isDark ? 'text-[#F40020]' : 'text-padel-green'} font-bold`}>{payment.name}</span>.</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`font-bold`} style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{payment.name}</span>.</p>
                               <p className={`text-[10px] mt-2 uppercase tracking-widest font-bold ${isDark ? 'text-slate-500' : 'text-gray-500'}`}>Click to pay now</p>
                             </a>
                           ))
@@ -280,19 +298,41 @@ const Navbar = ({ isDark = false }) => {
 
             {session ? (
               <div className="flex items-center gap-4 ml-2">
-                <a href="/profile" className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900 hover:!text-[#F40020]' : 'text-white hover:text-padel-green'}`}>
+                <a 
+                  href="/profile" 
+                  className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900' : 'text-white hover:text-padel-green'}`}
+                  onMouseEnter={(e) => {
+                    if (isDark && accentColor) e.target.style.setProperty('color', accentColor, 'important');
+                    else if (isDark) e.target.style.setProperty('color', '#F40020', 'important');
+                  }}
+                  onMouseLeave={(e) => {
+                    if (isDark) e.target.style.setProperty('color', '', 'important');
+                  }}
+                >
                   Profile
                 </a>
                 <button
                   onClick={handleLogout}
-                  className="bg-red-500/20 text-red-400 px-5 py-2 rounded-full text-sm font-bold hover:bg-red-500 hover:text-white transition-all duration-300">
+                  className="px-5 py-2 rounded-full text-sm font-bold transition-all duration-300"
+                  style={{ backgroundColor: `${accentColor || '#ef4444'}33`, color: accentColor || '#f87171' }}
+                  onMouseEnter={(e) => {
+                    e.target.style.backgroundColor = accentColor || '#ef4444';
+                    e.target.style.color = '#fff';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.backgroundColor = `${accentColor || '#ef4444'}33`;
+                    e.target.style.color = accentColor || '#f87171';
+                  }}
+                >
                   Logout
                 </button>
               </div>
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 ${isDark ? 'bg-[#F40020] text-white hover:bg-[#960f24]' : 'bg-padel-green text-black hover:bg-white'}`}>
+                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 text-white`}
+                style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#88e000') }}
+              >
                 Login / Register ↗
               </button>
             )}
@@ -352,7 +392,7 @@ const Navbar = ({ isDark = false }) => {
                               className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                             >
                               <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
-                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`${isDark ? 'text-[#F40020]' : 'text-padel-green'} font-bold`}>{payment.name}</span>.</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className={`font-bold`} style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{payment.name}</span>.</p>
                             </a>
                           ))
                         ) : (

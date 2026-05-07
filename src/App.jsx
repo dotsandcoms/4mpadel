@@ -17,6 +17,7 @@ import AllTournaments from './pages/AllTournaments';
 import Blog from './pages/Blog';
 import BlogPost from './pages/BlogPost';
 import KitKatLeague from './pages/KitKatLeague';
+import NorthVsSouth from './pages/NorthVsSouth';
 
 import TournamentDraw from './pages/TournamentDraw';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
@@ -86,7 +87,7 @@ function AppContent() {
   const isHeroRoute = location.pathname === '/' || location.pathname.startsWith('/calendar/');
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
   const isHomePage = location.pathname === '/';
-  
+
   // Routes that should always be accessible even if not logged in
   const isPublicRoute = isHomePage || location.pathname === '/reset-password' || location.pathname === '/contact';
 
@@ -109,6 +110,7 @@ function AppContent() {
           <Route path="/rankings" element={<Rankings />} />
           <Route path="/tournaments/broll" element={<Broll />} />
           <Route path="/tournaments/kit-kat-league" element={<KitKatLeague />} />
+          <Route path="/tournaments/north-vs-south" element={<NorthVsSouth />} />
           <Route path="/tournaments/ladies" element={<Ladies />} />
           <Route path="/tournaments/juniors" element={<Juniors />} />
           <Route path="/tournaments/mens40" element={<Mens40 />} />
