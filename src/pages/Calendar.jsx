@@ -592,8 +592,8 @@ const Calendar = () => {
                         {[
                             ...(activeTab === 'my-calendar' ? [{ id: 'my-calendar', label: 'My Calendar' }] : []),
                             { id: 'upcoming', label: 'Upcoming' },
-                            { id: 'past', label: 'Past Events' },
-                            { id: 'all', label: 'All Events' }
+                            { id: 'all', label: 'All Events' },
+                            { id: 'past', label: 'Past Events' }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
