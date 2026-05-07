@@ -562,6 +562,58 @@ const NorthVsSouth = () => {
         </div>
       </section>
 
+      {/* ═══════════════ TITLE SPONSOR ═══════════════════════════════════════════ */}
+      <section className="py-12 md:py-32 bg-gray-50 border-y border-gray-100 overflow-hidden relative">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col items-center text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="flex flex-col items-center"
+            >
+              <p className="text-[10px] md:text-xs font-black uppercase tracking-[0.5em] text-magenta mb-8 md:mb-12" style={{ color: MAGENTA }}>Title Sponsor</p>
+              
+              <a 
+                href="https://guardrisk.co.za/" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="relative mb-8 md:mb-16 block group"
+              >
+                <div className="absolute inset-0 bg-magenta/5 blur-3xl rounded-full group-hover:bg-magenta/10 transition-colors" style={{ background: `${MAGENTA}05` }} />
+                <motion.img 
+                  whileHover={{ scale: 1.05 }}
+                  src={new URL('../assets/sponsors/Gaurdrisk-Logo.png', import.meta.url).href} 
+                  alt="Guardrisk" 
+                  className="relative z-10 h-16 md:h-32 w-auto object-contain transition-transform" 
+                />
+              </a>
+
+              <div className="max-w-4xl">
+                <h3 className="text-2xl md:text-5xl font-black uppercase tracking-tighter italic leading-tight mb-6 md:mb-10" style={{ color: MAGENTA }}>
+                  Powering the ultimate<br className="hidden md:block" /> padel showdown
+                </h3>
+                <p className="text-gray-500 text-sm md:text-xl font-medium leading-relaxed max-w-2xl mx-auto mb-8 md:mb-12">
+                  As the title sponsor, Guardrisk is proud to support the elite Guardrisk North vs South tournament. We are committed to excellence, competitive spirit, and the high-performance community that defines South African padel.
+                </p>
+
+                <motion.a
+                  href="https://guardrisk.co.za/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="inline-flex items-center gap-2 px-8 py-4 bg-white border border-gray-200 rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest text-magenta shadow-sm hover:shadow-lg transition-all"
+                  style={{ color: MAGENTA }}
+                >
+                  Visit Guardrisk <ExternalLink className="w-3 h-3 md:w-4 md:h-4" />
+                </motion.a>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
       {/* ═══════════════ THE FORMAT ══════════════════════════════════════════════ */}
       <section className="py-12 md:py-32 bg-magenta text-white px-6 overflow-hidden relative" style={{ background: MAGENTA }}>
         <div className="absolute top-0 right-0 w-full md:w-1/3 h-full opacity-10 md:opacity-20 pointer-events-none">
