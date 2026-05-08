@@ -72,11 +72,19 @@ const EventFinance = ({ allowedEvents = [] }) => {
     const totalCollected = useMemo(() => {
         if (!selectedEvent) return 0;
         return localParticipants
-            .filter(p => p.is_paid)
             .reduce((sum, p) => {
-                // Use category-specific fee if available, otherwise fallback to base entry fee
-                const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
-                return sum + Number(divFee);
+                // PRIORITIZE actual payment record amount if it exists
+                if (p.actual_payment) {
+                    return sum + Number(p.actual_payment.amount || 0);
+                }
+                
+                // FALLBACK to category fee only if is_paid is true but no payment record found (legacy)
+                if (p.is_paid) {
+                    const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
+                    return sum + Number(divFee);
+                }
+                
+                return sum;
             }, 0);
     }, [localParticipants, selectedEvent]);
 
@@ -106,13 +114,38 @@ const EventFinance = ({ allowedEvents = [] }) => {
         if (!eventId) return;
         setLoading(prev => ({ ...prev, matching: true }));
         try {
-            const { data, error } = await supabase
-                .from('tournament_participants')
-                .select('*, players(id, name, email, contact_number, license_type, paid_registration)')
-                .eq('event_id', eventId)
-                .order('full_name');
-            if (error) throw error;
-            setLocalParticipants(data || []);
+            const [{ data: pData, error: pError }, { data: payData, error: payError }] = await Promise.all([
+                supabase
+                    .from('tournament_participants')
+                    .select('*, players(id, name, email, contact_number, license_type, paid_registration)')
+                    .eq('event_id', eventId)
+                    .order('full_name'),
+                supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('event_id', eventId)
+                    .eq('status', 'success')
+            ]);
+
+            if (pError) throw pError;
+            if (payError) throw payError;
+
+            // Enrich participants with their actual payment records
+            const enriched = (pData || []).map(p => {
+                // Find payment by metadata participant_id OR by profile_id + amount match if needed
+                // But metadata.participant_id is the most reliable link we created
+                const payment = (payData || []).find(pay => 
+                    pay.metadata?.participant_id === p.id || 
+                    (p.profile_id && pay.player_id === p.profile_id && pay.payment_type === 'event_entry_fee')
+                );
+                
+                return {
+                    ...p,
+                    actual_payment: payment || null
+                };
+            });
+
+            setLocalParticipants(enriched);
         } catch (err) {
             console.error("Fetch participants error:", err);
             toast.error("Failed to load local participants");
@@ -190,15 +223,20 @@ const EventFinance = ({ allowedEvents = [] }) => {
             // Step 3: Fetch existing participants and PAID registrations
             const [{ data: existingRows }, { data: paidRegs }] = await Promise.all([
                 supabase.from('tournament_participants').select('id, rankedin_participant_id, class_name, is_paid, email, metadata').eq('event_id', eventId),
-                supabase.from('event_registrations').select('full_name, email, division, payment_status').eq('event_id', eventId).eq('payment_status', 'paid')
+                supabase.from('event_registrations').select('full_name, email, division, payment_status, payment_method').eq('event_id', eventId).eq('payment_status', 'paid')
             ]);
 
             // Map existing records by ID + Class
             const existingMap = new Map((existingRows || []).map(r => [`${r.rankedin_participant_id}_${r.class_name}`, r]));
             
-            // Map paid registrations by Name + Division AND Email + Division
-            const paidRegsByName = new Set((paidRegs || []).map(r => `${r.full_name.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`));
-            const paidRegsByEmail = new Set((paidRegs || []).map(r => `${r.email?.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`).filter(e => !e.startsWith('_')));
+            // Map paid registrations by Name + Division AND Email + Division to capture payment method
+            const paidRegsMap = new Map();
+            (paidRegs || []).forEach(r => {
+                const nameKey = `${r.full_name.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`;
+                const emailKey = `${r.email?.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`;
+                if (r.full_name) paidRegsMap.set(nameKey, r.payment_method);
+                if (r.email && !r.email.startsWith('_')) paidRegsMap.set(emailKey, r.payment_method);
+            });
 
             console.info(`Found ${paidRegs?.length || 0} paid registrations in system for ${eventName}. Checking for matches...`);
 
@@ -218,7 +256,10 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
                 // SPECIAL FIX: Check if this player already PAID in our system for THIS division
                 const divLower = p.class_name?.toLowerCase().trim();
-                const alreadyPaidInSystem = paidRegsByName.has(`${nameLower}_${divLower}`) || (matchedEmail && paidRegsByEmail.has(`${matchedEmail}_${divLower}`));
+                const nameKey = `${nameLower}_${divLower}`;
+                const emailKey = matchedEmail ? `${matchedEmail}_${divLower}` : null;
+                const detectedPaymentMethod = paidRegsMap.get(nameKey) || (emailKey ? paidRegsMap.get(emailKey) : null);
+                const alreadyPaidInSystem = !!detectedPaymentMethod;
 
                 const existingRecord = existingMap.get(`${p.rankedin_participant_id}_${p.class_name}`);
                 const currentMetadata = existingRecord?.metadata || {};
@@ -231,7 +272,13 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     class_name: p.class_name,
                     email: matchedEmail || null,
                     ...(autoProfileId ? { profile_id: autoProfileId } : {}),
-                    ...(alreadyPaidInSystem && !isManualUnpaid ? { is_paid: true } : {}) // RESPECT MANUAL UNMARK
+                    ...(alreadyPaidInSystem && !isManualUnpaid ? { 
+                        is_paid: true,
+                        metadata: { 
+                            ...currentMetadata, 
+                            payment_method: detectedPaymentMethod || currentMetadata.payment_method || 'system'
+                        }
+                    } : {}) // RESPECT MANUAL UNMARK
                 };
 
                 const { error: dbError } = existingRecord 
@@ -344,7 +391,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
         
         try {
             // Update local participant table - also clear manual_unpaid flag
-            const newMetadata = { ...(participant.metadata || {}), manual_unpaid: false };
+            const newMetadata = { 
+                ...(participant.metadata || {}), 
+                manual_unpaid: false,
+                payment_method: 'manual'
+            };
             const { error: pError } = await supabase
                 .from('tournament_participants')
                 .update({ is_paid: true, metadata: newMetadata })
@@ -479,12 +530,12 @@ const EventFinance = ({ allowedEvents = [] }) => {
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Amount Paid'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Payment Method', 'Amount Paid'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
             
             // Add auto-filter to header row
-            sheet.autoFilter = 'A3:H3';
+            sheet.autoFilter = 'A3:I3';
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
@@ -497,19 +548,20 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     p.players?.contact_number || 'N/A',
                     p.players?.license_type || 'None',
                     p.is_paid ? 'PAID' : 'UNPAID',
+                    p.is_paid ? (p.metadata?.payment_method || 'System') : 'N/A',
                     amountPaid
                 ]);
             });
 
             // Add Total Revenue row at the bottom
             sheet.addRow([]);
-            const totalRow = sheet.addRow(['', '', '', '', '', '', 'TOTAL REVENUE:', totalCollected]);
-            totalRow.getCell(7).font = { bold: true };
+            const totalRow = sheet.addRow(['', '', '', '', '', '', '', 'TOTAL REVENUE:', totalCollected]);
             totalRow.getCell(8).font = { bold: true };
-            totalRow.getCell(8).numFmt = '"R"#,##0.00';
+            totalRow.getCell(9).font = { bold: true };
+            totalRow.getCell(9).numFmt = '"R"#,##0.00';
 
             // Expand columns to fit content
-            for (let i = 1; i <= 8; i++) {
+            for (let i = 1; i <= 9; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
@@ -882,7 +934,12 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                 {p.is_paid ? (
                                                     <div className="flex flex-col gap-1">
                                                         <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit">PAID</span>
-                                                        <span className="text-[8px] text-gray-500 italic">Confirmed</span>
+                                                        <span className="text-[8px] text-gray-500 italic uppercase tracking-wider">
+                                                            {p.actual_payment?.payment_method || p.metadata?.payment_method || 'System'}
+                                                        </span>
+                                                        {p.actual_payment && (
+                                                            <span className="text-[7px] text-padel-green font-bold">R {p.actual_payment.amount}</span>
+                                                        )}
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col gap-1">
