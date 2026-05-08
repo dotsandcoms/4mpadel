@@ -479,15 +479,16 @@ const EventFinance = ({ allowedEvents = [] }) => {
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Amount Paid'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
             
             // Add auto-filter to header row
-            sheet.autoFilter = 'A3:G3';
+            sheet.autoFilter = 'A3:H3';
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
+                const amountPaid = p.is_paid ? (selEvent.category_fees?.[p.class_name] || selEvent.entry_fee || 0) : 0;
                 sheet.addRow([
                     p.full_name,
                     p.class_name || 'N/A',
@@ -495,12 +496,20 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     p.players?.email || 'N/A',
                     p.players?.contact_number || 'N/A',
                     p.players?.license_type || 'None',
-                    p.is_paid ? 'PAID' : 'UNPAID'
+                    p.is_paid ? 'PAID' : 'UNPAID',
+                    amountPaid
                 ]);
             });
 
+            // Add Total Revenue row at the bottom
+            sheet.addRow([]);
+            const totalRow = sheet.addRow(['', '', '', '', '', '', 'TOTAL REVENUE:', totalCollected]);
+            totalRow.getCell(7).font = { bold: true };
+            totalRow.getCell(8).font = { bold: true };
+            totalRow.getCell(8).numFmt = '"R"#,##0.00';
+
             // Expand columns to fit content
-            for (let i = 1; i <= 7; i++) {
+            for (let i = 1; i <= 8; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
