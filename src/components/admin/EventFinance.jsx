@@ -68,6 +68,18 @@ const EventFinance = ({ allowedEvents = [] }) => {
         });
         return counts;
     }, [localParticipants]);
+    
+    const totalCollected = useMemo(() => {
+        if (!selectedEvent) return 0;
+        return localParticipants
+            .filter(p => p.is_paid)
+            .reduce((sum, p) => {
+                // Use category-specific fee if available, otherwise fallback to base entry fee
+                const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
+                return sum + Number(divFee);
+            }, 0);
+    }, [localParticipants, selectedEvent]);
+
     useEffect(() => {
         const fetchInitialData = async () => {
             setLoading(prev => ({ ...prev, events: true }));
@@ -739,7 +751,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                             className="p-2 bg-padel-green text-black rounded-xl hover:bg-padel-green/90 transition-all flex items-center justify-center w-[44px] sm:w-[38px] h-[44px] sm:h-[38px] shrink-0"
                                             title="View on Rankedin"
                                         >
-                                            <ExternalLink size={18} />
+                                            <ExternalLink size={18} className="text-black" />
                                         </a>
                                     )}
                                 </div>
@@ -766,9 +778,13 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     <p className="text-xl font-black text-white leading-none">{Object.keys(playerEntryCounts).length}</p>
                                 </div>
                                 <div className="flex-1 bg-padel-green/5 p-3 rounded-xl border border-padel-green/10 flex flex-row sm:flex-col justify-between items-center sm:items-start text-padel-green">
-                                    <p className="text-[9px] font-black uppercase tracking-widest">Paid</p>
-                                    <p className="text-xl font-black leading-none">{localParticipants.filter(p => p.is_paid).length}</p>
-                                </div>
+                                     <p className="text-[9px] font-black uppercase tracking-widest">Paid Entries</p>
+                                     <p className="text-xl font-black leading-none">{localParticipants.filter(p => p.is_paid).length}</p>
+                                 </div>
+                                 <div className="flex-1 bg-padel-green p-3 rounded-xl border border-padel-green/20 flex flex-row sm:flex-col justify-between items-center sm:items-start text-black shadow-lg shadow-padel-green/20">
+                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Total Revenue</p>
+                                     <p className="text-xl font-black leading-none">R {totalCollected}</p>
+                                 </div>
                             </div>
                         </div>
                     </div>
