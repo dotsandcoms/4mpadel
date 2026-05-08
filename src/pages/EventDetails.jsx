@@ -2344,7 +2344,7 @@ const EventDetails = () => {
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
                                 className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-6 md:p-8"
                             >
-                                <div className="bg-[#0F172A] w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
+                                <div className="bg-[#0F172A] w-full max-w-xl rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
                                     {/* Modal Header */}
                                     <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                         <h3 className="text-white font-bold text-lg">
@@ -2781,7 +2781,7 @@ const EventDetails = () => {
                                                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
                                                                     <div className="space-y-0.5">
                                                                         <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
-                                                                        <div className="flex items-baseline gap-2">
+                                                                        <div className="space-y-1">
                                                                             <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
                                                                             <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
                                                                         </div>
