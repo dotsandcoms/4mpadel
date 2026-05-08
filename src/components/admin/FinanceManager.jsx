@@ -71,9 +71,16 @@ const FinanceManager = () => {
     }, [activeTab, allowedTabs, permissions, permissionsLoading]);
 
     const fetchPayments = useCallback(async () => {
-        const { data, error } = await supabase.from('payments').select('reference');
+        const { data, error } = await supabase.from('payments').select('reference, metadata');
         if (!error && data) {
-            setRecordedRefs(new Set(data.map(p => p.reference)));
+            const refs = new Set();
+            data.forEach(p => {
+                if (p.reference) refs.add(p.reference);
+                // Also track the original Paystack reference stored in metadata to avoid duplicates
+                if (p.metadata?.paystack_ref) refs.add(p.metadata.paystack_ref);
+                if (p.metadata?.original_trx?.id) refs.add(p.metadata.original_trx.id);
+            });
+            setRecordedRefs(refs);
         }
     }, []);
 
@@ -155,32 +162,197 @@ const FinanceManager = () => {
             setSyncingId(trx.id);
             const email = trx.user.toLowerCase();
             const amount = parseFloat(trx.amount.replace('R ', '').replace(',', ''));
+            
+            // 1. Identify if it's an Event Registration (REGEV) or a standalone Membership
+            const reference = trx.id || '';
+            const isEventReg = reference.startsWith('REGEV-');
+            let enrichedEventId = trx.metadata?.event_id || null;
+            let enrichedEventName = trx.metadata?.event_name || null;
+
+            // Extract Event ID from reference if missing from metadata
+            if (isEventReg && !enrichedEventId) {
+                const parts = reference.split('-');
+                if (parts.length >= 2) {
+                    const extractedId = parseInt(parts[1], 10);
+                    if (!isNaN(extractedId)) enrichedEventId = extractedId;
+                }
+            }
+
             const licenseType = amount >= 450 ? 'full' : 'temporary';
+            const paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
 
             const { data: player, error: fetchError } = await supabase
                 .from('players')
-                .select('id, name')
+                .select('id, name, paid_registration, license_type')
                 .ilike('email', email)
                 .maybeSingle();
 
             if (fetchError) throw fetchError;
             if (!player) throw new Error(`Player with email ${email} not found.`);
 
-            const { error: updateError } = await supabase
-                .from('players')
-                .update({ 
-                    paid_registration: true, 
-                    license_type: licenseType,
-                    approved: true 
-                })
-                .eq('id', player.id);
+            // 2. Update Player Table (Only if it's not an event entry fee, OR if they need a license)
+            // If it's a high amount (>= 450), we usually treat it as including a full license.
+            if (!player.paid_registration || (licenseType === 'full' && player.license_type !== 'full')) {
+                const { error: updateError } = await supabase
+                    .from('players')
+                    .update({ 
+                        paid_registration: true, 
+                        license_type: licenseType,
+                        approved: true 
+                    })
+                    .eq('id', player.id);
 
-            if (updateError) throw updateError;
+                if (updateError) throw updateError;
+            }
             
-            // If it's a temporary license and event_id is missing, try to find it in the temporary_licenses lookup
-            let enrichedEventId = trx.metadata?.event_id || null;
-            let enrichedEventName = trx.metadata?.event_name || null;
+            // 3. Handle Event-Specific Logic (Syncing Tournament Participants & Splitting Payments)
+            const paymentsToInsert = [];
+            if (isEventReg && enrichedEventId) {
+                // Fetch event details to get the correct fee structure
+                const { data: event } = await supabase
+                    .from('calendar')
+                    .select('id, event_name, entry_fee, category_fees')
+                    .eq('id', enrichedEventId)
+                    .single();
 
+                const enrichedEventName = event?.event_name || null;
+                const entryFeePerPerson = event?.entry_fee || 0;
+                const categoryFees = event?.category_fees || {};
+
+                console.info(`Marking participants for Player ${player.name} in Event ${enrichedEventId} as PAID...`);
+                
+                // 1. Find the player's own registrations
+                const { data: ownParticipants } = await supabase
+                    .from('tournament_participants')
+                    .select('id, full_name, class_name, profile_id')
+                    .eq('event_id', enrichedEventId)
+                    .eq('profile_id', player.id);
+
+                let allParticipants = ownParticipants ? [...ownParticipants] : [];
+
+                // 2. Look for registrations where this player might have paid for a partner
+                const { data: regData } = await supabase
+                    .from('event_registrations')
+                    .select('partner_name, division')
+                    .eq('event_id', enrichedEventId)
+                    .ilike('email', email);
+                
+                if (regData && regData.length > 0) {
+                    for (const reg of regData) {
+                        if (reg.partner_name && reg.partner_name.trim()) {
+                            // Search for the partner in the same event (fuzzy name and division match)
+                            const { data: partners } = await supabase
+                                .from('tournament_participants')
+                                .select('id, full_name, class_name, profile_id')
+                                .eq('event_id', enrichedEventId)
+                                .ilike('full_name', `%${reg.partner_name.trim()}%`);
+                            
+                            if (partners) {
+                                partners.forEach(partner => {
+                                    // Verify it's the same or similar division to avoid matching the same person in a different category
+                                    const normalizedDbDiv = partner.class_name.toLowerCase().replace(/[^a-z]/g, '');
+                                    const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z]/g, '');
+                                    
+                                    if (normalizedDbDiv.includes(normalizedRegDiv) || normalizedRegDiv.includes(normalizedDbDiv)) {
+                                        if (!allParticipants.some(p => p.id === partner.id)) {
+                                            allParticipants.push(partner);
+                                        }
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+
+                if (allParticipants.length > 0) {
+                    // 3. Calculate Fee Breakdown: Separate Entry Fees from potential Licenses
+                    let totalExpectedEntryFees = 0;
+                    allParticipants.forEach(p => {
+                        const fee = categoryFees[p.class_name] || entryFeePerPerson || 0;
+                        totalExpectedEntryFees += fee;
+                    });
+
+                    // Amount to be attributed as entry fees (cannot exceed total transaction)
+                    const entryFeePortion = Math.min(amount, totalExpectedEntryFees);
+                    const licensePortion = amount - entryFeePortion;
+
+                    // 4. Split logic for Entry Fees:
+                    const primaryParticipants = allParticipants.filter(p => p.profile_id === player.id);
+                    const divisor = primaryParticipants.length > 0 ? primaryParticipants.length : allParticipants.length;
+                    const splitEntryAmount = entryFeePortion / divisor;
+
+                    for (let i = 0; i < allParticipants.length; i++) {
+                        const p = allParticipants[i];
+                        const isPartner = p.profile_id !== player.id;
+                        
+                        // Mark as paid in tournament_participants
+                        await supabase
+                            .from('tournament_participants')
+                            .update({ 
+                                is_paid: true, 
+                                is_test: trx.domain === 'test',
+                                last_synced_at: new Date().toISOString() 
+                            })
+                            .eq('id', p.id);
+                            
+                        // Ensure event_registrations record exists
+                        await supabase.from('event_registrations').upsert({
+                            event_id: enrichedEventId,
+                            full_name: p.full_name,
+                            email: isPartner ? null : email,
+                            division: p.class_name,
+                            payment_status: 'paid',
+                            payment_method: 'paystack',
+                            is_test: trx.domain === 'test'
+                        }, { onConflict: 'event_id, email, division' });
+
+                        // Prepare entry fee payment record
+                        paymentsToInsert.push({
+                            player_id: p.profile_id || player.id,
+                            event_id: enrichedEventId,
+                            amount: isPartner ? 0 : splitEntryAmount,
+                            status: 'success',
+                            payment_type: 'event_entry_fee',
+                            reference: i === 0 ? trx.id : `${trx.id}-${i + 1}`,
+                            created_at: trx.rawDate,
+                            metadata: { 
+                                source: 'paystack_sync', 
+                                original_trx: trx,
+                                event_name: enrichedEventName,
+                                participant_id: p.id,
+                                division: p.class_name,
+                                paystack_ref: trx.id,
+                                ...(isPartner && { 
+                                    paid_by_name: player.name,
+                                    paid_by_id: player.id 
+                                })
+                            }
+                        });
+                    }
+
+                    // 5. If there's extra amount (License/Membership), record it separately for the primary player
+                    if (licensePortion > 0) {
+                        paymentsToInsert.push({
+                            player_id: player.id,
+                            event_id: enrichedEventId,
+                            amount: licensePortion,
+                            status: 'success',
+                            payment_type: 'temp_license', // General fallback for extra fees in tournament sync
+                            payment_method: 'paystack',
+                            reference: `LIC-${trx.id}`,
+                            created_at: trx.rawDate,
+                            metadata: {
+                                source: 'paystack_sync',
+                                original_trx: trx,
+                                event_name: enrichedEventName,
+                                note: 'Combined license/membership fees from bulk payment'
+                            }
+                        });
+                    }
+                }
+            }
+
+            // 4. Handle Temporary License Lookup fallback (if still no event_id)
             if (licenseType === 'temporary' && !enrichedEventId) {
                 const { data: tempLic } = await supabase
                     .from('temporary_licenses')
@@ -196,21 +368,42 @@ const FinanceManager = () => {
                 }
             }
 
-            // Also record in our NEW payments table for future history
-            await supabase.from('payments').insert([{
-                player_id: player.id,
-                event_id: enrichedEventId,
-                amount: amount,
-                status: 'success',
-                payment_type: licenseType === 'full' ? 'membership' : 'temp_license',
-                reference: trx.id,
-                created_at: trx.rawDate,
-                metadata: { 
-                    source: 'paystack_sync', 
-                    original_trx: trx,
-                    event_name: enrichedEventName
-                }
-            }]);
+            // 5. Record in Payments Table (Clean up old records first to allow clean splits)
+            if (paymentsToInsert.length > 0) {
+                // Delete existing records for this reference (including possible old splits or registration-page records)
+                // We search by the main reference OR by the paystack_ref in metadata
+                await supabase.from('payments')
+                    .delete()
+                    .or(`reference.eq.${trx.id},reference.like.${trx.id}-%,reference.like.REG-${trx.id}-%,reference.like.REG-PARTNER-${trx.id}-%`);
+
+                // ALSO delete by metadata search to catch legacy format records
+                await supabase.from('payments')
+                    .delete()
+                    .filter('metadata->>paystack_ref', 'eq', trx.id);
+                
+                await supabase.from('payments')
+                    .delete()
+                    .filter('metadata->original_trx->>id', 'eq', trx.id);
+
+                // Insert the new split records
+                await supabase.from('payments').insert(paymentsToInsert);
+            } else {
+                // Standalone payment (Membership/License or Single Entry)
+                await supabase.from('payments').upsert({
+                    player_id: player.id,
+                    event_id: enrichedEventId,
+                    amount: amount,
+                    status: 'success',
+                    payment_type: paymentType,
+                    reference: trx.id,
+                    created_at: trx.rawDate,
+                    metadata: { 
+                        source: 'paystack_sync', 
+                        original_trx: trx,
+                        event_name: enrichedEventName
+                    }
+                }, { onConflict: 'reference' });
+            }
 
             // CRITICAL: Ensure temporary license record exists to prevent scavenger cleanup
             if (licenseType === 'temporary' && enrichedEventId) {
@@ -475,15 +668,18 @@ const FinanceManager = () => {
                                                                 const isRecorded = recordedRefs.has(trx.id);
                                                                 
                                                                 if (!p) return <span className="text-[10px] text-gray-600">No Profile</span>;
-                                                                if (isRecorded) return <CheckCircle size={14} className="text-padel-green ml-auto" />;
+                                                                
+                                                                // Allow re-syncing if it's an event registration that might have been misidentified
+                                                                const isEventReg = trx.id?.startsWith('REGEV-');
+                                                                if (isRecorded && !isEventReg) return <CheckCircle size={14} className="text-padel-green ml-auto" />;
                                                                 
                                                                 return (
                                                                     <button 
                                                                         onClick={() => handleSyncPlayer(trx)} 
                                                                         disabled={syncingId === trx.id}
-                                                                        className={`${p.paid_registration ? 'bg-blue-600' : 'bg-orange-500'} text-white text-[10px] font-black py-1 px-2 rounded-lg hover:scale-105 transition-all disabled:opacity-50`}
+                                                                        className={`${isRecorded ? 'bg-padel-green text-black' : p.paid_registration ? 'bg-blue-600' : 'bg-orange-500'} text-white text-[10px] font-black py-1 px-2 rounded-lg hover:scale-105 transition-all disabled:opacity-50`}
                                                                     >
-                                                                        {syncingId === trx.id ? '...' : p.paid_registration ? 'Backfill Entry' : 'Sync Now'}
+                                                                        {syncingId === trx.id ? '...' : isRecorded ? 'Re-Sync' : p.paid_registration ? 'Backfill Entry' : 'Sync Now'}
                                                                     </button>
                                                                 );
                                                             })()

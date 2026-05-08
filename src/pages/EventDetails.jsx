@@ -1133,32 +1133,38 @@ const EventDetails = () => {
             // Entry Fees for each division
             selectedDivisions.forEach(division => {
                 const fee = getEntryFeeForCategory(division);
+                const partnerEntryFee = (payForPartner && partnerProfile) ? fee : 0;
                 
-                // Main Player
+                // Main Player (gets the combined fee for the pair)
                 paymentsToInsert.push({
                     player_id: playerId,
                     event_id: event.id,
-                    amount: fee,
+                    amount: fee + partnerEntryFee,
                     status: 'success',
                     payment_type: 'event_entry_fee',
                     payment_method: 'paystack',
-                    reference: `${formData.full_name} - ${division} - Entry`,
+                    reference: `REG-${paystackRef}-${division.replaceAll(' ', '_')}`,
                     is_test: isTestMode,
                     metadata: { paystack_ref: paystackRef, division: division }
                 });
 
-                // Partner (if applicable)
+                // Partner (gets R0 record with attribution)
                 if (payForPartner && partnerProfile) {
                     paymentsToInsert.push({
                         player_id: partnerProfile.id,
                         event_id: event.id,
-                        amount: fee,
+                        amount: 0,
                         status: 'success',
                         payment_type: 'event_entry_fee',
                         payment_method: 'paystack',
-                        reference: `${partnerProfile.name} - ${division} - Entry`,
+                        reference: `REG-PARTNER-${paystackRef}-${division.replaceAll(' ', '_')}`,
                         is_test: isTestMode,
-                        metadata: { paystack_ref: paystackRef, division: division }
+                        metadata: { 
+                            paystack_ref: paystackRef, 
+                            division: division,
+                            paid_by_name: formData.full_name,
+                            paid_by_id: playerId
+                        }
                     });
                 }
             });
@@ -1195,34 +1201,41 @@ const EventDetails = () => {
 
             // Partner side
             if (payForPartner && partnerProfile) {
-                // Partner: Entry Fee
-                paymentsToInsert.push({
-                    player_id: partnerProfile.id,
-                    event_id: event.id,
-                    amount: entryFee,
-                    status: 'success',
-                    payment_type: 'event_entry_fee',
-                    payment_method: 'paystack',
-                    reference: `${partnerProfile.name} - Entry (Paid by ${formData.full_name})`,
-                    is_test: isTestMode,
-                    metadata: { paystack_ref: paystackRef, paid_by: formData.email }
-                });
-
+                // Partner: Entry Fee (handled in selectedDivisions loop above)
+                
                 // Partner License
                 if (!partnerProfile.paid_registration) {
                     const isPartnerFull = partnerLicenseChoice === 'full';
                     const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
 
+                    // Main player pays for the partner's license
                     paymentsToInsert.push({
-                        player_id: partnerProfile.id,
+                        player_id: playerId,
                         event_id: event.id,
                         amount: partnerLicenseAmount,
                         status: 'success',
                         payment_type: isPartnerFull ? 'full_license' : 'temp_license',
                         payment_method: 'paystack',
-                        reference: `Partner License - ${partnerProfile.name}`,
+                        reference: `LIC-FOR-PARTNER-${paystackRef}`,
                         is_test: isTestMode,
-                        metadata: { paystack_ref: paystackRef }
+                        metadata: { paystack_ref: paystackRef, paid_for_name: partnerProfile.name }
+                    });
+
+                    // Partner gets R0 license record
+                    paymentsToInsert.push({
+                        player_id: partnerProfile.id,
+                        event_id: event.id,
+                        amount: 0,
+                        status: 'success',
+                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
+                        payment_method: 'paystack',
+                        reference: `LIC-PARTNER-${paystackRef}`,
+                        is_test: isTestMode,
+                        metadata: { 
+                            paystack_ref: paystackRef,
+                            paid_by_name: formData.full_name,
+                            paid_by_id: playerId
+                        }
                     });
 
                     if (!isPartnerFull) {

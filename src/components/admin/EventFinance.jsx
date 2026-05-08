@@ -539,7 +539,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
-                const amountPaid = p.is_paid ? (selEvent.category_fees?.[p.class_name] || selEvent.entry_fee || 0) : 0;
+                const amountPaid = p.is_paid ? (p.actual_payment?.amount || 0) : 0;
                 sheet.addRow([
                     p.full_name,
                     p.class_name || 'N/A',
@@ -548,7 +548,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     p.players?.contact_number || 'N/A',
                     p.players?.license_type || 'None',
                     p.is_paid ? 'PAID' : 'UNPAID',
-                    p.is_paid ? (p.metadata?.payment_method || 'System') : 'N/A',
+                    p.is_paid ? (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || 'System')) : 'N/A',
                     amountPaid
                 ]);
             });
@@ -1063,7 +1063,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                             {p.is_paid ? (
                                                 <div className="space-y-0.5">
                                                     <p className="text-[10px] text-padel-green font-black uppercase italic tracking-wider">
-                                                        {p.actual_payment?.payment_method || p.metadata?.payment_method || 'System'}
+                                                        {p.actual_payment?.metadata?.paid_by_name 
+                                                           ? `By ${p.actual_payment.metadata.paid_by_name}` 
+                                                           : (p.actual_payment?.payment_method || p.metadata?.payment_method || 'System')}
                                                     </p>
                                                     {p.actual_payment && (
                                                         <p className="text-[10px] text-white font-black">R {p.actual_payment.amount}</p>
