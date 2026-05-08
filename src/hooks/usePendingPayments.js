@@ -40,9 +40,10 @@ export const usePendingPayments = (email, rankedinId) => {
                                 if (match) {
                                     const hasFee = match.entry_fee > 0 || (match.category_fees && Object.keys(match.category_fees).length > 0);
                                     if (hasFee) {
-                                        unpaidEvents.set(match.id, {
+                                        unpaidEvents.set(`${match.id}_${re.class_name || 'N/A'}`, {
                                             id: match.id,
                                             name: match.event_name,
+                                            division: re.class_name,
                                             slug: match.slug || match.id,
                                             start_date: match.start_date
                                         });
@@ -58,6 +59,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     .from('tournament_participants')
                     .select(`
                         event_id,
+                        class_name,
                         calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug)
                     `)
                     .ilike('email', email)
@@ -69,6 +71,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     .from('event_registrations')
                     .select(`
                         event_id,
+                        division,
                         calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug)
                     `)
                     .ilike('email', email)
@@ -86,9 +89,11 @@ export const usePendingPayments = (email, rankedinId) => {
                     const hasFee = cal.entry_fee > 0 || (cal.category_fees && Object.keys(cal.category_fees).length > 0);
                     
                     if (hasFee) {
-                        unpaidEvents.set(cal.id, {
+                        const division = record.class_name || record.division || 'N/A';
+                        unpaidEvents.set(`${cal.id}_${division}`, {
                             id: cal.id,
                             name: cal.event_name,
+                            division: division,
                             slug: cal.slug || cal.id,
                             start_date: cal.start_date
                         });
@@ -105,23 +110,23 @@ export const usePendingPayments = (email, rankedinId) => {
                     
                     const { data: paidRegs } = await supabase
                         .from('event_registrations')
-                        .select('event_id')
+                        .select('event_id, division')
                         .ilike('email', email)
                         .eq('payment_status', 'paid')
                         .in('event_id', eventIds);
                         
                     const { data: paidParts } = await supabase
                         .from('tournament_participants')
-                        .select('event_id')
+                        .select('event_id, class_name')
                         .ilike('email', email)
                         .eq('is_paid', true)
                         .in('event_id', eventIds);
 
                     if (paidRegs) {
-                        paidRegs.forEach(r => unpaidEvents.delete(r.event_id));
+                        paidRegs.forEach(r => unpaidEvents.delete(`${r.event_id}_${r.division}`));
                     }
                     if (paidParts) {
-                        paidParts.forEach(p => unpaidEvents.delete(p.event_id));
+                        paidParts.forEach(p => unpaidEvents.delete(`${p.event_id}_${p.class_name}`));
                     }
                 }
 

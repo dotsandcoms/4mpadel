@@ -256,6 +256,10 @@ const EventDetails = () => {
     const [loggedInPlayer, setLoggedInPlayer] = useState(null);
     const [isRegistered, setIsRegistered] = useState(false);
     const [isPaid, setIsPaid] = useState(false);
+    const [paidDivisions, setPaidDivisions] = useState([]);
+    const [registeredDivisions, setRegisteredDivisions] = useState([]);
+    const [selectedDivisions, setSelectedDivisions] = useState([]);
+    const [isCheckingReg, setIsCheckingReg] = useState(false);
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -345,9 +349,13 @@ const EventDetails = () => {
 
         const checkStatus = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
-
-            const userEmail = session.user.email.toLowerCase().trim();
+            const userEmail = session?.user?.email?.toLowerCase().trim() || formData.email?.toLowerCase().trim();
+            
+            if (!userEmail || userEmail.length < 5 || !userEmail.includes('@')) {
+                setRegisteredDivisions([]);
+                setIsRegistered(false);
+                return;
+            }
 
             // Fetch profile for name and Rankedin ID matching
             const { data: profile } = await supabase
@@ -360,34 +368,39 @@ const EventDetails = () => {
             const userRID = profile?.rankedin_id;
 
             // 1. Check Payment Status (Local DB)
-            const { data: reg } = await supabase
+            const { data: regs } = await supabase
                 .from('event_registrations')
-                .select('id')
+                .select('division')
                 .eq('event_id', event.id)
                 .ilike('email', userEmail)
-                .eq('payment_status', 'paid')
-                .maybeSingle();
+                .eq('payment_status', 'paid');
 
-            const { data: part } = await supabase
+            const { data: parts } = await supabase
                 .from('tournament_participants')
-                .select('id')
+                .select('class_name')
                 .eq('event_id', event.id)
-                .ilike('email', userEmail)
                 .eq('is_paid', true)
-                .maybeSingle();
+                .or(`email.ilike.${userEmail},profile_id.eq.${profile?.id || 0}`);
 
-            if (reg || part) {
-                setIsPaid(true);
-            }
+            const paidDivs = Array.from(new Set([
+                ...(regs || []).map(r => r.division),
+                ...(parts || []).map(p => p.class_name)
+            ].filter(Boolean)));
+            
+            setPaidDivisions(paidDivs);
+            setIsPaid(paidDivs.length > 0);
 
             // 2. Check Registration Status (Rankedin Live Player List)
             if (rId) {
+                setIsCheckingReg(true);
                 try {
                     const divisions = await getTournamentPlayerTabs(rId);
-                    let found = false;
-                    for (const cls of divisions) {
+                    const regDivs = [];
+                    
+                    // We need to check EACH division to see which ones they are in
+                    await Promise.all(divisions.map(async (cls) => {
                         const teams = await getTournamentParticipants(rId, cls.Id);
-                        found = teams.some(t => {
+                        const isMatch = teams.some(t => {
                             const p = t.Participant || t;
                             const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
 
@@ -406,17 +419,26 @@ const EventDetails = () => {
                                     (userName && pName === userName);
                             });
                         });
-                        if (found) break;
+                        
+                        if (isMatch) regDivs.push(cls.Name);
+                    }));
+
+                    setRegisteredDivisions(regDivs);
+                    setIsRegistered(regDivs.length > 0);
+                    
+                    // Default select the first division if only one found and not yet paid
+                    if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
+                        setSelectedDivisions([regDivs[0]]);
                     }
-                    setIsRegistered(found);
                 } catch (e) {
                     console.error("Registration check failed:", e);
-                    if (part) setIsRegistered(true);
+                } finally {
+                    setIsCheckingReg(false);
                 }
             }
         };
         checkStatus();
-    }, [event?.id, getTournamentParticipants, getTournamentPlayerTabs]);
+    }, [event?.id, formData.email, loggedInPlayer, getTournamentParticipants, getTournamentPlayerTabs]);
 
     // Debounced email lookup
     useEffect(() => {
@@ -808,7 +830,8 @@ const EventDetails = () => {
     };
 
     const calculateTotalAmount = () => {
-        let total = getEntryFeeForCategory(formData.division);
+        let entryFeesTotal = selectedDivisions.reduce((sum, div) => sum + getEntryFeeForCategory(div), 0);
+        let total = entryFeesTotal;
 
         // Add Temp License or Full License fee if player doesn't have a valid license
         if (playerProfileData && !playerProfileData.paid_registration) {
@@ -817,7 +840,7 @@ const EventDetails = () => {
 
         // Add Partner costs if paying for them and partner registration is enabled
         if (hasPartner && payForPartner && partnerProfile) {
-            total += getEntryFeeForCategory(formData.division); // Same division assumed for partners usually
+            total += entryFeesTotal; // Same divisions assumed for partners usually
             if (!partnerProfile.paid_registration) {
                 total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
             }
@@ -1060,41 +1083,41 @@ const EventDetails = () => {
 
         try {
             const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
-            const entryFee = getEntryFeeForCategory(formData.division);
-
-            // 1. Create registrations
-            const registrationsToUpsert = [
-                {
+            
+            // 1. Create registrations for EACH selected division
+            const registrationsToUpsert = [];
+            
+            selectedDivisions.forEach(division => {
+                registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
                     email: formData.email,
                     phone: formData.phone,
                     partner_name: formData.partner_name,
-                    division: formData.division,
-                    payment_status: 'paid',
-                    is_test: isTestMode
-                }
-            ];
-
-            if (payForPartner && partnerProfile) {
-                registrationsToUpsert.push({
-                    event_id: event.id,
-                    full_name: partnerProfile.name,
-                    email: partnerProfile.email,
-                    partner_name: formData.full_name,
-                    division: formData.division,
+                    division: division,
                     payment_status: 'paid',
                     is_test: isTestMode
                 });
-            }
 
-            console.log("Saving registrations...");
-            // Ensure unique registrations by email to prevent "ON CONFLICT DO UPDATE command cannot affect row a second time"
-            const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [r.email.toLowerCase(), r])).values());
+                if (payForPartner && partnerProfile) {
+                    registrationsToUpsert.push({
+                        event_id: event.id,
+                        full_name: partnerProfile.name,
+                        email: partnerProfile.email,
+                        partner_name: formData.full_name,
+                        division: division,
+                        payment_status: 'paid',
+                        is_test: isTestMode
+                    });
+                }
+            });
+
+            // Ensure unique registrations by email + division
+            const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
 
             const { error: regError } = await supabase
                 .from('event_registrations')
-                .upsert(uniqueRegistrations, { onConflict: 'event_id, email' });
+                .upsert(uniqueRegistrations, { onConflict: 'event_id, email, division' });
 
             if (regError) {
                 console.error("Reg Error:", regError);
@@ -1107,17 +1130,37 @@ const EventDetails = () => {
 
             const paymentsToInsert = [];
 
-            // Main Player: Entry Fee
-            paymentsToInsert.push({
-                player_id: playerId,
-                event_id: event.id,
-                amount: entryFee,
-                status: 'success',
-                payment_type: 'event_entry_fee',
-                payment_method: 'paystack',
-                reference: `${formData.full_name} - Entry`,
-                is_test: isTestMode,
-                metadata: { paystack_ref: paystackRef }
+            // Entry Fees for each division
+            selectedDivisions.forEach(division => {
+                const fee = getEntryFeeForCategory(division);
+                
+                // Main Player
+                paymentsToInsert.push({
+                    player_id: playerId,
+                    event_id: event.id,
+                    amount: fee,
+                    status: 'success',
+                    payment_type: 'event_entry_fee',
+                    payment_method: 'paystack',
+                    reference: `${formData.full_name} - ${division} - Entry`,
+                    is_test: isTestMode,
+                    metadata: { paystack_ref: paystackRef, division: division }
+                });
+
+                // Partner (if applicable)
+                if (payForPartner && partnerProfile) {
+                    paymentsToInsert.push({
+                        player_id: partnerProfile.id,
+                        event_id: event.id,
+                        amount: fee,
+                        status: 'success',
+                        payment_type: 'event_entry_fee',
+                        payment_method: 'paystack',
+                        reference: `${partnerProfile.name} - ${division} - Entry`,
+                        is_test: isTestMode,
+                        metadata: { paystack_ref: paystackRef, division: division }
+                    });
+                }
             });
 
             // Main Player: License (if applicable)
@@ -1501,8 +1544,8 @@ const EventDetails = () => {
                                                 </motion.a>
                                             )}
 
-                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND not already paid */}
-                                            {!isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
+                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured */}
+                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
                                                 <motion.button
                                                     whileHover={{ scale: 1.02 }}
                                                     whileTap={{ scale: 0.98 }}
@@ -1515,9 +1558,16 @@ const EventDetails = () => {
                                             )}
 
                                             {isPaid && (
-                                                <div className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl border border-white/10 shadow-lg uppercase tracking-[0.2em] text-[10px]">
-                                                    <CheckCircle size={16} strokeWidth={3} />
-                                                    Payment Received
+                                                <div className="flex flex-col items-center gap-2 w-full bg-slate-900 p-4 rounded-2xl border border-white/10 shadow-lg">
+                                                    <div className="flex items-center justify-center gap-2 text-padel-green font-black uppercase tracking-[0.2em] text-[10px]">
+                                                        <CheckCircle size={16} strokeWidth={3} />
+                                                        Payment Received
+                                                    </div>
+                                                    <div className="flex flex-wrap justify-center gap-1">
+                                                        {paidDivisions.map(div => (
+                                                            <span key={div} className="px-2 py-0.5 bg-padel-green/10 text-padel-green border border-padel-green/20 rounded text-[8px] font-black uppercase tracking-widest">{div}</span>
+                                                        ))}
+                                                    </div>
                                                 </div>
                                             )}
 
@@ -2280,7 +2330,7 @@ const EventDetails = () => {
                 {/* Registration Modal */}
                 <AnimatePresence>
                     {isModalOpen && (
-                        <>
+                        <div className="fixed inset-0 z-[1100]">
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -2308,7 +2358,7 @@ const EventDetails = () => {
                                     {/* Modal Content */}
                                     <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
                                         {regStep === 1 ? (
-                                            <div className="space-y-5">
+                                            <>
                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                                     <div className="space-y-1.5">
                                                         <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
@@ -2362,43 +2412,102 @@ const EventDetails = () => {
                                                             />
                                                         </div>
                                                     </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Division</label>
-                                                        <div className="relative">
-                                                            <Trophy className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
-                                                            <select
-                                                                name="division"
-                                                                value={formData.division}
-                                                                onChange={handleInputChange}
-                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold appearance-none cursor-pointer"
-                                                                required
-                                                            >
-                                                                <option value="" disabled className="bg-[#0F172A]">Select Division</option>
-                                                                {playerDivisions.length > 0 ? (
-                                                                    playerDivisions.map(tab => (
-                                                                        <option key={tab.Id} value={tab.Name} className="bg-[#0F172A]">{tab.Name}</option>
-                                                                    ))
-                                                                ) : (
-                                                                    EVENT_CATEGORIES.map(cat => (
-                                                                        <option key={cat} value={cat} className="bg-[#0F172A]">{cat}</option>
-                                                                    ))
-                                                                )}
-                                                            </select>
-                                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-                                                        </div>
-                                                    </div>
                                                 </div>
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between ml-3 mb-1">
+                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
+                                                            {registeredDivisions.length > 0 && (
+                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
+                                                                    {selectedDivisions.length} / {registeredDivisions.length} Selected
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {isCheckingReg ? (
+                                                            <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
+                                                                <Loader className="w-5 h-5 animate-spin text-padel-green" />
+                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
+                                                            </div>
+                                                        ) : registeredDivisions.length > 0 ? (
+                                                            <div className="grid grid-cols-1 gap-2.5">
+                                                                {registeredDivisions.map(divName => {
+                                                                    const alreadyPaid = paidDivisions.includes(divName);
+                                                                    const isSelected = selectedDivisions.includes(divName);
+                                                                    
+                                                                    return (
+                                                                        <button
+                                                                            key={divName}
+                                                                            type="button"
+                                                                            disabled={alreadyPaid}
+                                                                            onClick={() => {
+                                                                                setSelectedDivisions(prev => 
+                                                                                    prev.includes(divName) 
+                                                                                        ? prev.filter(d => d !== divName) 
+                                                                                        : [...prev, divName]
+                                                                                );
+                                                                            }}
+                                                                            className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-300 ${
+                                                                                alreadyPaid 
+                                                                                    ? 'bg-padel-green/5 border-padel-green/20 opacity-60 cursor-not-allowed' 
+                                                                                    : isSelected
+                                                                                        ? 'bg-padel-green border-padel-green shadow-lg shadow-padel-green/20 scale-[1.02]'
+                                                                                        : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
+                                                                            }`}
+                                                                        >
+                                                                            <div className="flex items-center gap-4">
+                                                                                <div className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all duration-300 ${
+                                                                                    alreadyPaid ? 'bg-padel-green border-padel-green' :
+                                                                                    isSelected ? 'bg-white border-white' : 'border-white/20 bg-black/20'
+                                                                                }`}>
+                                                                                    {alreadyPaid && <CheckCircle size={14} className="text-white" />}
+                                                                                    {isSelected && !alreadyPaid && <CheckCircle size={14} className="text-padel-green" />}
+                                                                                </div>
+                                                                                <div className="text-left">
+                                                                                    <span className={`text-[13px] font-black uppercase tracking-tight block ${
+                                                                                        isSelected && !alreadyPaid ? 'text-black' : alreadyPaid ? 'text-padel-green' : 'text-white'
+                                                                                    }`}>
+                                                                                        {divName}
+                                                                                    </span>
+                                                                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${
+                                                                                        isSelected && !alreadyPaid ? 'text-black/60' : 'text-white/30'
+                                                                                    }`}>
+                                                                                        Tournament Entry
+                                                                                    </span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex flex-col items-end gap-1">
+                                                                                {alreadyPaid ? (
+                                                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-padel-green/20 text-padel-green px-3 py-1 rounded-full border border-padel-green/30">Already Paid</span>
+                                                                                ) : (
+                                                                                    <span className={`text-sm font-black ${isSelected ? 'text-black' : 'text-padel-green'}`}>
+                                                                                        R{getEntryFeeForCategory(divName)}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        ) : formData.email && (
+                                                            <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
+                                                                <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
+                                                                <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
+                                                                <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
+                                                                    Please ensure you are registered on Rankedin <br />for this specific event.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
 
                                                 <div className="space-y-3">
-                                                    <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
-                                                                <Users size={16} />
+                                                    <div className="flex items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-padel-green/10 rounded-xl flex items-center justify-center text-padel-green group-hover:bg-padel-green group-hover:text-black transition-all duration-500">
+                                                                <Users size={20} />
                                                             </div>
                                                             <div>
-                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">Register with a Partner?</p>
-                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional registration</p>
+                                                                <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
+                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
                                                             </div>
                                                         </div>
                                                         <button
@@ -2413,11 +2522,11 @@ const EventDetails = () => {
                                                                     setFormData(prev => ({ ...prev, partner_name: '' }));
                                                                 }
                                                             }}
-                                                            className={`relative inline-flex h-6 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
+                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-white/10'}`}
                                                         >
                                                             <span
                                                                 aria-hidden="true"
-                                                                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${hasPartner ? 'translate-x-4' : 'translate-x-0'}`}
+                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
                                                             />
                                                         </button>
                                                     </div>
@@ -2508,7 +2617,7 @@ const EventDetails = () => {
                                                                                 <div>
                                                                                     <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
                                                                                     <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
-                                                                                        R{getEntryFeeForCategory(formData.division)} (Entry Fee) {partnerProfile.paid_registration ? '(License valid)' : `(+ License Required)`}
+                                                                                        Multi-Division Fee Auto-Calculated
                                                                                     </p>
                                                                                 </div>
                                                                             </div>
@@ -2603,100 +2712,96 @@ const EventDetails = () => {
                                                     )}
                                                 </div>
 
-                                                <div className="pt-4 border-t border-white/10">
-                                                    <div className="bg-slate-900/50 rounded-[1.5rem] p-5 text-white overflow-hidden relative group border border-white/5">
+                                                <div className="pt-3 border-t border-white/10">
+                                                    <div className="bg-slate-900/50 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/5 shadow-2xl">
                                                         {/* Decorative Background Glow */}
-                                                        <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-padel-green/20 transition-colors duration-500" />
+                                                        <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/5 rounded-full blur-3xl -mr-24 -mt-24 group-hover:bg-padel-green/10 transition-colors duration-1000" />
 
                                                         <div className="relative z-10 space-y-4">
-                                                            {/* Itemized list for clarity */}
+                                                            {/* Itemized list */}
                                                             <div className="space-y-3">
                                                                 <div className="space-y-2">
                                                                     {/* Registrant Section */}
-                                                                    <div className="flex justify-between items-start gap-4">
-                                                                        <div className="space-y-0.5">
-                                                                            <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
-                                                                            <p className="text-[8px] font-medium text-white/40 uppercase tracking-wider">{formData.division || 'No Category'}</p>
-                                                                        </div>
-                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-1">R{getEntryFeeForCategory(formData.division)} <span className="text-[7px] text-white/40 font-bold ml-1">(ENTRY FEE)</span></span>
+                                                                    <div className="space-y-2">
+                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green mb-1">Your Entries</p>
+                                                                        {selectedDivisions.map(div => (
+                                                                            <div key={`reg-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                                <div className="space-y-0.5">
+                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
+                                                                                    <p className="text-[8px] font-black text-padel-green uppercase tracking-wider italic">{div}</p>
+                                                                                </div>
+                                                                                <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
+                                                                            </div>
+                                                                        ))}
+                                                                        {selectedDivisions.length === 0 && (
+                                                                            <div className="flex justify-between items-start gap-4 opacity-30 p-3">
+                                                                                <div className="space-y-0.5">
+                                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
+                                                                                    <p className="text-[9px] font-medium text-white/40 uppercase tracking-wider">No Category Selected</p>
+                                                                                </div>
+                                                                                <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5">R0</span>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
 
                                                                     {playerProfileData && !playerProfileData.paid_registration && (
-                                                                        <div className="flex justify-between items-center text-padel-green">
-                                                                            <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                        <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20">
+                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                            <span className="text-[10px] font-black text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                         </div>
                                                                     )}
 
                                                                     {/* Partner Section - Conditional */}
                                                                     {hasPartner && partnerProfile && (
-                                                                        <div className="pt-2 mt-2 border-t border-white/10 space-y-2">
-                                                                            <div className="flex justify-between items-start gap-4">
-                                                                                <div className="space-y-0.5">
-                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} (Partner)</p>
-                                                                                    <p className="text-[8px] font-medium text-white/40 uppercase tracking-wider">{formData.division || 'Category'}</p>
+                                                                        <div className="space-y-2 pt-1">
+                                                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
+                                                                            {selectedDivisions.map(div => (
+                                                                                <div key={`par-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                                    <div className="space-y-0.5">
+                                                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
+                                                                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
                                                                                 </div>
-                                                                                <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-1">R{getEntryFeeForCategory(formData.division)} <span className="text-[7px] text-white/40 font-bold ml-1">(ENTRY FEE)</span></span>
-                                                                            </div>
-
+                                                                            ))}
                                                                             {payForPartner && !partnerProfile.paid_registration && (
-                                                                                <div className="flex justify-between items-center text-padel-green">
-                                                                                    <span className="text-[9px] font-bold uppercase tracking-widest">4M Padel {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                                <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
+                                                                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                    <span className="text-[10px] font-black text-blue-400">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                                 </div>
                                                                             )}
                                                                         </div>
                                                                     )}
                                                                 </div>
+                                                                </div>
                                                             </div>
 
                                                             {/* Bottom Action Area */}
-                                                            <div className="pt-4 border-t border-white/20">
-                                                                {isPaid ? (
-                                                                    <div className="flex items-center justify-between gap-4 py-2 w-full">
-                                                                        <div className="flex flex-col">
-                                                                            <div className="flex items-center gap-2 text-padel-green">
-                                                                                <CheckCircle size={16} />
-                                                                                <p className="text-[10px] font-black uppercase tracking-[0.2em] italic text-padel-green">Registration Confirmed</p>
-                                                                            </div>
-                                                                            <p className="text-[9px] text-white/40 font-bold uppercase mt-1 tracking-wider">You're all set for this event!</p>
+                                                            <div className="pt-4 border-t border-white/10 mt-1">
+                                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                                                                    <div className="space-y-0.5">
+                                                                        <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
+                                                                        <div className="flex items-baseline gap-2">
+                                                                            <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
+                                                                            <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
                                                                         </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setShowRegistrationModal(false)}
-                                                                            className="h-12 px-10 bg-white/10 text-white rounded-xl hover:bg-white/20 hover:scale-[1.02] active:scale-95 transition-all duration-300 font-black uppercase tracking-[0.1em] text-[10px] border border-white/5"
-                                                                        >
-                                                                            Close
-                                                                        </button>
                                                                     </div>
-                                                                ) : (
-                                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
-                                                                        <div className="space-y-0.5">
-                                                                            <p className="text-[9px] font-black uppercase tracking-[0.2em] text-padel-green">Total to Pay</p>
-                                                                            <div className="flex items-baseline gap-2">
-                                                                                <p className="text-3xl font-black tracking-tighter leading-none">R {calculateTotalAmount()}</p>
-                                                                                <p className="text-[7px] font-bold uppercase tracking-[0.2em] text-white/30 whitespace-nowrap">SECURE VIA PAYSTACK</p>
-                                                                            </div>
-                                                                        </div>
-
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={handleRegister}
-                                                                            disabled={isSubmitting || emailCheckStatus === 'not_found'}
-                                                                            className="h-14 px-6 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.02] active:scale-95 transition-all duration-300 shadow-xl shadow-padel-green/20 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.1em] text-[10px] flex-1 md:flex-none"
-                                                                        >
-                                                                            <CreditCard className="w-5 h-5" />
-                                                                            <span>Pay Now</span>
-                                                                        </button>
-                                                                    </div>
-                                                                )}
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={handleRegister}
+                                                                        disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
+                                                                        className="h-14 px-8 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[10px] flex-1 md:flex-none group"
+                                                                    >
+                                                                        <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                                                        <span>Complete Payment</span>
+                                                                    </button>
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                        </div>
+                                                        </>
                                         ) : (
-                                            <div className="flex-1 flex flex-col items-center justify-center py-16 px-8 text-center bg-[#0F172A] relative overflow-hidden">
+                                             <>
                                                 {/* Ambient Glows */}
                                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
                                                 <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
@@ -2730,14 +2835,13 @@ const EventDetails = () => {
                                                         <ArrowRight className="w-4 h-4" />
                                                     </button>
                                                     <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Data Syncing Complete</p>
-                                                </div>
-                                            </div>
+                                                    </div>
+                                             </>
                                         )}
-
                                     </div>
                                 </div>
                             </motion.div>
-                        </>
+                        </div>
                     )}
                 </AnimatePresence>
 

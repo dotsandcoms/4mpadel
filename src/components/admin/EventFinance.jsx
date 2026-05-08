@@ -29,6 +29,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
+    const selectedEvent = useMemo(() => 
+        events.find(e => e.id === selectedEventId), 
+        [events, selectedEventId]
+    );
+
     const filteredEvents = useMemo(() => {
         let sorted = [...events].sort((a, b) => {
             const dateA = new Date(a.start_date);
@@ -54,6 +59,15 @@ const EventFinance = ({ allowedEvents = [] }) => {
         if (!eventSearch) return sorted;
         return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
     }, [events, eventSearch, allowedEvents]);
+
+    const playerEntryCounts = useMemo(() => {
+        const counts = {};
+        localParticipants.forEach(p => {
+            const name = p.full_name?.toLowerCase().trim();
+            if (name) counts[name] = (counts[name] || 0) + 1;
+        });
+        return counts;
+    }, [localParticipants]);
     useEffect(() => {
         const fetchInitialData = async () => {
             setLoading(prev => ({ ...prev, events: true }));
@@ -107,6 +121,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
     // 3. Sync from Rankedin (Core Engine)
     const runSyncForEvent = async (eventId, rId, eventName) => {
         let successCount = 0;
+        let createdCount = 0;
         let errorCount = 0;
 
         try {
@@ -152,22 +167,28 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
             if (externalParticipants.length === 0) return { success: 0, error: 0, message: "No players found" };
 
-            // Deduplicate
-            const seenIds = new Map();
-            externalParticipants.forEach(p => seenIds.set(p.rankedin_participant_id, p));
-            externalParticipants = Array.from(seenIds.values());
+            // Deduplicate by Participant ID AND Class (Division)
+            const seenKeys = new Map();
+            externalParticipants.forEach(p => {
+                const key = `${p.rankedin_participant_id}_${p.class_name}`;
+                seenKeys.set(key, p);
+            });
+            externalParticipants = Array.from(seenKeys.values());
 
             // Step 3: Fetch existing participants and PAID registrations
             const [{ data: existingRows }, { data: paidRegs }] = await Promise.all([
-                supabase.from('tournament_participants').select('id, rankedin_participant_id, is_paid').eq('event_id', eventId),
-                supabase.from('event_registrations').select('full_name, email, payment_status').eq('event_id', eventId).eq('payment_status', 'paid')
+                supabase.from('tournament_participants').select('id, rankedin_participant_id, class_name, is_paid, email, metadata').eq('event_id', eventId),
+                supabase.from('event_registrations').select('full_name, email, division, payment_status').eq('event_id', eventId).eq('payment_status', 'paid')
             ]);
 
-            const existingMap = new Map((existingRows || []).map(r => [r.rankedin_participant_id, r]));
-            const paidRegNames = new Set((paidRegs || []).map(r => r.full_name.toLowerCase().trim()));
-            const paidRegEmails = new Set((paidRegs || []).map(r => r.email?.toLowerCase().trim()).filter(Boolean));
+            // Map existing records by ID + Class
+            const existingMap = new Map((existingRows || []).map(r => [`${r.rankedin_participant_id}_${r.class_name}`, r]));
+            
+            // Map paid registrations by Name + Division AND Email + Division
+            const paidRegsByName = new Set((paidRegs || []).map(r => `${r.full_name.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`));
+            const paidRegsByEmail = new Set((paidRegs || []).map(r => `${r.email?.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`).filter(e => !e.startsWith('_')));
 
-            console.info(`Found ${paidRegNames.size} paid registrations in system for ${eventName}. Checking for matches...`);
+            console.info(`Found ${paidRegs?.length || 0} paid registrations in system for ${eventName}. Checking for matches...`);
 
             // Step 4: Upsert participants
             for (const p of externalParticipants) {
@@ -183,10 +204,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     matchedEmail = matchedProfile.email?.toLowerCase().trim();
                 }
 
-                // SPECIAL FIX: Check if this player already PAID in our system (Name or Email match)
-                const alreadyPaidInSystem = paidRegNames.has(nameLower) || (matchedEmail && paidRegEmails.has(matchedEmail));
+                // SPECIAL FIX: Check if this player already PAID in our system for THIS division
+                const divLower = p.class_name?.toLowerCase().trim();
+                const alreadyPaidInSystem = paidRegsByName.has(`${nameLower}_${divLower}`) || (matchedEmail && paidRegsByEmail.has(`${matchedEmail}_${divLower}`));
 
-                const existingRecord = existingMap.get(p.rankedin_participant_id);
+                const existingRecord = existingMap.get(`${p.rankedin_participant_id}_${p.class_name}`);
                 const currentMetadata = existingRecord?.metadata || {};
                 const isManualUnpaid = currentMetadata.manual_unpaid === true;
 
@@ -195,6 +217,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     rankedin_participant_id: p.rankedin_participant_id,
                     full_name: p.full_name,
                     class_name: p.class_name,
+                    email: matchedEmail || null,
                     ...(autoProfileId ? { profile_id: autoProfileId } : {}),
                     ...(alreadyPaidInSystem && !isManualUnpaid ? { is_paid: true } : {}) // RESPECT MANUAL UNMARK
                 };
@@ -204,10 +227,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     : await supabase.from('tournament_participants').insert(participantData);
 
                 if (dbError) {
-                    console.error('Sync DB Error:', dbError);
+                    console.error(`Sync DB Error for ${p.full_name} (${p.class_name}):`, dbError);
                     errorCount++;
                 } else {
-                    successCount++;
+                    if (existingRecord) successCount++;
+                    else createdCount++;
                 }
             }
             
@@ -215,12 +239,12 @@ const EventFinance = ({ allowedEvents = [] }) => {
             // We fetch the current state and explicitly delete any ID not in the fresh list.
             const { data: currentInDb } = await supabase
                 .from('tournament_participants')
-                .select('id, rankedin_participant_id')
+                .select('id, rankedin_participant_id, class_name')
                 .eq('event_id', eventId);
             
-            const validIds = externalParticipants.map(p => p.rankedin_participant_id);
+            const validKeys = externalParticipants.map(p => `${p.rankedin_participant_id}_${p.class_name}`);
             const toDelete = (currentInDb || [])
-                .filter(row => !validIds.includes(String(row.rankedin_participant_id)))
+                .filter(row => !validKeys.includes(`${row.rankedin_participant_id}_${row.class_name}`))
                 .map(row => row.id);
             
             if (toDelete.length > 0) {
@@ -235,9 +259,12 @@ const EventFinance = ({ allowedEvents = [] }) => {
                 }
             }
 
-            return { success: successCount, error: errorCount };
+            fetchParticipants(eventId);
+            toast.success(`Sync complete: ${createdCount} new entries, ${successCount} updated. ${errorCount > 0 ? `${errorCount} failed.` : ''}`);
+            return { success: successCount + createdCount, error: errorCount };
         } catch (err) {
             console.error(`Core sync error for ${eventName}:`, err);
+            toast.error(`Sync failed: ${err.message}`);
             return { success: 0, error: 1, message: err.message };
         }
     };
@@ -354,7 +381,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
             let regQuery = supabase
                 .from('event_registrations')
                 .update({ payment_status: 'unpaid' })
-                .eq('event_id', selectedEventId);
+                .eq('event_id', selectedEventId)
+                .eq('division', participant.class_name);
             
             if (searchEmail) {
                 regQuery = regQuery.or(`full_name.ilike.%${searchName}%,email.ilike.${searchEmail}`);
@@ -565,7 +593,6 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     <th className="px-6 py-3">Event Date</th>
                                     <th className="px-6 py-3">Tournament Name</th>
                                     <th className="px-6 py-3">Rankedin ID</th>
-                                    <th className="px-6 py-3 text-right">Status / Quick View</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -603,28 +630,6 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <span className="text-[10px] font-mono text-gray-600 bg-white/5 px-2 py-0.5 rounded uppercase">{rId || 'NO ID'}</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-3 translate-x-2">
-                                                        <button
-                                                            onClick={(ev) => {
-                                                                    ev.stopPropagation();
-                                                                    handleSyncFromRankedin(e);
-                                                            }}
-                                                            disabled={loading.syncing}
-                                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${
-                                                                isSelected 
-                                                                ? 'bg-black/20 border-black/10 hover:bg-black/30' 
-                                                                : 'bg-white/5 border-white/10 hover:bg-padel-green hover:text-black hover:border-padel-green'
-                                                            }`}
-                                                        >
-                                                            {loading.syncing && isSelected ? <Loader2 className="animate-spin" size={10} /> : <RefreshCcw size={10} />}
-                                                            Sync
-                                                        </button>
-                                                        <div className={`p-2 rounded-lg transition-colors ${isSelected ? 'bg-padel-green text-black shadow-inner' : 'bg-white/5 text-padel-green opacity-0 group-hover:opacity-100'}`}>
-                                                            <ExternalLink size={14} />
-                                                        </div>
-                                                    </div>
                                                 </td>
                                             </tr>
                                         );
@@ -714,6 +719,30 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     <option value="paid">Fees: Paid</option>
                                     <option value="unpaid">Fees: Unpaid</option>
                                 </select>
+
+                                {/* Event Quick Actions */}
+                                <div className="flex items-center gap-2 sm:ml-auto col-span-2 sm:col-span-1 justify-end mt-2 sm:mt-0">
+                                    <button
+                                        onClick={() => handleSyncFromRankedin()}
+                                        disabled={loading.syncing}
+                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-black/40 hover:bg-black/60 border border-white/10 text-white px-4 py-2 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-30 h-[44px] sm:h-[38px] min-w-[100px]"
+                                    >
+                                        {loading.syncing ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
+                                        SYNC
+                                    </button>
+                                    
+                                    {selectedEvent?.rankedin_url && (
+                                        <a 
+                                            href={selectedEvent.rankedin_url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="p-2 bg-padel-green text-black rounded-xl hover:bg-padel-green/90 transition-all flex items-center justify-center w-[44px] sm:w-[38px] h-[44px] sm:h-[38px] shrink-0"
+                                            title="View on Rankedin"
+                                        >
+                                            <ExternalLink size={18} />
+                                        </a>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
