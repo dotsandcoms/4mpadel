@@ -51,6 +51,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [profilePic, setProfilePic] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
+    const [region, setRegion] = useState('');
 
     // Temporary License Addition
     const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -100,6 +101,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         setAcceptTerms(false);
         setPaymentOption('pay_now');
         setSelectedEventId('');
+        setRegion('');
         setMessage(null);
     };
 
@@ -204,7 +206,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'error', text: 'Passwords do not match.' });
                 return;
             }
-            if (!firstName || !lastName || !contactNumber || !gender || !nationality || !idNumber) {
+            if (!firstName || !lastName || !contactNumber || !gender || !nationality || !idNumber || !region) {
                 setMessage({ type: 'error', text: 'Please fill in all required fields for Step 1.' });
                 return;
             }
@@ -311,6 +313,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 p_bio: bio,
                 p_home_club: homeClub,
                 p_sponsors: sponsors,
+                p_region: region,
             };
 
             const { error: insertError } = await supabase.rpc('create_player_profile', {
@@ -565,15 +568,34 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                     required
                                                 />
                                             </div>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    placeholder="ID / Passport Number"
-                                                    value={idNumber}
-                                                    onChange={(e) => setIdNumber(e.target.value)}
-                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="ID / Passport Number"
+                                                        value={idNumber}
+                                                        onChange={(e) => setIdNumber(e.target.value)}
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white text-sm focus:outline-none focus:border-padel-green transition-all"
+                                                        required
+                                                    />
+                                                </div>
+                                                <select
+                                                    value={region}
+                                                    onChange={(e) => setRegion(e.target.value)}
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl h-12 px-4 text-white text-sm focus:outline-none focus:border-padel-green transition-all appearance-none cursor-pointer"
                                                     required
-                                                />
+                                                >
+                                                    <option value="" disabled>Region</option>
+                                                    <option value="Eastern Cape">Eastern Cape</option>
+                                                    <option value="Free State">Free State</option>
+                                                    <option value="Gauteng">Gauteng</option>
+                                                    <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                                                    <option value="Limpopo">Limpopo</option>
+                                                    <option value="Mpumalanga">Mpumalanga</option>
+                                                    <option value="Northern Cape">Northern Cape</option>
+                                                    <option value="North West">North West</option>
+                                                    <option value="Western Cape">Western Cape</option>
+                                                </select>
                                             </div>
                                             <button
                                                 type="submit"

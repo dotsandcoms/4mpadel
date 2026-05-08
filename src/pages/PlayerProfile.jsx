@@ -54,7 +54,8 @@ const PlayerProfile = () => {
         id_number: '',
         home_club: '',
         age: '',
-        instagram_link: ''
+        instagram_link: '',
+        region: ''
     });
 
     const showMessage = (text, type = 'success') => {
@@ -184,7 +185,8 @@ const PlayerProfile = () => {
                     category: playerData.category || '',
                     id_number: playerData.id_number || '',
                     age: playerData.age || '',
-                    instagram_link: playerData.instagram_link || ''
+                    instagram_link: playerData.instagram_link || '',
+                    region: playerData.region || ''
                 });
 
                 // Fetch associated coach application if any
@@ -411,7 +413,8 @@ const PlayerProfile = () => {
             category: formData.category,
             id_number: formData.id_number,
             age: formData.age,
-            instagram_link: formData.instagram_link
+            instagram_link: formData.instagram_link,
+            region: formData.region
         };
 
         try {
@@ -1288,6 +1291,28 @@ const PlayerProfile = () => {
                                                                                 className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="@username or full URL"
                                                                             />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Region</label>
+                                                                        <div className="relative">
+                                                                            <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-padel-green/40" size={20} />
+                                                                            <select
+                                                                                value={formData.region}
+                                                                                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none transition-all font-bold appearance-none cursor-pointer"
+                                                                            >
+                                                                                <option value="" disabled>Select Region</option>
+                                                                                <option value="Eastern Cape">Eastern Cape</option>
+                                                                                <option value="Free State">Free State</option>
+                                                                                <option value="Gauteng">Gauteng</option>
+                                                                                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                                                                                <option value="Limpopo">Limpopo</option>
+                                                                                <option value="Mpumalanga">Mpumalanga</option>
+                                                                                <option value="Northern Cape">Northern Cape</option>
+                                                                                <option value="North West">North West</option>
+                                                                                <option value="Western Cape">Western Cape</option>
+                                                                            </select>
                                                                         </div>
                                                                     </div>
                                                                 </div>
