@@ -2342,7 +2342,7 @@ const EventDetails = () => {
                                 initial={{ opacity: 0, scale: 0.95, y: 20 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="fixed inset-0 z-[1100] flex items-start md:items-center justify-center pointer-events-none p-4 md:p-8"
+                                className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-6 md:p-8"
                             >
                                 <div className="bg-[#0F172A] w-full max-w-lg rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
                                     {/* Modal Header */}
@@ -2776,9 +2776,9 @@ const EventDetails = () => {
                                                                 </div>
                                                             </div>
 
-                                                            {/* Bottom Action Area */}
+                                                             {/* Bottom Action Area */}
                                                             <div className="pt-4 border-t border-white/10 mt-1">
-                                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 w-full">
+                                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
                                                                     <div className="space-y-0.5">
                                                                         <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
                                                                         <div className="flex items-baseline gap-2">
@@ -2790,7 +2790,7 @@ const EventDetails = () => {
                                                                         type="button"
                                                                         onClick={handleRegister}
                                                                         disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
-                                                                        className="h-14 px-8 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[10px] flex-1 md:flex-none group"
+                                                                        className="h-16 md:h-14 px-12 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0"
                                                                     >
                                                                         <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
                                                                         <span>Complete Payment</span>

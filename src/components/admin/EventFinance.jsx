@@ -758,7 +758,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             
                             <div className="flex gap-3 flex-1 order-1 sm:order-2">
                                 <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 flex flex-row sm:flex-col justify-between items-center sm:items-start">
-                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Total Players</p>
+                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Total Entries</p>
                                     <p className="text-xl font-black text-white leading-none">{localParticipants.length}</p>
                                 </div>
                                 <div className="flex-1 bg-padel-green/5 p-3 rounded-xl border border-padel-green/10 flex flex-row sm:flex-col justify-between items-center sm:items-start text-padel-green">
