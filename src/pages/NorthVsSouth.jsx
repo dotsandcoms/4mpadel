@@ -500,18 +500,18 @@ const NorthVsSouth = () => {
         </motion.div>
 
         <div className="relative z-10 max-w-7xl mx-auto w-full py-6 md:py-0">
-          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="flex flex-col items-start">
-            <motion.div variants={fadeInUp} className="flex items-center gap-3 md:gap-6 mb-4 md:mb-8">
-              <div className="bg-white p-2 rounded-xl md:rounded-2xl shadow-xl">
-                <img src={nvsLogo} alt="Official Logo" className="h-10 md:h-32 w-auto object-contain" />
+          <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="flex flex-col items-center md:items-start">
+            <motion.div variants={fadeInUp} className="flex flex-col md:flex-row items-center gap-4 md:gap-6 mb-8 md:mb-8">
+              <div className="bg-white p-3 md:p-2 rounded-2xl shadow-xl">
+                <img src={nvsLogo} alt="Official Logo" className="h-24 md:h-32 w-auto object-contain" />
               </div>
-              <div className="h-8 md:h-16 w-px bg-white/30" />
-              <p className="text-white text-[8px] md:text-sm font-black uppercase tracking-[0.4em] leading-tight">Guardrisk<br />North Vs South<br />2026</p>
+              <div className="hidden md:block h-16 w-px bg-white/30" />
+              <p className="text-white text-[10px] md:text-sm font-black uppercase tracking-[0.4em] leading-tight text-center md:text-left">Guardrisk<br />North Vs South<br />2026</p>
             </motion.div>
 
             <motion.h1
               variants={fadeInUp}
-              className="text-white text-4xl sm:text-7xl md:text-[9rem] font-black uppercase tracking-tighter italic leading-[0.9] mb-6 md:mb-12 drop-shadow-2xl"
+              className="text-white text-4xl sm:text-7xl md:text-[9rem] font-black uppercase tracking-tighter italic leading-[0.9] mb-6 md:mb-12 drop-shadow-2xl text-center md:text-left"
               style={{ textShadow: '0 20px 80px rgba(0,0,0,0.3)' }}
             >
               THE ULTIMATE<br />BRAGGING RIGHTS
