@@ -724,6 +724,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
             </div>
 
             {selectedEventId && (
+                <React.Fragment>
                 <div className="space-y-6 text-white pt-8 border-t border-white/5">
                     {/* Active Event Indicator */}
                     <div className="flex flex-col gap-2">
@@ -748,8 +749,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
                     <div className="flex flex-col gap-6">
                         {/* Search & Filters Grid */}
-                        <div className="flex flex-col lg:flex-row gap-4">
-                            <div className="relative w-full lg:w-72 shrink-0">
+                        <div className="flex flex-col gap-4">
+                            <div className="flex flex-col lg:flex-row gap-4">
+                                <div className="relative w-full lg:w-72 shrink-0">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
                                 <input
                                     type="text"
@@ -803,8 +805,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     <option value="unpaid">Fees: Unpaid</option>
                                 </select>
 
-                                {/* Event Quick Actions */}
-                                <div className="flex items-center gap-2 sm:ml-auto col-span-2 sm:col-span-1 justify-end mt-2 sm:mt-0">
+                                <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto justify-end mt-2 sm:mt-0">
                                     <button
                                         onClick={() => handleSyncFromRankedin()}
                                         disabled={loading.syncing}
@@ -828,6 +829,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
 
                         {/* Top Stats & Export */}
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -839,28 +842,27 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                 Export Excel
                             </button>
                             
-                            <div className="flex gap-3 flex-1 order-1 sm:order-2">
-                                <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 flex flex-row sm:flex-col justify-between items-center sm:items-start">
-                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Total Entries</p>
-                                    <p className="text-xl font-black text-white leading-none">{localParticipants.length}</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 flex-1 order-1 sm:order-2">
+                                <div className="bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col justify-between items-start">
+                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest leading-tight">Total Entries</p>
+                                    <p className="text-xl font-black text-white leading-none mt-1">{localParticipants.length}</p>
                                 </div>
-                                <div className="flex-1 bg-white/5 p-3 rounded-xl border border-white/5 flex flex-row sm:flex-col justify-between items-center sm:items-start">
-                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Unique Players</p>
-                                    <p className="text-xl font-black text-white leading-none">{Object.keys(playerEntryCounts).length}</p>
+                                <div className="bg-white/5 p-3 rounded-xl border border-white/5 flex flex-col justify-between items-start">
+                                    <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest leading-tight">Unique Players</p>
+                                    <p className="text-xl font-black text-white leading-none mt-1">{Object.keys(playerEntryCounts).length}</p>
                                 </div>
-                                <div className="flex-1 bg-padel-green/5 p-3 rounded-xl border border-padel-green/10 flex flex-row sm:flex-col justify-between items-center sm:items-start text-padel-green">
-                                     <p className="text-[9px] font-black uppercase tracking-widest">Paid Entries</p>
-                                     <p className="text-xl font-black leading-none">{localParticipants.filter(p => p.is_paid).length}</p>
+                                <div className="bg-padel-green/5 p-3 rounded-xl border border-padel-green/10 flex flex-col justify-between items-start text-padel-green">
+                                     <p className="text-[9px] font-black uppercase tracking-widest leading-tight">Paid Entries</p>
+                                     <p className="text-xl font-black leading-none mt-1">{localParticipants.filter(p => p.is_paid).length}</p>
                                  </div>
-                                 <div className="flex-1 bg-padel-green p-3 rounded-xl border border-padel-green/20 flex flex-row sm:flex-col justify-between items-center sm:items-start text-black shadow-lg shadow-padel-green/20">
-                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Total Revenue</p>
-                                     <p className="text-xl font-black leading-none">R {totalCollected}</p>
+                                 <div className="bg-padel-green p-3 rounded-xl border border-padel-green/20 flex flex-col justify-between items-start text-black shadow-lg shadow-padel-green/20">
+                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-70 leading-tight">Total Revenue</p>
+                                     <p className="text-xl font-black leading-none mt-1">R {totalCollected}</p>
                                  </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10">
+                        <div className="bg-[#1E293B]/50 backdrop-blur-md rounded-3xl border border-white/10">
                         {/* DESKTOP TABLE VIEW */}
                         <div className="hidden lg:block overflow-x-auto max-h-[75vh] overflow-y-auto custom-scrollbar border border-white/5 rounded-2xl">
                             <table className="w-full text-left border-collapse">
@@ -1056,6 +1058,21 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                                 {p.players?.license_type || 'No License'}
                                             </span>
                                         </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Payment Info</p>
+                                            {p.is_paid ? (
+                                                <div className="space-y-0.5">
+                                                    <p className="text-[10px] text-padel-green font-black uppercase italic tracking-wider">
+                                                        {p.actual_payment?.payment_method || p.metadata?.payment_method || 'System'}
+                                                    </p>
+                                                    {p.actual_payment && (
+                                                        <p className="text-[10px] text-white font-black">R {p.actual_payment.amount}</p>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-[10px] text-gray-500 italic">No record</p>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Actions */}
@@ -1084,7 +1101,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             ))}
                         </div>
                     </div>
-                </div>
+                    </div>
+                </React.Fragment>
             )}
 
 
@@ -1161,8 +1179,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                 Cancel
                             </button>
                         </motion.div>
-                    </div>
-                )}
+                        </div>
+                    )}
             </AnimatePresence>
         </div>
     );
