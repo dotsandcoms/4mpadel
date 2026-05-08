@@ -7,7 +7,7 @@ import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, Ar
 // ── Assets ────────────────────────────────────────────────────────────────────
 import nvsLogo from '../assets/nvs/official_logo.png';
 import heroImg from '../assets/nvs/hero.png';
-import actionImg from '../assets/nvs/action_male.jpg';
+import actionImg from '../assets/nvs/action_male.png';
 import venueImg from '../assets/nvs/venue.png';
 
 // ── Sponsor Assets ─────────────────────────────────────────────────────────────
