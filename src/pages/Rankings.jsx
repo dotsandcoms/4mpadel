@@ -260,6 +260,197 @@ const TierCard = ({ tier }) => {
   );
 };
 
+const FullRankingsTable = ({
+  activeTab,
+  setActiveTab,
+  searchTerm,
+  setSearchTerm,
+  paginatedData,
+  totalPages,
+  currentPage,
+  setCurrentPage,
+  itemsPerPage,
+  filteredData,
+  imageErrors,
+  setImageErrors,
+  setSelectedPlayer,
+  getInitials
+}) => {
+  return (
+    <div className="max-w-7xl mx-auto px-6 relative z-10">
+      {/* Official Rankings Header */}
+      <div className="mb-10 text-center">
+        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">SAPA</span> Rankings</h2>
+        <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
+      </div>
+
+      {/* Controls Box */}
+      <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-md mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+
+          {/* Internal Table Tabs */}
+          <div className="flex p-1 bg-black/40 rounded-xl max-w-sm w-full md:w-auto">
+            <button
+              onClick={() => setActiveTab('men')}
+              className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'men' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Men
+            </button>
+            <button
+              onClick={() => setActiveTab('ladies')}
+              className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'ladies' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+                }`}
+            >
+              Women
+            </button>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative w-full md:w-80">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-500" />
+            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search player name..."
+              className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-padel-green/50 placeholder-gray-500 transition-all font-medium"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white"
+              >
+                &times;
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Table Area */}
+      <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-full md:min-w-[600px]">
+            <thead>
+              <tr className="bg-white/5">
+                <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm w-12 md:w-24">Pos</th>
+                <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm">Player</th>
+                <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm text-right">Points</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedData.length > 0 ? (
+                paginatedData.map((player) => (
+                  <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
+                    <td className="py-3 px-3 md:py-4 md:px-6 text-xl md:text-2xl font-black text-gray-500 group-hover:text-padel-green transition-colors text-center md:text-left">
+                      {player.rawRank}
+                    </td>
+                    <td className="py-3 px-3 md:py-4 md:px-6">
+                      <div
+                        onClick={() => {
+                          if (player.hasLocalProfile && player.playerRecord) {
+                            setSelectedPlayer(player.playerRecord);
+                          } else {
+                            window.open(player.rankedinProfile, '_blank');
+                          }
+                        }}
+                        className="flex items-center gap-3 md:gap-4 group/link cursor-pointer"
+                      >
+                        <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
+                          {!imageErrors[player.id] ? (
+                            <img
+                              src={player.image}
+                              alt={player.name}
+                              className={`w-full h-full object-cover transition-all ${player.hasLocalProfile ? '' : 'filter grayscale group-hover/link:grayscale-0'}`}
+                              onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
+                            />
+                          ) : (
+                            <span className="text-xs md:text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
+                          )}
+                        </div>
+                        <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
+                          {player.name}
+                          {player.hasLocalProfile && (
+                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-padel-green/10 text-padel-green text-[8px] font-black uppercase tracking-widest border border-padel-green/20">4M</span>
+                          )}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 md:py-4 md:px-6 text-right">
+                      <span className="inline-block bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-base md:text-lg font-black text-white group-hover:bg-padel-green group-hover:text-black transition-colors">
+                        {player.points.toLocaleString()}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="3" className="py-16 text-center text-gray-500 font-medium">
+                    No players found matching "{searchTerm}"
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="border-t border-white/10 p-6 flex items-center justify-between bg-white/[0.02]">
+            <p className="text-sm text-gray-500 font-medium hidden md:block">
+              Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="text-white">{filteredData.length}</span> players
+            </p>
+
+            <div className="flex items-center gap-2 mx-auto md:mx-0">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-padel-green transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-1 mx-4">
+                {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
+                  let pageNum = currentPage;
+                  if (totalPages <= 5) pageNum = idx + 1;
+                  else if (currentPage <= 3) pageNum = idx + 1;
+                  else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + idx;
+                  else pageNum = currentPage - 2 + idx;
+
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-all duration-300 ${currentPage === pageNum
+                        ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20 scale-110'
+                        : 'text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+                className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-padel-green transition-colors"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const Rankings = () => {
   const { getOrganisationRankings } = useRankedin();
   const [mensDataRaw, setMensDataRaw] = useState([]);
@@ -557,6 +748,26 @@ const Rankings = () => {
                 </div>
                 <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                 <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+
+                {/* Full Ranking Table added under Leaderboards */}
+                <div className="mt-20">
+                  <FullRankingsTable
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    paginatedData={paginatedData}
+                    totalPages={totalPages}
+                    currentPage={currentPage}
+                    setCurrentPage={setCurrentPage}
+                    itemsPerPage={itemsPerPage}
+                    filteredData={filteredData}
+                    imageErrors={imageErrors}
+                    setImageErrors={setImageErrors}
+                    setSelectedPlayer={setSelectedPlayer}
+                    getInitials={getInitials}
+                  />
+                </div>
               </div>
             )}
           </motion.div>
@@ -569,177 +780,24 @@ const Rankings = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.3 }}
-            className="max-w-7xl mx-auto px-6 relative z-10"
+            className="w-full relative z-10"
           >
-            {/* Official Rankings Header */}
-            <div className="mb-10 text-center">
-              <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">SAPA</span> Rankings</h2>
-              <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
-            </div>
-
-            {/* Controls Box */}
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-md mb-8">
-              <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-
-                {/* Internal Table Tabs */}
-                <div className="flex p-1 bg-black/40 rounded-xl max-w-sm w-full md:w-auto">
-                  <button
-                    onClick={() => setActiveTab('men')}
-                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'men' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                      }`}
-                  >
-                    Men
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('ladies')}
-                    className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'ladies' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                      }`}
-                  >
-                    Women
-                  </button>
-                </div>
-
-                {/* Search Box */}
-                <div className="relative w-full md:w-80">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-500" />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Search player name..."
-                    className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-padel-green/50 placeholder-gray-500 transition-all font-medium"
-                  />
-                  {searchTerm && (
-                    <button
-                      onClick={() => setSearchTerm('')}
-                      className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white"
-                    >
-                      &times;
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Table Area */}
-            <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-full md:min-w-[600px]">
-                  <thead>
-                    <tr className="bg-white/5">
-                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm w-12 md:w-24">Pos</th>
-                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm">Player</th>
-                      <th className="py-3 px-3 md:py-5 md:px-6 font-bold text-gray-400 uppercase tracking-widest text-xs md:text-sm text-right">Points</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginatedData.length > 0 ? (
-                      paginatedData.map((player) => (
-                        <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                          <td className="py-3 px-3 md:py-4 md:px-6 text-xl md:text-2xl font-black text-gray-500 group-hover:text-padel-green transition-colors text-center md:text-left">
-                            {player.rawRank}
-                          </td>
-                          <td className="py-3 px-3 md:py-4 md:px-6">
-                            <div
-                              onClick={() => {
-                                if (player.hasLocalProfile && player.playerRecord) {
-                                  setSelectedPlayer(player.playerRecord);
-                                } else {
-                                  window.open(player.rankedinProfile, '_blank');
-                                }
-                              }}
-                              className="flex items-center gap-3 md:gap-4 group/link cursor-pointer"
-                            >
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
-                                {!imageErrors[player.id] ? (
-                                  <img
-                                    src={player.image}
-                                    alt={player.name}
-                                    className={`w-full h-full object-cover transition-all ${player.hasLocalProfile ? '' : 'filter grayscale group-hover/link:grayscale-0'}`}
-                                    onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
-                                  />
-                                ) : (
-                                  <span className="text-xs md:text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
-                                )}
-                              </div>
-                              <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
-                                {player.name}
-                                {player.hasLocalProfile && (
-                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-padel-green/10 text-padel-green text-[8px] font-black uppercase tracking-widest border border-padel-green/20">4M</span>
-                                )}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 md:py-4 md:px-6 text-right">
-                            <span className="inline-block bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-base md:text-lg font-black text-white group-hover:bg-padel-green group-hover:text-black transition-colors">
-                              {player.points.toLocaleString()}
-                            </span>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan="3" className="py-16 text-center text-gray-500 font-medium">
-                          No players found matching "{searchTerm}"
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="border-t border-white/10 p-6 flex items-center justify-between bg-white/[0.02]">
-                  <p className="text-sm text-gray-500 font-medium hidden md:block">
-                    Showing <span className="text-white">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="text-white">{Math.min(currentPage * itemsPerPage, filteredData.length)}</span> of <span className="text-white">{filteredData.length}</span> players
-                  </p>
-
-                  <div className="flex items-center gap-2 mx-auto md:mx-0">
-                    <button
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-padel-green transition-colors"
-                    >
-                      <ChevronLeft className="w-5 h-5" />
-                    </button>
-
-                    <div className="flex items-center gap-1 mx-4">
-                      {Array.from({ length: Math.min(5, totalPages) }).map((_, idx) => {
-                        let pageNum = currentPage;
-                        if (totalPages <= 5) pageNum = idx + 1;
-                        else if (currentPage <= 3) pageNum = idx + 1;
-                        else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + idx;
-                        else pageNum = currentPage - 2 + idx;
-
-                        return (
-                          <button
-                            key={pageNum}
-                            onClick={() => setCurrentPage(pageNum)}
-                            className={`w-10 h-10 flex items-center justify-center rounded-lg font-bold text-sm transition-all duration-300 ${currentPage === pageNum
-                              ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20 scale-110'
-                              : 'text-gray-400 hover:bg-white/10 hover:text-white'
-                              }`}
-                          >
-                            {pageNum}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <button
-                      onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-2 rounded-lg bg-white/5 text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 hover:text-padel-green transition-colors"
-                    >
-                      <ChevronRight className="w-5 h-5" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <FullRankingsTable
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              paginatedData={paginatedData}
+              totalPages={totalPages}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              itemsPerPage={itemsPerPage}
+              filteredData={filteredData}
+              imageErrors={imageErrors}
+              setImageErrors={setImageErrors}
+              setSelectedPlayer={setSelectedPlayer}
+              getInitials={getInitials}
+            />
           </motion.div>
         )}
       </AnimatePresence>
