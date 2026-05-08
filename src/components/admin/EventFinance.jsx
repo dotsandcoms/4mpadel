@@ -599,6 +599,16 @@ const EventFinance = ({ allowedEvents = [] }) => {
         return Array.from(divisions).sort();
     }, [localParticipants]);
 
+    const divisionCounts = useMemo(() => {
+        const counts = {};
+        localParticipants.forEach(p => {
+            if (p.class_name) {
+                counts[p.class_name] = (counts[p.class_name] || 0) + 1;
+            }
+        });
+        return counts;
+    }, [localParticipants]);
+
     const filteredParticipants = localParticipants.filter(p => {
         const matchesSearch = p.full_name.toLowerCase().includes(searchQuery.toLowerCase());
         
@@ -766,9 +776,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                     onChange={(e) => setFilterDivision(e.target.value)}
                                     className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
                                 >
-                                    <option value="all">Division: All</option>
+                                    <option value="all">Division: All ({localParticipants.length})</option>
                                     {uniqueDivisions.map(div => (
-                                        <option key={div} value={div}>{div}</option>
+                                        <option key={div} value={div}>{div} ({divisionCounts[div] || 0})</option>
                                     ))}
                                 </select>
 
