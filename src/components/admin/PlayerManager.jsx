@@ -57,6 +57,7 @@ const PlayerManager = () => {
     const [filterPaid, setFilterPaid] = useState('all'); // all | paid | unpaid
     const [filterActive, setFilterActive] = useState('all'); // all | visible | hidden
     const [filterCategory, setFilterCategory] = useState('All');
+    const [filterRegion, setFilterRegion] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 50;
 
@@ -80,6 +81,7 @@ const PlayerManager = () => {
         approved: true,
         paid_registration: true,
         license_type: 'none',
+        region: '',
     });
 
 
@@ -209,8 +211,9 @@ const PlayerManager = () => {
             .map(item => ({ name: item.name, registrations: item.count }));
     }, [players]);
 
-    // Categories for filter dropdown
+    // Categories and Regions for filter dropdown
     const categories = useMemo(() => ['All', ...new Set(players.map(p => p.category).filter(Boolean))], [players]);
+    const regions = useMemo(() => ['All', ...new Set(players.map(p => p.region).filter(Boolean))], [players]);
 
     // Filtered players
     const filteredPlayers = useMemo(() => {
@@ -227,9 +230,10 @@ const PlayerManager = () => {
                 (filterActive === 'visible' && player.approved !== false && player.paid_registration === true && player.license_type === 'full') ||
                 (filterActive === 'hidden' && (player.approved === false || player.paid_registration !== true || player.license_type !== 'full'));
             const matchesCategory = filterCategory === 'All' || player.category === filterCategory;
-            return matchesSearch && matchesPaid && matchesActive && matchesCategory;
+            const matchesRegion = filterRegion === 'All' || player.region === filterRegion;
+            return matchesSearch && matchesPaid && matchesActive && matchesCategory && matchesRegion;
         });
-    }, [players, searchTerm, filterPaid, filterActive, filterCategory]);
+    }, [players, searchTerm, filterPaid, filterActive, filterCategory, filterRegion]);
 
 
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -239,14 +243,14 @@ const PlayerManager = () => {
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterPaid, filterActive, filterCategory]);
+    }, [searchTerm, filterPaid, filterActive, filterCategory, filterRegion]);
 
     const handleAddNew = () => {
         setCurrentPlayer(null);
         setFormData({
             name: '', rank_label: '', points: '', win_rate: '', image_url: '', home_club: '', age_group: '',
             category: '', level: '', nationality: '', bio: '', sponsors: '', contact_number: '', email: '',
-            gender: '', approved: true, paid_registration: false, license_type: 'none',
+            gender: '', approved: true, paid_registration: false, license_type: 'none', region: '',
         });
         setIsEditing(true);
     };
@@ -281,6 +285,7 @@ const PlayerManager = () => {
             approved: player.approved !== false,
             paid_registration: player.paid_registration === true,
             license_type: player.license_type || 'none',
+            region: player.region || '',
         });
         setIsEditing(true);
     };
@@ -383,6 +388,7 @@ const PlayerManager = () => {
             approved: formData.approved,
             paid_registration: formData.paid_registration,
             license_type: formData.license_type,
+            region: formData.region,
         };
 
         let error;
@@ -618,6 +624,15 @@ const PlayerManager = () => {
                         <option key={c} value={c}>{c}</option>
                     ))}
                 </select>
+                <select
+                    value={filterRegion}
+                    onChange={(e) => setFilterRegion(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 text-white focus:border-padel-green focus:outline-none cursor-pointer"
+                >
+                    {regions.map(r => (
+                        <option key={r} value={r}>{r}</option>
+                    ))}
+                </select>
             </div>
 
             {/* Players Table */}
@@ -631,6 +646,7 @@ const PlayerManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Last Activity</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Category</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Region</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Club</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Points</th>
                                 <th className="py-3 px-4 text-right font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Actions</th>
@@ -671,6 +687,7 @@ const PlayerManager = () => {
                                             </span>
                                         </td>
                                         <td className="py-3 px-4 text-gray-300 text-sm">{player.category || '—'}</td>
+                                        <td className="py-3 px-4 text-gray-300 text-sm font-bold">{player.region || '—'}</td>
                                         <td className="py-3 px-4 text-gray-400 text-sm">{player.home_club || '—'}</td>
                                         <td className="py-3 px-4 text-padel-green font-mono">{player.points ?? 0}</td>
                                         <td className="py-3 px-4 text-right">
@@ -758,7 +775,7 @@ const PlayerManager = () => {
 
                             <form onSubmit={handleSubmit} className="p-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                    {['name', 'rank_label', 'points', 'win_rate', 'home_club', 'age_group', 'category', 'level', 'nationality', 'contact_number', 'email'].map(field => (
+                                    {['name', 'rank_label', 'points', 'win_rate', 'home_club', 'age_group', 'category', 'region', 'level', 'nationality', 'contact_number', 'email'].map(field => (
                                         <div key={field}>
                                             <label className="block text-gray-400 text-sm mb-1 capitalize">{field.replace('_', ' ')}</label>
                                             {field === 'category' ? (
@@ -782,6 +799,23 @@ const PlayerManager = () => {
                                                         <option value="Ladies 35+">Ladies 35+</option>
                                                         <option value="Ladies Juniors">Ladies Juniors</option>
                                                     </optgroup>
+                                                </select>
+                                            ) : field === 'region' ? (
+                                                <select
+                                                    value={formData[field] || ''}
+                                                    onChange={e => setFormData({ ...formData, [field]: e.target.value })}
+                                                    className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none appearance-none cursor-pointer font-bold"
+                                                >
+                                                    <option value="">Select Region</option>
+                                                    <option value="Eastern Cape">Eastern Cape</option>
+                                                    <option value="Free State">Free State</option>
+                                                    <option value="Gauteng">Gauteng</option>
+                                                    <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                                                    <option value="Limpopo">Limpopo</option>
+                                                    <option value="Mpumalanga">Mpumalanga</option>
+                                                    <option value="Northern Cape">Northern Cape</option>
+                                                    <option value="North West">North West</option>
+                                                    <option value="Western Cape">Western Cape</option>
                                                 </select>
                                             ) : (
                                                 <input
