@@ -178,8 +178,10 @@ const FinanceManager = () => {
                 }
             }
 
-            const licenseType = amount >= 450 ? 'full' : 'temporary';
-            const paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
+            // Determine base license type from amount (for standalone payments)
+            // If it's an event registration, we'll refine this later after calculating entry fees
+            let licenseType = amount >= 450 ? 'full' : 'temporary';
+            let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
 
             const { data: player, error: fetchError } = await supabase
                 .from('players')
@@ -190,20 +192,6 @@ const FinanceManager = () => {
             if (fetchError) throw fetchError;
             if (!player) throw new Error(`Player with email ${email} not found.`);
 
-            // 2. Update Player Table (Only if it's not an event entry fee, OR if they need a license)
-            // If it's a high amount (>= 450), we usually treat it as including a full license.
-            if (!player.paid_registration || (licenseType === 'full' && player.license_type !== 'full')) {
-                const { error: updateError } = await supabase
-                    .from('players')
-                    .update({ 
-                        paid_registration: true, 
-                        license_type: licenseType,
-                        approved: true 
-                    })
-                    .eq('id', player.id);
-
-                if (updateError) throw updateError;
-            }
             
             // 3. Handle Event-Specific Logic (Syncing Tournament Participants & Splitting Payments)
             const paymentsToInsert = [];
@@ -332,12 +320,18 @@ const FinanceManager = () => {
 
                     // 5. If there's extra amount (License/Membership), record it separately for the primary player
                     if (licensePortion > 0) {
+                        // RECALCULATE LICENSE TYPE BASED ON PORTION
+                        // If the portion after entry fees is >= 450, it's a full license.
+                        // Otherwise, if they paid exactly 120 or similar, it's temporary.
+                        const actualLicenseType = licensePortion >= 450 ? 'full' : 'temporary';
+                        licenseType = actualLicenseType; // Update the variable used for player record update
+
                         paymentsToInsert.push({
                             player_id: player.id,
                             event_id: enrichedEventId,
                             amount: licensePortion,
                             status: 'success',
-                            payment_type: 'temp_license', // General fallback for extra fees in tournament sync
+                            payment_type: actualLicenseType === 'full' ? 'full_license' : 'temp_license',
                             payment_method: 'paystack',
                             reference: `LIC-${trx.id}`,
                             created_at: trx.rawDate,
@@ -368,7 +362,21 @@ const FinanceManager = () => {
                 }
             }
 
-            // 5. Record in Payments Table (Clean up old records first to allow clean splits)
+            // 5. Update Player Table (Now using correctly calculated licenseType)
+            if (!player.paid_registration || (licenseType === 'full' && player.license_type !== 'full')) {
+                const { error: updateError } = await supabase
+                    .from('players')
+                    .update({ 
+                        paid_registration: true, 
+                        license_type: licenseType,
+                        approved: true 
+                    })
+                    .eq('id', player.id);
+
+                if (updateError) throw updateError;
+            }
+
+            // 6. Record in Payments Table (Clean up old records first to allow clean splits)
             if (paymentsToInsert.length > 0) {
                 // Delete existing records for this reference (including possible old splits or registration-page records)
                 // We search by the main reference OR by the paystack_ref in metadata
