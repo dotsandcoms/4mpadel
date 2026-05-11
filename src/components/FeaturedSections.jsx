@@ -379,9 +379,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const scrollRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
+    const [mobilePage, setMobilePage] = useState(0);
+
+    // Image/Card content for the right/bottom side of the hero section
+    const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
+    const isSlider = items && items.length > 3;
 
     const checkScroll = () => {
-        if (scrollRef.current) {
+        if (scrollRef.current && window.innerWidth >= 768) {
             const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
             setCanScrollLeft(scrollLeft > 10);
             setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
@@ -389,6 +394,16 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     };
 
     const scroll = (direction) => {
+        if (window.innerWidth < 768) {
+            const totalPages = Math.ceil((items?.length || 0) / 3);
+            if (direction === 'right') {
+                setMobilePage((prev) => (prev + 1) % totalPages);
+            } else {
+                setMobilePage((prev) => (prev - 1 + totalPages) % totalPages);
+            }
+            return;
+        }
+
         if (scrollRef.current) {
             const { scrollLeft, clientWidth } = scrollRef.current;
             const scrollAmount = clientWidth * 0.8;
@@ -433,6 +448,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             return () => el.removeEventListener('scroll', checkScroll);
         }
     }, [featuredTournaments, liveTournaments, liveFeaturedTournaments]);
+
+    const mobileItems = items?.slice(mobilePage * 3, (mobilePage + 1) * 3) || [];
+    const totalMobilePages = Math.ceil((items?.length || 0) / 3);
+    const showMobileArrows = isSlider && totalMobilePages > 1;
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
 
@@ -517,113 +536,74 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         </div>
     );
 
-    // Image/Card content for the right/bottom side of the hero section
-    const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
-    const isSlider = items && items.length > 3;
-
     const imageContent = isGridSection ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0">
-            <div
-                ref={scrollRef}
-                className={`${isSlider
-                    ? 'flex overflow-x-auto gap-5 lg:gap-6 pb-8 snap-x snap-mandatory scrollbar-hide'
-                    : 'grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6'
-                    }`}
-            >
-                {data.id === 'recent-results' ? (
-                    liveTournaments && liveTournaments.length > 0 ? (
-                        liveTournaments.map((t, i) => (
-                            <div key={t.eventId} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
-                                <TournamentCard
-                                    index={i}
-                                    title={t.eventName}
-                                    label={t.sapaStatus || 'Tournament'}
-                                    date={t.date}
-                                    image={t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
-                                    linkPath={t.customLink || `/draws/${t.eventId}`}
-                                    buttonLabel="VIEW RESULTS"
-                                    status={t.sapaStatus || 'Gold'}
-                                    registeredPlayers={t.registered_players || t.registeredPlayers}
-                                    rankedinId={t.eventId}
-                                    venue={t.venue}
-                                    organizerName={t.organizerName}
-                                    city={t.city}
-                                />
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02] w-full">
-                            <div className="w-10 h-10 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4 border border-white/10">
-                                <span className="text-padel-green animate-ping absolute inline-flex h-3 w-3 rounded-full opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-padel-green"></span>
-                            </div>
-                            <p className="text-gray-400 text-sm font-medium">Loading tournament data...</p>
-                        </div>
-                    )
-                ) : data.id === 'featured-live' ? (
-                    liveFeaturedTournaments && liveFeaturedTournaments.length > 0 ? (
-                        liveFeaturedTournaments.map((t, i) => (
-                            <div key={t.id} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
-                                <TournamentCard
-                                    index={i}
-                                    title={t.event_name}
-                                    label={t.sapa_status || 'Live Event'}
-                                    date={formatTournamentDate(t.start_date, t.end_date)}
-                                    image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
-                                    linkPath={`/calendar/${t.slug || t.id}`}
-                                    drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
-                                    youtubeUrl={t.live_youtube_url}
-                                    livePlayers={t.live_players}
-                                    nextMatch={t.next_match}
-                                    onWatchLive={onWatchLive}
-                                    isLive={true}
-                                    status={t.sapa_status || 'Gold'}
-                                    registeredPlayers={t.registered_players}
-                                    rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
-                                    venue={t.venue || t.clubName}
-                                    organizerName={t.organizer_name}
-                                    city={t.city}
-                                />
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02] w-full">
-                            <p className="text-gray-400 text-sm font-medium">Loading live events...</p>
-                        </div>
-                    )
-                ) : (
-                    featuredTournaments && featuredTournaments.length > 0 ? (
-                        featuredTournaments.map((t, i) => (
-                            <div key={t.id} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
-                                <TournamentCard
-                                    index={i}
-                                    title={t.event_name}
-                                    label={t.sapa_status || 'Major Event'}
-                                    date={formatTournamentDate(t.start_date, t.end_date)}
-                                    image={t.image_url || 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop'}
-                                    linkPath={`/calendar/${t.slug || t.id}`}
-                                    drawPath={(t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null}
-                                    status={t.sapa_status || 'Gold'}
-                                    registeredPlayers={t.registered_players}
-                                    rankedinId={t.rankedin_id || extractRankedinId(t.rankedin_url)}
-                                    venue={t.venue || t.clubName}
-                                    organizerName={t.organizer_name}
-                                    city={t.city}
-                                />
-                            </div>
-                        ))
-                    ) : (
-                        <div className="col-span-1 md:col-span-3 text-center py-20 border border-white/5 rounded-[24px] bg-white/[0.02] w-full">
-                            <p className="text-gray-400 text-sm font-medium">Loading featured tournaments...</p>
-                        </div>
-                    )
-                )}
+            <div className="md:hidden">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={mobilePage}
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -20 }}
+                        transition={{ duration: 0.3 }}
+                        className="flex flex-col gap-5"
+                    >
+                        {mobileItems.map((t, i) => (
+                            <TournamentCard
+                                key={t.id || t.eventId}
+                                index={i}
+                                title={t.event_name || t.eventName}
+                                label={t.sapa_status || t.sapaStatus || 'Tournament'}
+                                date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
+                                image={t.image_url || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                                linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
+                                drawPath={t.event_name ? ((t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null) : null}
+                                buttonLabel={t.event_name ? "VIEW DETAILS" : "VIEW RESULTS"}
+                                status={t.sapa_status || t.sapaStatus || 'Gold'}
+                                registeredPlayers={t.registered_players || t.registeredPlayers}
+                                rankedinId={t.rankedin_id || t.eventId}
+                                venue={t.venue || t.clubName}
+                                organizerName={t.organizer_name || t.organizerName}
+                                city={t.city}
+                            />
+                        ))}
+                    </motion.div>
+                </AnimatePresence>
             </div>
 
-            {isSlider && (
+            <div
+                ref={scrollRef}
+                className={`hidden md:flex ${isSlider
+                    ? 'overflow-x-auto gap-6 pb-8 snap-x snap-mandatory scrollbar-hide'
+                    : 'grid grid-cols-3 gap-6'
+                    }`}
+            >
+                {items?.map((t, i) => (
+                    <div key={t.id || t.eventId} className={isSlider ? "flex-none w-[calc(33.333%-16px)] snap-start" : ""}>
+                        <TournamentCard
+                            index={i}
+                            title={t.event_name || t.eventName}
+                            label={t.sapa_status || t.sapaStatus || 'Tournament'}
+                            date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
+                            image={t.image_url || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                            linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
+                            drawPath={t.event_name ? ((t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null) : null}
+                            buttonLabel={t.event_name ? "VIEW DETAILS" : "VIEW RESULTS"}
+                            status={t.sapa_status || t.sapaStatus || 'Gold'}
+                            registeredPlayers={t.registered_players || t.registeredPlayers}
+                            rankedinId={t.rankedin_id || t.eventId}
+                            venue={t.venue || t.clubName}
+                            organizerName={t.organizer_name || t.organizerName}
+                            city={t.city}
+                        />
+                    </div>
+                ))}
+            </div>
+
+            {((isSlider && window.innerWidth >= 768) || (showMobileArrows && window.innerWidth < 768)) && (
                 <div className="flex gap-4 z-20 mt-8 justify-center min-h-[44px]">
                     <AnimatePresence>
-                        {canScrollLeft && (
+                        {(canScrollLeft || (window.innerWidth < 768 && mobilePage > 0)) && (
                             <motion.button
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -637,7 +617,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                 <ChevronLeft className="w-5 h-5" />
                             </motion.button>
                         )}
-                        {canScrollRight && (
+                        {(canScrollRight || (window.innerWidth < 768 && mobilePage < totalMobilePages - 1)) && (
                             <motion.button
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
