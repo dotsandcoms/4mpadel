@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     PieChart,
@@ -17,7 +17,7 @@ import {
     Area,
 } from 'recharts';
 
-const STAT_COLORS = { 'padel-green': '#beff00', green: '#22c55e', amber: '#f59e0b', slate: '#64748b' };
+const STAT_COLORS = { 'padel-green': '#beff00', green: '#22c55e', amber: '#f59e0b', slate: '#64748b', sky: '#38bdf8' };
 const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', delay = 0 }) => {
     const c = STAT_COLORS[color] || STAT_COLORS['padel-green'];
     return (
@@ -165,6 +165,16 @@ const PlayerManager = () => {
         const temp = players.filter(p => p.paid_registration === true && p.license_type === 'temporary').length;
         const unpaid = players.length - (full + temp);
         const visible = players.filter(p => p.approved !== false && p.paid_registration === true && p.license_type === 'full').length;
+
+        // Calculate Region Stats
+        const regionMap = {};
+        players.forEach(p => {
+            const reg = p.region || 'Unassigned';
+            regionMap[reg] = (regionMap[reg] || 0) + 1;
+        });
+        const topRegionEntry = Object.entries(regionMap).sort((a, b) => b[1] - a[1])[0];
+        const topRegion = topRegionEntry ? topRegionEntry[0] : 'None';
+
         return {
             total: players.length,
             paid: full + temp,
@@ -172,7 +182,21 @@ const PlayerManager = () => {
             temp,
             unpaid,
             visible,
+            topRegion,
+            uniqueRegions: Object.keys(regionMap).length
         };
+    }, [players]);
+
+    const regionChartData = useMemo(() => {
+        const map = {};
+        players.forEach(p => {
+            const reg = p.region || 'Unassigned';
+            map[reg] = (map[reg] || 0) + 1;
+        });
+        return Object.entries(map)
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 8);
     }, [players]);
 
     // Chart data
@@ -506,11 +530,12 @@ const PlayerManager = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                 <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
-                <StatCard title="Paid" value={loading ? '—' : stats.paid} subtext="License paid" icon={CreditCard} color="green" delay={0.05} />
-                <StatCard title="Unpaid" value={loading ? '—' : stats.unpaid} subtext="Awaiting payment" icon={CreditCard} color="amber" delay={0.1} />
-                <StatCard title="Visible" value={loading ? '—' : stats.visible} subtext="On Players page" icon={Eye} color="padel-green" delay={0.15} />
+                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext="Annual subscription" icon={CreditCard} color="green" delay={0.05} />
+                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="sky" delay={0.1} />
+                <StatCard title="Regions" value={loading ? '—' : stats.uniqueRegions} subtext={`Top: ${stats.topRegion}`} icon={MapPin} color="slate" delay={0.15} />
+                <StatCard title="Unpaid" value={loading ? '—' : stats.unpaid} subtext="Awaiting payment" icon={AlertCircle} color="amber" delay={0.2} />
             </div>
 
             {/* Charts Row */}
@@ -564,6 +589,28 @@ const PlayerManager = () => {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3 }}
+                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                >
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Region</h3>
+                    {loading ? (
+                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={180}>
+                            <BarChart data={regionChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    )}
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
                     className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                 >
                     <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Registrations</h3>
