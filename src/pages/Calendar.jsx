@@ -14,6 +14,227 @@ const extractRankedinId = (url) => {
     return match ? match[1] : null;
 };
 
+const FeaturedEventCard = ({ event, index }) => {
+    const { getTournamentClasses } = useRankedin();
+    const [hasDraw, setHasDraw] = useState(false);
+    const [hasResults, setHasResults] = useState(false);
+
+    useEffect(() => {
+        const checkStatus = async () => {
+            const rId = event.rankedin_id || event.eventId || extractRankedinId(event.rankedin_url);
+            if (rId) {
+                const classes = await getTournamentClasses(rId);
+                const drawAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    Array.isArray(c.TournamentDraws) &&
+                    c.TournamentDraws.length > 0
+                );
+                setHasDraw(drawAvailable);
+
+                const resultsAvailable = classes && classes.some(c =>
+                    c.IsPublished &&
+                    c.HasResults === true
+                );
+                setHasResults(resultsAvailable);
+            }
+        };
+        checkStatus();
+    }, [event, getTournamentClasses]);
+
+    let tierColor = 'border-white/10';
+    let badgeColor = 'bg-white/10 text-gray-400';
+    let accentColor = 'text-padel-green';
+    let glowColor = 'shadow-padel-green/20';
+
+    if (event.sapa_status === 'Major') { tierColor = 'border-red-500/30 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; accentColor = 'text-red-500'; glowColor = 'shadow-red-500/30'; }
+    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-amber-500/30 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; accentColor = 'text-amber-500'; glowColor = 'shadow-amber-500/30'; }
+    else if (event.sapa_status === 'Gold') { tierColor = 'border-yellow-500/30 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; accentColor = 'text-yellow-500'; glowColor = 'shadow-yellow-500/30'; }
+    else if (event.sapa_status === 'Silver') { tierColor = 'border-gray-400/30 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; accentColor = 'text-gray-400'; glowColor = 'shadow-gray-400/30'; }
+    else if (event.sapa_status === 'Bronze') { tierColor = 'border-orange-700/30 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; accentColor = 'text-orange-700'; glowColor = 'shadow-orange-700/30'; }
+    else if (event.sapa_status === 'FIP event') { tierColor = 'border-blue-500/30 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; accentColor = 'text-blue-500'; glowColor = 'shadow-blue-500/30'; }
+
+    const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: index * 0.1 }}
+            className="h-full"
+        >
+            <Link
+                to={detailsPath}
+                className={`group relative flex flex-col h-full bg-[#060913] rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-2xl ${glowColor}`}
+            >
+                {/* Poster Image Container */}
+                <div className="relative aspect-[16/9] overflow-hidden">
+                    {event.custom_image_url || event.image_url || event.posterUrl ? (
+                        <img
+                            src={event.custom_image_url || event.image_url || event.posterUrl}
+                            alt={event.event_name || event.eventName}
+                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                            <CalendarIcon className="w-12 h-12 text-white/10" />
+                        </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-transparent to-transparent opacity-60" />
+                    
+                    {/* Floating Status Badge */}
+                    <div className="absolute top-4 right-4">
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg`}>
+                            {event.sapa_status}
+                        </span>
+                    </div>
+
+                    {event.featured_live && (
+                        <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
+                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                            <span>Live</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Content */}
+                <div className="p-6 flex flex-col flex-1">
+                    <h3 className="text-xl font-bold text-white mb-3 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
+                        {event.event_name || event.eventName}
+                    </h3>
+
+                    <div className="space-y-3 mt-auto">
+                        <div className="flex items-center gap-2.5 text-gray-400">
+                            <CalendarIcon className={`w-4 h-4 ${accentColor} shrink-0`} />
+                            <span className={`text-xs font-bold ${accentColor}`}>
+                                {event.event_dates ||
+                                    (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                    (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
+                            </span>
+                        </div>
+
+                        {(event.venue || event.city) && (
+                            <div className="flex items-center gap-2.5 text-gray-400">
+                                <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
+                                <span className="text-xs font-medium truncate uppercase tracking-widest">
+                                    {event.venue || event.city}
+                                </span>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                            {event.registered_players > 0 ? (
+                                <div className="flex items-center gap-1.5">
+                                    <Users className={`w-3.5 h-3.5 ${accentColor}`} />
+                                    <span className="text-white font-bold text-xs">{event.registered_players} <span className="text-gray-500 font-medium">Players</span></span>
+                                </div>
+                            ) : <div></div>}
+                            
+                            <div className="flex items-center gap-1 text-padel-green font-black text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                                <span>Details</span>
+                                <ArrowRight className="w-3 h-3" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Link>
+        </motion.div>
+    );
+};
+
+const FeaturedCarousel = ({ events }) => {
+    const scrollRef = useRef(null);
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(true);
+
+    const checkScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            setCanScrollLeft(scrollLeft > 10);
+            setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+        }
+    };
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el) {
+            el.addEventListener('scroll', checkScroll);
+            checkScroll();
+            window.addEventListener('resize', checkScroll);
+            return () => {
+                el.removeEventListener('scroll', checkScroll);
+                window.removeEventListener('resize', checkScroll);
+            };
+        }
+    }, [events]);
+
+    const scroll = (direction) => {
+        if (scrollRef.current) {
+            const { scrollLeft, clientWidth } = scrollRef.current;
+            const scrollAmount = clientWidth * 0.8;
+            const scrollTo = direction === 'left' ? scrollLeft - scrollAmount : scrollLeft + scrollAmount;
+            scrollRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
+        }
+    };
+
+    if (!events || events.length === 0) return null;
+
+    return (
+        <div className="mb-12 relative">
+            <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center">
+                        <Trophy className="w-6 h-6 text-padel-green" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-1">
+                            Featured <span className="text-padel-green">Events</span>
+                        </h2>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Handpicked highlights for you</p>
+                    </div>
+                </div>
+                
+                {events.length > 3 && (
+                    <div className="hidden sm:flex gap-3">
+                        <button
+                            onClick={() => scroll('left')}
+                            disabled={!canScrollLeft}
+                            className={`w-12 h-12 rounded-2xl border border-white/10 flex items-center justify-center transition-all ${canScrollLeft ? 'bg-white/5 text-white hover:bg-padel-green hover:text-black hover:border-padel-green' : 'opacity-20 cursor-not-allowed'}`}
+                        >
+                            <ChevronLeft className="w-6 h-6" />
+                        </button>
+                        <button
+                            onClick={() => scroll('right')}
+                            disabled={!canScrollRight}
+                            className={`w-12 h-12 rounded-2xl border border-white/10 flex items-center justify-center transition-all ${canScrollRight ? 'bg-white/5 text-white hover:bg-padel-green hover:text-black hover:border-padel-green' : 'opacity-20 cursor-not-allowed'}`}
+                        >
+                            <ChevronRight className="w-6 h-6" />
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div
+                ref={scrollRef}
+                className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-2 px-2"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+                {events.map((event, index) => (
+                    <div key={event.id} className="flex-none w-[300px] sm:w-[380px] snap-start">
+                        <FeaturedEventCard event={event} index={index} />
+                    </div>
+                ))}
+            </div>
+
+            {/* Mobile Navigation Indicator */}
+            {events.length > 1 && (
+                <div className="sm:hidden flex justify-center gap-1.5 mt-2">
+                     {/* We could add dots here if we wanted, but horizontal scroll is usually enough on mobile */}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const CalendarEventItem = ({ event, index }) => {
     const { getTournamentClasses } = useRankedin();
     const [hasDraw, setHasDraw] = useState(false);
@@ -428,6 +649,10 @@ const Calendar = () => {
         });
     }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode]);
 
+    const featuredEvents = useMemo(() => {
+        return events.filter(event => event.featured_event === true);
+    }, [events]);
+
     // Pagination Logic
     const totalPages = Math.ceil(filteredEvents.length / itemsPerPage);
     const paginatedEvents = filteredEvents.slice(
@@ -617,6 +842,9 @@ const Calendar = () => {
                         ))}
                     </div>
                 </div>
+
+                {/* Featured Carousel */}
+                <FeaturedCarousel events={featuredEvents} />
 
                 {/* Filters & Controls */}
                 <motion.div
