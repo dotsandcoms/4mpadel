@@ -8,7 +8,6 @@ import {
 import { supabase } from '../../supabaseClient';
 import FinancialDashboard from './FinancialDashboard';
 import UserPayments from './UserPayments';
-import EventFinance from './EventFinance';
 import FinancialSummaryReport from './FinancialSummaryReport';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 
@@ -47,11 +46,11 @@ const FinanceManager = () => {
     
     // SAFE FALLBACK: If granular perms exist but we haven't specified tabs, 
     // default to showing everything BUT the Dashboard and Settings (protects totals).
-    const defaultRestrictedTabs = ['summary', 'users', 'events', 'transactions'];
-    const defaultFullTabs = ['dashboard', 'summary', 'users', 'events', 'transactions', 'settings'];
+    const defaultRestrictedTabs = ['summary', 'users', 'transactions'];
+    const defaultFullTabs = ['dashboard', 'summary', 'users', 'transactions', 'settings'];
 
     const allowedTabs = financePerms 
-        ? (financePerms.allowedTabs || ['events']) 
+        ? (financePerms.allowedTabs || ['transactions']) 
         : defaultFullTabs;
         
     const allowedEvents = financePerms?.allowedEvents || [];
@@ -168,6 +167,7 @@ const FinanceManager = () => {
             const isEventReg = reference.startsWith('REGEV-');
             let enrichedEventId = trx.metadata?.event_id || null;
             let enrichedEventName = trx.metadata?.event_name || null;
+            let enrichedEventDate = trx.metadata?.event_date || trx.rawDate;
 
             // Extract Event ID from reference if missing from metadata
             if (isEventReg && !enrichedEventId) {
@@ -179,8 +179,8 @@ const FinanceManager = () => {
             }
 
             // Determine base license type from amount (for standalone payments)
-            // If it's an event registration, we'll refine this later after calculating entry fees
-            let licenseType = amount >= 450 ? 'full' : 'temporary';
+            // We use 450 (Membership) and 120 (Temp) as standard markers.
+            let licenseType = isEventReg ? null : (amount === 450 ? 'full' : (amount === 120 ? 'temporary' : (amount > 450 ? 'full' : 'temporary')));
             let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
 
             const { data: player, error: fetchError } = await supabase
@@ -197,15 +197,17 @@ const FinanceManager = () => {
             const paymentsToInsert = [];
             if (isEventReg && enrichedEventId) {
                 // Fetch event details to get the correct fee structure
-                const { data: event } = await supabase
+                // Fetch event details to get the correct fee structure and dates
+                const { data: eventData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, entry_fee, category_fees')
+                    .select('id, event_name, entry_fee, category_fees, date, start_date')
                     .eq('id', enrichedEventId)
-                    .single();
+                    .maybeSingle();
 
-                const enrichedEventName = event?.event_name || null;
-                const entryFeePerPerson = event?.entry_fee || 0;
-                const categoryFees = event?.category_fees || {};
+                if (eventData) {
+                    enrichedEventName = eventData.event_name || enrichedEventName;
+                    enrichedEventDate = eventData.start_date || eventData.date || enrichedEventDate;
+                }
 
                 console.info(`Marking participants for Player ${player.name} in Event ${enrichedEventId} as PAID...`);
                 
@@ -256,7 +258,7 @@ const FinanceManager = () => {
                     // 3. Calculate Fee Breakdown: Separate Entry Fees from potential Licenses
                     let totalExpectedEntryFees = 0;
                     allParticipants.forEach(p => {
-                        const fee = categoryFees[p.class_name] || entryFeePerPerson || 0;
+                        const fee = eventData ? (eventData.category_fees?.[p.class_name] || eventData.entry_fee || 0) : 0;
                         totalExpectedEntryFees += fee;
                     });
 
@@ -317,21 +319,28 @@ const FinanceManager = () => {
                             }
                         });
                     }
+                } else {
+                    // Fallback identification for when tournament participants are not yet linked
+                    // but the amount clearly indicates a specific license type relative to the event fee.
+                    const entryFee = eventData?.entry_fee || 0;
+                    const tempLicFee = 120;
+                    const membershipFee = 450;
 
-                    // 5. If there's extra amount (License/Membership), record it separately for the primary player
+                    if (amount === entryFee + tempLicFee || amount === tempLicFee) {
+                        licenseType = 'temporary';
+                        licensePortion = tempLicFee;
+                    } else if (amount === entryFee + membershipFee || amount === membershipFee) {
+                        licenseType = 'full';
+                        licensePortion = membershipFee;
+                    }
+
                     if (licensePortion > 0) {
-                        // RECALCULATE LICENSE TYPE BASED ON PORTION
-                        // If the portion after entry fees is >= 450, it's a full license.
-                        // Otherwise, if they paid exactly 120 or similar, it's temporary.
-                        const actualLicenseType = licensePortion >= 450 ? 'full' : 'temporary';
-                        licenseType = actualLicenseType; // Update the variable used for player record update
-
                         paymentsToInsert.push({
                             player_id: player.id,
                             event_id: enrichedEventId,
                             amount: licensePortion,
                             status: 'success',
-                            payment_type: actualLicenseType === 'full' ? 'full_license' : 'temp_license',
+                            payment_type: licenseType === 'full' ? 'full_license' : 'temp_license',
                             payment_method: 'paystack',
                             reference: `LIC-${trx.id}`,
                             created_at: trx.rawDate,
@@ -339,7 +348,7 @@ const FinanceManager = () => {
                                 source: 'paystack_sync',
                                 original_trx: trx,
                                 event_name: enrichedEventName,
-                                note: 'Combined license/membership fees from bulk payment'
+                                note: 'License portion identified from transaction total (no participants found yet)'
                             }
                         });
                     }
@@ -363,7 +372,9 @@ const FinanceManager = () => {
             }
 
             // 5. Update Player Table (Now using correctly calculated licenseType)
-            if (!player.paid_registration || (licenseType === 'full' && player.license_type !== 'full')) {
+            // Only update if we have a valid licenseType to apply (e.g. they actually bought a license or standalone)
+            // We now allow updating even if they are 'full' to correct potential misidentifications during syncs.
+            if (licenseType && (!player.paid_registration || player.license_type !== licenseType)) {
                 const { error: updateError } = await supabase
                     .from('players')
                     .update({ 
@@ -415,26 +426,30 @@ const FinanceManager = () => {
 
             // CRITICAL: Ensure temporary license record exists to prevent scavenger cleanup
             if (licenseType === 'temporary' && enrichedEventId) {
-                const { data: existingTempLic } = await supabase
+                // 1. Check for existing license
+                const { data: existingLic } = await supabase
                     .from('temporary_licenses')
                     .select('id')
                     .eq('player_id', player.id)
                     .eq('event_id', enrichedEventId)
                     .maybeSingle();
-                
-                if (!existingTempLic) {
-                    const { data: eventData } = await supabase
-                        .from('calendar')
-                        .select('start_date, end_date')
-                        .eq('id', enrichedEventId)
-                        .maybeSingle();
 
-                    await supabase.from('temporary_licenses').insert({
-                        player_id: player.id,
-                        event_id: enrichedEventId,
-                        event_name: enrichedEventName || 'Calendar Event',
-                        event_date: eventData?.end_date || eventData?.start_date || new Date().toISOString()
-                    });
+                const licensePayload = {
+                    player_id: player.id,
+                    event_id: enrichedEventId,
+                    event_name: enrichedEventName || 'Calendar Event',
+                    event_date: enrichedEventDate || new Date().toISOString()
+                };
+
+                if (existingLic) {
+                    await supabase
+                        .from('temporary_licenses')
+                        .update(licensePayload)
+                        .eq('id', existingLic.id);
+                } else {
+                    await supabase
+                        .from('temporary_licenses')
+                        .insert([licensePayload]);
                 }
             }
 
@@ -489,9 +504,11 @@ const FinanceManager = () => {
             if (player?.paid_registration) return false;
         }
 
+        const player = players.find(p => p.email?.toLowerCase() === trx.user?.toLowerCase());
         const matchesSearch = !searchQuery || 
             trx.user.toLowerCase().includes(searchQuery.toLowerCase()) || 
-            trx.id.toLowerCase().includes(searchQuery.toLowerCase());
+            trx.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (player?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
 
         return matchesLicense && matchesSearch;
     });
@@ -505,7 +522,6 @@ const FinanceManager = () => {
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'summary', label: 'Summary Rep', icon: FileText },
         { id: 'users', label: 'User Ledger', icon: Users },
-        { id: 'events', label: 'Event Finance', icon: Trophy },
         { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
         { id: 'settings', label: 'Settings', icon: Settings },
     ];
@@ -563,8 +579,6 @@ const FinanceManager = () => {
                     {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={allowedEvents} />}
 
                     {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={allowedEvents} />}
-                    
-                    {activeTab === 'events' && allowedTabs.includes('events') && <EventFinance allowedEvents={allowedEvents} />}
                     
                     {activeTab === 'transactions' && (
                         <div className="space-y-6">

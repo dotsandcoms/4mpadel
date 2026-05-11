@@ -10,6 +10,7 @@ import FinanceManager from '../components/admin/FinanceManager';
 import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
+import EventManagement from '../components/admin/EventManagement';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -163,6 +164,7 @@ const Admin = () => {
                                     {activeTab === 'players' && <PlayerManager />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
+                                    {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} />}
                                     {activeTab === 'gallery' && (
                                         <GalleryManager />
                                     )}

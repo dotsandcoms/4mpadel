@@ -10,6 +10,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
+        { id: 'event-mgmt', label: 'Event Manager', icon: Trophy },
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'settings', label: 'Settings', icon: Settings },
@@ -17,10 +18,10 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
     ];
 
     const menuItems = allMenuItems.filter(item => {
-        if (!permissions) return false; 
+        if (!permissions) return false;
         if (permissions.role === 'super_admin') return true;
         if (item.superAdminOnly) return false;
-        
+
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(item.id);
     });
 
@@ -54,48 +55,48 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
                     </button>
                 </div>
 
-            <nav className="flex-1 px-4 space-y-2">
-                {menuItems.map((item) => {
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.id;
-                    return (
-                        <button
-                            key={item.id}
-                            onClick={() => {
-                                setActiveTab(item.id);
-                                if (window.innerWidth < 1024) onClose();
-                            }}
-                            className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 relative group ${isActive ? 'text-black font-bold' : 'text-gray-400 hover:text-white'
-                                }`}
-                        >
-                            {isActive && (
-                                <motion.div
-                                    layoutId="activeTab"
-                                    className="absolute inset-0 bg-padel-green rounded-xl"
-                                    initial={false}
-                                    transition={{ type: "spring", stiffness: 300, damping: 30 }}
-                                />
-                            )}
-                            <span className="relative z-10 flex items-center gap-3">
-                                <Icon size={20} />
-                                {item.label}
-                            </span>
-                        </button>
-                    );
-                })}
-            </nav>
+                <nav className="flex-1 px-4 space-y-2">
+                    {menuItems.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = activeTab === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => {
+                                    setActiveTab(item.id);
+                                    if (window.innerWidth < 1024) onClose();
+                                }}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 relative group ${isActive ? 'text-black font-bold' : 'text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                {isActive && (
+                                    <motion.div
+                                        layoutId="activeTab"
+                                        className="absolute inset-0 bg-padel-green rounded-xl"
+                                        initial={false}
+                                        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                                    />
+                                )}
+                                <span className="relative z-10 flex items-center gap-3">
+                                    <Icon size={20} />
+                                    {item.label}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </nav>
 
-            <div className="p-4 border-t border-white/10">
-                <button
-                    onClick={onLogout}
-                    className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
-                >
-                    <LogOut size={20} />
-                    Sign Out
-                </button>
-            </div>
-        </aside>
-    </>
+                <div className="p-4 border-t border-white/10">
+                    <button
+                        onClick={onLogout}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
+                    >
+                        <LogOut size={20} />
+                        Sign Out
+                    </button>
+                </div>
+            </aside>
+        </>
     );
 };
 

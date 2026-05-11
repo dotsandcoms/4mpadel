@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download, 
-    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy
+    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -10,9 +10,10 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 
-const EventFinance = ({ allowedEvents = [] }) => {
+const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
+    const [viewMode, setViewMode] = useState('list'); // 'list' | 'dashboard' | 'table'
     const [localParticipants, setLocalParticipants] = useState([]);
     const [systemProfiles, setSystemProfiles] = useState([]);
     const [loading, setLoading] = useState({ events: true, matching: false, syncing: false });
@@ -51,6 +52,11 @@ const EventFinance = ({ allowedEvents = [] }) => {
             return dateB - dateA; // Past: Most recent first
         });
 
+        // Filter by finance_managed if this is the management module
+        if (isEventManagementModule) {
+            sorted = sorted.filter(e => e.finance_managed);
+        }
+
         // Filter by allowedEvents permissions if any
         if (allowedEvents && allowedEvents.length > 0) {
             sorted = sorted.filter(e => allowedEvents.includes(e.id));
@@ -58,7 +64,7 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
         if (!eventSearch) return sorted;
         return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
-    }, [events, eventSearch, allowedEvents]);
+    }, [events, eventSearch, allowedEvents, isEventManagementModule]);
 
     const playerEntryCounts = useMemo(() => {
         const counts = {};
@@ -88,13 +94,44 @@ const EventFinance = ({ allowedEvents = [] }) => {
             }, 0);
     }, [localParticipants, selectedEvent]);
 
+    const dashboardStats = useMemo(() => {
+        if (!selectedEvent) return { expected: 0, outstanding: 0, licenses: { full: 0, temp: 0, none: 0 }, uniquePlayers: 0 };
+        
+        let expected = 0;
+        const uniqueProfiles = new Set();
+        const licenseCounts = { full: 0, temp: 0, none: 0 };
+
+        localParticipants.forEach(p => {
+            const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
+            expected += Number(divFee);
+
+            const profileKey = p.profile_id || p.full_name?.toLowerCase().trim();
+            if (profileKey && !uniqueProfiles.has(profileKey)) {
+                uniqueProfiles.add(profileKey);
+                const lic = p.players?.license_type?.toLowerCase() || 'none';
+                if (lic === 'full') licenseCounts.full++;
+                else if (lic === 'temporary' || lic === 'temp') licenseCounts.temp++;
+                else licenseCounts.none++;
+            }
+        });
+
+        const outstanding = Math.max(0, expected - totalCollected);
+
+        return {
+            expected,
+            outstanding,
+            licenses: licenseCounts,
+            uniquePlayers: uniqueProfiles.size
+        };
+    }, [localParticipants, selectedEvent, totalCollected]);
+
     useEffect(() => {
         const fetchInitialData = async () => {
             setLoading(prev => ({ ...prev, events: true }));
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees')
+                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed')
                     .order('start_date', { ascending: false });
                 setEvents(eData || []);
 
@@ -610,7 +647,9 @@ const EventFinance = ({ allowedEvents = [] }) => {
     }, [localParticipants]);
 
     const filteredParticipants = localParticipants.filter(p => {
-        const matchesSearch = p.full_name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = p.full_name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+            (p.players?.email?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+            (p.players?.name?.toLowerCase().includes(searchQuery.toLowerCase()));
         
         const isLinked = !!p.players;
         const matchesProfile = filterProfile === 'all' || 
@@ -631,7 +670,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header & Managed Events List */}
+            {/* Header & Managed Events List - Only visible in 'list' mode */}
+            {viewMode === 'list' && (
             <div className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-3xl border border-white/10">
                 {/* Search & Bulk Action Header */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
@@ -690,12 +730,15 @@ const EventFinance = ({ allowedEvents = [] }) => {
                                         return (
                                             <tr 
                                                 key={e.id}
-                                                onClick={() => setSelectedEventId(e.id)}
-                                                className={`group cursor-pointer transition-all ${isSelected ? 'bg-padel-green/10' : 'hover:bg-white/5'}`}
+                                                onClick={() => {
+                                                    setSelectedEventId(e.id);
+                                                    setViewMode('dashboard');
+                                                }}
+                                                className={`group cursor-pointer transition-all hover:bg-white/5`}
                                             >
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="flex flex-col">
-                                                        <p className={`text-[11px] font-bold ${isSelected ? 'text-padel-green' : 'text-gray-400'}`}>
+                                                        <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                                                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </p>
                                                         <span className={`text-[8px] font-black uppercase tracking-widest ${isUpcoming ? 'text-padel-green/60' : 'text-gray-600'}`}>
@@ -722,10 +765,33 @@ const EventFinance = ({ allowedEvents = [] }) => {
                     </div>
                 </div>
             </div>
+            )}
 
-            {selectedEventId && (
+            {selectedEventId && viewMode !== 'list' && (
                 <React.Fragment>
-                <div className="space-y-6 text-white pt-8 border-t border-white/5">
+                <div className="space-y-6 text-white pt-2">
+                    {/* Navigation Bar */}
+                    <div className="flex items-center justify-between mb-2">
+                        <button 
+                            onClick={() => {
+                                setSelectedEventId(null);
+                                setViewMode('list');
+                            }}
+                            className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2 transition-colors"
+                        >
+                            ← Back to Events List
+                        </button>
+                        
+                        {viewMode === 'table' && (
+                            <button 
+                                onClick={() => setViewMode('dashboard')}
+                                className="text-xs font-bold uppercase tracking-widest text-padel-green hover:text-white flex items-center gap-2 transition-colors"
+                            >
+                                View Dashboard Cards
+                            </button>
+                        )}
+                    </div>
+
                     {/* Active Event Indicator */}
                     <div className="flex flex-col gap-2">
                         <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
@@ -747,7 +813,109 @@ const EventFinance = ({ allowedEvents = [] }) => {
                         </p>
                     </div>
 
-                    <div className="flex flex-col gap-6">
+                    {/* Dashboard Stats */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, staggerChildren: 0.1 }}
+                        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+                    >
+                        <motion.div 
+                            whileHover={{ y: -5, scale: 1.02 }}
+                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                        >
+                            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:rotate-12 transition-all duration-500">
+                                <Users size={120} />
+                            </div>
+                            <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Total Entries</p>
+                            <div className="flex items-baseline gap-2 mt-2 relative z-10">
+                                <h3 className="text-4xl md:text-5xl font-black text-white drop-shadow-md">{localParticipants.length}</h3>
+                                <span className="text-xs text-padel-green font-bold uppercase">{dashboardStats.uniquePlayers} Unique</span>
+                            </div>
+                        </motion.div>
+                        
+                        <motion.div 
+                            whileHover={{ y: -5, scale: 1.02 }}
+                            className="bg-gradient-to-br from-padel-green/20 via-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-padel-green/30 flex flex-col gap-2 relative overflow-hidden group shadow-[0_0_30px_rgba(190,255,0,0.1)]"
+                        >
+                            <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 text-padel-green">
+                                <DollarSign size={120} />
+                            </div>
+                            <p className="text-xs font-black uppercase text-padel-green/80 tracking-widest relative z-10">Total Revenue</p>
+                            <h3 className="text-4xl md:text-5xl font-black text-padel-green mt-2 relative z-10 drop-shadow-[0_0_15px_rgba(190,255,0,0.3)]">R {totalCollected.toLocaleString()}</h3>
+                            <p className="text-xs text-red-400 font-bold uppercase relative z-10">R {dashboardStats.outstanding.toLocaleString()} outstanding</p>
+                        </motion.div>
+                        
+                        <motion.div 
+                            whileHover={{ y: -5, scale: 1.02 }}
+                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                        >
+                            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:-rotate-12 transition-all duration-500">
+                                <Trophy size={120} />
+                            </div>
+                            <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Player Licenses</p>
+                            <div className="flex items-center justify-between gap-3 mt-4 w-full relative z-10">
+                                <div className="flex flex-col items-center">
+                                    <span className="text-2xl font-black text-padel-green">{dashboardStats.licenses.full}</span>
+                                    <span className="text-[10px] text-gray-400 uppercase font-bold mt-1">Full</span>
+                                    <div className="w-full h-1 bg-padel-green/20 rounded-full mt-1 overflow-hidden"><div className="h-full bg-padel-green" style={{ width: `${(dashboardStats.licenses.full / dashboardStats.uniquePlayers) * 100}%` }}></div></div>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-2xl font-black text-sky-400">{dashboardStats.licenses.temp}</span>
+                                    <span className="text-[10px] text-gray-400 uppercase font-bold mt-1">Temp</span>
+                                    <div className="w-full h-1 bg-sky-400/20 rounded-full mt-1 overflow-hidden"><div className="h-full bg-sky-400" style={{ width: `${(dashboardStats.licenses.temp / dashboardStats.uniquePlayers) * 100}%` }}></div></div>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-2xl font-black text-red-400">{dashboardStats.licenses.none}</span>
+                                    <span className="text-[10px] text-gray-400 uppercase font-bold mt-1">None</span>
+                                    <div className="w-full h-1 bg-red-400/20 rounded-full mt-1 overflow-hidden"><div className="h-full bg-red-400" style={{ width: `${(dashboardStats.licenses.none / dashboardStats.uniquePlayers) * 100}%` }}></div></div>
+                                </div>
+                            </div>
+                        </motion.div>
+                        
+                        <motion.div 
+                            whileHover={{ y: -5, scale: 1.02 }}
+                            className="bg-gradient-to-br from-[#1E293B]/80 to-[#0F172A]/80 backdrop-blur-xl p-6 rounded-3xl border border-white/10 flex flex-col gap-2 relative overflow-hidden group shadow-2xl"
+                        >
+                            <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:scale-110 transition-all duration-500">
+                                <CheckCircle size={120} />
+                            </div>
+                            <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Paid Status</p>
+                            <div className="flex items-baseline gap-2 mt-2 relative z-10">
+                                <h3 className="text-4xl md:text-5xl font-black text-white drop-shadow-md">{localParticipants.filter(p => p.is_paid).length}</h3>
+                                <span className="text-xs text-gray-400 font-bold uppercase">/ {localParticipants.length} Paid</span>
+                            </div>
+                            {/* Visual Progress Bar */}
+                            <div className="w-full h-2 bg-black/40 rounded-full mt-auto relative z-10 overflow-hidden border border-white/5">
+                                <motion.div 
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(localParticipants.filter(p => p.is_paid).length / (localParticipants.length || 1)) * 100}%` }}
+                                    transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
+                                    className="h-full bg-gradient-to-r from-padel-green/50 to-padel-green rounded-full shadow-[0_0_10px_rgba(190,255,0,0.5)]"
+                                />
+                            </div>
+                        </motion.div>
+                    </motion.div>
+
+                    {viewMode === 'dashboard' && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.5, delay: 0.3 }}
+                            className="flex justify-center mt-12 relative z-20"
+                        >
+                            <button 
+                                onClick={() => setViewMode('table')}
+                                className="group relative flex items-center justify-center gap-3 bg-padel-green text-black px-12 py-5 rounded-2xl font-black uppercase tracking-[0.2em] hover:bg-white hover:scale-105 transition-all shadow-[0_0_40px_rgba(190,255,0,0.15)] hover:shadow-[0_0_60px_rgba(255,255,255,0.3)] overflow-hidden"
+                            >
+                                <span className="relative z-10">View Full Table Data & Filters</span>
+                                <div className="absolute inset-0 bg-white/20 -translate-x-[150%] group-hover:animate-[shimmer_1.5s_infinite] skew-x-12 z-0" />
+                            </button>
+                        </motion.div>
+                    )}
+
+                    {viewMode === 'table' && (
+                    <div className="flex flex-col gap-6 mt-8 border-t border-white/5 pt-8">
                         {/* Search & Filters Grid */}
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col lg:flex-row gap-4">
@@ -830,7 +998,6 @@ const EventFinance = ({ allowedEvents = [] }) => {
                             </div>
                         </div>
                     </div>
-                </div>
 
                         {/* Top Stats & Export */}
                         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -1104,6 +1271,8 @@ const EventFinance = ({ allowedEvents = [] }) => {
                         </div>
                     </div>
                     </div>
+                    )}
+                </div>
                 </React.Fragment>
             )}
 

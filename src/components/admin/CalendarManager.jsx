@@ -133,7 +133,8 @@ const CalendarManager = () => {
         next_match: '',
         sponsor_logos: [],
         category_fees: {},
-        is_visible: true
+        is_visible: true,
+        finance_managed: false
     });
 
     useEffect(() => {
@@ -429,7 +430,8 @@ const CalendarManager = () => {
             next_match: '',
             sponsor_logos: [],
             category_fees: {},
-            is_visible: true
+            is_visible: true,
+            finance_managed: false
         });
     }
 
@@ -530,7 +532,8 @@ const CalendarManager = () => {
             next_match: event.next_match || '',
             sponsor_logos: event.sponsor_logos || [],
             category_fees: event.category_fees || {},
-            is_visible: event.is_visible !== false // Default to true if undefined
+            is_visible: event.is_visible !== false, // Default to true if undefined
+            finance_managed: event.finance_managed || false
         });
         setIsModalOpen(true);
     };
@@ -1350,6 +1353,20 @@ const CalendarManager = () => {
                                             />
                                             <label htmlFor="is_visible" className="text-sm font-bold text-white uppercase cursor-pointer">
                                                 Visible on Website
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="finance_managed"
+                                                name="finance_managed"
+                                                checked={formData.finance_managed}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
+                                            />
+                                            <label htmlFor="finance_managed" className="text-sm font-bold text-white uppercase cursor-pointer flex flex-col">
+                                                <span>Finance Manage</span>
+                                                <span className="text-[10px] text-padel-green font-normal">Show in Event Mgmt</span>
                                             </label>
                                         </div>
                                         <div className="flex items-center gap-2">

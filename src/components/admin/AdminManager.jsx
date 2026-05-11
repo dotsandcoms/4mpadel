@@ -33,6 +33,7 @@ const AdminManager = () => {
         { id: 'coaches', label: 'Coaches' },
         { id: 'blog', label: 'Blog' },
         { id: 'calendar', label: 'Calendar' },
+        { id: 'event-mgmt', label: 'Event Management' },
         { id: 'gallery', label: 'Gallery' },
         { id: 'finance', label: 'Finance' },
         { id: 'settings', label: 'Settings' }
@@ -166,11 +167,13 @@ const AdminManager = () => {
                 ? prev.allowed_tabs.filter(id => id !== tabId)
                 : [...prev.allowed_tabs, tabId];
 
-            // If enabling finance, seed defaults if they don't exist
-            let nextModulePerms = { ...prev.module_permissions };
             if (!isRemoving && tabId === 'finance' && !nextModulePerms.finance) {
                 nextModulePerms.finance = {
-                    allowedTabs: ['events'],
+                    allowedTabs: ['dashboard', 'users', 'transactions', 'summary']
+                };
+            }
+            if (!isRemoving && tabId === 'event-mgmt' && !nextModulePerms['event-mgmt']) {
+                nextModulePerms['event-mgmt'] = {
                     allowedEvents: []
                 };
             }
@@ -466,7 +469,6 @@ const AdminManager = () => {
                                                         {[
                                                             { id: 'dashboard', label: 'Dashboard' },
                                                             { id: 'users', label: 'User Payments' },
-                                                            { id: 'events', label: 'Event Finance' },
                                                             { id: 'transactions', label: 'Transactions' },
                                                             { id: 'summary', label: 'Summary Report' }
                                                         ].map(tab => {
@@ -503,6 +505,20 @@ const AdminManager = () => {
                                                         })}
                                                     </div>
                                                 </div>
+                                            </motion.div>
+                                        )}
+
+                                        {/* Event Management Sub-permissions */}
+                                        {formData.allowed_tabs.includes('event-mgmt') && (
+                                            <motion.div 
+                                                initial={{ opacity: 0, height: 0 }}
+                                                animate={{ opacity: 1, height: 'auto' }}
+                                                className="bg-black/20 rounded-2xl p-4 border border-white/5 space-y-3"
+                                            >
+                                                <div className="flex items-center gap-2 text-padel-green mb-1">
+                                                    <Shield size={16} />
+                                                    <span className="text-xs font-black uppercase tracking-widest">Event Management Granular Access</span>
+                                                </div>
 
                                                 <div className="space-y-3">
                                                     <label className="block text-[10px] font-bold text-gray-500 uppercase">Restrict to Specific Events</label>
@@ -523,20 +539,20 @@ const AdminManager = () => {
                                                                 {allEvents
                                                                     .filter(e => 
                                                                         e.event_name.toLowerCase().includes(eventSelectorSearch.toLowerCase()) && 
-                                                                        !(formData.module_permissions.finance?.allowedEvents || []).includes(e.id)
+                                                                        !(formData.module_permissions['event-mgmt']?.allowedEvents || []).includes(e.id)
                                                                     )
                                                                     .map(event => (
                                                                         <button
                                                                             key={event.id}
                                                                             type="button"
                                                                             onClick={() => {
-                                                                                const current = formData.module_permissions.finance?.allowedEvents ?? [];
+                                                                                const current = formData.module_permissions['event-mgmt']?.allowedEvents ?? [];
                                                                                 setFormData(prev => ({
                                                                                     ...prev,
                                                                                     module_permissions: {
                                                                                         ...prev.module_permissions,
-                                                                                        finance: {
-                                                                                            ...prev.module_permissions.finance,
+                                                                                        'event-mgmt': {
+                                                                                            ...prev.module_permissions['event-mgmt'],
                                                                                             allowedEvents: [...current, event.id]
                                                                                         }
                                                                                     }
@@ -550,7 +566,7 @@ const AdminManager = () => {
                                                                     ))}
                                                                 {allEvents.filter(e => 
                                                                     e.event_name.toLowerCase().includes(eventSelectorSearch.toLowerCase()) && 
-                                                                    !(formData.module_permissions.finance?.allowedEvents || []).includes(e.id)
+                                                                    !(formData.module_permissions['event-mgmt']?.allowedEvents || []).includes(e.id)
                                                                 ).length === 0 && (
                                                                     <div className="px-4 py-3 text-[10px] text-gray-600 italic">No matching events found</div>
                                                                 )}
@@ -558,7 +574,7 @@ const AdminManager = () => {
                                                         )}
 
                                                         <div className="flex flex-wrap gap-2">
-                                                            {formData.module_permissions.finance?.allowedEvents?.map(eventId => {
+                                                            {formData.module_permissions['event-mgmt']?.allowedEvents?.map(eventId => {
                                                                 const event = allEvents.find(e => e.id === eventId);
                                                                 return (
                                                                     <div key={eventId} className="bg-white/5 border border-white/10 pl-3 pr-1 py-1 rounded-lg flex items-center gap-2 group">
@@ -572,9 +588,9 @@ const AdminManager = () => {
                                                                                     ...prev,
                                                                                     module_permissions: {
                                                                                         ...prev.module_permissions,
-                                                                                        finance: {
-                                                                                            ...prev.module_permissions.finance,
-                                                                                            allowedEvents: prev.module_permissions.finance.allowedEvents.filter(id => id !== eventId)
+                                                                                        'event-mgmt': {
+                                                                                            ...prev.module_permissions['event-mgmt'],
+                                                                                            allowedEvents: prev.module_permissions['event-mgmt'].allowedEvents.filter(id => id !== eventId)
                                                                                         }
                                                                                     }
                                                                                 }));
@@ -586,7 +602,7 @@ const AdminManager = () => {
                                                                     </div>
                                                                 );
                                                             })}
-                                                            {(!formData.module_permissions.finance?.allowedEvents || formData.module_permissions.finance.allowedEvents.length === 0) && (
+                                                            {(!formData.module_permissions['event-mgmt']?.allowedEvents || formData.module_permissions['event-mgmt'].allowedEvents.length === 0) && (
                                                                 <span className="text-[10px] text-gray-600 italic">No event restrictions (Full Access)</span>
                                                             )}
                                                         </div>

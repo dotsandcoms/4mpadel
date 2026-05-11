@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin, Download, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ExcelJS from 'exceljs';
+import logo4m from '../../assets/logo_4m_lowercase.png';
 import {
     PieChart,
     Pie,
@@ -59,6 +61,13 @@ const PlayerManager = () => {
     const [filterCategory, setFilterCategory] = useState('All');
     const [filterRegion, setFilterRegion] = useState('All');
     const [currentPage, setCurrentPage] = useState(1);
+    const [fullLicensePayments, setFullLicensePayments] = useState([]);
+    const [events, setEvents] = useState([]);
+    const [isAssigningTemp, setIsAssigningTemp] = useState(false);
+    const [tempLicenseTarget, setTempLicenseTarget] = useState(null);
+    const [selectedEventId, setSelectedEventId] = useState('');
+    const [eventSearchTerm, setEventSearchTerm] = useState('');
+    const [assignLoading, setAssignLoading] = useState(false);
     const itemsPerPage = 50;
 
     // Form State
@@ -87,7 +96,43 @@ const PlayerManager = () => {
 
     useEffect(() => {
         fetchPlayers();
+        fetchEvents();
     }, []);
+
+    const fetchEvents = async () => {
+        try {
+            // Try fetching from calendar first
+            const { data: cData, error: cError } = await supabase
+                .from('calendar')
+                .select('id, event_name, start_date')
+                .order('start_date', { ascending: false });
+            
+            if (!cError && cData && cData.length > 0) {
+                setEvents(cData.map(e => ({
+                    id: e.id,
+                    name: e.event_name,
+                    date: e.start_date
+                })));
+                return;
+            }
+
+            // Fallback to events table
+            const { data: eData, error: eError } = await supabase
+                .from('events')
+                .select('id, title, date')
+                .order('date', { ascending: false });
+            
+            if (!eError && eData) {
+                setEvents(eData.map(e => ({
+                    id: e.id,
+                    name: e.title,
+                    date: e.date
+                })));
+            }
+        } catch (err) {
+            console.error("Fetch events failure:", err);
+        }
+    };
 
     const showToast = (message, type = 'success') => {
         const id = Date.now();
@@ -101,61 +146,30 @@ const PlayerManager = () => {
 
     const fetchPlayers = async () => {
         setLoading(true);
-        const { data, error } = await supabase
-            .from('players')
-            .select('*, temporary_licenses(event_name, event_date)')
-            .order('created_at', { ascending: false });
+        const [{ data: playersData, error: playersError }, { data: paymentsData, error: paymentsError }] = await Promise.all([
+            supabase
+                .from('players')
+                .select('*, temporary_licenses(event_name, event_date)')
+                .order('created_at', { ascending: false }),
+            supabase
+                .from('payments')
+                .select('player_id, created_at, amount')
+                .in('payment_type', ['membership', 'full_license'])
+                .eq('status', 'success')
+                .order('created_at', { ascending: false })
+        ]);
 
-        if (error) {
-            console.error('Error fetching players:', error);
+        if (playersError) {
+            console.error('Error fetching players:', playersError);
             showToast('Failed to fetch players', 'error');
         } else {
-            // Identify and fix stale temporary licenses
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            const stalePlayerIds = (data || [])
-                .filter(p => {
-                    if (p.license_type !== 'temporary') return false;
-
-                    // If no temp license records, it's stale
-                    if (!p.temporary_licenses || p.temporary_licenses.length === 0) return true;
-
-                    // If all temp license records are in the past, it's stale
-                    // We check if there's ANY active or future license
-                    const hasActive = p.temporary_licenses.some(tl => {
-                        const eventDate = new Date(tl.event_date);
-                        return eventDate >= today;
-                    });
-
-                    return !hasActive;
-                })
-                .map(p => p.id);
-
-            if (stalePlayerIds.length > 0) {
-                console.log(`Found ${stalePlayerIds.length} stale temporary licenses. Updating...`);
-                const { error: updateError } = await supabase
-                    .from('players')
-                    .update({
-                        license_type: 'none',
-                        paid_registration: false
-                    })
-                    .in('id', stalePlayerIds);
-
-                if (!updateError) {
-                    // Update local data so the UI reflects it immediately
-                    data.forEach(p => {
-                        if (stalePlayerIds.includes(p.id)) {
-                            p.license_type = 'none';
-                            p.paid_registration = false;
-                        }
-                    });
-                    showToast(`Cleaned up ${stalePlayerIds.length} expired temporary licenses`, 'info');
-                }
-            }
-
-            setPlayers(data || []);
+            setPlayers(playersData || []);
         }
+
+        if (!paymentsError && paymentsData) {
+            setFullLicensePayments(paymentsData);
+        }
+
         setLoading(false);
     };
 
@@ -235,13 +249,38 @@ const PlayerManager = () => {
             .map(item => ({ name: item.name, registrations: item.count }));
     }, [players]);
 
+    const fullLicenseChartData = useMemo(() => {
+        const map = {};
+        fullLicensePayments.forEach(p => {
+            if (!p.created_at) return;
+            const date = new Date(p.created_at);
+            const monthYear = date.toLocaleString('default', { month: 'short', year: '2-digit' });
+            const sortKey = date.toISOString().substring(0, 7); // YYYY-MM
+
+            if (!map[sortKey]) {
+                map[sortKey] = { name: monthYear, count: 0, sortKey };
+            }
+            map[sortKey].count += 1;
+        });
+
+        return Object.values(map)
+            .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+            .map(item => ({ name: item.name, licenses: item.count }));
+    }, [fullLicensePayments]);
+
     // Categories and Regions for filter dropdown
     const categories = useMemo(() => ['All', ...new Set(players.map(p => p.category).filter(Boolean))], [players]);
     const regions = useMemo(() => ['All', ...new Set(players.map(p => p.region).filter(Boolean))], [players]);
 
     // Filtered players
     const filteredPlayers = useMemo(() => {
-        return players.filter(player => {
+        return players.map(player => {
+            const payment = fullLicensePayments.find(p => p.player_id === player.id);
+            return {
+                ...player,
+                full_license_paid_at: payment ? payment.created_at : null
+            };
+        }).filter(player => {
             const matchesSearch = !searchTerm ||
                 player.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 player.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -257,7 +296,7 @@ const PlayerManager = () => {
             const matchesRegion = filterRegion === 'All' || player.region === filterRegion;
             return matchesSearch && matchesPaid && matchesActive && matchesCategory && matchesRegion;
         });
-    }, [players, searchTerm, filterPaid, filterActive, filterCategory, filterRegion]);
+    }, [players, fullLicensePayments, searchTerm, filterPaid, filterActive, filterCategory, filterRegion]);
 
 
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -494,6 +533,100 @@ const PlayerManager = () => {
         }
     };
 
+    const handleExportExcel = async () => {
+        try {
+            // Use FILTERED players for export to respect user's current view
+            const sortedPlayers = [...filteredPlayers].sort((a, b) => 
+                (a.name || '').localeCompare(b.name || '')
+            );
+
+            const workbook = new ExcelJS.Workbook();
+            const sheet = workbook.addWorksheet('Players List');
+
+            // Add Title at the top
+            const titleRow = sheet.addRow([`4M Padel - Players Export (${new Date().toLocaleDateString()})`]);
+            titleRow.font = { bold: true, size: 14 };
+            titleRow.height = 45;
+            titleRow.alignment = { vertical: 'middle' };
+            sheet.mergeCells('A1:J1');
+
+            try {
+                // Fetch the image from the bundled URL
+                const response = await fetch(logo4m);
+                const buffer = await response.arrayBuffer();
+                const imageId = workbook.addImage({
+                    buffer: buffer,
+                    extension: 'png',
+                });
+                
+                sheet.addImage(imageId, {
+                    tl: { col: 8, row: 0 },
+                    ext: { width: 120, height: 40 }
+                });
+            } catch (imgErr) {
+                console.warn('Could not load logo for Excel export', imgErr);
+            }
+            
+            sheet.addRow([]);
+
+            // Add Headers
+            const headers = [
+                'Name', 'Email', 'Contact Number', 'Region', 'Home Club', 
+                'Category', 'Gender', 'License Type', 'Paid Status', 
+                'License Paid', 'Last Login'
+            ];
+            const headerRow = sheet.addRow(headers);
+            headerRow.font = { bold: true };
+            sheet.autoFilter = 'A3:K3';
+
+            // Add Data Rows
+            sortedPlayers.forEach(p => {
+                sheet.addRow([
+                    p.name,
+                    p.email || 'N/A',
+                    p.contact_number || 'N/A',
+                    p.region || 'N/A',
+                    p.home_club || 'N/A',
+                    p.category || 'N/A',
+                    p.gender || 'N/A',
+                    p.license_type || 'None',
+                    p.paid_registration ? 'Paid' : 'Unpaid',
+                    p.full_license_paid_at ? new Date(p.full_license_paid_at).toLocaleDateString() : 'N/A',
+                    p.last_login ? new Date(p.last_login).toLocaleDateString() : 'Never'
+                ]);
+            });
+
+            // Expand columns to fit content
+            for (let i = 1; i <= 11; i++) {
+                const column = sheet.getColumn(i);
+                let maxLen = 0;
+                column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
+                    if (rowNumber >= 3 && cell.value) {
+                        const colLen = cell.value.toString().length;
+                        if (colLen > maxLen) maxLen = colLen;
+                    }
+                });
+                column.width = maxLen + 2 > 10 ? maxLen + 2 : 10;
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Players_Export_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+            
+            showToast("Players export downloaded successfully");
+        } catch (err) {
+            console.error("Export error:", err);
+            showToast("Failed to generate Excel export", "error");
+        }
+    };
+
     return (
         <div className="space-y-8 pb-12">
             {/* Toast Container */}
@@ -521,21 +654,28 @@ const PlayerManager = () => {
                     <h2 className="text-2xl font-bold text-white">Players Dashboard</h2>
                     <p className="text-gray-400 text-sm">Manage players, view stats, and filter by license status</p>
                 </div>
-                <button
-                    onClick={handleAddNew}
-                    className="bg-padel-green text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors"
-                >
-                    <Plus size={18} /> Add Player
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={handleExportExcel}
+                        className="bg-white/10 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white/20 transition-colors"
+                    >
+                        <Download size={18} /> Export
+                    </button>
+                    <button
+                        onClick={handleAddNew}
+                        className="bg-padel-green text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors"
+                    >
+                        <Plus size={18} /> Add Player
+                    </button>
+                </div>
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
                 <StatCard title="Full License" value={loading ? '—' : stats.full} subtext="Annual subscription" icon={CreditCard} color="green" delay={0.05} />
-                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="sky" delay={0.1} />
-                <StatCard title="Regions" value={loading ? '—' : stats.uniqueRegions} subtext={`Top: ${stats.topRegion}`} icon={MapPin} color="slate" delay={0.15} />
-                <StatCard title="Unpaid" value={loading ? '—' : stats.unpaid} subtext="Awaiting payment" icon={AlertCircle} color="amber" delay={0.2} />
+                <StatCard title="Visible Players" value={loading ? '—' : stats.visible} subtext="Public on rankings" icon={Eye} color="slate" delay={0.1} />
+                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="sky" delay={0.15} />
             </div>
 
             {/* Charts Row */}
@@ -628,6 +768,34 @@ const PlayerManager = () => {
                         </ResponsiveContainer>
                     )}
                 </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                >
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Full License Sales</h3>
+                    {loading ? (
+                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={180}>
+                            <AreaChart data={fullLicenseChartData}>
+                                <defs>
+                                    <linearGradient id="colorLic" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#beff00" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#beff00" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Area type="monotone" dataKey="licenses" stroke="#beff00" fillOpacity={1} fill="url(#colorLic)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    )}
+                </motion.div>
             </div>
 
             {/* Filters */}
@@ -690,6 +858,7 @@ const PlayerManager = () => {
                             <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Name</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">License</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Paid Date</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Last Activity</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Category</th>
@@ -719,6 +888,11 @@ const PlayerManager = () => {
                                                     </span>
                                                 )}
                                             </div>
+                                        </td>
+                                        <td className="py-3 px-4">
+                                            <span className="text-gray-400 text-xs font-bold">
+                                                {player.full_license_paid_at ? new Date(player.full_license_paid_at).toLocaleDateString() : '—'}
+                                            </span>
                                         </td>
 
                                         <td className="py-3 px-4">
@@ -759,6 +933,16 @@ const PlayerManager = () => {
                                                     className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black"
                                                 >
                                                     <Mail size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setTempLicenseTarget(player);
+                                                        setIsAssigningTemp(true);
+                                                    }}
+                                                    title="Assign Temporary License"
+                                                    className="p-1.5 bg-sky-500/10 text-sky-400 rounded-lg hover:bg-sky-500 hover:text-white"
+                                                >
+                                                    <Calendar size={14} />
                                                 </button>
                                                 <button onClick={() => handleEdit(player)} className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white">
                                                     <Edit2 size={14} />
@@ -1044,6 +1228,157 @@ const PlayerManager = () => {
                                     </button>
                                 </div>
                             </form>
+                        </motion.div>
+                    </motion.div>
+                )}
+                {/* Assign Temp License Modal */}
+                {isAssigningTemp && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                            className="bg-[#1E293B] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                                <h3 className="text-xl font-bold text-white">Assign Temp License</h3>
+                                <button onClick={() => setIsAssigningTemp(false)} className="text-gray-400 hover:text-white"><X size={24} /></button>
+                            </div>
+
+                            <div className="p-6 space-y-6">
+                                <div>
+                                    <p className="text-gray-400 text-sm mb-2">Assigning license to:</p>
+                                    <p className="text-white font-black text-lg">{tempLicenseTarget?.name}</p>
+                                    <p className="text-gray-500 text-xs">{tempLicenseTarget?.email}</p>
+                                </div>
+
+                                <div>
+                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-widest mb-2">Search Target Event</label>
+                                    <div className="relative">
+                                        <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                            <Search size={16} />
+                                        </div>
+                                        <input 
+                                            type="text"
+                                            placeholder="Type to filter events..."
+                                            value={eventSearchTerm}
+                                            onChange={(e) => {
+                                                setEventSearchTerm(e.target.value);
+                                                setSelectedEventId(''); // Reset selection when searching
+                                            }}
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-10 py-3 text-white focus:border-padel-green outline-none font-bold"
+                                        />
+                                    </div>
+                                    
+                                    {/* Filtered Results List */}
+                                    <div className="mt-2 max-h-48 overflow-y-auto bg-black/40 rounded-xl border border-white/5 custom-scrollbar">
+                                        {events
+                                            .filter(e => !eventSearchTerm || e.name?.toLowerCase().includes(eventSearchTerm.toLowerCase()))
+                                            .map(event => (
+                                                <button
+                                                    key={event.id}
+                                                    onClick={() => {
+                                                        setSelectedEventId(event.id);
+                                                        setEventSearchTerm(event.name);
+                                                    }}
+                                                    className={`w-full text-left px-4 py-3 text-sm transition-all border-b border-white/5 last:border-0 hover:bg-padel-green/10 ${
+                                                        selectedEventId === event.id ? 'bg-padel-green/20 text-padel-green font-black' : 'text-gray-300'
+                                                    }`}
+                                                >
+                                                    <div className="flex justify-between items-center">
+                                                        <span>{event.name}</span>
+                                                        <span className="text-[10px] opacity-50">{new Date(event.date || new Date()).toLocaleDateString()}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        {events.filter(e => !eventSearchTerm || e.name?.toLowerCase().includes(eventSearchTerm.toLowerCase())).length === 0 && (
+                                            <div className="p-4 text-center text-gray-500 text-xs italic">No events found matching your search</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <button
+                                    disabled={!selectedEventId || assignLoading}
+                                    onClick={async () => {
+                                        setAssignLoading(true);
+                                        try {
+                                            const event = events.find(e => String(e.id) === String(selectedEventId));
+                                            if (!event) throw new Error("Please select an event from the list first.");
+
+                                            // Ensure we have a valid date string
+                                            const validDate = event.date || new Date().toISOString();
+                                            
+                                            // 1. Check for existing license to avoid conflict errors
+                                            const { data: existingLic } = await supabase
+                                                .from('temporary_licenses')
+                                                .select('id')
+                                                .eq('player_id', tempLicenseTarget.id)
+                                                .eq('event_id', event.id)
+                                                .maybeSingle();
+
+                                            const licenseData = {
+                                                player_id: tempLicenseTarget.id,
+                                                event_id: event.id,
+                                                event_name: event.name || 'Tournament Event',
+                                                event_date: validDate
+                                            };
+
+                                            let licError;
+                                            if (existingLic) {
+                                                const { error } = await supabase
+                                                    .from('temporary_licenses')
+                                                    .update(licenseData)
+                                                    .eq('id', existingLic.id);
+                                                licError = error;
+                                            } else {
+                                                const { error } = await supabase
+                                                    .from('temporary_licenses')
+                                                    .insert([licenseData]);
+                                                licError = error;
+                                            }
+                                            
+                                            if (licError) {
+                                                console.error("License Save Error:", licError);
+                                                throw new Error(`License Save Error: ${licError.message}`);
+                                            }
+
+                                            // 2. Update Player Status
+                                            const { error: playerError } = await supabase
+                                                .from('players')
+                                                .update({
+                                                    paid_registration: true,
+                                                    license_type: 'temporary',
+                                                    approved: true
+                                                })
+                                                .eq('id', tempLicenseTarget.id);
+                                            
+                                            if (playerError) {
+                                                console.error("Player Update Error:", playerError);
+                                                throw new Error(`Player Update Error: ${playerError.message}`);
+                                            }
+
+                                            showToast("Temporary license assigned successfully!");
+                                            setIsAssigningTemp(false);
+                                            setEventSearchTerm('');
+                                            setSelectedEventId('');
+                                            fetchPlayers();
+                                        } catch (err) {
+                                            console.error("Manual Assign catch:", err);
+                                            showToast(err.message || "Failed to assign license", "error");
+                                        } finally {
+                                            setAssignLoading(false);
+                                        }
+                                    }}
+                                    className="w-full bg-padel-green text-black py-4 rounded-xl font-black uppercase tracking-widest hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 shadow-lg shadow-padel-green/20"
+                                >
+                                    {assignLoading ? 'Assigning...' : 'Confirm Assignment'}
+                                </button>
+                            </div>
                         </motion.div>
                     </motion.div>
                 )}
