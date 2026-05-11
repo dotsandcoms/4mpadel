@@ -52,6 +52,8 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [previewUrl, setPreviewUrl] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
     const [region, setRegion] = useState('');
+    const [racketBrand, setRacketBrand] = useState('');
+    const [customRacketBrand, setCustomRacketBrand] = useState('');
 
     // Temporary License Addition
     const [upcomingEvents, setUpcomingEvents] = useState([]);
@@ -102,6 +104,8 @@ const AuthModal = ({ isOpen, onClose }) => {
         setPaymentOption('pay_now');
         setSelectedEventId('');
         setRegion('');
+        setRacketBrand('');
+        setCustomRacketBrand('');
         setMessage(null);
     };
 
@@ -314,14 +318,15 @@ const AuthModal = ({ isOpen, onClose }) => {
                 p_home_club: homeClub,
                 p_sponsors: sponsors,
                 p_region: region,
+                p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
             };
 
             const { error: insertError } = await supabase.rpc('create_player_profile', {
                 ...baseParams,
-                p_instagram_link: instagramLink || null,
                 p_paid_registration: false,
                 p_license_type: 'none',
                 p_image_url: uploadedImageUrl,
+                p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
             });
 
             if (insertError) {
@@ -685,6 +690,43 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                 onChange={(e) => setSponsors(e.target.value)}
                                                 className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
                                             />
+
+                                            <div className="space-y-3">
+                                                <select
+                                                    value={racketBrand}
+                                                    onChange={(e) => setRacketBrand(e.target.value)}
+                                                    className="w-full bg-black/50 border border-white/10 rounded-xl h-12 px-4 text-white text-sm focus:outline-none focus:border-padel-green transition-all appearance-none cursor-pointer"
+                                                    required
+                                                >
+                                                    <option value="" disabled>Racket Brand</option>
+                                                    <option value="Adidas">Adidas</option>
+                                                    <option value="Babolat">Babolat</option>
+                                                    <option value="Bull Padel">Bull Padel</option>
+                                                    <option value="Nox">Nox</option>
+                                                    <option value="Varlion">Varlion</option>
+                                                    <option value="Oxdog">Oxdog</option>
+                                                    <option value="Wilson">Wilson</option>
+                                                    <option value="Head">Head</option>
+                                                    <option value="Siux">Siux</option>
+                                                    <option value="Other">Other</option>
+                                                </select>
+
+                                                {racketBrand === 'Other' && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: -10 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                    >
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Please specify your racket brand"
+                                                            value={customRacketBrand}
+                                                            onChange={(e) => setCustomRacketBrand(e.target.value)}
+                                                            className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all text-sm"
+                                                            required
+                                                        />
+                                                    </motion.div>
+                                                )}
+                                            </div>
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="checkbox"

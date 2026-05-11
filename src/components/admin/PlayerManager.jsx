@@ -91,6 +91,7 @@ const PlayerManager = () => {
         paid_registration: true,
         license_type: 'none',
         region: '',
+        racket_brand: '',
     });
 
 
@@ -313,7 +314,7 @@ const PlayerManager = () => {
         setFormData({
             name: '', rank_label: '', points: '', win_rate: '', image_url: '', home_club: '', age_group: '',
             category: '', level: '', nationality: '', bio: '', sponsors: '', contact_number: '', email: '',
-            gender: '', approved: true, paid_registration: false, license_type: 'none', region: '',
+            gender: '', approved: true, paid_registration: false, license_type: 'none', region: '', racket_brand: '',
         });
         setIsEditing(true);
     };
@@ -349,6 +350,7 @@ const PlayerManager = () => {
             paid_registration: player.paid_registration === true,
             license_type: player.license_type || 'none',
             region: player.region || '',
+            racket_brand: player.racket_brand || '',
         });
         setIsEditing(true);
     };
@@ -452,6 +454,7 @@ const PlayerManager = () => {
             paid_registration: formData.paid_registration,
             license_type: formData.license_type,
             region: formData.region,
+            racket_brand: formData.racket_brand,
         };
 
         let error;
@@ -571,13 +574,13 @@ const PlayerManager = () => {
 
             // Add Headers
             const headers = [
-                'Name', 'Email', 'Contact Number', 'Region', 'Home Club', 
+                'Name', 'Email', 'Contact Number', 'Region', 'Racket Brand', 'Home Club', 
                 'Category', 'Gender', 'License Type', 'Paid Status', 
                 'License Paid', 'Last Login'
             ];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
-            sheet.autoFilter = 'A3:K3';
+            sheet.autoFilter = 'A3:L3';
 
             // Add Data Rows
             sortedPlayers.forEach(p => {
@@ -586,6 +589,7 @@ const PlayerManager = () => {
                     p.email || 'N/A',
                     p.contact_number || 'N/A',
                     p.region || 'N/A',
+                    p.racket_brand || 'N/A',
                     p.home_club || 'N/A',
                     p.category || 'N/A',
                     p.gender || 'N/A',
@@ -597,7 +601,7 @@ const PlayerManager = () => {
             });
 
             // Expand columns to fit content
-            for (let i = 1; i <= 11; i++) {
+            for (let i = 1; i <= 12; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
@@ -1065,6 +1069,45 @@ const PlayerManager = () => {
                                             <option value="Male">Male</option>
                                             <option value="Female">Female</option>
                                         </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Racket Brand</label>
+                                        <div className="space-y-2">
+                                            <select 
+                                                value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')} 
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    if (val === 'Other') {
+                                                        setFormData({ ...formData, racket_brand: 'Other' });
+                                                    } else {
+                                                        setFormData({ ...formData, racket_brand: val });
+                                                    }
+                                                }} 
+                                                className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
+                                            >
+                                                <option value="">Select Brand</option>
+                                                <option value="Adidas">Adidas</option>
+                                                <option value="Babolat">Babolat</option>
+                                                <option value="Bull Padel">Bull Padel</option>
+                                                <option value="Nox">Nox</option>
+                                                <option value="Varlion">Varlion</option>
+                                                <option value="Oxdog">Oxdog</option>
+                                                <option value="Wilson">Wilson</option>
+                                                <option value="Head">Head</option>
+                                                <option value="Siux">Siux</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                            {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
+                                                <input
+                                                    type="text"
+                                                    value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
+                                                    onChange={e => setFormData({ ...formData, racket_brand: e.target.value })}
+                                                    placeholder="Specify brand"
+                                                    className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
+                                                    required
+                                                />
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="md:col-span-2">
                                         <label className="block text-gray-400 text-sm mb-1">Sponsors (comma separated)</label>

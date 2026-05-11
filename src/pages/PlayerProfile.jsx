@@ -55,7 +55,8 @@ const PlayerProfile = () => {
         home_club: '',
         age: '',
         instagram_link: '',
-        region: ''
+        region: '',
+        racket_brand: ''
     });
 
     const showMessage = (text, type = 'success') => {
@@ -186,7 +187,8 @@ const PlayerProfile = () => {
                     id_number: playerData.id_number || '',
                     age: playerData.age || '',
                     instagram_link: playerData.instagram_link || '',
-                    region: playerData.region || ''
+                    region: playerData.region || '',
+                    racket_brand: playerData.racket_brand || ''
                 });
 
                 // Fetch associated coach application if any
@@ -414,7 +416,8 @@ const PlayerProfile = () => {
             id_number: formData.id_number,
             age: formData.age === '' || formData.age === null ? null : parseInt(formData.age),
             instagram_link: formData.instagram_link,
-            region: formData.region
+            region: formData.region,
+            racket_brand: formData.racket_brand
         };
 
         try {
@@ -1098,9 +1101,13 @@ const PlayerProfile = () => {
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
                                                                     <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
                                                                 </div>
-                                                                <div className="space-y-1">
+                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
                                                                     <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Racket Brand</p>
+                                                                    <p className="text-lg font-bold text-white">{player.racket_brand || 'Not set'}</p>
                                                                 </div>
                                                                 {player.sponsors && (
                                                                     <div className="space-y-1 md:col-span-2 lg:col-span-3">
@@ -1317,6 +1324,48 @@ const PlayerProfile = () => {
                                                                                 <option value="North West">North West</option>
                                                                                 <option value="Western Cape">Western Cape</option>
                                                                             </select>
+                                                                            <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={20} />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Racket Brand</label>
+                                                                        <div className="relative space-y-3">
+                                                                            <select
+                                                                                value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')}
+                                                                                onChange={(e) => {
+                                                                                    const val = e.target.value;
+                                                                                    if (val === 'Other') {
+                                                                                        setFormData({ ...formData, racket_brand: 'Other' });
+                                                                                    } else {
+                                                                                        setFormData({ ...formData, racket_brand: val });
+                                                                                    }
+                                                                                }}
+                                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-padel-green outline-none transition-all font-bold appearance-none cursor-pointer"
+                                                                            >
+                                                                                <option value="" disabled>Select Brand</option>
+                                                                                <option value="Adidas">Adidas</option>
+                                                                                <option value="Babolat">Babolat</option>
+                                                                                <option value="Bull Padel">Bull Padel</option>
+                                                                                <option value="Nox">Nox</option>
+                                                                                <option value="Varlion">Varlion</option>
+                                                                                <option value="Oxdog">Oxdog</option>
+                                                                                <option value="Wilson">Wilson</option>
+                                                                                <option value="Head">Head</option>
+                                                                                <option value="Siux">Siux</option>
+                                                                                <option value="Other">Other</option>
+                                                                            </select>
+                                                                            <ChevronDown className="absolute right-6 top-6 text-padel-green/40 pointer-events-none" size={20} />
+                                                                            
+                                                                            {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
+                                                                                    onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
+                                                                                    placeholder="Specify your brand"
+                                                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none transition-all font-bold"
+                                                                                    required
+                                                                                />
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 </div>
