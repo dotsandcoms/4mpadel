@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
-import { motion } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight, GitBranch, User } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight, GitBranch, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import tournamentBg from '../assets/tournament_bg.png';
@@ -186,10 +186,31 @@ const CalendarEventItem = ({ event, index }) => {
 const Calendar = () => {
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const scrollRef = useRef(null);
+    const navigate = useNavigate();
+    const [canScrollLeft, setCanScrollLeft] = useState(false);
+    const [canScrollRight, setCanScrollRight] = useState(true);
+
+    const checkScroll = () => {
+        if (scrollRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+            setCanScrollLeft(scrollLeft > 10);
+            setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 10);
+        }
+    };
 
     useEffect(() => {
         fetchEvents();
     }, []);
+
+    useEffect(() => {
+        const el = scrollRef.current;
+        if (el) {
+            el.addEventListener('scroll', checkScroll);
+            setTimeout(checkScroll, 100);
+            return () => el.removeEventListener('scroll', checkScroll);
+        }
+    }, [events]);
 
     const fetchEvents = async () => {
         const { data, error } = await supabase
@@ -197,7 +218,7 @@ const Calendar = () => {
             .select('*')
             .eq('featured_event', true)
             .order('start_date', { ascending: true })
-            .limit(3);
+            .limit(10);
 
         if (error) {
             console.error('Error fetching events:', error?.message || error);
@@ -207,28 +228,81 @@ const Calendar = () => {
         setLoading(false);
     };
 
+    const scroll = (direction) => {
+        if (scrollRef.current) {
+            const { scrollLeft, clientWidth } = scrollRef.current;
+            const scrollAmount = clientWidth * 0.8;
+            const scrollTo = direction === 'left'
+                ? scrollLeft - scrollAmount
+                : scrollLeft + scrollAmount;
+            scrollRef.current.scrollTo({ left: scrollTo, behavior: 'smooth' });
+        }
+    };
+
     if (loading) return null;
 
+    const isSlider = events.length > 3;
+
     return (
-        <section className="py-24 bg-black relative">
+        <section className="py-24 bg-black relative overflow-hidden">
             <div className="absolute inset-0 opacity-20">
                 <img src={tournamentBg} alt="" className="w-full h-full object-cover" />
             </div>
 
             <div className="container mx-auto px-6 md:px-20 relative z-10">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 relative">
                     <div>
                         <span className="text-padel-green font-bold tracking-widest uppercase text-sm">Upcoming Events</span>
                         <h2 className="text-4xl md:text-5xl font-bold text-white mt-4">Calendar</h2>
                     </div>
-                    <Link to="/calendar" className="hidden md:block px-6 py-3 border border-white/20 rounded-full text-white hover:bg-white/10 transition-colors">
-                        View Full Calendar
-                    </Link>
+                    
+                    <div className="flex items-center gap-6 mt-6 md:mt-0">
+                        <Link to="/calendar" className="px-6 py-3 border border-white/20 rounded-full text-white hover:bg-white/10 transition-colors">
+                            View Full Calendar
+                        </Link>
+                    </div>
+
+                    {isSlider && (
+                        <div className="flex gap-4 z-20 mt-8 justify-center min-h-[44px]">
+                            <AnimatePresence>
+                                {canScrollLeft && (
+                                    <motion.button
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        onClick={() => scroll('left')}
+                                        className="w-11 h-11 rounded-full border border-white/10 bg-white/5 text-white flex items-center justify-center hover:bg-padel-green hover:text-black transition-all duration-300"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </motion.button>
+                                )}
+                                {canScrollRight && (
+                                    <motion.button
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        onClick={() => scroll('right')}
+                                        className="w-11 h-11 rounded-full border border-white/10 bg-white/5 text-white flex items-center justify-center hover:bg-padel-green hover:text-black transition-all duration-300"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </motion.button>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
                 </div>
 
-                <div className="grid gap-6">
+                <div 
+                    ref={scrollRef}
+                    className={isSlider 
+                        ? "flex overflow-x-auto gap-6 pb-8 snap-x snap-mandatory scrollbar-hide" 
+                        : "grid gap-6"
+                    }
+                >
                     {events.map((event, index) => (
-                        <CalendarEventItem key={event.id} event={event} index={index} />
+                        <div key={event.id} className={isSlider ? "flex-none w-[90%] md:w-[650px] snap-start" : "w-full"}>
+                            <CalendarEventItem event={event} index={index} />
+                        </div>
                     ))}
                 </div>
             </div>

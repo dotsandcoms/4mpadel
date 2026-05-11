@@ -526,14 +526,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             <div
                 ref={scrollRef}
                 className={`${isSlider
-                    ? 'flex overflow-x-auto gap-5 lg:gap-6 pb-8 snap-x snap-mandatory scrollbar-hide -mx-4 px-4'
+                    ? 'flex overflow-x-auto gap-5 lg:gap-6 pb-8 snap-x snap-mandatory scrollbar-hide'
                     : 'grid grid-cols-1 md:grid-cols-3 gap-5 lg:gap-6'
                     }`}
             >
                 {data.id === 'recent-results' ? (
                     liveTournaments && liveTournaments.length > 0 ? (
                         liveTournaments.map((t, i) => (
-                            <div key={t.eventId} className={isSlider ? "flex-none w-[85%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
+                            <div key={t.eventId} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
                                 <TournamentCard
                                     index={i}
                                     title={t.eventName}
@@ -563,7 +563,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ) : data.id === 'featured-live' ? (
                     liveFeaturedTournaments && liveFeaturedTournaments.length > 0 ? (
                         liveFeaturedTournaments.map((t, i) => (
-                            <div key={t.id} className={isSlider ? "flex-none w-[85%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
+                            <div key={t.id} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
                                 <TournamentCard
                                     index={i}
                                     title={t.event_name}
@@ -594,7 +594,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ) : (
                     featuredTournaments && featuredTournaments.length > 0 ? (
                         featuredTournaments.map((t, i) => (
-                            <div key={t.id} className={isSlider ? "flex-none w-[85%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
+                            <div key={t.id} className={isSlider ? "flex-none w-[90%] md:w-[calc(33.333%-16px)] snap-start" : ""}>
                                 <TournamentCard
                                     index={i}
                                     title={t.event_name}
@@ -621,7 +621,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             </div>
 
             {isSlider && (
-                <div className={`flex gap-2 z-20 md:absolute md:-top-12 md:right-0 mt-6 md:mt-0 justify-center md:justify-end min-h-[44px]`}>
+                <div className="flex gap-4 z-20 mt-8 justify-center min-h-[44px]">
                     <AnimatePresence>
                         {canScrollLeft && (
                             <motion.button
