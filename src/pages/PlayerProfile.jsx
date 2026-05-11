@@ -412,7 +412,7 @@ const PlayerProfile = () => {
             image_url: formData.image_url,
             category: formData.category,
             id_number: formData.id_number,
-            age: formData.age,
+            age: formData.age === '' || formData.age === null ? null : parseInt(formData.age),
             instagram_link: formData.instagram_link,
             region: formData.region
         };
@@ -1097,6 +1097,10 @@ const PlayerProfile = () => {
                                                                 <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
                                                                     <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
+                                                                    <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
                                                                 </div>
                                                                 {player.sponsors && (
                                                                     <div className="space-y-1 md:col-span-2 lg:col-span-3">

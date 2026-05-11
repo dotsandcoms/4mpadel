@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Trophy, Search, Bell } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Search, Bell, MapPin } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
@@ -53,7 +53,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
 
       const { data } = await supabase
         .from('players')
-        .select('name, rankedin_id, rank_label, points, active_ranking_label')
+        .select('name, rankedin_id, rank_label, points, active_ranking_label, region')
         .ilike('email', targetEmail)
         .maybeSingle();
 
@@ -134,6 +134,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
             </button>
           </div>
         )}
+
+
         <div className="container mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
           <div className="flex items-center gap-4">
@@ -238,7 +240,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   title="Notifications"
                 >
                   <motion.div
-                    animate={pendingPayments.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                    animate={(pendingPayments.length > 0 || (player && !player.region)) ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
                     transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
                   >
                     <Bell 
@@ -247,7 +249,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
                     />
                   </motion.div>
-                  {pendingPayments.length > 0 && (
+                  {(pendingPayments.length > 0 || (player && !player.region)) && (
                     <span className="absolute top-0 right-0 flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
@@ -266,13 +268,28 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     >
                       <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
                         <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
-                        {pendingPayments.length > 0 && (
+                        {(pendingPayments.length > 0 || (player && !player.region)) && (
                           <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-                            {pendingPayments.length} Pending
+                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
                           </span>
                         )}
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
+                        {player && !player.region && (
+                          <a
+                            href="/profile"
+                            className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                          >
+                            <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
+                              <MapPin className="w-4 h-4 text-padel-green" />
+                            </div>
+                            <div>
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Region Missing</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Please select your home region in your profile to complete your registration.</p>
+                              <p className={`text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green`}>Update Profile ↗</p>
+                            </div>
+                          </a>
+                        )}
                         {pendingPayments.length > 0 ? (
                           pendingPayments.map(payment => (
                             <a
@@ -354,12 +371,12 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   className={`p-2 rounded-full ${isDark ? 'text-slate-900' : 'text-white'}`}
                 >
                   <motion.div
-                    animate={pendingPayments.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                    animate={(pendingPayments.length > 0 || (player && !player.region)) ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
                     transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
                   >
                     <Bell className="w-5 h-5" />
                   </motion.div>
-                  {pendingPayments.length > 0 && (
+                  {(pendingPayments.length > 0 || (player && !player.region)) && (
                     <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-black/50"></span>
@@ -378,13 +395,27 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     >
                       <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
                         <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
-                        {pendingPayments.length > 0 && (
+                        {(pendingPayments.length > 0 || (player && !player.region)) && (
                           <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-                            {pendingPayments.length} Pending
+                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
                           </span>
                         )}
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
+                        {player && !player.region && (
+                          <a
+                            href="/profile"
+                            className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                          >
+                            <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
+                              <MapPin className="w-4 h-4 text-padel-green" />
+                            </div>
+                            <div>
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Region Missing</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Select your home region in your profile.</p>
+                            </div>
+                          </a>
+                        )}
                         {pendingPayments.length > 0 ? (
                           pendingPayments.map(payment => (
                             <a
