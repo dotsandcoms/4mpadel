@@ -92,6 +92,11 @@ function AppContent() {
   const isPublicRoute = isHomePage || location.pathname === '/reset-password' || location.pathname === '/contact';
 
   const showMembersOnly = !loading && !session && !isPublicRoute;
+  
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
 
   return (
     <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
