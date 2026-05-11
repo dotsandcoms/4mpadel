@@ -673,7 +673,7 @@ const PlayerManager = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
-                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext="Annual subscription" icon={CreditCard} color="green" delay={0.05} />
+                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext="Paid" icon={CreditCard} color="green" delay={0.05} />
                 <StatCard title="Visible Players" value={loading ? '—' : stats.visible} subtext="Public on rankings" icon={Eye} color="slate" delay={0.1} />
                 <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="sky" delay={0.15} />
             </div>
