@@ -67,29 +67,39 @@ const FeaturedEventCard = ({ event, index }) => {
                 className={`group relative flex flex-col h-full bg-[#060913] rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-2xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
-                <div className="relative aspect-[16/9] overflow-hidden">
+                <div className="relative aspect-[16/9] overflow-hidden bg-black/40">
                     {event.custom_image_url || event.image_url || event.posterUrl ? (
-                        <img
-                            src={event.custom_image_url || event.image_url || event.posterUrl}
-                            alt={event.event_name || event.eventName}
-                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                        />
+                        <>
+                            {/* Blurred background to fill the space without pixelating the main subject */}
+                            <img
+                                src={event.custom_image_url || event.image_url || event.posterUrl}
+                                alt=""
+                                className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125"
+                                aria-hidden="true"
+                            />
+                            {/* Main Image - contained to avoid zooming and pixelation */}
+                            <img
+                                src={event.custom_image_url || event.image_url || event.posterUrl}
+                                alt={event.event_name || event.eventName}
+                                className="relative z-10 w-full h-full object-contain transition-transform duration-700 group-hover:scale-110"
+                            />
+                        </>
                     ) : (
                         <div className="w-full h-full bg-slate-900 flex items-center justify-center">
                             <CalendarIcon className="w-12 h-12 text-white/10" />
                         </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-transparent to-transparent opacity-60" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-transparent to-transparent opacity-80 z-20" />
                     
                     {/* Floating Status Badge */}
-                    <div className="absolute top-4 right-4">
+                    <div className="absolute top-4 right-4 z-30">
                         <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg`}>
                             {event.sapa_status}
                         </span>
                     </div>
 
                     {event.featured_live && (
-                        <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
+                        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
                             <div className="w-1.5 h-1.5 rounded-full bg-white" />
                             <span>Live</span>
                         </div>
