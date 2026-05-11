@@ -46,12 +46,12 @@ const FeaturedEventCard = ({ event, index }) => {
     let accentColor = 'text-padel-green';
     let glowColor = 'shadow-padel-green/20';
 
-    if (event.sapa_status === 'Major') { tierColor = 'border-red-500/30 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; accentColor = 'text-red-500'; glowColor = 'shadow-red-500/30'; }
-    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-amber-500/30 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; accentColor = 'text-amber-500'; glowColor = 'shadow-amber-500/30'; }
-    else if (event.sapa_status === 'Gold') { tierColor = 'border-yellow-500/30 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; accentColor = 'text-yellow-500'; glowColor = 'shadow-yellow-500/30'; }
-    else if (event.sapa_status === 'Silver') { tierColor = 'border-gray-400/30 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; accentColor = 'text-gray-400'; glowColor = 'shadow-gray-400/30'; }
-    else if (event.sapa_status === 'Bronze') { tierColor = 'border-orange-700/30 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; accentColor = 'text-orange-700'; glowColor = 'shadow-orange-700/30'; }
-    else if (event.sapa_status === 'FIP event') { tierColor = 'border-blue-500/30 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; accentColor = 'text-blue-500'; glowColor = 'shadow-blue-500/30'; }
+    if (event.sapa_status === 'Major') { tierColor = 'border-red-500/30 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; accentColor = 'text-red-500'; glowColor = 'shadow-red-500/15'; }
+    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-amber-500/30 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; accentColor = 'text-amber-500'; glowColor = 'shadow-amber-500/15'; }
+    else if (event.sapa_status === 'Gold') { tierColor = 'border-yellow-500/30 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; accentColor = 'text-yellow-500'; glowColor = 'shadow-yellow-500/15'; }
+    else if (event.sapa_status === 'Silver') { tierColor = 'border-gray-400/30 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; accentColor = 'text-gray-400'; glowColor = 'shadow-gray-400/15'; }
+    else if (event.sapa_status === 'Bronze') { tierColor = 'border-orange-700/30 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; accentColor = 'text-orange-700'; glowColor = 'shadow-orange-700/15'; }
+    else if (event.sapa_status === 'FIP event') { tierColor = 'border-blue-500/30 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; accentColor = 'text-blue-500'; glowColor = 'shadow-blue-500/15'; }
 
     const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
 
@@ -64,7 +64,7 @@ const FeaturedEventCard = ({ event, index }) => {
         >
             <Link
                 to={detailsPath}
-                className={`group relative flex flex-col h-full bg-[#060913] rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-2xl ${glowColor}`}
+                className={`group relative flex flex-col h-full bg-[#060913] rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
                 <div className="relative aspect-[16/9] overflow-hidden bg-black/40">
@@ -225,7 +225,7 @@ const FeaturedCarousel = ({ events }) => {
 
             <div
                 ref={scrollRef}
-                className="flex gap-6 overflow-x-auto pb-8 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-2 px-2"
+                className="flex gap-6 overflow-x-auto pb-12 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-6 px-6"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {events.map((event, index) => (
