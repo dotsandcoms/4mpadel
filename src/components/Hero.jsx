@@ -94,7 +94,7 @@ const Hero = () => {
                             className="text-5xl md:text-7xl lg:text-8xl font-bold text-white leading-none mb-4 max-w-4xl"
                         >
                             FOR THE PLAYERS<br />
-                            <span className="text-padel-green text-2xl md:text-3xl block mt-2">Calendar • Tournaments • Players •  Leaderboard •  Training</span>
+                            <span className="text-padel-green text-[12px] sm:text-sm md:text-2xl lg:text-3xl block mt-2 whitespace-nowrap tracking-tighter">Calendar • Tournaments • Players • Leaderboard • Training • Media</span>
 
                         </motion.h1>
                     </div>
