@@ -598,12 +598,12 @@ const Rankings = () => {
     },
     {
       type: 'SILVER',
-      maxPoints: '600',
+      maxPoints: '500',
       bgGradient: 'bg-gray-400',
       bgIcon: 'bg-gray-400/20',
       iconColor: 'text-gray-300',
       rows: [
-        { cat: '1', winner: '600', finals: '360', semis: '180', quarters: '90', r16: '45', r32: '22', bold: true },
+        { cat: '1', winner: '500', finals: '300', semis: '180', quarters: '90', r16: '45', r32: '22', bold: true },
         { cat: '2', winner: '180', finals: '108', semis: '65', quarters: '32', r16: '16', r32: '8', bold: false },
         { cat: '3', winner: '72', finals: '43', semis: '26', quarters: '13', r16: '6', r32: '3', bold: false },
         { cat: '4', winner: '29', finals: '17', semis: '10', quarters: '5', r16: '3', r32: '1', bold: false }
@@ -805,9 +805,9 @@ const Rankings = () => {
       {/* Player Modal */}
       <AnimatePresence>
         {selectedPlayer && (
-          <PlayerModal 
-            player={selectedPlayer} 
-            onClose={() => setSelectedPlayer(null)} 
+          <PlayerModal
+            player={selectedPlayer}
+            onClose={() => setSelectedPlayer(null)}
             userEmail={userEmail}
           />
         )}
