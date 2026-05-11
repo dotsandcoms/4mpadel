@@ -3,12 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
     CreditCard, DollarSign, CheckCircle, RefreshCcw, 
     ArrowUpRight, Search, Download, Loader2, 
-    LayoutDashboard, Users, Trophy, Settings, FileText
+    LayoutDashboard, Users, Trophy, Settings, FileText, Calendar
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import FinancialDashboard from './FinancialDashboard';
 import UserPayments from './UserPayments';
 import FinancialSummaryReport from './FinancialSummaryReport';
+import EventFinance from './EventFinance';
 import { useAdminPermissions } from '../../hooks/useAdminPermissions';
 
 const FinanceManager = () => {
@@ -520,6 +521,7 @@ const FinanceManager = () => {
 
     const allTabs = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'events', label: 'Event Finance', icon: Trophy },
         { id: 'summary', label: 'Summary Rep', icon: FileText },
         { id: 'users', label: 'User Ledger', icon: Users },
         { id: 'transactions', label: 'Live Paystack', icon: CreditCard },
@@ -577,6 +579,8 @@ const FinanceManager = () => {
                     {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={allowedEvents} />}
                     
                     {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={allowedEvents} />}
+
+                    {activeTab === 'events' && (allowedTabs.includes('events') || allowedEvents.length > 0) && <EventFinance allowedEvents={allowedEvents} />}
 
                     {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={allowedEvents} />}
                     

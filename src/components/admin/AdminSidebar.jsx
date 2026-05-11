@@ -22,6 +22,9 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
         if (permissions.role === 'super_admin') return true;
         if (item.superAdminOnly) return false;
 
+        // Auto-show Event Manager if they have specific event permissions
+        if (item.id === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
+
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(item.id);
     });
 
