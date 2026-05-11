@@ -348,8 +348,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 text-white`}
-                style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#88e000') }}
+                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 text-black`}
+                style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#ccff00') }}
               >
                 Login / Register ↗
               </button>
@@ -533,7 +533,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 onClick={() => { setIsMobileMenuOpen(false); setIsAuthModalOpen(true); }}
-                className="bg-padel-green text-black px-6 py-3 rounded-full text-lg font-bold mt-2"
+                className="bg-[#ccff00] text-black px-6 py-3 rounded-full text-lg font-bold mt-2"
               >
                 Login / Register
               </motion.button>
