@@ -5,7 +5,7 @@ import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Sear
 import { supabase } from '../supabaseClient';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
-import sapaLogo from '../assets/sapa-logo.svg';
+
 import { GitBranch } from 'lucide-react';
 
 const extractRankedinId = (url) => {
@@ -190,9 +190,9 @@ const FeaturedCarousel = ({ events }) => {
 
     return (
         <div className="mb-12 relative">
-            <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-6 sm:gap-0">
+                <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center shrink-0">
                         <Trophy className="w-6 h-6 text-padel-green" />
                     </div>
                     <div>
@@ -787,7 +787,7 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pt-20 md:pt-32 pb-20 container mx-auto px-6 max-w-7xl">
+            <main className="relative z-10 pt-10 md:pt-32 pb-20 container mx-auto px-6 max-w-7xl">
 
                 {/* Hero Header */}
                 <div className="text-center mb-10 md:mb-16">
@@ -805,9 +805,8 @@ const Calendar = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4 md:mb-6"
                     >
-                        <img src={sapaLogo} alt="SAPA Logo" className="h-12 md:h-20 object-contain drop-shadow-lg" />
-                        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase m-0 leading-none">
-                            SAPA Tour <span className="text-padel-green">Calendar</span>
+                        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase m-0 leading-none text-center">
+                            Tournament <span className="text-padel-green">Calendar</span>
                         </h1>
                     </motion.div>
 
