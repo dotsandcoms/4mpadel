@@ -130,8 +130,31 @@ export const usePendingPayments = (email, rankedinId) => {
                     }
                 }
 
+                // Deduplicate: If an event appears both with a division and without, 
+                // prioritize the one WITH the division to avoid redundant notifications.
+                const deduplicated = new Map();
+                unpaidEvents.forEach((val, key) => {
+                    const eventId = val.id;
+                    const hasDiv = val.division && val.division !== 'N/A' && val.division !== 'null';
+                    
+                    if (!deduplicated.has(eventId)) {
+                        deduplicated.set(eventId, val);
+                    } else if (hasDiv) {
+                        // If we already have a record but it doesn't have a division, replace it with this one
+                        const existing = deduplicated.get(eventId);
+                        const existingHasDiv = existing.division && existing.division !== 'N/A' && existing.division !== 'null';
+                        if (!existingHasDiv) {
+                            deduplicated.set(eventId, val);
+                        } else if (existing.division !== val.division) {
+                            // If both have DIFFERENT divisions, we keep both by using a composite key for the map
+                            // This is a rare case but ensures we don't hide real multi-division entry fees
+                            deduplicated.set(`${eventId}_${val.division}`, val);
+                        }
+                    }
+                });
+
                 // Sort by date ascending
-                const sortedPending = Array.from(unpaidEvents.values()).sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+                const sortedPending = Array.from(deduplicated.values()).sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
                 setPendingPayments(sortedPending);
             } catch (error) {
                 console.error("Error in usePendingPayments:", error);
