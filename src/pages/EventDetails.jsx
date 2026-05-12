@@ -944,8 +944,13 @@ const EventDetails = () => {
             return;
         }
 
-        if (isPaid) {
-            toast.error('You are already registered for this event!');
+        // Only block if they have already paid for ALL their registered divisions 
+        // AND they haven't selected any new ones to pay for now
+        const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.includes(div));
+        const isFullyPaid = isRegistered && registeredDivisions.length > 0 && registeredDivisions.every(div => paidDivisions.includes(div));
+
+        if (isFullyPaid && !hasUnpaidSelections) {
+            toast.error('You have already paid for all your registered divisions!');
             return;
         }
 
@@ -1716,7 +1721,7 @@ const EventDetails = () => {
                                 if (!isEventPassed) {
                                     return (
                                         <div className="flex gap-2">
-                                            {isRegistered && isPaid ? (
+                                            {isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.includes(div)) ? (
                                                 <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
                                                     <CheckCircle size={14} className="text-padel-green" />
                                                     <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Paid</span>
@@ -1739,7 +1744,7 @@ const EventDetails = () => {
                                                             <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Registered</span>
                                                         </div>
                                                     )}
-                                                    {!isPaid && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.includes(div)))) && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
                                                         <button
                                                             onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                             className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
