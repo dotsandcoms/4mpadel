@@ -991,7 +991,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:opacity-10 group-hover:-rotate-12 transition-all duration-500">
                                 <Trophy size={120} />
                             </div>
-                            <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Player Licenses</p>
+                            <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Total Players ({dashboardStats.uniquePlayers})</p>
                             <div className="flex items-center justify-between gap-3 mt-4 w-full relative z-10">
                                 <div className="flex flex-col items-center">
                                     <span className="text-2xl font-black text-padel-green">{dashboardStats.licenses.full}</span>
