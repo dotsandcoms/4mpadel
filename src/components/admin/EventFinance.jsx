@@ -1246,7 +1246,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             </div>
                                             <p className="text-gray-400 text-[9px] font-black uppercase tracking-[0.2em] mt-1 truncate opacity-70">{p.class_name}</p>
                                         </div>
-                                        <div className="shrink-0 ml-4">
+                                        <div className="shrink-0 ml-4 flex flex-col items-end gap-2">
                                             <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border shadow-sm ${
                                                 p.is_paid 
                                                 ? 'bg-padel-green text-black border-padel-green' 
@@ -1254,29 +1254,25 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             }`}>
                                                 {p.is_paid ? 'PAID' : 'UNPAID'}
                                             </div>
+                                            <button
+                                                onClick={() => handleToggleWhatsApp(p)}
+                                                disabled={updatingWhatsApp === p.id}
+                                                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all shadow-sm ${
+                                                    p.whatsapp_added 
+                                                    ? 'bg-green-500/20 border-green-500/20 text-green-400' 
+                                                    : 'bg-black/20 border-white/5 text-gray-500'
+                                                }`}
+                                            >
+                                                {updatingWhatsApp === p.id ? (
+                                                    <Loader2 size={10} className="animate-spin" />
+                                                ) : (
+                                                    <MessageCircle size={10} />
+                                                )}
+                                                <span className="text-[8px] font-black uppercase tracking-widest">
+                                                    {p.whatsapp_added ? 'WhatsApp OK' : 'No WhatsApp'}
+                                                </span>
+                                            </button>
                                         </div>
-                                    </div>
-
-                                    {/* WhatsApp Status Toggle (Floating or Top Right) */}
-                                    <div className="absolute top-16 right-4">
-                                        <button
-                                            onClick={() => handleToggleWhatsApp(p)}
-                                            disabled={updatingWhatsApp === p.id}
-                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-lg transition-all ${
-                                                p.whatsapp_added 
-                                                ? 'bg-green-500 border-green-400 text-white' 
-                                                : 'bg-[#1E293B] border-white/10 text-gray-400'
-                                            }`}
-                                        >
-                                            {updatingWhatsApp === p.id ? (
-                                                <Loader2 size={12} className="animate-spin" />
-                                            ) : (
-                                                <MessageCircle size={12} />
-                                            )}
-                                            <span className="text-[9px] font-black uppercase tracking-widest">
-                                                {p.whatsapp_added ? 'WhatsApp OK' : 'No WhatsApp'}
-                                            </span>
-                                        </button>
                                     </div>
 
                                     {/* Info Grid */}
