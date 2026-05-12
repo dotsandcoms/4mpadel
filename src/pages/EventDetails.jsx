@@ -1145,7 +1145,14 @@ const EventDetails = () => {
                     payment_method: 'paystack',
                     reference: `REG-${paystackRef}-${division.replaceAll(' ', '_')}`,
                     is_test: isTestMode,
-                    metadata: { paystack_ref: paystackRef, division: division }
+                    metadata: { 
+                        paystack_ref: paystackRef, 
+                        division: division,
+                        line_items: [
+                            { type: 'entry_fee', amount: fee, player: formData.full_name },
+                            ...(payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerProfile.name }] : [])
+                        ]
+                    }
                 });
 
                 // Partner (gets R0 record with attribution)
@@ -1163,7 +1170,10 @@ const EventDetails = () => {
                             paystack_ref: paystackRef, 
                             division: division,
                             paid_by_name: formData.full_name,
-                            paid_by_id: playerId
+                            paid_by_id: playerId,
+                            line_items: [
+                                { type: 'entry_fee', amount: 0, player: partnerProfile.name, paid_by: formData.full_name }
+                            ]
                         }
                     });
                 }

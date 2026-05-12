@@ -283,21 +283,43 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
             // Create a unified list of confirmed payments
-            const confirmedPayments = [
-                ...(paidRegs || []).map(r => ({
+            const confirmedPayments = [];
+            
+            // From local registrations table
+            (paidRegs || []).forEach(r => {
+                confirmedPayments.push({
                     name: r.full_name,
                     email: r.email,
                     partner: r.partner_name,
                     division: r.division,
                     method: r.payment_method || 'system'
-                })),
-                ...(paidPayments || []).map(p => ({
-                    profileId: p.player_id,
-                    name: p.metadata?.paid_by_name,
-                    division: p.metadata?.division,
-                    method: p.payment_method || 'paystack'
-                }))
-            ];
+                });
+            });
+
+            // From master payments table
+            (paidPayments || []).forEach(p => {
+                // If it has line items, it's a newer granular payment
+                if (p.metadata?.line_items && Array.isArray(p.metadata.line_items)) {
+                    p.metadata.line_items.forEach(item => {
+                        if (item.type === 'entry_fee') {
+                            confirmedPayments.push({
+                                profileId: p.player_id, // Main player ID
+                                name: item.player,      // Specific player for this line item
+                                division: p.metadata.division,
+                                method: p.payment_method || 'paystack'
+                            });
+                        }
+                    });
+                } else {
+                    // Legacy/Bulk payment without explicit line items
+                    confirmedPayments.push({
+                        profileId: p.player_id,
+                        name: p.metadata?.paid_by_name || p.metadata?.player_name,
+                        division: p.metadata?.division,
+                        method: p.payment_method || 'paystack'
+                    });
+                }
+            });
 
             // Step 4: Upsert participants
             for (const p of externalParticipants) {
@@ -1226,18 +1248,22 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             <td className="px-6 py-4">
                                                 {p.is_paid ? (
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit">PAID</span>
-                                                        <span className="text-[8px] text-gray-500 italic uppercase tracking-wider">
-                                                            {p.actual_payment?.payment_method || p.metadata?.payment_method || 'System'}
+                                                        <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit tracking-tighter">PAID</span>
+                                                        <span className="text-[8px] text-gray-400 italic uppercase font-black tracking-wider">
+                                                            {p.actual_payment?.metadata?.paid_by_name 
+                                                                ? `By ${p.actual_payment.metadata.paid_by_name}`
+                                                                : (p.actual_payment?.payment_method || p.metadata?.payment_method || 'System')}
                                                         </span>
                                                         {p.actual_payment && (
-                                                            <span className="text-[7px] text-padel-green font-bold">R {p.actual_payment.amount}</span>
+                                                            <span className="text-[8px] text-white font-black">
+                                                                {Number(p.actual_payment.amount) === 0 ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
+                                                            </span>
                                                         )}
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-col gap-1">
-                                                        <span className="bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-[10px] font-black border border-red-500/10 max-w-fit">UNPAID</span>
-                                                        <span className="text-[8px] text-gray-600 italic">No record</span>
+                                                        <span className="bg-red-500/10 text-red-400 px-3 py-1 rounded-full text-[10px] font-black border border-red-500/10 max-w-fit tracking-tighter">UNPAID</span>
+                                                        <span className="text-[8px] text-gray-600 italic font-black uppercase">No record</span>
                                                     </div>
                                                 )}
                                             </td>
