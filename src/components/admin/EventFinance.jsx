@@ -1020,7 +1020,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             </div>
                             <p className="text-xs font-black uppercase text-gray-400 tracking-widest relative z-10">Paid Status</p>
                             <div className="flex items-baseline gap-2 mt-2 relative z-10">
-                                <h3 className="text-4xl md:text-5xl font-black text-white drop-shadow-md">{localParticipants.filter(p => p.is_paid).length}</h3>
+                                <h3 className="text-4xl md:text-5xl font-black text-padel-green drop-shadow-md">{localParticipants.filter(p => p.is_paid).length}</h3>
                                 <span className="text-xs text-gray-400 font-bold uppercase">/ {localParticipants.length} Paid</span>
                             </div>
                             {/* Visual Progress Bar */}
