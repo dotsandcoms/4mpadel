@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Calendar, Users, CheckCircle, XCircle, Search, Download, 
-    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign
+    RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign,
+    MessageCircle, Check
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -27,6 +28,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [filterLicense, setFilterLicense] = useState('all');
     const [filterPayment, setFilterPayment] = useState('all');
     const [filterDivision, setFilterDivision] = useState('all');
+    const [filterWhatsApp, setFilterWhatsApp] = useState('all');
+    const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -525,6 +528,31 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         }
     };
 
+    const handleToggleWhatsApp = async (participant) => {
+        setUpdatingWhatsApp(participant.id);
+        const newState = !participant.whatsapp_added;
+        try {
+            const { error } = await supabase
+                .from('tournament_participants')
+                .update({ whatsapp_added: newState })
+                .eq('id', participant.id);
+            
+            if (error) throw error;
+            
+            // Update local state to avoid full re-fetch if possible, but fetchParticipants is safer
+            setLocalParticipants(prev => prev.map(p => 
+                p.id === participant.id ? { ...p, whatsapp_added: newState } : p
+            ));
+            
+            toast.success(`${participant.full_name} ${newState ? 'marked as added to WhatsApp' : 'unmarked from WhatsApp'}`);
+        } catch (err) {
+            console.error("WhatsApp toggle error:", err);
+            toast.error("Failed to update WhatsApp status");
+        } finally {
+            setUpdatingWhatsApp(null);
+        }
+    };
+
     const handleExportExcel = async () => {
         try {
             const selEvent = events.find(e => e.id === selectedEventId);
@@ -567,7 +595,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Payment Method', 'Amount Paid'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Payment Method', 'Amount Paid', 'WhatsApp Added'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
             
@@ -586,7 +614,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     p.players?.license_type || 'None',
                     p.is_paid ? 'PAID' : 'UNPAID',
                     p.is_paid ? (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || 'System')) : 'N/A',
-                    amountPaid
+                    amountPaid,
+                    p.whatsapp_added ? 'YES' : 'NO'
                 ]);
             });
 
@@ -598,7 +627,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             totalRow.getCell(9).numFmt = '"R"#,##0.00';
 
             // Expand columns to fit content
-            for (let i = 1; i <= 9; i++) {
+            for (let i = 1; i <= 10; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
@@ -665,7 +694,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             
         const matchesDivision = filterDivision === 'all' || p.class_name === filterDivision;
 
-        return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision;
+        const matchesWhatsApp = filterWhatsApp === 'all' || 
+            (filterWhatsApp === 'added' && p.whatsapp_added) || 
+            (filterWhatsApp === 'not_added' && !p.whatsapp_added);
+
+        return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision && matchesWhatsApp;
     });
 
     return (
@@ -973,6 +1006,16 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                     <option value="unpaid">Fees: Unpaid</option>
                                 </select>
 
+                                <select 
+                                    value={filterWhatsApp}
+                                    onChange={(e) => setFilterWhatsApp(e.target.value)}
+                                    className="bg-black/20 border border-white/10 rounded-xl py-2 px-3 text-[10px] sm:text-xs text-gray-300 focus:outline-none focus:border-padel-green h-[44px] sm:h-[38px] cursor-pointer"
+                                >
+                                    <option value="all">WhatsApp: All</option>
+                                    <option value="added">WhatsApp: Added</option>
+                                    <option value="not_added">WhatsApp: Pending</option>
+                                </select>
+
                                 <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto justify-end mt-2 sm:mt-0">
                                     <button
                                         onClick={() => handleSyncFromRankedin()}
@@ -1040,6 +1083,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">System Profile Match</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Contact Number</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">License Status</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">WhatsApp</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Entry Fee</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm text-right">Actions</th>
                                     </tr>
@@ -1108,6 +1152,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                 ) : (
                                                     <span className="text-gray-600 text-[10px] font-bold uppercase italic">Unlinked</span>
                                                 )}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <button
+                                                    onClick={() => handleToggleWhatsApp(p)}
+                                                    disabled={updatingWhatsApp === p.id}
+                                                    className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all ${
+                                                        p.whatsapp_added 
+                                                        ? 'bg-green-500/10 border-green-500/20 text-green-500' 
+                                                        : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+                                                    }`}
+                                                    title={p.whatsapp_added ? "Mark as not added" : "Mark as added to WhatsApp"}
+                                                >
+                                                    {updatingWhatsApp === p.id ? (
+                                                        <Loader2 size={14} className="animate-spin" />
+                                                    ) : p.whatsapp_added ? (
+                                                        <Check size={14} className="group-hover:hidden" />
+                                                    ) : (
+                                                        <MessageCircle size={14} />
+                                                    )}
+                                                    {p.whatsapp_added && <XCircle size={14} className="hidden group-hover:block text-red-500" />}
+                                                    <span className="text-[10px] font-black uppercase tracking-tight">
+                                                        {p.whatsapp_added ? 'Added' : 'Add'}
+                                                    </span>
+                                                </button>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {p.is_paid ? (
@@ -1187,6 +1255,28 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                 {p.is_paid ? 'PAID' : 'UNPAID'}
                                             </div>
                                         </div>
+                                    </div>
+
+                                    {/* WhatsApp Status Toggle (Floating or Top Right) */}
+                                    <div className="absolute top-16 right-4">
+                                        <button
+                                            onClick={() => handleToggleWhatsApp(p)}
+                                            disabled={updatingWhatsApp === p.id}
+                                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-lg transition-all ${
+                                                p.whatsapp_added 
+                                                ? 'bg-green-500 border-green-400 text-white' 
+                                                : 'bg-[#1E293B] border-white/10 text-gray-400'
+                                            }`}
+                                        >
+                                            {updatingWhatsApp === p.id ? (
+                                                <Loader2 size={12} className="animate-spin" />
+                                            ) : (
+                                                <MessageCircle size={12} />
+                                            )}
+                                            <span className="text-[9px] font-black uppercase tracking-widest">
+                                                {p.whatsapp_added ? 'WhatsApp OK' : 'No WhatsApp'}
+                                            </span>
+                                        </button>
                                     </div>
 
                                     {/* Info Grid */}
