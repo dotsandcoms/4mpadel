@@ -80,20 +80,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     
     const totalCollected = useMemo(() => {
         if (!selectedEvent) return 0;
+        
         return localParticipants
+            .filter(p => p.is_paid)
             .reduce((sum, p) => {
-                // PRIORITIZE actual payment record amount if it exists
-                if (p.actual_payment) {
-                    return sum + Number(p.actual_payment.amount || 0);
-                }
-                
-                // FALLBACK to category fee only if is_paid is true but no payment record found (legacy)
-                if (p.is_paid) {
-                    const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
-                    return sum + Number(divFee);
-                }
-                
-                return sum;
+                const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
+                return sum + Number(divFee);
             }, 0);
     }, [localParticipants, selectedEvent]);
 
@@ -107,7 +99,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         localParticipants.forEach(p => {
             const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
             expected += Number(divFee);
-
+            
             const profileKey = p.profile_id || p.full_name?.toLowerCase().trim();
             if (profileKey && !uniqueProfiles.has(profileKey)) {
                 uniqueProfiles.add(profileKey);
@@ -171,13 +163,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             if (payError) throw payError;
 
             // Enrich participants with their actual payment records
+            const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+
             const enriched = (pData || []).map(p => {
-                // Find payment by metadata participant_id OR by profile_id + amount match if needed
-                // But metadata.participant_id is the most reliable link we created
-                const payment = (payData || []).find(pay => 
-                    pay.metadata?.participant_id === p.id || 
-                    (p.profile_id && pay.player_id === p.profile_id && pay.payment_type === 'event_entry_fee')
-                );
+                // Find payment by metadata participant_id OR by profile_id + division match
+                const pDiv = normalize(p.class_name);
+
+                const payment = (payData || []).find(pay => {
+                    // Highest priority: direct link
+                    if (pay.metadata?.participant_id === p.id) return true;
+
+                    // Fallback: player_id + event_id match
+                    const isOwnPayment = p.profile_id && pay.player_id === p.profile_id && pay.payment_type === 'event_entry_fee';
+                    if (!isOwnPayment) return false;
+
+                    // If we have a division in payment metadata, it MUST match (fuzzy)
+                    const payDiv = normalize(pay.metadata?.division);
+                    if (payDiv && pDiv) {
+                        return payDiv.includes(pDiv) || pDiv.includes(payDiv);
+                    }
+
+                    // If no division in metadata, we assume it's a match if they only have one entry, 
+                    // or we check if there are other payments. For now, if no div in metadata, we match.
+                    return true;
+                });
                 
                 return {
                     ...p,
@@ -260,30 +269,42 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             });
             externalParticipants = Array.from(seenKeys.values());
 
-            // Step 3: Fetch existing participants and PAID registrations
-            const [{ data: existingRows }, { data: paidRegs }] = await Promise.all([
+            // Step 3: Fetch existing participants and confirm payments from BOTH registrations and payments tables
+            const [{ data: existingRows }, { data: paidRegs }, { data: paidPayments }] = await Promise.all([
                 supabase.from('tournament_participants').select('id, rankedin_participant_id, class_name, is_paid, email, metadata').eq('event_id', eventId),
-                supabase.from('event_registrations').select('full_name, email, division, payment_status, payment_method').eq('event_id', eventId).eq('payment_status', 'paid')
+                supabase.from('event_registrations').select('full_name, email, division, partner_name, payment_status, payment_method').eq('event_id', eventId).eq('payment_status', 'paid'),
+                supabase.from('payments').select('player_id, amount, status, payment_type, metadata, payment_method').eq('event_id', eventId).eq('status', 'success').eq('payment_type', 'event_entry_fee')
             ]);
 
             // Map existing records by ID + Class
             const existingMap = new Map((existingRows || []).map(r => [`${r.rankedin_participant_id}_${r.class_name}`, r]));
             
-            // Map paid registrations by Name + Division AND Email + Division to capture payment method
-            const paidRegsMap = new Map();
-            (paidRegs || []).forEach(r => {
-                const nameKey = `${r.full_name.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`;
-                const emailKey = `${r.email?.toLowerCase().trim()}_${r.division?.toLowerCase().trim()}`;
-                if (r.full_name) paidRegsMap.set(nameKey, r.payment_method);
-                if (r.email && !r.email.startsWith('_')) paidRegsMap.set(emailKey, r.payment_method);
-            });
+            // Helper for matching
+            const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
-            console.info(`Found ${paidRegs?.length || 0} paid registrations in system for ${eventName}. Checking for matches...`);
+            // Create a unified list of confirmed payments
+            const confirmedPayments = [
+                ...(paidRegs || []).map(r => ({
+                    name: r.full_name,
+                    email: r.email,
+                    partner: r.partner_name,
+                    division: r.division,
+                    method: r.payment_method || 'system'
+                })),
+                ...(paidPayments || []).map(p => ({
+                    profileId: p.player_id,
+                    name: p.metadata?.paid_by_name,
+                    division: p.metadata?.division,
+                    method: p.payment_method || 'paystack'
+                }))
+            ];
 
             // Step 4: Upsert participants
             for (const p of externalParticipants) {
-                // Auto-match system profile
                 const nameLower = p.full_name.toLowerCase().trim();
+                const nDiv = normalize(p.class_name);
+
+                // Auto-match system profile
                 let autoProfileId = null;
                 let matchedEmail = null;
                 const matchedProfile = systemProfiles.find(sp => 
@@ -294,16 +315,40 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     matchedEmail = matchedProfile.email?.toLowerCase().trim();
                 }
 
-                // SPECIAL FIX: Check if this player already PAID in our system for THIS division
-                const divLower = p.class_name?.toLowerCase().trim();
-                const nameKey = `${nameLower}_${divLower}`;
-                const emailKey = matchedEmail ? `${matchedEmail}_${divLower}` : null;
-                const detectedPaymentMethod = paidRegsMap.get(nameKey) || (emailKey ? paidRegsMap.get(emailKey) : null);
-                const alreadyPaidInSystem = !!detectedPaymentMethod;
-
                 const existingRecord = existingMap.get(`${p.rankedin_participant_id}_${p.class_name}`);
                 const currentMetadata = existingRecord?.metadata || {};
                 const isManualUnpaid = currentMetadata.manual_unpaid === true;
+                const isManualPaid = currentMetadata.payment_method === 'manual';
+
+                // Match with ALL confirmed payments
+                const detectedPayment = confirmedPayments.find(reg => {
+                    const rName = normalize(reg.name);
+                    const rEmail = normalize(reg.email);
+                    const rPartner = normalize(reg.partner);
+                    const rDiv = normalize(reg.division);
+                    const rProfileId = reg.profileId;
+
+                    // Identity match
+                    // 1. Check if the payment belongs to this participant's linked profile
+                    const linkedProfileId = existingRecord?.profile_id || autoProfileId;
+                    const idMatch = (rProfileId && linkedProfileId && String(rProfileId) === String(linkedProfileId));
+                    
+                    // 2. Check name or email or partner name
+                    const nameMatch = (normalize(p.full_name) === rName) || (rPartner && normalize(p.full_name) === rPartner);
+                    const emailMatch = matchedEmail && rEmail && (matchedEmail === rEmail);
+                    
+                    if (!idMatch && !nameMatch && !emailMatch) return false;
+
+                    // Division Match Logic:
+                    if (rDiv && nDiv) {
+                        return rDiv.includes(nDiv) || nDiv.includes(rDiv);
+                    }
+                    if (!rDiv) return true;
+                    return false;
+                });
+
+                const detectedPaymentMethod = detectedPayment?.method;
+                const alreadyPaidInSystem = !!detectedPaymentMethod;
 
                 const participantData = {
                     event_id: eventId,
@@ -312,13 +357,14 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     class_name: p.class_name,
                     email: matchedEmail || null,
                     ...(autoProfileId ? { profile_id: autoProfileId } : {}),
-                    ...(alreadyPaidInSystem && !isManualUnpaid ? { 
-                        is_paid: true,
+                    // If not manually marked/unmarked, sync status with the system's payment records
+                    ...(!isManualUnpaid && !isManualPaid ? { 
+                        is_paid: alreadyPaidInSystem,
                         metadata: { 
                             ...currentMetadata, 
-                            payment_method: detectedPaymentMethod || currentMetadata.payment_method || 'system'
+                            payment_method: alreadyPaidInSystem ? (detectedPaymentMethod || currentMetadata.payment_method || 'system') : null
                         }
-                    } : {}) // RESPECT MANUAL UNMARK
+                    } : {}) 
                 };
 
                 const { error: dbError } = existingRecord 

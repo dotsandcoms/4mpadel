@@ -1267,7 +1267,7 @@ const EventDetails = () => {
             // 3. Mark in participants list (Improved Sync)
             console.log("Updating participants for Event ID:", event.id);
 
-            const syncParticipant = async (pId, pEmail, pName, label) => {
+            const syncParticipant = async (pId, pEmail, pName, label, targetDivisions = []) => {
                 try {
                     const filters = [];
                     if (pId) filters.push(`profile_id.eq.${pId}`);
@@ -1283,7 +1283,7 @@ const EventDetails = () => {
                     // 1. Try finding with combined filters (OR)
                     let { data: matches, error: fetchError } = await supabase
                         .from('tournament_participants')
-                        .select('id, full_name, profile_id, event_id')
+                        .select('id, full_name, profile_id, event_id, class_name')
                         .eq('event_id', Number(event.id))
                         .or(filters.join(','));
 
@@ -1313,8 +1313,20 @@ const EventDetails = () => {
 
                     console.info(`Found ${matches.length} matching record(s) for ${label}:`, matches);
 
-                    // 2. Update each match by its unique UUID
+                    // 2. Update each match by its unique UUID (filtering by division if provided)
                     for (const match of matches) {
+                        if (targetDivisions && targetDivisions.length > 0) {
+                            const normalizedMatchDiv = (match.class_name || '').toLowerCase().replace(/[^a-z]/g, '');
+                            const isTargetDiv = targetDivisions.some(d => {
+                                const normalizedTarget = d.toLowerCase().replace(/[^a-z]/g, '');
+                                return normalizedMatchDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedMatchDiv);
+                            });
+                            if (!isTargetDiv) {
+                                console.info(`Skipping sync for division ${match.class_name} as it was not part of this payment.`);
+                                continue;
+                            }
+                        }
+
                         const { error: updateError } = await supabase
                             .from('tournament_participants')
                             .update({
@@ -1343,14 +1355,14 @@ const EventDetails = () => {
             if (!mainPId && !mainPEmail && !mainPName) {
                 console.error("FATAL: No registrant information available for sync!");
             } else {
-                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName });
-                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player");
+                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
+                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
             }
 
             // Sync Partner
             if (payForPartner && partnerProfile) {
-                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name });
-                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner");
+                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name, divisions: selectedDivisions });
+                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner", selectedDivisions);
             }
 
             console.log("Registration Save Complete!");

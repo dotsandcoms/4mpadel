@@ -169,6 +169,7 @@ const FinanceManager = () => {
             let enrichedEventId = trx.metadata?.event_id || null;
             let enrichedEventName = trx.metadata?.event_name || null;
             let enrichedEventDate = trx.metadata?.event_date || trx.rawDate;
+            let enrichedDivision = trx.metadata?.division || null;
 
             // Extract Event ID from reference if missing from metadata
             if (isEventReg && !enrichedEventId) {
@@ -221,6 +222,15 @@ const FinanceManager = () => {
 
                 let allParticipants = ownParticipants ? [...ownParticipants] : [];
 
+                // Filter own registrations by division if specified in payment metadata
+                if (enrichedDivision && allParticipants.length > 0) {
+                    const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z]/g, '');
+                    allParticipants = allParticipants.filter(p => {
+                        const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z]/g, '');
+                        return normalizedDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedDiv);
+                    });
+                }
+
                 // 2. Look for registrations where this player might have paid for a partner
                 const { data: regData } = await supabase
                     .from('event_registrations')
@@ -229,7 +239,17 @@ const FinanceManager = () => {
                     .ilike('email', email);
                 
                 if (regData && regData.length > 0) {
-                    for (const reg of regData) {
+                    // Also filter regData (partners) by division if specified
+                    let filteredRegData = regData;
+                    if (enrichedDivision) {
+                        const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z]/g, '');
+                        filteredRegData = regData.filter(reg => {
+                            const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z]/g, '');
+                            return normalizedRegDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedRegDiv);
+                        });
+                    }
+
+                    for (const reg of filteredRegData) {
                         if (reg.partner_name && reg.partner_name.trim()) {
                             // Search for the partner in the same event (fuzzy name and division match)
                             const { data: partners } = await supabase
