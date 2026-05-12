@@ -137,7 +137,7 @@ const FeaturedEventCard = ({ event, index }) => {
                             ) : <div></div>}
                             
                             <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
-                                <span className="hidden sm:inline">Details</span>
+                                <span>Details</span>
                                 <ArrowRight className="w-3 h-3" />
                             </div>
                         </div>
