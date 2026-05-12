@@ -899,8 +899,31 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <h2 className="text-xl sm:text-2xl md:text-4xl font-black text-white uppercase tracking-tighter italic leading-none truncate max-w-full">
                                 {events.find(e => e.id === selectedEventId)?.event_name}
                             </h2>
-                            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-padel-green text-black text-[9px] sm:text-[10px] font-black uppercase rounded-lg shadow-lg shadow-padel-green/20 w-fit shrink-0">
-                                <Trophy size={12} /> Selected Tournament
+                            <div className="flex items-center gap-3">
+                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-padel-green text-black text-[9px] sm:text-[10px] font-black uppercase rounded-lg shadow-lg shadow-padel-green/20 w-fit shrink-0">
+                                    <Trophy size={12} /> Selected Tournament
+                                </div>
+                                
+                                <button
+                                    onClick={() => handleSyncFromRankedin()}
+                                    disabled={loading.syncing}
+                                    className="flex items-center justify-center gap-2 bg-black/40 hover:bg-black/60 border border-white/10 text-white px-4 py-1.5 rounded-lg transition-all font-black uppercase tracking-widest text-[9px] sm:text-[10px] disabled:opacity-30 h-fit"
+                                >
+                                    {loading.syncing ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
+                                    SYNC
+                                </button>
+                                
+                                {selectedEvent?.rankedin_url && (
+                                    <a 
+                                        href={selectedEvent.rankedin_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 bg-padel-green text-black rounded-lg hover:bg-padel-green/90 transition-all flex items-center justify-center w-fit h-fit shrink-0"
+                                        title="View on Rankedin"
+                                    >
+                                        <ExternalLink size={16} className="text-black" />
+                                    </a>
+                                )}
                             </div>
                         </div>
                         <p className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-[0.2em] sm:tracking-[0.3em] flex items-center gap-2">
@@ -1084,28 +1107,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                     <option value="not_added">WhatsApp: Pending</option>
                                 </select>
 
-                                <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto justify-end mt-2 sm:mt-0">
-                                    <button
-                                        onClick={() => handleSyncFromRankedin()}
-                                        disabled={loading.syncing}
-                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-black/40 hover:bg-black/60 border border-white/10 text-white px-4 py-2 rounded-xl transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-30 h-[44px] sm:h-[38px] min-w-[100px]"
-                                    >
-                                        {loading.syncing ? <Loader2 className="animate-spin" size={14} /> : <RefreshCcw size={14} />}
-                                        SYNC
-                                    </button>
-                                    
-                                    {selectedEvent?.rankedin_url && (
-                                        <a 
-                                            href={selectedEvent.rankedin_url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="p-2 bg-padel-green text-black rounded-xl hover:bg-padel-green/90 transition-all flex items-center justify-center w-[44px] sm:w-[38px] h-[44px] sm:h-[38px] shrink-0"
-                                            title="View on Rankedin"
-                                        >
-                                            <ExternalLink size={18} className="text-black" />
-                                        </a>
-                                    )}
-                                </div>
+                                {/* Sync buttons moved to header */}
                             </div>
                         </div>
                     </div>
