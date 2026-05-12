@@ -9,3 +9,8 @@ entrypoint = "./functions/paystack-transactions/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/expire-temp-licenses/index.ts"
+
+[functions.seo-preview]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/seo-preview/index.ts"

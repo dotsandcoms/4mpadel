@@ -34,3 +34,5 @@ screenshots/
 *.jpg
 !src/assets/**/*.jpg
 !public/**/*.jpg
+.vercel
+.env*.local
