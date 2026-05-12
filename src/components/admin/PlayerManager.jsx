@@ -176,10 +176,18 @@ const PlayerManager = () => {
 
     // Derived stats
     const stats = useMemo(() => {
+        const total = players.length;
         const full = players.filter(p => p.paid_registration === true && p.license_type === 'full').length;
         const temp = players.filter(p => p.paid_registration === true && p.license_type === 'temporary').length;
-        const unpaid = players.length - (full + temp);
+        const unpaid = total - (full + temp);
         const visible = players.filter(p => p.approved !== false && p.paid_registration === true && p.license_type === 'full').length;
+
+        // Calculate Percentages
+        const fullPercentage = total > 0 ? Math.round((full / total) * 100) : 0;
+
+        // Calculate Gender Stats
+        const male = players.filter(p => p.gender?.toLowerCase() === 'male').length;
+        const female = players.filter(p => p.gender?.toLowerCase() === 'female').length;
 
         // Calculate Region Stats
         const regionMap = {};
@@ -191,16 +199,25 @@ const PlayerManager = () => {
         const topRegion = topRegionEntry ? topRegionEntry[0] : 'None';
 
         return {
-            total: players.length,
+            total,
             paid: full + temp,
             full,
+            fullPercentage,
             temp,
             unpaid,
             visible,
             topRegion,
-            uniqueRegions: Object.keys(regionMap).length
+            uniqueRegions: Object.keys(regionMap).length,
+            male,
+            female
         };
     }, [players]);
+
+    const genderChartData = useMemo(() => [
+        { name: 'Male', value: stats.male, color: '#38bdf8' },
+        { name: 'Female', value: stats.female, color: '#f472b6' },
+        { name: 'Other', value: stats.total - (stats.male + stats.female), color: '#64748b' }
+    ].filter(item => item.value > 0), [stats]);
 
     const regionChartData = useMemo(() => {
         const map = {};
@@ -677,9 +694,9 @@ const PlayerManager = () => {
             {/* Stats Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
-                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext="Paid" icon={CreditCard} color="green" delay={0.05} />
-                <StatCard title="Visible Players" value={loading ? '—' : stats.visible} subtext="Public on rankings" icon={Eye} color="slate" delay={0.1} />
-                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="sky" delay={0.15} />
+                <StatCard title="Full License" value={loading ? '—' : stats.full} subtext={`${stats.fullPercentage}% of all registered`} icon={CreditCard} color="green" delay={0.05} />
+                <StatCard title="Male / Female" value={loading ? '—' : `${stats.male} / ${stats.female}`} subtext="Gender breakdown" icon={Users} color="sky" delay={0.1} />
+                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
             </div>
 
             {/* Charts Row */}
@@ -757,18 +774,29 @@ const PlayerManager = () => {
                     transition={{ delay: 0.35 }}
                     className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                 >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Registrations</h3>
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Gender Distribution</h3>
                     {loading ? (
                         <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={registrationChartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
-                            </BarChart>
+                            <PieChart>
+                                <Pie 
+                                    data={genderChartData} 
+                                    dataKey="value" 
+                                    nameKey="name" 
+                                    cx="50%" 
+                                    cy="50%" 
+                                    innerRadius={50}
+                                    outerRadius={70} 
+                                    paddingAngle={5}
+                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                >
+                                    {genderChartData.map((entry, i) => (
+                                        <Cell key={i} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip />
+                            </PieChart>
                         </ResponsiveContainer>
                     )}
                 </motion.div>
@@ -779,14 +807,14 @@ const PlayerManager = () => {
                     transition={{ delay: 0.4 }}
                     className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                 >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Full License Sales</h3>
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Registrations</h3>
                     {loading ? (
                         <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={180}>
-                            <AreaChart data={fullLicenseChartData}>
+                            <AreaChart data={registrationChartData}>
                                 <defs>
-                                    <linearGradient id="colorLic" x1="0" y1="0" x2="0" y2="1">
+                                    <linearGradient id="colorReg" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#beff00" stopOpacity={0.3}/>
                                         <stop offset="95%" stopColor="#beff00" stopOpacity={0}/>
                                     </linearGradient>
@@ -795,7 +823,35 @@ const PlayerManager = () => {
                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Area type="monotone" dataKey="licenses" stroke="#beff00" fillOpacity={1} fill="url(#colorLic)" />
+                                <Area type="monotone" dataKey="registrations" stroke="#beff00" fillOpacity={1} fill="url(#colorReg)" />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    )}
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.45 }}
+                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                >
+                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-green-400">Full License Sales</h3>
+                    {loading ? (
+                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                    ) : (
+                        <ResponsiveContainer width="100%" height={180}>
+                            <AreaChart data={fullLicenseChartData}>
+                                <defs>
+                                    <linearGradient id="colorLic" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                <Area type="monotone" dataKey="licenses" stroke="#22c55e" fillOpacity={1} fill="url(#colorLic)" />
                             </AreaChart>
                         </ResponsiveContainer>
                     )}
