@@ -1,5 +1,19 @@
 {
   "rewrites": [
+    {
+      "source": "/calendar/:slug",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*" }
+      ],
+      "destination": "https://uzglrpbixubfijvjbtgz.supabase.co/functions/v1/seo-preview?type=event&slug=:slug"
+    },
+    {
+      "source": "/gallery/:slug",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(WhatsApp|facebookexternalhit|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot).*" }
+      ],
+      "destination": "https://uzglrpbixubfijvjbtgz.supabase.co/functions/v1/seo-preview?type=album&slug=:slug"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
