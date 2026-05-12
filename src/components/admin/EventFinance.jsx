@@ -1217,7 +1217,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                 )}
                                             </td>
                                             <td className="px-2 py-4 whitespace-nowrap">
-                                                <span className="text-gray-300 font-mono text-[11px]">{p.players?.contact_number || '-'}</span>
+                                                <span className="text-gray-300 font-mono text-xs font-bold">{p.players?.contact_number || '-'}</span>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {p.players ? (
