@@ -377,8 +377,12 @@ const UserPayments = ({ allowedEvents = [] }) => {
                                             </div>
                                             <div className="flex items-center gap-6">
                                                 <div className="text-right">
-                                                    <p className="text-white font-black text-sm">R{pay.amount}</p>
-                                                    <p className="text-[9px] text-padel-green font-black uppercase tracking-widest leading-none mt-1">{pay.payment_method}</p>
+                                                    <p className="text-white font-black text-sm">
+                                                        {Number(pay.amount) === 0 ? 'R0' : `R${pay.amount}`}
+                                                    </p>
+                                                    <p className="text-[9px] text-padel-green font-black uppercase tracking-widest leading-none mt-1">
+                                                        {pay.metadata?.paid_by_name ? `By ${pay.metadata.paid_by_name}` : pay.payment_method}
+                                                    </p>
                                                 </div>
                                                 <button 
                                                     onClick={(e) => {
