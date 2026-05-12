@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
-import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star } from 'lucide-react';
+import { useRankedin } from '../hooks/useRankedin';
+import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List } from 'lucide-react';
 
 // ── Assets ────────────────────────────────────────────────────────────────────
 import nvsLogo from '../assets/nvs/official_logo.png';
@@ -427,6 +428,288 @@ const PlayerGridCard = ({ name, imageUrl, accent, onClick }) => {
   );
 };
 
+// ── Results Data ─────────────────────────────────────────────────────────────
+const TOURNAMENT_DATA = {
+  id: '6404918',
+  name: "Guardrisk North vs South 2026",
+  scores: { north: 3, south: 2 },
+  lastUpdated: 'Live Updates',
+  matches: [
+    { id: 1, team1: 'Adam Van Harte / Aidan Carrazedo', team2: 'Paul Waldburger / Jason Blakey-Milner', score: '1-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
+    { id: 2, team1: 'Bradwin Williams / Brandon Weir-Smith', team2: 'Luan Krige / Shaun Leagas', score: '2-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
+    { id: 3, team1: 'Chadley Brown / Charl Vos', team2: 'Joshua Heath / Anthony Scholtz', score: '0-1', winner: 'south', status: 'Completed', round: 'Men-Doubles' },
+    { id: 4, team1: 'Chevaan Davids / Dean Nortier', team2: 'Brett Hilarides / Bryce Wigston', score: '0-2', winner: 'south', status: 'Completed', round: 'Men-Doubles' },
+    { id: 5, team1: 'Farhaan Sayanvala / Joel Van Rensburg', team2: 'Calvin Crouse / Cameron Weir', score: '1-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
+    { id: 6, team1: 'Joshua Van Rensburg / Egmond Van heerden', team2: 'chris westerhof / Craig Smith', score: 'Upcoming', winner: null, status: '16/05 15:00', round: 'Men-Doubles' },
+    { id: 7, team1: 'Gustav Hefer / Pierre Le grange', team2: 'David Allardice / DJ Broeksma', score: 'Upcoming', winner: null, status: '16/05 15:00', round: 'Men-Doubles' },
+    { id: 8, team1: 'Juan-Louis Van Antwerpen / Josh Deutschmann', team2: 'James Corns / JAMES MUNRO', score: 'Upcoming', winner: null, status: '16/05 14:30', round: 'Men-Doubles' },
+    { id: 9, team1: 'Keagan Rooy / Mark Morreira', team2: 'Marc Anderson / Martin Redelinghuys', score: 'Upcoming', winner: null, status: '16/05 14:30', round: 'Men-Doubles' },
+    { id: 10, team1: 'Mark Stillerman / Paul Anderson', team2: 'Ockie Oosthuizen / Oloff van Achterbergh', score: 'Upcoming', winner: null, status: '16/05 14:30', round: 'Men-Doubles' },
+    { id: 11, team1: 'Richard Ashforth / Steven Loock', team2: 'Philip Franken / Sebastian millan', score: 'Upcoming', winner: null, status: '16/05 14:30', round: 'Men-Doubles' },
+    { id: 12, team1: 'Tiaan Erasmus / Tremayne Mitchell', team2: 'Tiaan Van Wyk / Yazeed Abbas', score: 'Upcoming', winner: null, status: '16/05 14:30', round: 'Men-Doubles' },
+    { id: 13, team1: 'Warren Kuhn / Yasser Assamo', team2: 'Paul Atkinson / Aaron Marks', score: 'Upcoming', winner: null, status: '16/05 10:00', round: 'Men-Doubles' },
+    { id: 14, team1: 'Zaidy Patel / Adam Van Harte', team2: 'Scott Whysall / Hamza Kana', score: 'Upcoming', winner: null, status: '16/05 14:00', round: 'Men-Doubles' }
+  ]
+};
+
+const ResultsSection = () => {
+  const [activeTab, setActiveTab] = useState('standings'); // 'standings' or 'matches'
+  const [liveData, setLiveData] = useState(TOURNAMENT_DATA);
+  const { getTeamTournamentResults, loading } = useRankedin();
+
+  useEffect(() => {
+    const fetchLiveResults = async () => {
+      try {
+        const results = await getTeamTournamentResults(TOURNAMENT_DATA.id);
+        
+        if (results && results.Matches && results.Matches.length > 0) {
+          const formattedMatches = results.Matches.map((m, i) => ({
+            id: i + 1,
+            team1: m.Team1Players || m.Team1Name,
+            team2: m.Team2Players || m.Team2Name,
+            score: m.Score || 'Upcoming',
+            winner: m.WinnerTeamId === results.Team1Id ? 'north' : (m.WinnerTeamId === results.Team2Id ? 'south' : null),
+            status: m.IsFinished ? 'Completed' : (m.MatchDateFormatted || 'Upcoming'),
+            round: m.CategoryName || 'Men-Doubles'
+          }));
+
+          setLiveData({
+            ...TOURNAMENT_DATA,
+            scores: { 
+              north: results.Team1Score || 0, 
+              south: results.Team2Score || 0 
+            },
+            matches: formattedMatches,
+            lastUpdated: 'Live Updates'
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching live results:", err);
+      }
+    };
+
+    fetchLiveResults();
+    
+    // Auto-refresh every 5 minutes while page is open
+    const interval = setInterval(fetchLiveResults, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [getTeamTournamentResults]);
+
+  const displayData = liveData;
+
+  return (
+    <section id="results" className="py-20 md:py-32 bg-white relative overflow-hidden">
+      <style>
+        {`
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #e2e2e2;
+            border-radius: 10px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: ${MAGENTA};
+          }
+        `}
+      </style>
+      {/* Background Decorative Elements */}
+      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-magenta/20 to-transparent" style={{ background: `linear-gradient(to right, transparent, ${MAGENTA}33, transparent)` }} />
+      <div className="absolute -top-24 -left-24 w-96 h-96 bg-magenta/5 blur-3xl rounded-full" style={{ background: `${MAGENTA}08` }} />
+      <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-gold/5 blur-3xl rounded-full" style={{ background: `${GOLD}08` }} />
+
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-12 md:mb-20 gap-8">
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="flex h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400">Live Tournament Results</p>
+            </div>
+            <h2 className="text-3xl md:text-6xl font-black uppercase tracking-tighter italic leading-none" style={{ color: MAGENTA }}>
+              Battle for Supremacy
+            </h2>
+          </div>
+
+          <div className="flex bg-gray-50 p-1.5 rounded-2xl border border-gray-100 shadow-inner">
+            <button
+              onClick={() => setActiveTab('standings')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'standings' ? 'bg-white shadow-md text-magenta translate-y-[-1px]' : 'text-gray-400 hover:text-gray-600'}`}
+              style={{ color: activeTab === 'standings' ? MAGENTA : undefined }}
+            >
+              <LayoutGrid className="w-4 h-4" />
+              Standings
+            </button>
+            <button
+              onClick={() => setActiveTab('matches')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'matches' ? 'bg-white shadow-md text-magenta translate-y-[-1px]' : 'text-gray-400 hover:text-gray-600'}`}
+              style={{ color: activeTab === 'matches' ? MAGENTA : undefined }}
+            >
+              <List className="w-4 h-4" />
+              Matches
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence mode="wait">
+          {activeTab === 'standings' ? (
+            <motion.div
+              key="standings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+            >
+              {/* Main Scoreboard */}
+              <div className="lg:col-span-2 bg-gradient-to-br from-gray-900 to-black rounded-[40px] p-8 md:p-16 relative overflow-hidden shadow-2xl">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Trophy className="w-40 h-40 text-white" />
+                </div>
+                
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div className="flex justify-between items-center mb-12">
+                    <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                      <Activity className="w-4 h-4 text-gold" style={{ color: GOLD }} />
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white">{displayData.lastUpdated}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row items-center justify-between gap-12 py-8">
+                    {/* Team North */}
+                    <div className="flex flex-col items-center md:items-start text-center md:text-left">
+                      <div className="w-20 h-20 bg-magenta/20 rounded-3xl flex items-center justify-center mb-6 border border-magenta/30" style={{ background: `${MAGENTA}33` }}>
+                        <img src={nvsLogo} alt="North" className="w-12 h-12 object-contain" />
+                      </div>
+                      <h4 className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-2">Team North</h4>
+                      <div className="text-7xl md:text-[10rem] font-black italic tracking-tighter leading-none text-white drop-shadow-2xl">
+                        {displayData.scores.north}
+                      </div>
+                    </div>
+
+                    <div className="h-px w-24 md:h-32 md:w-px bg-white/10" />
+
+                    {/* Team South */}
+                    <div className="flex flex-col items-center md:items-end text-center md:text-right">
+                      <div className="w-20 h-20 bg-gold/20 rounded-3xl flex items-center justify-center mb-6 border border-gold/30" style={{ background: `${GOLD}33` }}>
+                        <img src={nvsLogo} alt="South" className="w-12 h-12 object-contain" />
+                      </div>
+                      <h4 className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-2">Team South</h4>
+                      <div className="text-7xl md:text-[10rem] font-black italic tracking-tighter leading-none text-white drop-shadow-2xl">
+                        {displayData.scores.south}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-12 pt-12 border-t border-white/10 flex flex-wrap gap-6 justify-center md:justify-start">
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Leader:</span>
+                      <span className="text-xs font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>North +1 Match</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Card */}
+              <div className="bg-gray-50 rounded-[40px] p-8 md:p-10 border border-gray-100 flex flex-col justify-between">
+                <div>
+                  <h3 className="text-xl font-black uppercase tracking-tighter italic mb-8" style={{ color: MAGENTA }}>Current Advantage</h3>
+                  <div className="space-y-6">
+                    <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Winning Percentage</span>
+                        <span className="text-sm font-black text-magenta" style={{ color: MAGENTA }}>60%</span>
+                      </div>
+                      <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <motion.div 
+                          initial={{ width: 0 }} 
+                          animate={{ width: '60%' }} 
+                          className="h-full bg-magenta" 
+                          style={{ background: MAGENTA }} 
+                        />
+                      </div>
+                    </div>
+
+                    <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-gold/10 flex items-center justify-center" style={{ background: `${GOLD}1A` }}>
+                          <Users className="w-6 h-6 text-gold" style={{ color: GOLD }} />
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches Played</p>
+                          <p className="text-xl font-black italic">05 / 28</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-10 p-6 bg-magenta rounded-3xl text-white" style={{ background: MAGENTA }}>
+                  <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Next Milestone</p>
+                  <p className="text-lg font-black italic tracking-tight leading-tight">15 Matches wins to secure bragging rights</p>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="matches"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-4 max-h-[600px] overflow-y-auto pr-4 custom-scrollbar"
+            >
+              {displayData.matches.map((match, idx) => (
+                <motion.div
+                  key={match.id}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="group relative bg-white hover:bg-gray-50 border border-gray-100 rounded-[24px] md:rounded-[32px] p-6 md:p-8 flex flex-col md:flex-row items-center gap-6 md:gap-12 transition-all hover:shadow-xl hover:translate-y-[-2px]"
+                >
+                  <div className="flex items-center gap-4 w-full md:w-32 shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${match.score !== 'Upcoming' ? 'bg-green-50' : 'bg-gray-50'}`}>
+                      {match.score !== 'Upcoming' ? <CheckCircle2 className="w-5 h-5 text-green-500" /> : <Clock className="w-5 h-5 text-gray-300" />}
+                    </div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">{match.round}</span>
+                  </div>
+
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] items-center gap-4 md:gap-12 w-full">
+                    {/* Team North Side */}
+                    <div className={`flex items-center justify-end gap-6 ${match.winner === 'north' || match.score === 'Upcoming' ? 'opacity-100' : 'opacity-40'}`}>
+                      <p className="text-xs md:text-lg font-black uppercase tracking-tighter text-right leading-tight">{match.team1}</p>
+                      <div className="w-2 h-12 bg-magenta rounded-full shrink-0" style={{ background: MAGENTA }} />
+                    </div>
+
+                    {/* Score */}
+                    <div className="flex flex-col items-center px-6 py-2 bg-gray-100 rounded-2xl shrink-0 min-w-[80px]">
+                      <span className="text-xl font-black italic tracking-tighter">{match.score === 'Upcoming' ? 'VS' : match.score}</span>
+                      <span className="text-[8px] font-black uppercase tracking-[0.2em] text-gray-400">{match.score === 'Upcoming' ? 'Upcoming' : 'Final Score'}</span>
+                    </div>
+
+                    {/* Team South Side */}
+                    <div className={`flex items-center gap-6 ${match.winner === 'south' || match.score === 'Upcoming' ? 'opacity-100' : 'opacity-40'}`}>
+                      <div className="w-2 h-12 bg-gold rounded-full shrink-0" style={{ background: GOLD }} />
+                      <p className="text-xs md:text-lg font-black uppercase tracking-tighter leading-tight">{match.team2}</p>
+                    </div>
+                  </div>
+
+                  <div className="hidden md:block">
+                    <div className={`px-4 py-2 rounded-full border ${match.score !== 'Upcoming' ? 'border-gray-100 text-gray-400 group-hover:bg-magenta group-hover:text-white group-hover:border-magenta' : 'border-dashed border-gray-200 text-gray-200'} text-[10px] font-black uppercase tracking-widest transition-all`} style={{ '--hover-bg': MAGENTA }}>
+                      {match.status}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </section>
+  );
+};
+
 const NorthVsSouth = () => {
   const [dbPlayers, setDbPlayers] = useState([]);
   const [activeDiv, setActiveDiv] = useState("Men's Open");
@@ -536,6 +819,9 @@ const NorthVsSouth = () => {
           </motion.div>
         </div>
       </section>
+
+      {/* ═══════════════ TOURNAMENT RESULTS ══════════════════════════════════════ */}
+      <ResultsSection />
 
       {/* ═══════════════ THE EVENT ═══════════════════════════════════════════════ */}
       <section id="the-event" className="py-12 md:py-40 px-6 bg-white relative">

@@ -659,6 +659,33 @@ export const useRankedin = () => {
         }
     }, []);
 
+    /**
+     * Fetches live match results and standings for a team-based tournament.
+     * @param {string|number} tournamentId 
+     * @returns {Promise<Object>} Team tournament results
+     */
+    const getTeamTournamentResults = useCallback(async (tournamentId) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const url = 'https://www.rankedin.com/team/GetTeamTournamentMatchResultsAsync';
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `teamTournamentId=${tournamentId}`
+            });
+
+            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
+            return await response.json();
+        } catch (err) {
+            console.error("Rankedin TeamTournament Results fetch error:", err);
+            setError(err.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     return {
         loading,
         error,
@@ -676,7 +703,8 @@ export const useRankedin = () => {
         getPlayerMatches,
         getTeamLeagueStandings,
         getTeamLeagueTeams,
-        getTeamMatchResults
+        getTeamMatchResults,
+        getTeamTournamentResults
     };
 };
 
