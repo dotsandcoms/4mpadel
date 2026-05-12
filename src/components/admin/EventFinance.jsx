@@ -965,9 +965,23 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="absolute -right-4 -bottom-4 opacity-10 group-hover:opacity-20 group-hover:scale-110 transition-all duration-500 text-padel-green">
                                 <DollarSign size={120} />
                             </div>
-                            <p className="text-xs font-black uppercase text-padel-green/80 tracking-widest relative z-10">Total Revenue</p>
-                            <h3 className="text-4xl md:text-5xl font-black text-padel-green mt-2 relative z-10 drop-shadow-[0_0_15px_rgba(190,255,0,0.3)]">R {totalCollected.toLocaleString()}</h3>
-                            <p className="text-xs text-red-400 font-bold uppercase relative z-10">R {dashboardStats.outstanding.toLocaleString()} outstanding</p>
+                            <div className="flex justify-between items-start relative z-10">
+                                <p className="text-[10px] font-black uppercase text-padel-green/80 tracking-widest whitespace-nowrap">
+                                    Total amount Billed
+                                </p>
+                                <p className="text-[10px] font-black text-white bg-black/40 px-2 py-0.5 rounded border border-white/5">
+                                    R {dashboardStats.expected.toLocaleString()}
+                                </p>
+                            </div>
+                            <div className="flex flex-col mt-auto relative z-10">
+                                <div className="flex items-baseline gap-2">
+                                    <h3 className="text-3xl md:text-4xl font-black text-padel-green drop-shadow-[0_0_15px_rgba(190,255,0,0.3)] whitespace-nowrap">
+                                        R {totalCollected.toLocaleString()}
+                                    </h3>
+                                    <span className="text-[9px] text-padel-green font-black uppercase tracking-widest opacity-70">Collected</span>
+                                </div>
+                                <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
+                            </div>
                         </motion.div>
                         
                         <motion.div 
