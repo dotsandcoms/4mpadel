@@ -64,58 +64,55 @@ const FeaturedEventCard = ({ event, index }) => {
         >
             <Link
                 to={detailsPath}
-                className={`group relative flex flex-col h-full bg-[#060913] rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+                className={`group relative flex flex-row items-stretch h-full bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
-                <div className="relative aspect-[16/9] overflow-hidden bg-black/40">
+                <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
                     {event.custom_image_url || event.image_url || event.posterUrl ? (
                         <>
-                            {/* Blurred background to fill the space without pixelating the main subject */}
                             <img
                                 src={event.custom_image_url || event.image_url || event.posterUrl}
                                 alt=""
                                 className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125"
                                 aria-hidden="true"
                             />
-                            {/* Main Image - contained to avoid zooming and pixelation */}
                             <img
                                 src={event.custom_image_url || event.image_url || event.posterUrl}
                                 alt={event.event_name || event.eventName}
-                                className="relative z-10 w-full h-full object-contain transition-transform duration-700 group-hover:scale-110"
+                                className="relative z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                             />
                         </>
                     ) : (
                         <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                            <CalendarIcon className="w-12 h-12 text-white/10" />
+                            <CalendarIcon className="w-8 h-8 text-white/10" />
                         </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#060913] via-transparent to-transparent opacity-80 z-20" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
                     
-                    {/* Floating Status Badge */}
-                    <div className="absolute top-4 right-4 z-30">
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg`}>
-                            {event.sapa_status}
-                        </span>
-                    </div>
-
                     {event.featured_live && (
-                        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
-                            <div className="w-1.5 h-1.5 rounded-full bg-white" />
+                        <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
+                            <div className="w-1 h-1 rounded-full bg-white" />
                             <span>Live</span>
                         </div>
                     )}
                 </div>
 
                 {/* Content */}
-                <div className="p-6 flex flex-col flex-1">
-                    <h3 className="text-xl font-bold text-white mb-3 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
+                <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
+                            {event.sapa_status}
+                        </span>
+                    </div>
+
+                    <h3 className="text-sm sm:text-lg font-black text-white mb-2 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
                         {event.event_name || event.eventName}
                     </h3>
 
-                    <div className="space-y-3 mt-auto">
-                        <div className="flex items-center gap-2.5 text-gray-400">
-                            <CalendarIcon className={`w-4 h-4 ${accentColor} shrink-0`} />
-                            <span className={`text-xs font-bold ${accentColor}`}>
+                    <div className="space-y-2 mt-auto">
+                        <div className="flex items-center gap-2 text-gray-400">
+                            <CalendarIcon className={`w-3 h-3 sm:w-4 sm:h-4 ${accentColor} shrink-0`} />
+                            <span className={`text-[9px] sm:text-xs font-bold ${accentColor} truncate`}>
                                 {event.event_dates ||
                                     (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
                                     (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
@@ -123,24 +120,24 @@ const FeaturedEventCard = ({ event, index }) => {
                         </div>
 
                         {(event.venue || event.city) && (
-                            <div className="flex items-center gap-2.5 text-gray-400">
-                                <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
-                                <span className="text-xs font-medium truncate uppercase tracking-widest">
+                            <div className="flex items-center gap-2 text-gray-400">
+                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
+                                <span className="text-[9px] sm:text-xs font-medium truncate uppercase tracking-widest">
                                     {event.venue || event.city}
                                 </span>
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                        <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-3">
                             {event.registered_players > 0 ? (
-                                <div className="flex items-center gap-1.5">
-                                    <Users className={`w-3.5 h-3.5 ${accentColor}`} />
-                                    <span className="text-white font-bold text-xs">{event.registered_players} <span className="text-gray-500 font-medium">Players</span></span>
+                                <div className="flex items-center gap-1">
+                                    <Users className={`w-3 h-3 ${accentColor}`} />
+                                    <span className="text-white font-bold text-[9px] sm:text-xs">{event.registered_players}</span>
                                 </div>
                             ) : <div></div>}
                             
-                            <div className="flex items-center gap-1 text-padel-green font-black text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
-                                <span>Details</span>
+                            <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                                <span className="hidden sm:inline">Details</span>
                                 <ArrowRight className="w-3 h-3" />
                             </div>
                         </div>
