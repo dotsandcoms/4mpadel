@@ -291,10 +291,6 @@ async function syncRankedin() {
                 if (isCancelled && existingEvent.is_visible !== false) {
                     updates.is_visible = false;
                     needsUpdate = true;
-                } else if (!isCancelled && existingEvent.is_visible === false) {
-                    // Re-enable if no longer cancelled
-                    updates.is_visible = true;
-                    needsUpdate = true;
                 }
 
                 if (needsUpdate) {
@@ -330,7 +326,7 @@ async function syncRankedin() {
                     featured_live: false,
                     live_youtube_url: '',
                     youtube_playlist_url: '',
-                    is_visible: !isCancelled
+                    is_visible: false
                 }]);
 
                 if (error) {

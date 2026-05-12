@@ -213,7 +213,8 @@ const run = async () => {
                 image_url: details.image_url || '',
                 registered_players: details.registered_players || 0,
                 rankedin_url: details.rankedin_url || '',
-                sponsor_logos: details.sponsor_logos || []
+                sponsor_logos: details.sponsor_logos || [],
+                is_visible: false
             };
 
             const existing = existingMap.get(event.eventName.toLowerCase());
