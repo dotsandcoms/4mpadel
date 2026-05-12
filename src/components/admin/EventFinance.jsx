@@ -769,7 +769,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                 }}
                                                 className={`group cursor-pointer transition-all hover:bg-white/5`}
                                             >
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-4 py-4 whitespace-nowrap">
                                                     <div className="flex flex-col">
                                                         <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
                                                             {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
@@ -1078,10 +1078,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <table className="w-full text-left border-collapse">
                                 <thead className="sticky top-0 z-20">
                                     <tr className="bg-[#1E293B]">
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Participant (Rankedin)</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-full">Participant (Rankedin)</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Division</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">System Profile Match</th>
-                                        <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Contact Number</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[160px]">System Profile Match</th>
+                                        <th className="sticky top-0 bg-[#1E293B] px-2 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm w-[120px]">Contact Number</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">License Status</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">WhatsApp</th>
                                         <th className="sticky top-0 bg-[#1E293B] px-6 py-4 text-gray-400 text-[10px] uppercase font-black shadow-sm">Entry Fee</th>
@@ -1110,7 +1110,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             <td className="px-6 py-4">
                                                 <span className="text-gray-400 text-[10px] font-black uppercase tracking-widest">{p.class_name}</span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-2 py-4 whitespace-nowrap">
                                                 {p.players ? (
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2 text-padel-green font-bold text-sm">
@@ -1132,7 +1132,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     </button>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
+                                            <td className="px-2 py-4 whitespace-nowrap">
                                                 <span className="text-gray-300 font-mono text-[11px]">{p.players?.contact_number || '-'}</span>
                                             </td>
                                             <td className="px-6 py-4">

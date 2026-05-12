@@ -8,11 +8,11 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
-        { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
         { id: 'event-mgmt', label: 'Event Manager', icon: Trophy },
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
         { id: 'finance', label: 'Finance', icon: DollarSign },
+        { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'settings', label: 'Settings', icon: Settings },
         { id: 'admin-mgmt', label: 'Permissions', icon: Shield, superAdminOnly: true },
     ];
