@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { 
     DollarSign, Users, Award, TrendingUp, Calendar, 
-    ArrowUpRight, ArrowDownRight, CreditCard 
+    ArrowUpRight, ArrowDownRight, CreditCard, ShieldCheck, Trophy
 } from 'lucide-react';
 import { 
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, 
@@ -35,10 +35,14 @@ const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
 const FinancialDashboard = ({ allowedEvents = [] }) => {
     const [stats, setStats] = useState({
         totalRevenue: 0,
-        eventRevenue: 0,
-        licenseRevenue: 0,
+        rev2026: 0,
+        fullLicRev: 0,
+        tempLicRev: 0,
+        allLicRev: 0,
+        eventEntryRev: 0,
         totalTransactions: 0,
-        activePlayers: 0
+        activePlayers: 0,
+        eventRevenueList: []
     });
     const [chartData, setChartData] = useState([]);
     const [pieData, setPieData] = useState([]);
@@ -50,41 +54,74 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch relevant payments
-                let query = supabase
-                    .from('payments')
-                    .select('*')
-                    .eq('status', 'success');
-                
-                if (isRestricted) {
-                    query = query.in('event_id', allowedEvents);
-                }
+                // 1. Fetch relevant payments and events in parallel
+                const [{ data: payments, error: pError }, { data: events, error: eError }] = await Promise.all([
+                    supabase
+                        .from('payments')
+                        .select('*, calendar(event_name)')
+                        .eq('status', 'success'),
+                    supabase
+                        .from('calendar')
+                        .select('id, event_name, start_date')
+                ]);
 
-                const { data: payments, error } = await query;
-
-                if (error) throw error;
+                if (pError) throw pError;
+                if (eError) throw eError;
 
                 if (payments) {
-                    const total = payments.reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    const eventRev = payments.filter(p => p.payment_type === 'event_entry_fee').reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    const licRev = payments.filter(p => !['event_entry_fee'].includes(p.payment_type)).reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    const totalRevenue = payments.reduce((acc, curr) => acc + Number(curr.amount), 0);
                     
-                    setStats(prev => ({
-                        ...prev,
-                        totalRevenue: total,
-                        eventRevenue: eventRev,
-                        licenseRevenue: licRev,
-                        totalTransactions: payments.length
-                    }));
+                    // Yearly Breakdown (Focus on 2026)
+                    const rev2026 = payments.filter(p => new Date(p.created_at).getFullYear() === 2026)
+                        .reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                    // License Breakdown
+                    const fullLicRev = payments.filter(p => 
+                        ['full_license', 'membership'].includes(p.payment_type) || 
+                        (p.payment_type !== 'event_entry_fee' && Number(p.amount) >= 400)
+                    ).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                    const tempLicRev = payments.filter(p => 
+                        ['temporary_license', 'temp_license'].includes(p.payment_type) || 
+                        (p.payment_type !== 'event_entry_fee' && Number(p.amount) < 400 && Number(p.amount) > 0)
+                    ).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                    // Event Entry Breakdown
+                    const eventEntryRev = payments.filter(p => p.payment_type === 'event_entry_fee')
+                        .reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                    // Revenue by Event
+                    const eventMap = {};
+                    payments.filter(p => p.payment_type === 'event_entry_fee').forEach(p => {
+                        const eventName = p.calendar?.event_name || p.metadata?.event_name || 'Unknown Event';
+                        const eventId = p.event_id || 'manual';
+                        if (!eventMap[eventId]) {
+                            eventMap[eventId] = { name: eventName, revenue: 0 };
+                        }
+                        eventMap[eventId].revenue += Number(p.amount);
+                    });
+                    const eventRevenueList = Object.values(eventMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+
+                    setStats({
+                        totalRevenue,
+                        rev2026,
+                        fullLicRev,
+                        tempLicRev,
+                        allLicRev: fullLicRev + tempLicRev,
+                        eventEntryRev,
+                        totalTransactions: payments.length,
+                        activePlayers: new Set(payments.map(p => p.player_id)).size,
+                        eventRevenueList
+                    });
 
                     // Prepare Pie Chart
                     setPieData([
-                        { name: 'Events', value: eventRev, color: '#9AE900' },
-                        { name: 'Licenses', value: licRev, color: '#3B82F6' },
-                        { name: 'Manual/Other', value: 0, color: '#6366F1' }
+                        { name: 'Event Entries', value: eventEntryRev, color: '#beff00' },
+                        { name: 'Full Licenses', value: fullLicRev, color: '#3b82f6' },
+                        { name: 'Temp Licenses', value: tempLicRev, color: '#f59e0b' }
                     ]);
 
-                    // Prepare Bar Chart (by month)
+                    // Prepare Bar Chart (by month for current/selected year)
                     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     const currentYear = new Date().getFullYear();
                     const monthlyData = months.map((m, i) => {
@@ -92,17 +129,24 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                             const d = new Date(p.created_at);
                             return d.getMonth() === i && d.getFullYear() === currentYear;
                         }).reduce((acc, curr) => acc + Number(curr.amount), 0);
-                        return { name: m, revenue: monthRev };
+
+                        const licenseRev = payments.filter(p => {
+                            const d = new Date(p.created_at);
+                            return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type !== 'event_entry_fee';
+                        }).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                        const entryRev = payments.filter(p => {
+                            const d = new Date(p.created_at);
+                            return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type === 'event_entry_fee';
+                        }).reduce((acc, curr) => acc + Number(curr.amount), 0);
+
+                        return { name: m, revenue: monthRev, licenses: licenseRev, entries: entryRev };
                     });
                     setChartData(monthlyData);
-
-                    // 2. Fetch Player Stats (Unique players in these payments)
-                    const uniquePlayers = new Set(payments.map(p => p.player_id)).size;
-                    setStats(prev => ({ ...prev, activePlayers: uniquePlayers }));
                 }
 
             } catch (err) {
-                console.error('Error fetching filtered dashboard data:', err);
+                console.error('Error fetching dashboard data:', err);
             } finally {
                 setLoading(false);
             }
@@ -128,31 +172,50 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                     value={`R${stats.totalRevenue.toLocaleString()}`} 
                     icon={DollarSign} 
                     trend="up" 
-                    trendValue="12.5"
+                    trendValue="100"
                     color="padel-green"
                 />
                 <KPICard 
-                    title="Event Revenue" 
-                    value={`R${stats.eventRevenue.toLocaleString()}`} 
+                    title="Revenue 2026" 
+                    value={`R${stats.rev2026.toLocaleString()}`} 
                     icon={Calendar} 
-                    trend="up" 
-                    trendValue="8.2"
                     color="blue-500"
+                />
+                <KPICard 
+                    title="Event Entries" 
+                    value={`R${stats.eventEntryRev.toLocaleString()}`} 
+                    icon={Trophy} 
+                    color="padel-green"
+                />
+                <KPICard 
+                    title="All Licenses" 
+                    value={`R${stats.allLicRev.toLocaleString()}`} 
+                    icon={Award} 
+                    color="indigo-500"
+                />
+                
+                <KPICard 
+                    title="Full Licenses" 
+                    value={`R${stats.fullLicRev.toLocaleString()}`} 
+                    icon={ShieldCheck} 
+                    color="blue-400"
+                />
+                <KPICard 
+                    title="Temp Licenses" 
+                    value={`R${stats.tempLicRev.toLocaleString()}`} 
+                    icon={CreditCard} 
+                    color="amber-500"
                 />
                 <KPICard 
                     title="Active Players" 
                     value={stats.activePlayers.toLocaleString()} 
                     icon={Users} 
-                    trend="up" 
-                    trendValue="5.1"
-                    color="indigo-500"
+                    color="purple-500"
                 />
                 <KPICard 
                     title="Transactions" 
                     value={stats.totalTransactions.toLocaleString()} 
                     icon={CreditCard} 
-                    trend="down" 
-                    trendValue="2.4"
                     color="orange-500"
                 />
             </div>
@@ -235,32 +298,58 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                 </div>
             </div>
 
-            {/* Recent Activity Mini List */}
+            {/* Event Revenue Details */}
             <div className="bg-[#1E293B]/50 backdrop-blur-md p-8 rounded-[2.5rem] border border-white/10 shadow-2xl">
                 <div className="flex justify-between items-center mb-8">
-                    <h3 className="text-xl font-bold text-white">Projected Growth</h3>
-                    <div className="flex items-center gap-2 text-padel-green bg-padel-green/10 px-3 py-1 rounded-full text-xs font-bold border border-padel-green/20">
-                        <TrendingUp size={14} /> +24% vs Last Period
+                    <div>
+                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Revenue by Event</h3>
+                        <p className="text-gray-400 text-sm">Top performing tournaments and leagues</p>
+                    </div>
+                    <div className="bg-padel-green/10 text-padel-green px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest border border-padel-green/20">
+                        Total Entry Fees: R{stats.eventEntryRev.toLocaleString()}
                     </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                        <Award className="text-padel-green mb-4" size={32} />
-                        <h4 className="text-white font-bold mb-1">Top Event</h4>
-                        <p className="text-gray-400 text-sm">Cape Town Major '26</p>
-                        <p className="text-padel-green font-black mt-2">R45,200</p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Event List Table */}
+                    <div className="space-y-4">
+                        {stats.eventRevenueList?.map((event, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5 hover:border-white/10 transition-all group">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center text-gray-500 group-hover:text-padel-green transition-colors font-black">
+                                        {idx + 1}
+                                    </div>
+                                    <div>
+                                        <p className="text-white font-bold group-hover:text-padel-green transition-colors">{event.name}</p>
+                                        <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Tournament Entry Fees</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-white font-black">R{event.revenue.toLocaleString()}</p>
+                                    <p className="text-[10px] text-padel-green font-bold uppercase tracking-widest">
+                                        {((event.revenue / (stats.eventEntryRev || 1)) * 100).toFixed(1)}%
+                                    </p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
-                    <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                        <Award className="text-blue-400 mb-4" size={32} />
-                        <h4 className="text-white font-bold mb-1">Top License Period</h4>
-                        <p className="text-gray-400 text-sm">March Registrations</p>
-                        <p className="text-blue-400 font-black mt-2">124 New Players</p>
-                    </div>
-                    <div className="p-6 rounded-3xl bg-white/5 border border-white/5">
-                        <Award className="text-indigo-400 mb-4" size={32} />
-                        <h4 className="text-white font-bold mb-1">Conversion</h4>
-                        <p className="text-gray-400 text-sm">Visitor to Player</p>
-                        <p className="text-indigo-400 font-black mt-2">18.4%</p>
+
+                    {/* Stacked Chart for Entries vs Licenses */}
+                    <div className="h-full min-h-[300px]">
+                        <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-6">Monthly Revenue Mix ({new Date().getFullYear()})</h4>
+                        <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                                <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `R${v/1000}k`} />
+                                <Tooltip 
+                                    contentStyle={{ background: '#0F172A', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px' }}
+                                    itemStyle={{ fontWeight: 'bold' }}
+                                />
+                                <Bar dataKey="entries" name="Event Entries" stackId="a" fill="#beff00" radius={[0, 0, 0, 0]} />
+                                <Bar dataKey="licenses" name="Licenses" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
