@@ -1173,7 +1173,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     )}
                                                     {p.whatsapp_added && <XCircle size={14} className="hidden group-hover:block text-red-500" />}
                                                     <span className="text-[10px] font-black uppercase tracking-tight">
-                                                        {p.whatsapp_added ? 'Added to WhatsApp' : 'Add to WhatsApp'}
+                                                        {p.whatsapp_added ? 'On Group' : 'Add to WhatsApp'}
                                                     </span>
                                                 </button>
                                             </td>
@@ -1269,7 +1269,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     <MessageCircle size={10} />
                                                 )}
                                                 <span className="text-[8px] font-black uppercase tracking-widest">
-                                                    {p.whatsapp_added ? 'Added to WhatsApp' : 'Add to WhatsApp'}
+                                                    {p.whatsapp_added ? 'On Group' : 'Add to WhatsApp'}
                                                 </span>
                                             </button>
                                         </div>
