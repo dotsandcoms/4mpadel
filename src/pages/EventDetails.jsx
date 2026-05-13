@@ -360,7 +360,7 @@ const EventDetails = () => {
             // Fetch profile for name and Rankedin ID matching
             const { data: profile } = await supabase
                 .from('players')
-                .select('name, rankedin_id')
+                .select('id, name, rankedin_id')
                 .ilike('email', userEmail)
                 .maybeSingle();
 
@@ -382,9 +382,19 @@ const EventDetails = () => {
                 .eq('is_paid', true)
                 .or(`email.ilike.${userEmail},profile_id.eq.${profile?.id || 0}`);
 
+            // 3. Check Direct Payments table for manual or externally synced payments
+            const { data: directPayments } = await supabase
+                .from('payments')
+                .select('metadata')
+                .eq('event_id', event.id)
+                .eq('status', 'success')
+                .eq('payment_type', 'event_entry_fee')
+                .or(profile?.id ? `player_id.eq.${profile.id},metadata->>email.ilike.${userEmail}` : `metadata->>email.ilike.${userEmail}`);
+
             const paidDivs = Array.from(new Set([
-                ...(regs || []).map(r => r.division),
-                ...(parts || []).map(p => p.class_name)
+                ...(regs || []).map(r => (r.division || '').trim()),
+                ...(parts || []).map(p => (p.class_name || '').trim()),
+                ...(directPayments || []).map(p => (p.metadata?.division || '').trim())
             ].filter(Boolean)));
             
             setPaidDivisions(paidDivs);
@@ -410,7 +420,7 @@ const EventDetails = () => {
                             if (players.length === 0) players.push(p);
 
                             return players.some(player => {
-                                const pEmail = (player.Email || '').toLowerCase();
+                                const pEmail = (player.Email || '').toLowerCase().trim();
                                 const pName = (player.Name || player.FullName || '').toLowerCase().trim();
                                 const pRID = player.RankedinId?.toString() || player.Id?.toString();
 
@@ -420,7 +430,7 @@ const EventDetails = () => {
                             });
                         });
                         
-                        if (isMatch) regDivs.push(cls.Name);
+                        if (isMatch) regDivs.push((cls.Name || '').trim());
                     }));
 
                     setRegisteredDivisions(regDivs);
@@ -1331,9 +1341,9 @@ const EventDetails = () => {
                     // 2. Update each match by its unique UUID (filtering by division if provided)
                     for (const match of matches) {
                         if (targetDivisions && targetDivisions.length > 0) {
-                            const normalizedMatchDiv = (match.class_name || '').toLowerCase().replace(/[^a-z]/g, '');
+                            const normalizedMatchDiv = (match.class_name || '').toLowerCase().trim().replace(/[^a-z]/g, '');
                             const isTargetDiv = targetDivisions.some(d => {
-                                const normalizedTarget = d.toLowerCase().replace(/[^a-z]/g, '');
+                                const normalizedTarget = (d || '').toLowerCase().trim().replace(/[^a-z]/g, '');
                                 return normalizedMatchDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedMatchDiv);
                             });
                             if (!isTargetDiv) {
@@ -1584,8 +1594,9 @@ const EventDetails = () => {
                                                 </motion.a>
                                             )}
 
-                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured */}
-                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && (
+                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND there is something to pay */}
+                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && 
+                                             (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.includes(div)))) && (
                                                 <motion.button
                                                     whileHover={{ scale: 1.02 }}
                                                     whileTap={{ scale: 0.98 }}

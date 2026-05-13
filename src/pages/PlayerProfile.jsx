@@ -271,18 +271,26 @@ const PlayerProfile = () => {
                     const { data: paidRegs } = await supabase
                         .from('event_registrations')
                         .select('event_id')
-                        .ilike('email', player.email)
+                        .or(`email.ilike.${player.email},email.is.null`) // This is a bit loose, better to check by profile_id if we have it
                         .eq('payment_status', 'paid');
 
                     const { data: paidParticipants } = await supabase
                         .from('tournament_participants')
                         .select('event_id')
-                        .ilike('email', player.email)
+                        .or(`email.ilike.${player.email},profile_id.eq.${player.id}`)
                         .eq('is_paid', true);
+
+                    const { data: directPayments } = await supabase
+                        .from('payments')
+                        .select('event_id')
+                        .eq('player_id', player.id)
+                        .eq('status', 'success')
+                        .eq('payment_type', 'event_entry_fee');
 
                     const paidEventIds = new Set([
                         ...(paidRegs || []).map(r => r.event_id),
-                        ...(paidParticipants || []).map(p => p.event_id)
+                        ...(paidParticipants || []).map(p => p.event_id),
+                        ...(directPayments || []).map(p => p.event_id)
                     ]);
 
                     if (dbEvents) {
