@@ -249,7 +249,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
                     />
                   </motion.div>
-                  {(pendingPayments.length > 0 || (player && !player.region)) && (
+                  {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
                     <span className="absolute top-0 right-0 flex h-2 w-2">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
@@ -268,16 +268,16 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     >
                       <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
                         <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
-                        {(pendingPayments.length > 0 || (player && !player.region)) && (
+                        {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
                           <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
+                            {pendingPayments.length + (player && !player.region ? 1 : 0) + (player && !player.racket_brand ? 1 : 0)} Total
                           </span>
                         )}
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
                         {player && !player.region && (
                           <a
-                            href="/profile"
+                            href="/profile?edit=true"
                             className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                           >
                             <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
@@ -286,6 +286,21 @@ const Navbar = ({ isDark = false, accentColor }) => {
                             <div>
                               <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Region Missing</p>
                               <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Please select your home region in your profile to complete your registration.</p>
+                              <p className={`text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green`}>Update Profile ↗</p>
+                            </div>
+                          </a>
+                        )}
+                        {player && !player.racket_brand && (
+                          <a
+                            href="/profile?edit=true"
+                            className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                          >
+                            <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
+                              <Trophy className="w-4 h-4 text-padel-green" />
+                            </div>
+                            <div>
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Racket Brand Selection</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Select your racket brand in your profile to complete your registration.</p>
                               <p className={`text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green`}>Update Profile ↗</p>
                             </div>
                           </a>
@@ -376,7 +391,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   >
                     <Bell className="w-5 h-5" />
                   </motion.div>
-                  {(pendingPayments.length > 0 || (player && !player.region)) && (
+                  {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
                     <span className="absolute top-1 right-1 flex h-2.5 w-2.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
                       <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-black/50"></span>
@@ -395,16 +410,16 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     >
                       <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
                         <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
-                        {(pendingPayments.length > 0 || (player && !player.region)) && (
+                        {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
                           <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
-                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
+                            {pendingPayments.length + (player && !player.region ? 1 : 0) + (player && !player.racket_brand ? 1 : 0)} Total
                           </span>
                         )}
                       </div>
                       <div className="max-h-[300px] overflow-y-auto">
                         {player && !player.region && (
                           <a
-                            href="/profile"
+                            href="/profile?edit=true"
                             className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                           >
                             <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
@@ -413,6 +428,20 @@ const Navbar = ({ isDark = false, accentColor }) => {
                             <div>
                               <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Region Missing</p>
                               <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Select your home region in your profile.</p>
+                            </div>
+                          </a>
+                        )}
+                        {player && !player.racket_brand && (
+                          <a
+                            href="/profile?edit=true"
+                            className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                          >
+                            <div className="mt-1 bg-padel-green/20 p-2 rounded-lg">
+                              <Trophy className="w-4 h-4 text-padel-green" />
+                            </div>
+                            <div>
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Racket Brand Missing</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Select your racket brand in your profile.</p>
                             </div>
                           </a>
                         )}

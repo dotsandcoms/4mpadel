@@ -956,8 +956,8 @@ const EventDetails = () => {
 
         // Only block if they have already paid for ALL their registered divisions 
         // AND they haven't selected any new ones to pay for now
-        const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.includes(div));
-        const isFullyPaid = isRegistered && registeredDivisions.length > 0 && registeredDivisions.every(div => paidDivisions.includes(div));
+        const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
+        const isFullyPaid = isRegistered && registeredDivisions.length > 0 && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
 
         if (isFullyPaid && !hasUnpaidSelections) {
             toast.error('You have already paid for all your registered divisions!');
@@ -1596,7 +1596,9 @@ const EventDetails = () => {
 
                                             {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND there is something to pay */}
                                             {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && 
-                                             (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.includes(div)))) && (
+                                             (!isPaid || (isRegistered && !registeredDivisions.every(div => 
+                                                 paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())
+                                             ))) && (
                                                 <motion.button
                                                     whileHover={{ scale: 1.02 }}
                                                     whileTap={{ scale: 0.98 }}
@@ -1732,7 +1734,7 @@ const EventDetails = () => {
                                 if (!isEventPassed) {
                                     return (
                                         <div className="flex gap-2">
-                                            {isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.includes(div)) ? (
+                                            {isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())) ? (
                                                 <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
                                                     <CheckCircle size={14} className="text-padel-green" />
                                                     <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Paid</span>
@@ -1755,7 +1757,7 @@ const EventDetails = () => {
                                                             <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Registered</span>
                                                         </div>
                                                     )}
-                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.includes(div)))) && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
                                                         <button
                                                             onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                             className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"

@@ -246,6 +246,13 @@ const PlayerProfile = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [navigate]);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('edit') === 'true') {
+            setIsEditing(true);
+        }
+    }, []);
+
     const indexOfLastTransaction = currentTransactionPage * transactionsPerPage;
     const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
     const currentTransactionsList = transactions.slice(indexOfFirstTransaction, indexOfLastTransaction);

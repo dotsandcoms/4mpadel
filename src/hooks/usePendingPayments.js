@@ -23,10 +23,20 @@ export const usePendingPayments = (email, rankedinId) => {
                 const todayStr = today.toISOString();
 
                 const unpaidEvents = new Map();
+                
+                // 0. Fetch profile to get profile_id for more accurate matching
+                const { data: profile } = await supabase
+                    .from('players')
+                    .select('id, rankedin_id')
+                    .ilike('email', email)
+                    .maybeSingle();
+                
+                const profileId = profile?.id;
+                const pRankedinId = rankedinId || profile?.rankedin_id;
 
                 // 1. Fetch from Rankedin API if rankedinId is provided
-                if (rankedinId) {
-                    const rEvents = await getPlayerEventsAsync(rankedinId);
+                if (pRankedinId) {
+                    const rEvents = await getPlayerEventsAsync(pRankedinId);
                     const upcomingREvents = (rEvents || []).filter(e => new Date(e.start_date) >= today && e.state !== 2);
 
                     if (upcomingREvents.length > 0) {
@@ -40,7 +50,8 @@ export const usePendingPayments = (email, rankedinId) => {
                                 if (match) {
                                     const hasFee = match.entry_fee > 0 || (match.category_fees && Object.keys(match.category_fees).length > 0);
                                     if (hasFee) {
-                                        unpaidEvents.set(`${match.id}_${re.class_name || 'N/A'}`, {
+                                        const division = (re.class_name || 'N/A').trim();
+                                        unpaidEvents.set(`${match.id}_${division}`, {
                                             id: match.id,
                                             name: match.event_name,
                                             division: re.class_name,
@@ -62,7 +73,7 @@ export const usePendingPayments = (email, rankedinId) => {
                         class_name,
                         calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug)
                     `)
-                    .ilike('email', email)
+                    .or(profileId ? `email.ilike.${email},profile_id.eq.${profileId}` : `email.ilike.${email}`)
                     .neq('is_paid', true) // Include false and null
                     .gte('calendar.start_date', todayStr);
 
@@ -89,7 +100,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     const hasFee = cal.entry_fee > 0 || (cal.category_fees && Object.keys(cal.category_fees).length > 0);
                     
                     if (hasFee) {
-                        const division = record.class_name || record.division || 'N/A';
+                        const division = (record.class_name || record.division || 'N/A').trim();
                         unpaidEvents.set(`${cal.id}_${division}`, {
                             id: cal.id,
                             name: cal.event_name,
@@ -103,10 +114,10 @@ export const usePendingPayments = (email, rankedinId) => {
                 if (participants) participants.forEach(processEvent);
                 if (registrations) registrations.forEach(processEvent);
 
-                // Now we need to make sure they haven't actually paid for these events in the other table
+                // Now we need to make sure they haven't actually paid for these events in the other tables
                 // e.g. they might be in tournament_participants with is_paid=false, but event_registrations payment_status='paid'
                 if (unpaidEvents.size > 0) {
-                    const eventIds = Array.from(unpaidEvents.keys());
+                    const eventIds = Array.from(new Set(Array.from(unpaidEvents.values()).map(e => e.id)));
                     
                     const { data: paidRegs } = await supabase
                         .from('event_registrations')
@@ -118,15 +129,44 @@ export const usePendingPayments = (email, rankedinId) => {
                     const { data: paidParts } = await supabase
                         .from('tournament_participants')
                         .select('event_id, class_name')
-                        .ilike('email', email)
+                        .or(profileId ? `email.ilike.${email},profile_id.eq.${profileId}` : `email.ilike.${email}`)
                         .eq('is_paid', true)
                         .in('event_id', eventIds);
 
+                    // Also check the payments table directly for robustness
+                    const { data: directPayments } = await supabase
+                        .from('payments')
+                        .select('event_id, metadata')
+                        .eq('status', 'success')
+                        .eq('payment_type', 'event_entry_fee')
+                        .in('event_id', eventIds)
+                        .or(profileId ? `player_id.eq.${profileId},metadata->>email.ilike.${email}` : `metadata->>email.ilike.${email}`);
+
+                    const findAndRemove = (eventId, divisionName) => {
+                        if (!divisionName) return;
+                        const normalizedTarget = `${eventId}_${divisionName.trim().toLowerCase()}`;
+                        for (const [key, val] of unpaidEvents.entries()) {
+                            if (key.toLowerCase() === normalizedTarget) {
+                                unpaidEvents.delete(key);
+                            }
+                        }
+                    };
+
                     if (paidRegs) {
-                        paidRegs.forEach(r => unpaidEvents.delete(`${r.event_id}_${r.division}`));
+                        paidRegs.forEach(r => findAndRemove(r.event_id, r.division));
                     }
                     if (paidParts) {
-                        paidParts.forEach(p => unpaidEvents.delete(`${p.event_id}_${p.class_name}`));
+                        paidParts.forEach(p => findAndRemove(p.event_id, p.class_name));
+                    }
+                    if (directPayments) {
+                        directPayments.forEach(p => {
+                            const division = p.metadata?.division;
+                            if (division) {
+                                findAndRemove(p.event_id, division);
+                            } else {
+                                findAndRemove(p.event_id, 'N/A');
+                            }
+                        });
                     }
                 }
 

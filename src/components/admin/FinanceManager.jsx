@@ -184,6 +184,7 @@ const FinanceManager = () => {
             // We use 450 (Membership) and 120 (Temp) as standard markers.
             let licenseType = isEventReg ? null : (amount === 450 ? 'full' : (amount === 120 ? 'temporary' : (amount > 450 ? 'full' : 'temporary')));
             let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
+            let licensePortion = 0;
 
             const { data: player, error: fetchError } = await supabase
                 .from('players')
@@ -285,7 +286,7 @@ const FinanceManager = () => {
 
                     // Amount to be attributed as entry fees (cannot exceed total transaction)
                     const entryFeePortion = Math.min(amount, totalExpectedEntryFees);
-                    const licensePortion = amount - entryFeePortion;
+                    licensePortion = amount - entryFeePortion;
 
                     // 4. Split logic for Entry Fees:
                     const primaryParticipants = allParticipants.filter(p => p.profile_id === player.id);
