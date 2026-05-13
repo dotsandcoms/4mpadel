@@ -120,6 +120,22 @@ const Admin = () => {
 
     return (
         <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row">
+            {/* Impersonation Banner */}
+            {sessionStorage.getItem('admin_test_login_email') && (
+                <div className="fixed top-0 left-0 right-0 z-[1000] bg-amber-500 text-black py-2 px-4 text-center text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-4 shadow-xl">
+                    <span>Testing Mode: Impersonating {sessionStorage.getItem('admin_test_login_email')}</span>
+                    <button
+                        onClick={() => {
+                            sessionStorage.removeItem('admin_test_login_email');
+                            window.location.href = '/admin';
+                        }}
+                        className="bg-black text-white px-3 py-1 rounded-full hover:bg-white hover:text-black transition-colors"
+                    >
+                        Exit & Return to Admin
+                    </button>
+                </div>
+            )}
+
             {/* Mobile Header */}
             <header className="lg:hidden bg-black border-b border-white/10 p-4 sticky top-0 z-[50] flex items-center justify-between">
                 <div className="flex items-center gap-2">

@@ -126,7 +126,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             <button
               onClick={() => {
                 sessionStorage.removeItem('admin_test_login_email');
-                window.location.reload();
+                window.location.href = '/admin';
               }}
               className="bg-black text-white px-3 py-0.5 rounded-full hover:bg-white hover:text-black transition-colors"
             >

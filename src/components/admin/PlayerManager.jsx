@@ -439,9 +439,9 @@ const PlayerManager = () => {
     const handleTestLogin = (player) => {
         sessionStorage.setItem('admin_test_login_email', player.email);
         showToast('Now testing as ' + player.name + '.');
-        // Small delay to allow toast to be seen before reload
+        // Redirect to profile to see the impersonated user data
         setTimeout(() => {
-            window.location.reload();
+            window.location.href = '/profile';
         }, 1000);
     };
 
