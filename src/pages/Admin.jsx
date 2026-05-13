@@ -14,7 +14,7 @@ import EventManagement from '../components/admin/EventManagement';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Menu, ShieldAlert } from 'lucide-react';
+import { Menu, ShieldAlert, ExternalLink, Home } from 'lucide-react';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -125,12 +125,23 @@ const Admin = () => {
                 <div className="flex items-center gap-2">
                     <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">4M Admin</span>
                 </div>
-                <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    className="p-2 text-gray-400 hover:text-white"
-                >
-                    <Menu size={24} />
-                </button>
+                <div className="flex items-center gap-2">
+                    <a
+                        href="/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-2 text-padel-green hover:bg-padel-green/10 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+                    >
+                        <Home size={18} />
+                        <span className="hidden xs:inline">Live Site</span>
+                    </a>
+                    <button
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="p-2 text-gray-400 hover:text-white"
+                    >
+                        <Menu size={24} />
+                    </button>
+                </div>
             </header>
 
             <AdminSidebar
@@ -144,6 +155,19 @@ const Admin = () => {
 
             <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
                 <div className="max-w-7xl mx-auto">
+                    {/* Desktop Header Actions */}
+                    <div className="hidden lg:flex justify-end mb-8">
+                        <a
+                            href="/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full transition-all group"
+                        >
+                            <Home className="w-5 h-5 text-padel-green group-hover:scale-110 transition-transform" />
+                            <span className="text-sm font-medium text-white">View live Site</span>
+                        </a>
+                    </div>
+
                     <AnimatePresence mode="wait">
                         <motion.div
                             key={activeTab}

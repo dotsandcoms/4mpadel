@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, permissions }) => {
@@ -89,7 +89,16 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-white/10">
+                <div className="p-4 border-t border-white/10 space-y-1">
+                    <a
+                        href="/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full flex items-center gap-3 px-4 py-3 text-padel-green hover:bg-padel-green/10 rounded-xl transition-colors font-medium"
+                    >
+                        <Home size={20} />
+                        View live Site
+                    </a>
                     <button
                         onClick={onLogout}
                         className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors"
