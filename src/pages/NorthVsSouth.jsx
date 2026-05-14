@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List } from 'lucide-react';
+import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List, Edit3, Save } from 'lucide-react';
+import { useAdminPermissions } from '../hooks/useAdminPermissions';
 
 // ── Assets ────────────────────────────────────────────────────────────────────
 import nvsLogo from '../assets/nvs/official_logo.png';
+import southLogo from '../assets/nvs/south_logo.jpeg';
 import heroImg from '../assets/nvs/hero.png';
 import actionImg from '../assets/nvs/action_male.png';
 import venueImg from '../assets/nvs/venue.png';
@@ -432,8 +434,13 @@ const PlayerGridCard = ({ name, imageUrl, accent, onClick }) => {
 const TOURNAMENT_DATA = {
   id: '6404918',
   name: "Guardrisk North vs South 2026",
-  scores: { north: 3, south: 2 },
   lastUpdated: 'Live Updates',
+  scores: {
+    overall: { north: 3, south: 2 },
+    friday: { north: 3, south: 2 },
+    saturday: { north: 0, south: 0 },
+    sunday: { north: 0, south: 0 }
+  },
   matches: [
     { id: 1, team1: 'Adam Van Harte / Aidan Carrazedo', team2: 'Paul Waldburger / Jason Blakey-Milner', score: '1-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
     { id: 2, team1: 'Bradwin Williams / Brandon Weir-Smith', team2: 'Luan Krige / Shaun Leagas', score: '2-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
@@ -453,9 +460,37 @@ const TOURNAMENT_DATA = {
 };
 
 const ResultsSection = () => {
-  const [activeTab, setActiveTab] = useState('standings'); // 'standings' or 'matches'
+  const [activeTab, setActiveTab] = useState('standings'); 
   const [liveData, setLiveData] = useState(TOURNAMENT_DATA);
   const { getTeamTournamentResults, loading } = useRankedin();
+  
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
+  }, []);
+
+  const { permissions } = useAdminPermissions(user?.email);
+  const isAdmin = permissions?.role === 'super_admin' || (permissions && permissions.id) || new URLSearchParams(window.location.search).get('admin') === 'true';
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [manualScores, setManualScores] = useState(TOURNAMENT_DATA.scores);
+
+  // Load manual scores from Supabase or localStorage on mount
+  useEffect(() => {
+    const savedScores = localStorage.getItem('nvs_manual_scores');
+    if (savedScores) {
+      try {
+        setManualScores(JSON.parse(savedScores));
+      } catch (e) {
+        console.error("Failed to parse saved scores", e);
+      }
+    }
+  }, []);
+
+  const handleSaveScores = () => {
+    localStorage.setItem('nvs_manual_scores', JSON.stringify(manualScores));
+    setIsEditing(false);
+  };
 
   useEffect(() => {
     const fetchLiveResults = async () => {
@@ -473,15 +508,20 @@ const ResultsSection = () => {
             round: m.CategoryName || 'Men-Doubles'
           }));
 
-          setLiveData({
-            ...TOURNAMENT_DATA,
-            scores: { 
-              north: results.Team1Score || 0, 
-              south: results.Team2Score || 0 
+          setLiveData(prev => ({
+            ...prev,
+            scores: manualScores || { 
+              overall: {
+                north: results.Team1Score || 0, 
+                south: results.Team2Score || 0 
+              },
+              friday: { north: 0, south: 0 },
+              saturday: { north: 0, south: 0 },
+              sunday: { north: 0, south: 0 }
             },
             matches: formattedMatches,
             lastUpdated: 'Live Updates'
-          });
+          }));
         }
       } catch (err) {
         console.error("Error fetching live results:", err);
@@ -489,13 +529,22 @@ const ResultsSection = () => {
     };
 
     fetchLiveResults();
-    
-    // Auto-refresh every 5 minutes while page is open
     const interval = setInterval(fetchLiveResults, 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [getTeamTournamentResults]);
+  }, [getTeamTournamentResults, manualScores]);
 
-  const displayData = liveData;
+  const displayData = {
+    ...liveData,
+    scores: manualScores || liveData.scores
+  };
+
+  const northWins = displayData.scores.overall.north;
+  const southWins = displayData.scores.overall.south;
+  const totalWins = northWins + southWins;
+  const winPercentage = totalWins > 0 ? Math.round((northWins / totalWins) * 100) : 50;
+  const leaderText = northWins > southWins 
+    ? `North +${northWins - southWins}` 
+    : (southWins > northWins ? `South +${southWins - northWins}` : 'Teams Level');
 
   return (
     <section id="results" className="py-20 md:py-32 bg-white relative overflow-hidden">
@@ -534,7 +583,16 @@ const ResultsSection = () => {
             </h2>
           </div>
 
-          <div className="flex bg-gray-50 p-1.5 rounded-2xl border border-gray-100 shadow-inner">
+          <div className="flex items-center gap-4">
+            {isAdmin && (
+              <button
+                onClick={() => setIsEditing(!isEditing)}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-200 transition-all"
+              >
+                {isEditing ? <X className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                {isEditing ? 'Cancel' : 'Edit Scores'}
+              </button>
+            )}
             <button
               onClick={() => setActiveTab('standings')}
               className={`flex items-center gap-2 px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'standings' ? 'bg-white shadow-md text-magenta translate-y-[-1px]' : 'text-gray-400 hover:text-gray-600'}`}
@@ -554,6 +612,48 @@ const ResultsSection = () => {
           </div>
         </div>
 
+        {isEditing && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-12 p-8 bg-gray-50 rounded-[32px] border border-gray-200 shadow-xl"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-black uppercase tracking-tighter italic" style={{ color: MAGENTA }}>Manual Score Entry</h3>
+              <button onClick={handleSaveScores} className="flex items-center gap-2 px-6 py-3 bg-magenta text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg" style={{ background: MAGENTA }}>
+                <Save className="w-4 h-4" /> Save All Scores
+              </button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {['overall', 'friday', 'saturday', 'sunday'].map(day => (
+                <div key={day} className="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-4">{day}</p>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[10px] font-bold uppercase text-magenta" style={{ color: MAGENTA }}>North</span>
+                      <input 
+                        type="number" 
+                        value={manualScores[day].north} 
+                        onChange={e => setManualScores({...manualScores, [day]: {...manualScores[day], north: parseInt(e.target.value) || 0}})}
+                        className="w-16 p-2 bg-gray-50 border border-gray-100 rounded-lg text-center font-black"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-[10px] font-bold uppercase text-gold" style={{ color: GOLD }}>South</span>
+                      <input 
+                        type="number" 
+                        value={manualScores[day].south} 
+                        onChange={e => setManualScores({...manualScores, [day]: {...manualScores[day], south: parseInt(e.target.value) || 0}})}
+                        className="w-16 p-2 bg-gray-50 border border-gray-100 rounded-lg text-center font-black"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {activeTab === 'standings' ? (
             <motion.div
@@ -564,51 +664,68 @@ const ResultsSection = () => {
               className="grid grid-cols-1 lg:grid-cols-3 gap-8"
             >
               {/* Main Scoreboard */}
-              <div className="lg:col-span-2 bg-gradient-to-br from-gray-900 to-black rounded-[40px] p-8 md:p-16 relative overflow-hidden shadow-2xl">
-                <div className="absolute top-0 right-0 p-8 opacity-10">
-                  <Trophy className="w-40 h-40 text-white" />
+              <div className="lg:col-span-2 flex flex-col gap-6">
+                <div className="bg-gradient-to-br from-gray-900 to-black rounded-[40px] p-8 md:p-12 relative overflow-hidden shadow-2xl">
+                  <div className="absolute top-0 right-0 p-8 opacity-10">
+                    <Trophy className="w-32 h-32 text-white" />
+                  </div>
+                  
+                  <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-8">
+                      <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
+                        <Activity className="w-4 h-4 text-gold" style={{ color: GOLD }} />
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white">Overall Standing</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-4 py-4">
+                      {/* Team North */}
+                      <div className="flex flex-col items-center text-center">
+                        <img src="/images/kitkat-group-logo.png" alt="North" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-4" />
+                        <div className="text-6xl md:text-8xl font-black italic tracking-tighter leading-none text-white">
+                          {displayData.scores.overall.north}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">VS</div>
+                        <div className="h-12 w-px bg-white/10" />
+                      </div>
+
+                      {/* Team South */}
+                      <div className="flex flex-col items-center text-center">
+                        <img src={southLogo} alt="South" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-4" />
+                        <div className="text-6xl md:text-8xl font-black italic tracking-tighter leading-none text-white">
+                          {displayData.scores.overall.south}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-8 flex items-center justify-center gap-3">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Current Leader:</span>
+                      <span className="text-xs font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
+                    </div>
+                  </div>
                 </div>
-                
-                <div className="relative z-10 flex flex-col h-full justify-between">
-                  <div className="flex justify-between items-center mb-12">
-                    <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                      <Activity className="w-4 h-4 text-gold" style={{ color: GOLD }} />
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white">{displayData.lastUpdated}</span>
-                    </div>
-                  </div>
 
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-12 py-8">
-                    {/* Team North */}
-                    <div className="flex flex-col items-center md:items-start text-center md:text-left">
-                      <div className="w-20 h-20 bg-magenta/20 rounded-3xl flex items-center justify-center mb-6 border border-magenta/30" style={{ background: `${MAGENTA}33` }}>
-                        <img src={nvsLogo} alt="North" className="w-12 h-12 object-contain" />
-                      </div>
-                      <h4 className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-2">Team North</h4>
-                      <div className="text-7xl md:text-[10rem] font-black italic tracking-tighter leading-none text-white drop-shadow-2xl">
-                        {displayData.scores.north}
+                {/* Daily Breakdown Grid */}
+                <div className="grid grid-cols-3 gap-4">
+                  {['friday', 'saturday', 'sunday'].map(day => (
+                    <div key={day} className="bg-white border border-gray-100 rounded-3xl p-4 md:p-6 shadow-sm">
+                      <p className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-gray-400 mb-3 text-center">{day}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs md:text-xl font-black italic" style={{ color: MAGENTA }}>{displayData.scores[day].north}</span>
+                          <span className="text-[6px] font-black uppercase text-magenta/40" style={{ color: `${MAGENTA}66` }}>North</span>
+                        </div>
+                        <div className="h-6 w-px bg-gray-100" />
+                        <div className="flex flex-col items-center">
+                          <span className="text-xs md:text-xl font-black italic" style={{ color: GOLD }}>{displayData.scores[day].south}</span>
+                          <span className="text-[6px] font-black uppercase text-gold/40" style={{ color: `${GOLD}66` }}>South</span>
+                        </div>
                       </div>
                     </div>
-
-                    <div className="h-px w-24 md:h-32 md:w-px bg-white/10" />
-
-                    {/* Team South */}
-                    <div className="flex flex-col items-center md:items-end text-center md:text-right">
-                      <div className="w-20 h-20 bg-gold/20 rounded-3xl flex items-center justify-center mb-6 border border-gold/30" style={{ background: `${GOLD}33` }}>
-                        <img src={nvsLogo} alt="South" className="w-12 h-12 object-contain" />
-                      </div>
-                      <h4 className="text-white/60 text-xs font-black uppercase tracking-[0.3em] mb-2">Team South</h4>
-                      <div className="text-7xl md:text-[10rem] font-black italic tracking-tighter leading-none text-white drop-shadow-2xl">
-                        {displayData.scores.south}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-12 pt-12 border-t border-white/10 flex flex-wrap gap-6 justify-center md:justify-start">
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Leader:</span>
-                      <span className="text-xs font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>North +1 Match</span>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
 
@@ -620,12 +737,12 @@ const ResultsSection = () => {
                     <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Winning Percentage</span>
-                        <span className="text-sm font-black text-magenta" style={{ color: MAGENTA }}>60%</span>
+                        <span className="text-sm font-black text-magenta" style={{ color: MAGENTA }}>{winPercentage}%</span>
                       </div>
                       <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }} 
-                          animate={{ width: '60%' }} 
+                          animate={{ width: `${winPercentage}%` }} 
                           className="h-full bg-magenta" 
                           style={{ background: MAGENTA }} 
                         />
@@ -638,8 +755,9 @@ const ResultsSection = () => {
                           <Users className="w-6 h-6 text-gold" style={{ color: GOLD }} />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches Played</p>
-                          <p className="text-xl font-black italic">05 / 28</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches</p>
+                          <p className="text-xl font-black italic">{displayData.matches.filter(m => m.score !== 'Upcoming').length.toString().padStart(2, '0')} / 112</p>
+                          <p className="text-[8px] text-gray-400 font-black uppercase tracking-wider mt-1">Fri: 28 · Sat: 56 · Sun: 28</p>
                         </div>
                       </div>
                     </div>
@@ -648,7 +766,7 @@ const ResultsSection = () => {
 
                 <div className="mt-10 p-6 bg-magenta rounded-3xl text-white" style={{ background: MAGENTA }}>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Next Milestone</p>
-                  <p className="text-lg font-black italic tracking-tight leading-tight">15 Matches wins to secure bragging rights</p>
+                  <p className="text-lg font-black italic tracking-tight leading-tight">57 Matches wins to secure bragging rights</p>
                 </div>
               </div>
             </motion.div>
@@ -676,7 +794,7 @@ const ResultsSection = () => {
                   </div>
 
                   <div className="flex-1 grid grid-cols-1 md:grid-cols-[1fr,auto,1fr] items-center gap-4 md:gap-12 w-full">
-                    {/* Team North Side */}
+                    {/* Kit Kat Team North Side */}
                     <div className={`flex items-center justify-end gap-6 ${match.winner === 'north' || match.score === 'Upcoming' ? 'opacity-100' : 'opacity-40'}`}>
                       <p className="text-xs md:text-lg font-black uppercase tracking-tighter text-right leading-tight">{match.team1}</p>
                       <div className="w-2 h-12 bg-magenta rounded-full shrink-0" style={{ background: MAGENTA }} />
@@ -959,7 +1077,10 @@ const NorthVsSouth = () => {
                 onClick={() => setSelectedTeam('north')}
                 className={`relative z-10 flex-1 lg:px-10 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedTeam === 'north' ? 'text-white' : 'text-gray-400'}`}
               >
-                Team North
+                <div className="flex items-center justify-center gap-2">
+                  <img src="/images/kitkat-group-logo.png" alt="Kit Kat" className={`h-3 w-auto ${selectedTeam === 'north' ? 'brightness-0 invert' : ''}`} />
+                  <span>Team North</span>
+                </div>
               </button>
               <button
                 onClick={() => setSelectedTeam('south')}
@@ -985,15 +1106,20 @@ const NorthVsSouth = () => {
                   className="w-24 h-24 md:w-32 md:h-32 rounded-[32px] md:rounded-[40px] flex items-center justify-center p-5 md:p-8 shadow-inner shrink-0"
                   style={{ background: selectedTeam === 'north' ? `${MAGENTA}10` : `${GOLD}10` }}
                 >
-                  <img src={nvsLogo} alt="NVS Logo" className="w-full h-full object-contain" />
+                  <img src={selectedTeam === 'north' ? "/images/kitkat-group-logo.png" : southLogo} alt="NVS Logo" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter italic mb-4" style={{ color: selectedTeam === 'north' ? MAGENTA : GOLD }}>
-                    {selectedTeam === 'north' ? 'Team North' : 'Team South'}
+                    {selectedTeam === 'north' ? (
+                      <span className="flex items-center gap-3">
+                        <img src="/images/kitkat-group-logo.png" alt="Kit Kat" className="h-8 md:h-12 w-auto" />
+                        <span>Team North</span>
+                      </span>
+                    ) : 'Team South'}
                   </h3>
                   <p className="text-gray-500 text-sm md:text-lg leading-relaxed font-medium max-w-3xl">
                     {selectedTeam === 'north'
-                      ? "Team North arrives with purpose and pace. Led by Paul Anderson, this is a side that plays forward, fast and with clear intent. There is an edge to their game, driven by ambition and a readiness to take control early."
+                      ? <span><img src="/images/kitkat-group-logo.png" alt="Kit Kat" className="h-4 w-auto inline-block align-middle mr-2" />Team North arrives with purpose and pace. Led by Paul Anderson, this is a side that plays forward, fast and with clear intent. There is an edge to their game, driven by ambition and a readiness to take control early.</span>
                       : "Measured, tactical and composed. United by regional familiarity and expectation, Team South brings a strong desire to keep the bragging rights where they believe they belong."
                     }
                   </p>
