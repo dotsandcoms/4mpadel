@@ -906,7 +906,7 @@ const PlayerManager = () => {
                             <tr className="bg-[#111827] text-gray-400 border-b border-white/10">
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Name</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">License</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Paid Date</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Date Registered</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Last Activity</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Category</th>
@@ -939,7 +939,7 @@ const PlayerManager = () => {
                                         </td>
                                         <td className="py-3 px-4">
                                             <span className="text-gray-400 text-xs font-bold">
-                                                {player.full_license_paid_at ? new Date(player.full_license_paid_at).toLocaleDateString() : '—'}
+                                                {player.created_at ? new Date(player.created_at).toLocaleDateString() : '—'}
                                             </span>
                                         </td>
 
