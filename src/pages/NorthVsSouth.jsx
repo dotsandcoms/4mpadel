@@ -475,20 +475,57 @@ const ResultsSection = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [manualScores, setManualScores] = useState(TOURNAMENT_DATA.scores);
 
-  // Load manual scores from Supabase or localStorage on mount
+  // Load scores from Supabase or localStorage on mount
   useEffect(() => {
-    const savedScores = localStorage.getItem('nvs_manual_scores');
-    if (savedScores) {
+    const fetchSavedScores = async () => {
+      // Try Supabase first
       try {
-        setManualScores(JSON.parse(savedScores));
+        const { data, error } = await supabase
+          .from('nvs_scores')
+          .select('scores')
+          .eq('id', TOURNAMENT_DATA.id)
+          .maybeSingle();
+        
+        if (data && data.scores) {
+          setManualScores(data.scores);
+          return;
+        }
       } catch (e) {
-        console.error("Failed to parse saved scores", e);
+        console.error("Supabase fetch failed", e);
       }
-    }
+
+      // Fallback to localStorage
+      const savedScores = localStorage.getItem('nvs_manual_scores');
+      if (savedScores) {
+        try {
+          setManualScores(JSON.parse(savedScores));
+        } catch (e) {
+          console.error("Failed to parse saved scores", e);
+        }
+      }
+    };
+
+    fetchSavedScores();
   }, []);
 
-  const handleSaveScores = () => {
-    localStorage.setItem('nvs_manual_scores', JSON.stringify(manualScores));
+  const handleSaveScores = async () => {
+    // Save to Supabase
+    try {
+      const { error } = await supabase
+        .from('nvs_scores')
+        .upsert({ 
+          id: TOURNAMENT_DATA.id, 
+          scores: manualScores,
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+    } catch (e) {
+      console.error("Failed to save to Supabase", e);
+      // Fallback to localStorage
+      localStorage.setItem('nvs_manual_scores', JSON.stringify(manualScores));
+    }
+    
     setIsEditing(false);
   };
 
