@@ -866,9 +866,22 @@ const ResultsSection = () => {
                   </div>
 
                   <div className="hidden md:block">
-                    <div className={`px-4 py-2 rounded-full border ${match.score !== 'Upcoming' ? 'border-gray-100 text-gray-400 group-hover:bg-magenta group-hover:text-white group-hover:border-magenta' : 'border-dashed border-gray-200 text-gray-200'} text-[10px] font-black uppercase tracking-widest transition-all`} style={{ '--hover-bg': MAGENTA }}>
-                      {match.status}
-                    </div>
+                    {match.status === 'Completed' ? (
+                      <div 
+                        className="px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+                        style={{ 
+                          borderColor: match.winner === 'north' ? `${MAGENTA}40` : `${GOLD}40`,
+                          color: match.winner === 'north' ? MAGENTA : GOLD,
+                          background: match.winner === 'north' ? `${MAGENTA}08` : `${GOLD}08`
+                        }}
+                      >
+                        {match.status}
+                      </div>
+                    ) : (
+                      <div className={`px-4 py-2 rounded-full border border-dashed border-gray-200 text-gray-300 text-[10px] font-black uppercase tracking-widest`}>
+                        {match.status}
+                      </div>
+                    )}
                   </div>
                 </motion.div>
               ))}
