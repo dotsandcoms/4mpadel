@@ -696,7 +696,7 @@ const PlayerManager = () => {
                 <StatCard title="Total Players" value={loading ? '—' : stats.total} subtext="All registered" icon={Users} color="padel-green" delay={0} />
                 <StatCard title="Full License" value={loading ? '—' : stats.full} subtext={`${stats.fullPercentage}% of all registered`} icon={CreditCard} color="green" delay={0.05} />
                 <StatCard title="Male / Female" value={loading ? '—' : `${stats.male} / ${stats.female}`} subtext="Gender breakdown" icon={Users} color="sky" delay={0.1} />
-                <StatCard title="Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
+                <StatCard title="Current Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
             </div>
 
             {/* Charts Row */}
