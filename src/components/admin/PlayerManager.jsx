@@ -812,19 +812,13 @@ const PlayerManager = () => {
                         <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={180}>
-                            <AreaChart data={registrationChartData}>
-                                <defs>
-                                    <linearGradient id="colorReg" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#beff00" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#beff00" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
+                            <BarChart data={registrationChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Area type="monotone" dataKey="registrations" stroke="#beff00" fillOpacity={1} fill="url(#colorReg)" />
-                            </AreaChart>
+                                <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
+                            </BarChart>
                         </ResponsiveContainer>
                     )}
                 </motion.div>
@@ -840,19 +834,13 @@ const PlayerManager = () => {
                         <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
                     ) : (
                         <ResponsiveContainer width="100%" height={180}>
-                            <AreaChart data={fullLicenseChartData}>
-                                <defs>
-                                    <linearGradient id="colorLic" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                                    </linearGradient>
-                                </defs>
+                            <BarChart data={fullLicenseChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                                 <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
                                 <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Area type="monotone" dataKey="licenses" stroke="#22c55e" fillOpacity={1} fill="url(#colorLic)" />
-                            </AreaChart>
+                                <Bar dataKey="licenses" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                            </BarChart>
                         </ResponsiveContainer>
                     )}
                 </motion.div>
