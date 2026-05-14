@@ -702,7 +702,7 @@ const ResultsSection = () => {
             >
               {/* Main Scoreboard */}
               <div className="lg:col-span-2 flex flex-col gap-6">
-                <div className="bg-[#0a0a0a] rounded-[40px] p-8 md:p-12 relative overflow-hidden shadow-2xl border border-white/5">
+                <div className="bg-[#0a0a0a] rounded-[32px] md:rounded-[40px] p-6 md:p-12 relative overflow-hidden shadow-2xl border border-white/5">
                   {/* Team Glows */}
                   <div className="absolute -left-20 top-0 w-80 h-full bg-magenta/20 blur-[100px] pointer-events-none" style={{ background: `${MAGENTA}33` }} />
                   <div className="absolute -right-20 top-0 w-80 h-full bg-gold/20 blur-[100px] pointer-events-none" style={{ background: `${GOLD}33` }} />
@@ -712,14 +712,14 @@ const ResultsSection = () => {
                   </div>
                   
                   <div className="relative z-10">
-                    <div className="flex justify-center mb-10">
+                    <div className="flex justify-center mb-6 md:mb-10">
                       <div className="flex items-center gap-3 bg-white/5 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
                         <Activity className="w-4 h-4 text-gold animate-pulse" style={{ color: GOLD }} />
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Overall Standing</span>
                       </div>
                     </div>
-
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-12 py-4">
+ 
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 py-4">
                       {/* Team North Side */}
                       <div className="flex flex-col items-center text-center md:items-start md:text-left flex-1">
                         <div className="mb-4">
@@ -728,17 +728,17 @@ const ResultsSection = () => {
                             Kit Kat Team North
                           </h3>
                         </div>
-                        <div className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(194,0,171,0.3)]">
+                        <div className="text-5xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(194,0,171,0.3)]">
                           {displayData.scores.overall.north}
                         </div>
                       </div>
-
+ 
                       {/* Divider */}
                       <div className="flex flex-col items-center gap-2 px-4">
-                        <div className="text-[12px] font-black uppercase tracking-[0.6em] text-white/10 italic">VS</div>
-                        <div className="h-20 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
+                        <div className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.6em] text-white/10 italic">VS</div>
+                        <div className="h-12 md:h-20 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
                       </div>
-
+ 
                       {/* Team South Side */}
                       <div className="flex flex-col items-center text-center md:items-end md:text-right flex-1">
                         <div className="mb-4">
@@ -747,13 +747,13 @@ const ResultsSection = () => {
                             Team South
                           </h3>
                         </div>
-                        <div className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(245,184,0,0.3)]">
+                        <div className="text-5xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(245,184,0,0.3)]">
                           {displayData.scores.overall.south}
                         </div>
                       </div>
                     </div>
-
-                    <div className="mt-12 flex items-center justify-center gap-4 bg-white/5 py-4 rounded-3xl border border-white/5 backdrop-blur-sm">
+ 
+                    <div className="mt-8 md:mt-12 flex items-center justify-center gap-4 bg-white/5 py-4 rounded-3xl border border-white/5 backdrop-blur-sm">
                       <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Current Leader:</span>
                       <span className="text-sm md:text-lg font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
                     </div>
