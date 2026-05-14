@@ -862,7 +862,7 @@ const NorthVsSouth = () => {
       </AnimatePresence>
 
       {/* ═══════════════ HERO ═══════════════════════════════════════════════════ */}
-      <section className="relative min-h-[80vh] md:min-h-screen flex flex-col justify-center md:justify-end p-6 md:p-12 overflow-hidden">
+      <section className="relative min-h-[80vh] md:min-h-screen flex flex-col justify-start md:justify-end p-6 md:p-12 pt-24 md:pt-0 overflow-hidden">
         <div className="absolute inset-0 z-0">
           <img src={heroImg} alt="Hero" className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-magenta/80 via-magenta/20 to-transparent" style={{ background: `linear-gradient(to top, ${MAGENTA}dd, ${MAGENTA}22, transparent)` }} />
@@ -904,7 +904,7 @@ const NorthVsSouth = () => {
           <motion.div initial="hidden" animate="visible" variants={staggerContainer} className="flex flex-col items-center md:items-start">
             <motion.div variants={fadeInUp} className="flex flex-col md:flex-row items-center gap-4 md:gap-6 mb-8 md:mb-8">
               <div className="bg-white p-3 md:p-2 rounded-2xl shadow-xl">
-                <img src={nvsLogo} alt="Official Logo" className="h-24 md:h-32 w-auto object-contain" />
+                <img src={nvsLogo} alt="Official Logo" className="h-32 md:h-32 w-auto object-contain" />
               </div>
               <div className="hidden md:block h-16 w-px bg-white/30" />
               <p className="text-white text-[10px] md:text-sm font-black uppercase tracking-[0.4em] leading-tight text-center md:text-left">Guardrisk<br />North Vs South<br />2026</p>
@@ -924,7 +924,7 @@ const NorthVsSouth = () => {
                 className="px-8 py-4 md:px-10 md:py-5 bg-white rounded-full font-black text-[10px] md:text-xs uppercase tracking-widest hover:scale-105 transition-transform shadow-xl w-full sm:w-auto"
                 style={{ color: MAGENTA }}
               >
-                View Rosters
+                View Teams
               </button>
               <button
                 onClick={() => scrollTo('the-event')}
