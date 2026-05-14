@@ -665,45 +665,60 @@ const ResultsSection = () => {
             >
               {/* Main Scoreboard */}
               <div className="lg:col-span-2 flex flex-col gap-6">
-                <div className="bg-gradient-to-br from-gray-900 to-black rounded-[40px] p-8 md:p-12 relative overflow-hidden shadow-2xl">
-                  <div className="absolute top-0 right-0 p-8 opacity-10">
-                    <Trophy className="w-32 h-32 text-white" />
+                <div className="bg-[#0a0a0a] rounded-[40px] p-8 md:p-12 relative overflow-hidden shadow-2xl border border-white/5">
+                  {/* Team Glows */}
+                  <div className="absolute -left-20 top-0 w-80 h-full bg-magenta/20 blur-[100px] pointer-events-none" style={{ background: `${MAGENTA}33` }} />
+                  <div className="absolute -right-20 top-0 w-80 h-full bg-gold/20 blur-[100px] pointer-events-none" style={{ background: `${GOLD}33` }} />
+                  
+                  <div className="absolute top-0 right-0 p-8 opacity-5">
+                    <Trophy className="w-48 h-48 text-white" />
                   </div>
                   
                   <div className="relative z-10">
-                    <div className="flex justify-between items-center mb-8">
-                      <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-                        <Activity className="w-4 h-4 text-gold" style={{ color: GOLD }} />
-                        <span className="text-[10px] font-black uppercase tracking-widest text-white">Overall Standing</span>
+                    <div className="flex justify-center mb-10">
+                      <div className="flex items-center gap-3 bg-white/5 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
+                        <Activity className="w-4 h-4 text-gold animate-pulse" style={{ color: GOLD }} />
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Overall Standing</span>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 py-4">
-                      {/* Team North */}
-                      <div className="flex flex-col items-center text-center">
-                        <img src="/images/kitkat-group-logo.png" alt="North" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-4" />
-                        <div className="text-6xl md:text-8xl font-black italic tracking-tighter leading-none text-white">
+                    <div className="flex flex-col md:flex-row items-center justify-between gap-12 py-4">
+                      {/* Team North Side */}
+                      <div className="flex flex-col items-center text-center md:items-start md:text-left flex-1">
+                        <div className="mb-4">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 text-white mb-1 block">The North</span>
+                          <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter italic leading-none text-magenta" style={{ color: MAGENTA }}>
+                            Kit Kat Team North
+                          </h3>
+                        </div>
+                        <div className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(194,0,171,0.3)]">
                           {displayData.scores.overall.north}
                         </div>
                       </div>
 
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20">VS</div>
-                        <div className="h-12 w-px bg-white/10" />
+                      {/* Divider */}
+                      <div className="flex flex-col items-center gap-2 px-4">
+                        <div className="text-[12px] font-black uppercase tracking-[0.6em] text-white/10 italic">VS</div>
+                        <div className="h-20 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
                       </div>
 
-                      {/* Team South */}
-                      <div className="flex flex-col items-center text-center">
-                        <img src={southLogo} alt="South" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-4" />
-                        <div className="text-6xl md:text-8xl font-black italic tracking-tighter leading-none text-white">
+                      {/* Team South Side */}
+                      <div className="flex flex-col items-center text-center md:items-end md:text-right flex-1">
+                        <div className="mb-4">
+                          <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-40 text-white mb-1 block">The South</span>
+                          <h3 className="text-xl md:text-2xl font-black uppercase tracking-tighter italic leading-none text-gold" style={{ color: GOLD }}>
+                            Team South
+                          </h3>
+                        </div>
+                        <div className="text-7xl md:text-9xl font-black italic tracking-tighter leading-none text-white drop-shadow-[0_10px_30px_rgba(245,184,0,0.3)]">
                           {displayData.scores.overall.south}
                         </div>
                       </div>
                     </div>
 
-                    <div className="mt-8 flex items-center justify-center gap-3">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">Current Leader:</span>
-                      <span className="text-xs font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
+                    <div className="mt-12 flex items-center justify-center gap-4 bg-white/5 py-4 rounded-3xl border border-white/5 backdrop-blur-sm">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Current Leader:</span>
+                      <span className="text-sm md:text-lg font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
                     </div>
                   </div>
                 </div>
