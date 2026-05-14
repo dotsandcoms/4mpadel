@@ -367,22 +367,21 @@ const EventDetails = () => {
             const userName = profile?.name?.toLowerCase().trim();
             const userRID = profile?.rankedin_id;
 
-            // 1. Check Payment Status (Local DB)
-            const { data: regs } = await supabase
-                .from('event_registrations')
-                .select('division')
-                .eq('event_id', event.id)
-                .ilike('email', userEmail)
-                .eq('payment_status', 'paid');
-
-            const { data: parts } = await supabase
+            // 1. Check Registration & Payment Status (Local DB)
+            const { data: localParts } = await supabase
                 .from('tournament_participants')
-                .select('class_name')
+                .select('class_name, is_paid')
                 .eq('event_id', event.id)
-                .eq('is_paid', true)
-                .or(`email.ilike.${userEmail},profile_id.eq.${profile?.id || 0}`);
+                .or(profile?.id ? `profile_id.eq.${profile.id},email.ilike.${userEmail}` : `email.ilike.${userEmail}`);
 
-            // 3. Check Direct Payments table for manual or externally synced payments
+            // 1b. Check legacy event_registrations table
+            const { data: legacyRegs } = await supabase
+                .from('event_registrations')
+                .select('division, payment_status')
+                .eq('event_id', event.id)
+                .ilike('email', userEmail);
+
+            // 1c. Check Direct Payments table
             const { data: directPayments } = await supabase
                 .from('payments')
                 .select('metadata')
@@ -392,31 +391,31 @@ const EventDetails = () => {
                 .or(profile?.id ? `player_id.eq.${profile.id},metadata->>email.ilike.${userEmail}` : `metadata->>email.ilike.${userEmail}`);
 
             const paidDivs = Array.from(new Set([
-                ...(regs || []).map(r => (r.division || '').trim()),
-                ...(parts || []).map(p => (p.class_name || '').trim()),
+                ...(legacyRegs || []).filter(r => r.payment_status === 'paid').map(r => (r.division || '').trim()),
+                ...(localParts || []).filter(p => p.is_paid).map(p => (p.class_name || '').trim()),
                 ...(directPayments || []).map(p => (p.metadata?.division || '').trim())
             ].filter(Boolean)));
             
+            const unpaidLocalDivs = (localParts || [])
+                .filter(p => !p.is_paid)
+                .map(p => (p.class_name || '').trim());
+
             setPaidDivisions(paidDivs);
             setIsPaid(paidDivs.length > 0);
 
-            // 2. Check Registration Status (Rankedin Live Player List)
-            if (rId) {
+            // 2. Check Registration Status (Rankedin Live Player List fallback)
+            const regDivs = [...unpaidLocalDivs];
+            
+            if (rId && regDivs.length === 0) {
                 setIsCheckingReg(true);
                 try {
                     const divisions = await getTournamentPlayerTabs(rId);
-                    const regDivs = [];
-                    
-                    // We need to check EACH division to see which ones they are in
+                    // ... scraper logic follows if needed, but we already have local ones
                     await Promise.all(divisions.map(async (cls) => {
                         const teams = await getTournamentParticipants(rId, cls.Id);
                         const isMatch = teams.some(t => {
                             const p = t.Participant || t;
                             const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
-
-                            if (players.length === 0 && (p.FirstPlayer || p.SecondPlayer)) {
-                                players.push(...[p.FirstPlayer, p.SecondPlayer].filter(Boolean));
-                            }
                             if (players.length === 0) players.push(p);
 
                             return players.some(player => {
@@ -430,16 +429,23 @@ const EventDetails = () => {
                             });
                         });
                         
-                        if (isMatch) regDivs.push((cls.Name || '').trim());
+                        const divName = (cls.Name || '').trim();
+                        if (isMatch && !regDivs.includes(divName)) regDivs.push(divName);
                     }));
+                } catch (e) {
+                    console.error("Registration check failed:", e);
+                } finally {
+                    setIsCheckingReg(false);
+                }
+            }
 
-                    setRegisteredDivisions(regDivs);
-                    setIsRegistered(regDivs.length > 0);
-                    
-                    // Default select the first division if only one found and not yet paid
-                    if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
-                        setSelectedDivisions([regDivs[0]]);
-                    }
+            setRegisteredDivisions(Array.from(new Set(regDivs)));
+            setIsRegistered(regDivs.length > 0);
+            
+            // Default select the first division if only one found and not yet paid
+            if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
+                setSelectedDivisions([regDivs[0]]);
+            }
                 } catch (e) {
                     console.error("Registration check failed:", e);
                 } finally {
