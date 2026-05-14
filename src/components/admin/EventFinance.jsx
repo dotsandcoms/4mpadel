@@ -170,12 +170,27 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 const pDiv = normalize(p.class_name);
 
                 const payment = (payData || []).find(pay => {
-                    // Highest priority: direct link
+                    // 1. Highest priority: direct link
                     if (pay.metadata?.participant_id === p.id) return true;
 
-                    // Fallback: player_id + event_id match
-                    const isOwnPayment = p.profile_id && pay.player_id === p.profile_id && pay.payment_type === 'event_entry_fee';
-                    if (!isOwnPayment) return false;
+                    // Ensure we are only matching entry fees for the remaining checks
+                    const isEntryFee = pay.payment_type === 'event_entry_fee';
+                    if (!isEntryFee) return false;
+
+                    // 2. Profile ID match
+                    const idMatch = p.profile_id && pay.player_id === p.profile_id;
+                    
+                    // 3. Email match (extracting from metadata)
+                    const payEmail = normalize(pay.metadata?.email || pay.metadata?.original_trx?.user);
+                    const playerEmail = normalize(p.players?.email);
+                    const emailMatch = payEmail && playerEmail && payEmail === playerEmail;
+
+                    // 4. Name match
+                    const payName = normalize(pay.metadata?.player_name || pay.metadata?.paid_by_name || pay.metadata?.original_trx?.user_name);
+                    const pName = normalize(p.full_name);
+                    const nameMatch = payName && pName && (payName === pName || payName.includes(pName) || pName.includes(payName));
+
+                    if (!idMatch && !emailMatch && !nameMatch) return false;
 
                     // If we have a division in payment metadata, it MUST match (fuzzy)
                     const payDiv = normalize(pay.metadata?.division);
@@ -183,8 +198,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         return payDiv.includes(pDiv) || pDiv.includes(payDiv);
                     }
 
-                    // If no division in metadata, we assume it's a match if they only have one entry, 
-                    // or we check if there are other payments. For now, if no div in metadata, we match.
+                    // If no division in metadata, we assume it's a match
                     return true;
                 });
                 
@@ -303,8 +317,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     p.metadata.line_items.forEach(item => {
                         if (item.type === 'entry_fee') {
                             confirmedPayments.push({
-                                profileId: p.player_id, // Main player ID
-                                name: item.player,      // Specific player for this line item
+                                profileId: p.player_id,
+                                participantId: item.participant_id || p.metadata?.participant_id,
+                                name: item.player || p.metadata?.player_name || p.metadata?.paid_by_name,
+                                email: p.metadata?.email || p.metadata?.original_trx?.user,
                                 division: p.metadata.division,
                                 method: p.payment_method || 'paystack'
                             });
@@ -314,7 +330,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     // Legacy/Bulk payment without explicit line items
                     confirmedPayments.push({
                         profileId: p.player_id,
-                        name: p.metadata?.paid_by_name || p.metadata?.player_name,
+                        participantId: p.metadata?.participant_id,
+                        name: p.metadata?.paid_by_name || p.metadata?.player_name || p.metadata?.original_trx?.user_name,
+                        email: p.metadata?.email || p.metadata?.original_trx?.user,
                         division: p.metadata?.division,
                         method: p.payment_method || 'paystack'
                     });
@@ -351,15 +369,18 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     const rProfileId = reg.profileId;
 
                     // Identity match
-                    // 1. Check if the payment belongs to this participant's linked profile
+                    // 1. Direct participant ID match (most robust)
+                    const participantIdMatch = reg.participantId && existingRecord?.id && String(reg.participantId) === String(existingRecord.id);
+
+                    // 2. Check if the payment belongs to this participant's linked profile
                     const linkedProfileId = existingRecord?.profile_id || autoProfileId;
                     const idMatch = (rProfileId && linkedProfileId && String(rProfileId) === String(linkedProfileId));
                     
-                    // 2. Check name or email or partner name
+                    // 3. Check name or email or partner name
                     const nameMatch = (normalize(p.full_name) === rName) || (rPartner && normalize(p.full_name) === rPartner);
                     const emailMatch = matchedEmail && rEmail && (matchedEmail === rEmail);
                     
-                    if (!idMatch && !nameMatch && !emailMatch) return false;
+                    if (!participantIdMatch && !idMatch && !nameMatch && !emailMatch) return false;
 
                     // Division Match Logic:
                     if (rDiv && nDiv) {
