@@ -446,12 +446,6 @@ const EventDetails = () => {
             if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
                 setSelectedDivisions([regDivs[0]]);
             }
-                } catch (e) {
-                    console.error("Registration check failed:", e);
-                } finally {
-                    setIsCheckingReg(false);
-                }
-            }
         };
         checkStatus();
     }, [event?.id, formData.email, loggedInPlayer, getTournamentParticipants, getTournamentPlayerTabs]);
