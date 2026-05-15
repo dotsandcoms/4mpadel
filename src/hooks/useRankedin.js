@@ -660,23 +660,104 @@ export const useRankedin = () => {
     }, []);
 
     /**
-     * Fetches live match results and standings for a team-based tournament.
-     * @param {string|number} tournamentId 
+     * Fetches live match results and standings for a team-based tournament challenge.
+     * @param {string|number} challengeId 
      * @returns {Promise<Object>} Team tournament results
      */
-    const getTeamTournamentResults = useCallback(async (tournamentId) => {
+    const getTeamTournamentResults = useCallback(async (challengeId) => {
         setLoading(true);
         setError(null);
         try {
-            const url = 'https://www.rankedin.com/team/GetTeamTournamentMatchResultsAsync';
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `teamTournamentId=${tournamentId}`
+            // First get the actual tournament ID from the challenge ID
+            const tourRes = await fetch(`${API_BASE}/tournament/GetTournamentForChallengeAsync?challengeId=${challengeId}`);
+            if (!tourRes.ok) throw new Error(`Rankedin API Error: ${tourRes.status}`);
+            const tourData = await tourRes.json();
+            const tournamentId = tourData.TournamentId;
+
+            if (!tournamentId) throw new Error("Could not find tournament for challenge");
+
+            // Fetch Matches
+            const matchUrl = `${API_BASE}/tournament/GetTournamentTeamsMatchesAsync?tournamentId=${tournamentId}&challengeId=${challengeId}&language=en`;
+            const matchRes = await fetch(matchUrl);
+            if (!matchRes.ok) throw new Error(`Rankedin API Error: ${matchRes.status}`);
+            const matchData = await matchRes.json();
+
+            // Fetch Standings
+            const standingsUrl = `${API_BASE}/tournament/GeTournamentTeamMatchStandingsAsync?tournamentId=${tournamentId}&challengeId=${challengeId}&language=en`;
+            const standingsRes = await fetch(standingsUrl);
+            let team1 = null;
+            let team2 = null;
+            if (standingsRes.ok) {
+                const standingsData = await standingsRes.json();
+                if (standingsData && standingsData.ScoresViewModels && standingsData.ScoresViewModels.length >= 2) {
+                    team1 = standingsData.ScoresViewModels[0];
+                    team2 = standingsData.ScoresViewModels[1];
+                    
+                    // Ensure North is Team1
+                    if (team1.ParticipantName.toLowerCase().includes('south')) {
+                        const temp = team1;
+                        team1 = team2;
+                        team2 = temp;
+                    }
+                }
+            }
+
+            const rawMatches = (matchData[0] && matchData[0].Matches && matchData[0].Matches.Matches) ? matchData[0].Matches.Matches : [];
+
+            const formattedMatches = rawMatches.map(m => {
+                const team1Name = m.Challenger ? [m.Challenger.Name, m.Challenger.Player2Name].filter(Boolean).join(' / ') : '';
+                const team2Name = m.Challenged ? [m.Challenged.Name, m.Challenged.Player2Name].filter(Boolean).join(' / ') : '';
+                
+                let scoreText = 'Upcoming';
+                let winnerTeamId = null;
+                let isFinished = false;
+
+                if (m.MatchResult && m.MatchResult.IsPlayed) {
+                    isFinished = true;
+                    if (m.MatchResult.Score && m.MatchResult.Score.DetailedScoring) {
+                         scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
+                    } else {
+                         scoreText = 'Played'; 
+                    }
+                    
+                    if (m.MatchResult.IsFirstParticipantWinner) {
+                        winnerTeamId = team1 ? team1.ParticipantId : null;
+                    } else if (m.MatchResult.IsFirstParticipantWinner === false) {
+                        winnerTeamId = team2 ? team2.ParticipantId : null;
+                    }
+                } else if (m.MatchResult && m.MatchResult.Score && Array.isArray(m.MatchResult.Score.DetailedScoring) && m.MatchResult.Score.DetailedScoring.length > 0) {
+                     scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
+                }
+
+                let formattedDate = 'Upcoming';
+                if (m.Date) {
+                    const d = new Date(m.Date);
+                    const day = String(d.getDate()).padStart(2, '0');
+                    const month = String(d.getMonth() + 1).padStart(2, '0');
+                    const hours = String(d.getHours()).padStart(2, '0');
+                    const mins = String(d.getMinutes()).padStart(2, '0');
+                    formattedDate = `${day}/${month} ${hours}:${mins}`;
+                }
+
+                return {
+                    Team1Players: team1Name,
+                    Team2Players: team2Name,
+                    Score: scoreText,
+                    WinnerTeamId: winnerTeamId,
+                    IsFinished: isFinished,
+                    MatchDateFormatted: formattedDate,
+                    CategoryName: 'Men-Doubles' 
+                };
             });
 
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            return await response.json();
+            return {
+                Team1Id: team1 ? team1.ParticipantId : null,
+                Team2Id: team2 ? team2.ParticipantId : null,
+                Team1Score: team1 ? team1.Wins : 0,
+                Team2Score: team2 ? team2.Wins : 0,
+                Matches: formattedMatches
+            };
+
         } catch (err) {
             console.error("Rankedin TeamTournament Results fetch error:", err);
             setError(err.message);
