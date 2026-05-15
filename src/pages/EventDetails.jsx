@@ -876,7 +876,7 @@ const EventDetails = () => {
             full_name: formData.full_name,
             partner_name: formData.partner_name,
             partner_id: partnerProfile?.id,
-            division: formData.division,
+            division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
             is_test: isTestMode,
             includes_license: playerProfileData && !playerProfileData.paid_registration,
             license_type: licenseChoice,

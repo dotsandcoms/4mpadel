@@ -714,15 +714,17 @@ export const useRankedin = () => {
 
                 if (m.MatchResult && m.MatchResult.IsPlayed) {
                     isFinished = true;
-                    if (m.MatchResult.Score && m.MatchResult.Score.DetailedScoring) {
+                    if (m.MatchResult.Score && Array.isArray(m.MatchResult.Score.DetailedScoring) && m.MatchResult.Score.DetailedScoring.length > 0) {
                          scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
+                    } else if (m.MatchResult.Score && m.MatchResult.Score.FirstParticipantScore !== undefined && m.MatchResult.Score.SecondParticipantScore !== undefined) {
+                         scoreText = `${m.MatchResult.Score.FirstParticipantScore}-${m.MatchResult.Score.SecondParticipantScore}`;
                     } else {
                          scoreText = 'Played'; 
                     }
                     
-                    if (m.MatchResult.IsFirstParticipantWinner) {
+                    if (m.MatchResult.Score && m.MatchResult.Score.IsFirstParticipantWinner === true) {
                         winnerTeamId = team1 ? team1.ParticipantId : null;
-                    } else if (m.MatchResult.IsFirstParticipantWinner === false) {
+                    } else if (m.MatchResult.Score && m.MatchResult.Score.IsFirstParticipantWinner === false) {
                         winnerTeamId = team2 ? team2.ParticipantId : null;
                     }
                 } else if (m.MatchResult && m.MatchResult.Score && Array.isArray(m.MatchResult.Score.DetailedScoring) && m.MatchResult.Score.DetailedScoring.length > 0) {
