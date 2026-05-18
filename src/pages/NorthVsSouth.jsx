@@ -1023,22 +1023,22 @@ const ResultsSection = () => {
 
                       {/* Floating Motion Trophy Image */}
                       <motion.div
-                        animate={{ 
+                        animate={{
                           y: [0, -6, 0],
                         }}
-                        transition={{ 
-                          duration: 5, 
-                          repeat: Infinity, 
-                          ease: "easeInOut" 
+                        transition={{
+                          duration: 5,
+                          repeat: Infinity,
+                          ease: "easeInOut"
                         }}
                         className="relative z-10 w-40 h-40 md:w-56 md:h-56 mb-4 flex items-center justify-center cursor-pointer"
                         onClick={() => {
                           setIsTrophyModalOpen(true);
                         }}
                       >
-                        <img 
-                          src="/images/perpetual_trophy.png" 
-                          alt="Perpetual Trophy" 
+                        <img
+                          src="/images/perpetual_trophy.png"
+                          alt="Perpetual Trophy"
                           className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.15)] rounded-2xl hover:scale-105 transition-transform duration-300"
                         />
                         <div className="absolute -inset-2 bg-gold/5 rounded-full blur-xl -z-10 group-hover:bg-gold/15 transition-colors duration-500" />
@@ -1056,7 +1056,7 @@ const ResultsSection = () => {
                             { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
                             { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
                           ].map((engraving) => (
-                            <div 
+                            <div
                               key={engraving.year}
                               className="px-3 py-2 border rounded-2xl flex flex-col items-center justify-center transition-all hover:scale-105 hover:bg-white hover:shadow-md cursor-pointer border-dashed hover:border-solid"
                               style={{ backgroundColor: engraving.bg, borderColor: engraving.border }}
@@ -1184,7 +1184,7 @@ const ResultsSection = () => {
               <div className="flex flex-col items-center mb-6">
                 <Trophy className="w-8 h-8 text-gold mb-3" style={{ color: GOLD }} />
                 <h3 className="text-xl md:text-3xl font-black uppercase tracking-tighter italic text-white mb-2 text-center">
-                  North vs South Perpetual Trophy
+                  North vs South Trophy
                 </h3>
                 <p className="text-xs text-gray-400 text-center max-w-md">
                   Official annual Roll of Honour. Engraved with pride and awarded to the dominant region of South Africa.
@@ -1219,12 +1219,12 @@ const ResultsSection = () => {
                           <span className="text-sm text-white font-black block">{item.year}</span>
                           <span className="text-[10px] text-gray-400 font-medium">{item.detail}</span>
                         </div>
-                        <span 
+                        <span
                           className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border flex items-center gap-1.5"
-                          style={{ 
-                            color: item.color, 
-                            borderColor: `${item.color}30`, 
-                            backgroundColor: `${item.color}08` 
+                          style={{
+                            color: item.color,
+                            borderColor: `${item.color}30`,
+                            backgroundColor: `${item.color}08`
                           }}
                         >
                           {item.winner === 'Draw' ? (
