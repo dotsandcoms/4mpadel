@@ -537,11 +537,14 @@ export const useRankedin = () => {
                 const historyMatches = [];
                 for (const event of pastEvents) {
                     try {
-                        const url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${event.id}&LanguageCode=en&IsReadonly=true`;
+                        let url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${event.id}&LanguageCode=en&IsReadonly=true`;
+                        if (event.id === 68674 || event.id === '68674' || (event.event_name || '').toLowerCase().includes('north vs south')) {
+                            url = `${API_BASE}/tournament/GetTournamentTeamsMatchesAsync?tournamentId=${event.id}&challengeId=6404918&language=en`;
+                        }
                         const res = await fetch(url);
                         if (!res.ok) continue;
                         const mData = await res.json();
-                        const matches = mData.Matches || [];
+                        const matches = (mData[0] && mData[0].Matches && mData[0].Matches.Matches) ? mData[0].Matches.Matches : (mData.Matches || []);
                         
                         // Filter matches for THIS player AND only those already played
                         const filtered = matches.filter(m => {
