@@ -1205,7 +1205,7 @@ const ResultsSection = () => {
                 {/* Right: Roll of Honour list */}
                 <div className="flex flex-col space-y-4 bg-white/[0.03] border border-white/10 rounded-2xl p-6">
                   <h4 className="text-xs font-black uppercase tracking-widest text-padel-green border-b border-white/10 pb-3 flex items-center gap-2">
-                    <Star className="w-4 h-4 fill-current text-padel-green" /> Engraving History
+                    <Star className="w-4 h-4 fill-current text-padel-green" />North vs South Trophy History
                   </h4>
                   <div className="space-y-3">
                     {[
