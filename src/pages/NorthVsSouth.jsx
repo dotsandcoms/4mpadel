@@ -546,9 +546,9 @@ const PlayerGridCard = ({ name, imageUrl, accent, onClick }) => {
 
   return (
     <motion.button
-      whileHover={{ y: -5 }}
+      whileHover={{ y: -4 }}
       onClick={onClick}
-      className="relative aspect-[3/4] rounded-2xl md:rounded-[32px] overflow-hidden group bg-gray-100 shadow-lg"
+      className="relative aspect-[4/5] rounded-xl md:rounded-3xl overflow-hidden group bg-gray-100 shadow-md"
     >
       {/* Background Image */}
       <div className="absolute inset-0">
@@ -556,21 +556,21 @@ const PlayerGridCard = ({ name, imageUrl, accent, onClick }) => {
           <img src={finalImageUrl} alt={name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
         ) : (
           <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-            <User className="w-12 h-12 md:w-20 md:h-20 text-gray-400 opacity-30" />
+            <User className="w-8 h-8 md:w-12 md:h-12 text-gray-400 opacity-30" />
           </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent opacity-90" />
       </div>
 
       {/* Content */}
-      <div className="absolute inset-x-0 bottom-0 p-4 md:p-6 flex flex-col items-start text-left">
+      <div className="absolute inset-x-0 bottom-0 p-3 md:p-4 flex flex-col items-start text-left">
         {isCaptain && (
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-2 shadow-xl">
-            <Star className="w-3 h-3 text-gold fill-gold" style={{ color: GOLD, fill: GOLD }} />
-            <span className="text-[8px] font-black uppercase tracking-widest text-white">Captain</span>
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 mb-1.5 shadow-xl">
+            <Star className="w-2.5 h-2.5 text-gold fill-gold" style={{ color: GOLD, fill: GOLD }} />
+            <span className="text-[7px] font-black uppercase tracking-widest text-white">Captain</span>
           </div>
         )}
-        <h4 className="text-white font-black uppercase tracking-tighter italic text-sm md:text-xl leading-none group-hover:text-gold transition-colors" style={{ color: WHITE }}>{name}</h4>
+        <h4 className="text-white font-black uppercase tracking-tighter italic text-xs md:text-base leading-none group-hover:text-gold transition-colors" style={{ color: WHITE }}>{name}</h4>
       </div>
 
       {/* Hover Reveal Overlay */}
@@ -1464,7 +1464,7 @@ const NorthVsSouth = () => {
               {/* Player Grid */}
               <motion.div
                 layout
-                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8"
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5"
               >
                 {(selectedTeam === 'north' ? division.north : division.south)
                   .slice(0, isExpanded ? undefined : getCollapsedLimit())
