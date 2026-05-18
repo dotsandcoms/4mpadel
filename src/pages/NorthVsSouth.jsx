@@ -1155,14 +1155,14 @@ const ResultsSection = () => {
       {/* 🏆 Perpetual Trophy Modal */}
       <AnimatePresence>
         {isTrophyModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 pt-24 md:pt-32 overflow-y-auto">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsTrophyModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              className="fixed inset-0 bg-black/85 backdrop-blur-md"
             />
 
             {/* Modal Content */}
@@ -1171,7 +1171,7 @@ const ResultsSection = () => {
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
               transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="relative max-w-4xl w-full bg-[#0F172A]/95 border border-white/10 rounded-[32px] p-6 md:p-10 shadow-2xl backdrop-blur-xl z-10 flex flex-col"
+              className="relative max-w-4xl w-full bg-[#0F172A]/95 border border-white/10 rounded-[32px] p-6 md:p-10 shadow-2xl backdrop-blur-xl z-10 flex flex-col mb-12"
             >
               {/* Close Button */}
               <button
