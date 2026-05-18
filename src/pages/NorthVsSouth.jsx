@@ -424,7 +424,7 @@ const InstagramFeedWidget = ({ config }) => {
 
   if (provider === 'elfsight') {
     return (
-      <div className="w-full mb-10 md:mb-16 rounded-[24px] md:rounded-[32px] overflow-hidden bg-gray-50 p-2 border border-gray-100 shadow-inner">
+      <div className="w-full mb-10 md:mb-16 rounded-[16px] md:rounded-[32px] overflow-hidden bg-gray-50 p-1 md:p-2 border border-gray-100 shadow-inner">
         <div className={`elfsight-app-${id}`} data-elfsight-app-lazy></div>
       </div>
     );
@@ -1445,7 +1445,7 @@ const NorthVsSouth = () => {
       </section>
 
       {/* ═══════════════ INSTAGRAM FEED ═══════════════════════════════════════════ */}
-      <section className="py-12 md:py-32 bg-white px-6 border-t border-gray-100">
+      <section className="py-12 md:py-32 bg-white px-4 md:px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto text-center">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
