@@ -1499,7 +1499,7 @@ const NorthVsSouth = () => {
       </section>
 
       {/* ═══════════════ MEET THE TEAMS ═════════════════════════════════════════ */}
-      <section id="rosters" className="py-12 md:py-32 bg-[#fafafa] overflow-hidden px-6">
+      <section id="rosters" className="pt-12 md:pt-32 pb-6 md:pb-10 bg-[#fafafa] overflow-hidden px-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-8 md:mb-16 gap-6">
             <SectionHeader tag="The Contenders" title="Tournament Squads" />
@@ -1516,8 +1516,7 @@ const NorthVsSouth = () => {
                 className={`relative z-10 flex-1 lg:px-10 py-3 text-[10px] font-black uppercase tracking-widest transition-colors ${selectedTeam === 'north' ? 'text-white' : 'text-gray-400'}`}
               >
                 <div className="flex items-center justify-center gap-2">
-                  <img src="/images/kitkat-group-logo.png" alt="Kit Kat" className={`h-3 w-auto ${selectedTeam === 'north' ? 'brightness-0 invert' : ''}`} />
-                  <span>Team North</span>
+                  <span>Kit Kat Team North</span>
                 </div>
               </button>
               <button
@@ -1550,14 +1549,13 @@ const NorthVsSouth = () => {
                   <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter italic mb-4" style={{ color: selectedTeam === 'north' ? MAGENTA : GOLD }}>
                     {selectedTeam === 'north' ? (
                       <span className="flex items-center gap-3">
-                        <img src="/images/kitkat-group-logo.png" alt="Kit Kat" className="h-8 md:h-12 w-auto" />
-                        <span>Team North</span>
+                        <span>Kit Kat Team North</span>
                       </span>
                     ) : 'Team South'}
                   </h3>
                   <p className="text-gray-500 text-sm md:text-lg leading-relaxed font-medium max-w-3xl">
                     {selectedTeam === 'north'
-                      ? <span><img src="/images/kitkat-group-logo.png" alt="Kit Kat" className="h-4 w-auto inline-block align-middle mr-2" />Team North arrives with purpose and pace. Led by Paul Anderson, this is a side that plays forward, fast and with clear intent. There is an edge to their game, driven by ambition and a readiness to take control early.</span>
+                      ? "Kit Kat Team North arrives with purpose and pace. Led by Paul Anderson, this is a side that plays forward, fast and with clear intent. There is an edge to their game, driven by ambition and a readiness to take control early."
                       : "Measured, tactical and composed. United by regional familiarity and expectation, Team South brings a strong desire to keep the bragging rights where they believe they belong."
                     }
                   </p>
@@ -1587,11 +1585,22 @@ const NorthVsSouth = () => {
                 <div className="flex justify-center pt-8">
                   <button
                     onClick={() => setIsExpanded(!isExpanded)}
-                    className="group flex items-center gap-3 px-8 py-3.5 rounded-full bg-white border border-gray-100 hover:border-gray-200 text-gray-700 hover:text-black font-black uppercase tracking-widest text-[10px] transition-all shadow-md hover:shadow-lg active:scale-95"
+                    className="group flex items-center gap-3 px-8 py-3.5 rounded-full bg-white border font-black uppercase tracking-widest text-[10px] transition-all active:scale-95 hover:scale-[1.02]"
+                    style={{
+                      color: selectedTeam === 'north' ? MAGENTA : GOLD,
+                      borderColor: selectedTeam === 'north' ? `${MAGENTA}25` : `${GOLD}25`,
+                      boxShadow: selectedTeam === 'north'
+                        ? `0 12px 24px -6px ${MAGENTA}25, 0 4px 12px -4px ${MAGENTA}15`
+                        : `0 12px 24px -6px ${GOLD}25, 0 4px 12px -4px ${GOLD}15`,
+                    }}
                   >
                     <span>{isExpanded ? 'Show Less' : `Show Full Team (${(selectedTeam === 'north' ? division.north : division.south).length} Players)`}</span>
                     <ChevronDown
-                      className={`w-4 h-4 text-gray-400 group-hover:text-black transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                      className="w-4 h-4 transition-transform duration-300"
+                      style={{
+                        color: selectedTeam === 'north' ? MAGENTA : GOLD,
+                        transform: isExpanded ? 'rotate(180deg)' : 'none'
+                      }}
                     />
                   </button>
                 </div>
