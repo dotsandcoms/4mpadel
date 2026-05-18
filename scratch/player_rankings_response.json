@@ -1,0 +1,81 @@
+{
+  "PlayerRankings": {
+    "Payload": [
+      {
+        "RankingParticipantId": 192058,
+        "Position": 3,
+        "Points": 1936,
+        "RankingName": "SAPA ranking",
+        "RankingUrl": "/en/ranking/15809/sapa-ranking",
+        "RankingId": 15809,
+        "IsInfoRanking": false,
+        "RankingType": 3,
+        "AgeGroup": 3,
+        "IsHiddenBecauseOfAgeControl": false,
+        "Statistics": {
+          "CurrentYearCurrentRanking": 3,
+          "CurrentYearHighestRanking": 3,
+          "CareerHighestRankingDate": "2026-04-27T00:00:00",
+          "CareerHighestRanking": 3
+        }
+      },
+      {
+        "RankingParticipantId": 192058,
+        "Position": 24,
+        "Points": 998,
+        "RankingName": "SAPA ranking",
+        "RankingUrl": "/en/ranking/15809/sapa-ranking",
+        "RankingId": 15809,
+        "IsInfoRanking": false,
+        "RankingType": 3,
+        "AgeGroup": 82,
+        "IsHiddenBecauseOfAgeControl": false,
+        "Statistics": {
+          "CurrentYearCurrentRanking": 24,
+          "CurrentYearHighestRanking": 16,
+          "CareerHighestRankingDate": "2026-04-20T00:00:00",
+          "CareerHighestRanking": 16
+        }
+      },
+      {
+        "RankingParticipantId": 201437,
+        "Position": 19,
+        "Points": 180,
+        "RankingName": "Broll Pro Tour",
+        "RankingUrl": "/en/ranking/16317/broll-pro-tour",
+        "RankingId": 16317,
+        "IsInfoRanking": false,
+        "RankingType": 3,
+        "AgeGroup": 82,
+        "IsHiddenBecauseOfAgeControl": false,
+        "Statistics": {
+          "CurrentYearCurrentRanking": 19,
+          "CurrentYearHighestRanking": 16,
+          "CareerHighestRankingDate": "2026-04-20T00:00:00",
+          "CareerHighestRanking": 16
+        }
+      },
+      {
+        "RankingParticipantId": 208436,
+        "Position": 1,
+        "Points": 800,
+        "RankingName": "SA Grand Tour",
+        "RankingUrl": "/en/ranking/16482/sa-grand-tour",
+        "RankingId": 16482,
+        "IsInfoRanking": false,
+        "RankingType": 3,
+        "AgeGroup": 3,
+        "IsHiddenBecauseOfAgeControl": false,
+        "Statistics": {
+          "CurrentYearCurrentRanking": 1,
+          "CurrentYearHighestRanking": 1,
+          "CareerHighestRankingDate": "2026-05-04T00:00:00",
+          "CareerHighestRanking": 1
+        }
+      }
+    ],
+    "TotalCount": 3
+  },
+  "IsInOwnProfile": true,
+  "IsProPlayer": true
+}

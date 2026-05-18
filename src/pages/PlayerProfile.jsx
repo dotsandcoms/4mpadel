@@ -7,7 +7,7 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -31,6 +31,7 @@ const PlayerProfile = () => {
     const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
     const [transactionsPerPage] = useState(5);
     const [activeTab, setActiveTab] = useState('personal');
+    const [selectedRankingForBreakdown, setSelectedRankingForBreakdown] = useState(null);
     const [tempLicenseDetails, setTempLicenseDetails] = useState(null);
 
 
@@ -111,6 +112,9 @@ const PlayerProfile = () => {
                 showMessage(error.message, 'error');
             } else if (playerData) {
                 setPlayer(playerData);
+                if (playerData.rankings && Array.isArray(playerData.rankings) && playerData.rankings.length > 0) {
+                    setSelectedRankingForBreakdown(playerData.rankings[0]);
+                }
 
                 if (playerData.license_type === 'temporary') {
                     const { data: tempLicenseData } = await supabase
@@ -892,6 +896,18 @@ const PlayerProfile = () => {
                                                                                 <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">{r.points} PTS</p>
                                                                             </div>
                                                                         </div>
+                                                                        <div className="mt-2 flex justify-end">
+                                                                            <button
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setSelectedRankingForBreakdown(r);
+                                                                                    setActiveTab('rankings');
+                                                                                }}
+                                                                                className="text-[8px] font-black text-padel-green hover:text-white uppercase tracking-widest transition-colors flex items-center gap-0.5"
+                                                                            >
+                                                                                Show Details →
+                                                                            </button>
+                                                                        </div>
                                                                         {isPreferred && (
                                                                             <div className="absolute -top-1 -right-1">
                                                                                 <div className="bg-padel-green text-black rounded-full p-0.5 shadow-lg">
@@ -1005,6 +1021,17 @@ const PlayerProfile = () => {
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <CreditCard size={16} /> Payment History
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setActiveTab('rankings');
+                                        if (player.rankings && player.rankings.length > 0 && !selectedRankingForBreakdown) {
+                                            setSelectedRankingForBreakdown(player.rankings[0]);
+                                        }
+                                    }}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <TrendingUp size={16} /> My Rankings
                                 </button>
                                 {coachApplication && (
                                     <button
@@ -1474,6 +1501,170 @@ const PlayerProfile = () => {
                                 )}
 
                                 {/* Payment Transactions Section */}
+                                {activeTab === 'rankings' && (
+                                    <motion.div
+                                        key="rankings"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.2 }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                    >
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+
+                                        <div
+                                            onClick={() => {
+                                                if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                            }}
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
+                                        >
+                                            <div className="flex items-center justify-between w-full">
+                                                <div className="flex flex-col gap-1">
+                                                    <h4 className="font-bold text-white flex items-center gap-3">
+                                                        <TrendingUp className="text-padel-green" size={24} />
+                                                        Rankings Points Breakdown
+                                                    </h4>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Detailed list of tournaments and points accumulated</p>
+                                                </div>
+                                                <div className="md:hidden">
+                                                    <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <AnimatePresence mode="wait">
+                                            {(isMobileAccordionOpen || window.innerWidth >= 768) && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: "auto", opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="overflow-hidden space-y-6"
+                                                >
+                                                    {/* Small ranking list select pills */}
+                                                    {player.rankings && player.rankings.length > 0 && (
+                                                        <div className="relative z-10 flex flex-wrap gap-1.5 bg-black/40 p-1 rounded-xl w-fit">
+                                                            {player.rankings.map((r, i) => {
+                                                                const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
+                                                                return (
+                                                                    <button
+                                                                        key={i}
+                                                                        onClick={() => setSelectedRankingForBreakdown(r)}
+                                                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
+                                                                            isSelected
+                                                                                ? 'bg-padel-green text-black'
+                                                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                                                        }`}
+                                                                    >
+                                                                        {r.org?.split(' ')[0]} ({r.age_group || 'Open'})
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
+
+                                                    {selectedRankingForBreakdown ? (
+                                                        <div className="relative z-10 space-y-6">
+                                                            {/* Header Stats */}
+                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Standing</p>
+                                                                    <p className="text-2xl font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
+                                                                </div>
+                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Points</p>
+                                                                    <p className="text-2xl font-black text-white">{selectedRankingForBreakdown.points}</p>
+                                                                </div>
+                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Match Type</p>
+                                                                    <p className="text-xs font-bold text-gray-300 uppercase mt-2">{selectedRankingForBreakdown.match_type}</p>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Desktop Table View */}
+                                                            <div className="hidden md:block bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
+                                                                <div className="overflow-x-auto">
+                                                                    <table className="w-full text-left border-collapse">
+                                                                        <thead>
+                                                                            <tr className="bg-white/5 border-b border-white/5">
+                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Date</th>
+                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Tournament Name | Class</th>
+                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-center">Standing</th>
+                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Type</th>
+                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-right">Points</th>
+                                                                            </tr>
+                                                                        </thead>
+                                                                        <tbody>
+                                                                            {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
+                                                                                selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                                    <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                                                        <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">{item.date}</td>
+                                                                                        <td className="py-4 px-6">
+                                                                                            <div className="font-bold text-xs text-white">{item.name}</div>
+                                                                                            {item.class && <div className="text-[9px] text-padel-green font-bold uppercase mt-0.5">{item.class}</div>}
+                                                                                        </td>
+                                                                                        <td className="py-4 px-6 text-xs font-black text-center text-white">{item.place}</td>
+                                                                                        <td className="py-4 px-6">
+                                                                                            <span className="inline-block px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                                                                                                {item.event_type}
+                                                                                            </span>
+                                                                                        </td>
+                                                                                        <td className="py-4 px-6 text-xs font-black text-right text-padel-green whitespace-nowrap">+{item.points}</td>
+                                                                                    </tr>
+                                                                                ))
+                                                                            ) : (
+                                                                                <tr>
+                                                                                    <td colSpan="5" className="py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                                                                        No tournaments counted yet or detailed breakdown pending sync.
+                                                                                    </td>
+                                                                                </tr>
+                                                                            )}
+                                                                        </tbody>
+                                                                    </table>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Mobile Card list */}
+                                                            <div className="block md:hidden space-y-3">
+                                                                {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
+                                                                    selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                        <div key={idx} className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3">
+                                                                            <div className="flex justify-between items-start gap-2">
+                                                                                <div className="min-w-0">
+                                                                                    <h5 className="font-bold text-xs text-white uppercase tracking-tight">{item.name}</h5>
+                                                                                    {item.class && <p className="text-[9px] text-padel-green font-black uppercase mt-0.5">{item.class}</p>}
+                                                                                </div>
+                                                                                <div className="text-right shrink-0">
+                                                                                    <span className="text-xs font-black text-padel-green">+{item.points} PTS</span>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-bold uppercase tracking-wider pt-2.5 border-t border-white/5">
+                                                                                <div>{item.date}</div>
+                                                                                <div className="flex gap-2">
+                                                                                    <span>Standing: {item.place}</span>
+                                                                                    <span>•</span>
+                                                                                    <span className="text-gray-500">{item.event_type}</span>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))
+                                                                ) : (
+                                                                    <div className="text-center py-8 text-xs text-gray-500 font-bold uppercase tracking-wider bg-black/40 border border-white/10 rounded-2xl">
+                                                                        No tournaments counted yet or detailed breakdown pending sync.
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="relative z-10 py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                                            No rankings details available.
+                                                        </div>
+                                                    )}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </motion.div>
+                                )}
+
                                 {activeTab === 'payments' && (
                                     <motion.div
                                         key="payments"

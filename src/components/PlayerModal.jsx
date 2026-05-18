@@ -1,12 +1,13 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Trophy, MapPin, Instagram, Download, Share2 } from 'lucide-react';
+import { X, Trophy, MapPin, Instagram, Download, Share2, ChevronDown, ChevronUp } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
 const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) => {
     const cardRef = useRef(null);
     const printRef = useRef(null);
+    const [expandedRankingIdx, setExpandedRankingIdx] = useState(null);
 
     if (!player) return null;
 
@@ -230,7 +231,11 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                     {safeRankings.map((r, i) => {
                                         const isBroll = r.org?.toLowerCase().includes('broll');
                                         return (
-                                            <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors group">
+                                            <div 
+                                                key={i} 
+                                                className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors group cursor-pointer"
+                                                onClick={() => setExpandedRankingIdx(expandedRankingIdx === i ? null : i)}
+                                            >
                                                 <div className="flex items-center justify-between gap-4">
                                                     <div className="flex-1">
                                                         <div className="flex items-center gap-2 mb-1">
@@ -242,7 +247,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                                         </div>
                                                         <p className="text-lg font-bold text-white tracking-tight leading-tight mb-1">{r.age_group || r.division || 'Open'}</p>
                                                     </div>
-                                                    <div className="flex gap-4">
+                                                    <div className="flex gap-4 items-center">
                                                         <div className="text-right">
                                                             <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Rank</p>
                                                             <div className="flex items-baseline gap-0.5 justify-end">
@@ -254,8 +259,48 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                                             <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Points</p>
                                                             <p className="text-xl font-black text-white tracking-tighter">{r.points}</p>
                                                         </div>
+                                                        <div className="text-gray-400 pl-2">
+                                                            {expandedRankingIdx === i ? <ChevronUp size={16} className="text-padel-green" /> : <ChevronDown size={16} className="group-hover:text-padel-green transition-colors" />}
+                                                        </div>
                                                     </div>
                                                 </div>
+
+                                                {/* Expanded Points Breakdown */}
+                                                {expandedRankingIdx === i && (
+                                                    <div 
+                                                        className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {r.details && r.details.length > 0 ? (
+                                                            <div className="space-y-2.5 max-h-[220px] overflow-y-auto no-scrollbar">
+                                                                {r.details.map((item, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-center bg-black/30 border border-white/5 rounded-xl p-3 text-[11px]">
+                                                                        <div className="min-w-0 pr-2">
+                                                                            <div className="font-bold text-white truncate max-w-[200px] sm:max-w-xs">{item.name}</div>
+                                                                            <div className="flex gap-2 items-center text-[9px] text-gray-400 mt-0.5 font-semibold">
+                                                                                <span>{item.date}</span>
+                                                                                {item.class && (
+                                                                                    <>
+                                                                                        <span>•</span>
+                                                                                        <span className="text-padel-green uppercase font-black tracking-wider text-[8px]">{item.class}</span>
+                                                                                    </>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right shrink-0">
+                                                                            <div className="text-padel-green font-black text-[11px]">+{item.points} PTS</div>
+                                                                            <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Place: {item.place}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center py-4 text-[10px] text-gray-500 font-black uppercase tracking-wider bg-black/10 rounded-xl">
+                                                                No tournament details available for this ranking list.
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         );
                                     })}

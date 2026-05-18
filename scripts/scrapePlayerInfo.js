@@ -38,11 +38,17 @@ async function loginToRankedin(page) {
         await page.waitForSelector(fieldSelector, { timeout: 30000 });
         await page.type(fieldSelector, rankedinEmail);
         await page.type('input[type="password"]', rankedinPassword);
-        await Promise.all([
-            page.click('button[type="submit"], input[type="submit"]'),
-            page.waitForNavigation({ waitUntil: 'networkidle2' })
-        ]);
-        console.log("Logged in.");
+        
+        await page.click('button[type="submit"], input[type="submit"]');
+        
+        try {
+            await page.waitForNavigation({ waitUntil: 'load', timeout: 15000 });
+        } catch (e) {
+            console.log("Submit navigation timed out/completed silently. Continuing...");
+        }
+        
+        await new Promise(r => setTimeout(r, 4000));
+        console.log("Logged in successfully.");
         return true;
     } catch (error) {
         console.error("Login failed:", error.message);
@@ -211,26 +217,108 @@ async function scrapePlayer(browser, player) {
             rankingUrl = `${rankingUrl}/rankings`;
         }
 
+        // Intercept PlayerRankingsAsync response
+        let rankingsApiResponse = null;
+        const responseHandler = async (response) => {
+            const url = response.url();
+            if (url.includes('PlayerRankingsAsync') && response.request().method() === 'GET') {
+                try {
+                    const data = await response.json();
+                    if (data && data.PlayerRankings && data.PlayerRankings.Payload) {
+                        rankingsApiResponse = data.PlayerRankings.Payload;
+                        console.log(`Intercepted ${rankingsApiResponse.length} rankings from API!`);
+                    }
+                } catch (e) {
+                    // Ignore preflight or non-json errors
+                }
+            }
+        };
+        page.on('response', responseHandler);
+
         console.log("Navigating to rankings:", rankingUrl);
         await page.goto(rankingUrl, { waitUntil: 'networkidle2', timeout: 60000 });
         await new Promise(r => setTimeout(r, 8000));
 
-        const rankings = await page.evaluate(() => {
-            const table = document.querySelector('.rankings-table table, #vdtnetable1, table');
-            if (!table) return [];
-            const rows = Array.from(table.querySelectorAll('tbody tr, tr')).filter(r => r.querySelector('td'));
-            return rows.map(row => {
-                const tds = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
-                if (tds.length < 5) return null;
-                return {
-                    rank: tds[1] || '',
-                    org: tds[2] || '',
-                    age_group: tds[3] || '',
-                    points: tds[4] || '',
-                    match_type: tds[5] || ''
-                };
-            }).filter(r => r && r.org && r.org.length > 2);
-        });
+        // Clean up response listener
+        page.off('response', responseHandler);
+
+        let rankings = [];
+
+        if (rankingsApiResponse && rankingsApiResponse.length > 0) {
+            console.log(`Processing points breakdown for ${rankingsApiResponse.length} rankings...`);
+            for (const r of rankingsApiResponse) {
+                const detailsUrl = `https://api.rankedin.com/v1/ranking/getparticipantpointsdetailsasync?id=${r.RankingParticipantId}&agegroup=${r.AgeGroup}&weekfromnow=0&showAll=false&language=en&skip=0&take=100`;
+                let detailsPayload = [];
+                try {
+                    console.log(`Fetching details for ranking: ${r.RankingName} (${r.AgeGroup})`);
+                    const detailsJson = await page.evaluate(async (url) => {
+                        const res = await fetch(url);
+                        return res.json();
+                    }, detailsUrl);
+
+                    detailsPayload = (detailsJson?.ParticipantWithPoints?.EventPoints?.Payload || []).map(ep => ({
+                        date: ep.EventPoint?.Date || '',
+                        name: ep.EventName || ep.EventPoint?.EventName?.split('|')[0]?.trim() || '',
+                        class: ep.EventPoint?.EventName?.split('| Class:')[1]?.trim() || '',
+                        place: ep.EventPoint?.Standing || '',
+                        event_type: ep.EventPoint?.EventType === 4 ? 'tournament' : 'friendly',
+                        points: ep.EventPoint?.Points ? parseFloat(ep.EventPoint.Points) : 0
+                    }));
+                    console.log(`  ✓ Extracted ${detailsPayload.length} tournaments for ${r.RankingName}`);
+                } catch (err) {
+                    console.error(`  × Failed to fetch details for ${r.RankingName}:`, err.message);
+                }
+
+                let matchType = 'Doubles';
+                if (r.RankingName?.toLowerCase().includes('singles')) {
+                    matchType = 'Singles';
+                } else if (r.RankingName?.toLowerCase().includes('mixed')) {
+                    matchType = 'Mixed';
+                }
+
+                let ageGroupLabel = 'Open';
+                if (r.AgeGroup === 3) {
+                    ageGroupLabel = 'Men Over 40';
+                } else if (r.AgeGroup === 4) {
+                    ageGroupLabel = 'Women Over 40';
+                } else if (r.AgeGroup === 82) {
+                    ageGroupLabel = 'Men-Main';
+                } else if (r.AgeGroup === 83) {
+                    ageGroupLabel = 'Women-Main';
+                } else if (r.AgeGroup === 84) {
+                    ageGroupLabel = 'Mixed-Main';
+                }
+
+                rankings.push({
+                    rank: r.Position?.toString() || '',
+                    org: r.RankingName || '',
+                    age_group: ageGroupLabel,
+                    points: r.Points?.toString() || '0',
+                    match_type: matchType,
+                    details: detailsPayload
+                });
+            }
+        } else {
+            console.log("No API rankings intercepted. Falling back to DOM table scraping...");
+            const scrapedRankings = await page.evaluate(() => {
+                const table = document.querySelector('.rankings-table table, #vdtnetable1, table');
+                if (!table) return [];
+                const rows = Array.from(table.querySelectorAll('tbody tr, tr')).filter(r => r.querySelector('td'));
+                return rows.map(row => {
+                    const tds = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                    if (tds.length < 5) return null;
+                    return {
+                        rank: tds[1] || '',
+                        org: tds[2] || '',
+                        age_group: tds[3] || '',
+                        points: tds[4] || '',
+                        match_type: tds[5] || '',
+                        details: []
+                    };
+                }).filter(r => r && r.org && r.org.length > 2);
+            });
+            rankings.push(...scrapedRankings);
+        }
 
         console.log(`Rankings found:`, JSON.stringify(rankings, null, 2));
         console.log(`Extracted: RID=${basics.rid}, RankingsCount=${rankings.length}, Skill=${basics.skill}`);

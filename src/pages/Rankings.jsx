@@ -274,40 +274,66 @@ const FullRankingsTable = ({
   imageErrors,
   setImageErrors,
   setSelectedPlayer,
-  getInitials
+  getInitials,
+  selectedOrgId,
+  setSelectedOrgId
 }) => {
+  const orgLabels = {
+    15809: 'SAPA',
+    16317: 'Broll Pro Tour',
+    16482: 'SA Grand Tour'
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
       <div className="mb-10 text-center">
-        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">SAPA</span> Rankings</h2>
+        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">{orgLabels[selectedOrgId] || 'SAPA'}</span> Rankings</h2>
         <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
       </div>
 
       {/* Controls Box */}
       <div className="bg-white/5 border border-white/10 rounded-3xl p-6 md:p-8 backdrop-blur-md mb-8">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="flex flex-col lg:flex-row justify-between items-center gap-6">
 
           {/* Internal Table Tabs */}
-          <div className="flex p-1 bg-black/40 rounded-xl max-w-sm w-full md:w-auto">
+          <div className="flex p-1 bg-black/40 rounded-xl max-w-sm w-full lg:w-auto">
             <button
               onClick={() => setActiveTab('men')}
-              className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'men' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+              className={`flex-1 py-3 px-6 lg:px-8 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'men' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
             >
               Men
             </button>
             <button
               onClick={() => setActiveTab('ladies')}
-              className={`flex-1 py-3 px-6 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'ladies' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
+              className={`flex-1 py-3 px-6 lg:px-8 rounded-lg font-bold text-sm uppercase tracking-wider transition-all duration-300 ${activeTab === 'ladies' ? 'bg-padel-green text-black shadow-lg shadow-padel-green/20' : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
             >
               Women
             </button>
           </div>
 
+          {/* Select Organization */}
+          <div className="relative w-full lg:w-64">
+            <div className="relative">
+              <select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-xs tracking-wider cursor-pointer transition-all"
+              >
+                <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
+                <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
+                <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                <ChevronDown className="w-4 h-4 text-padel-green" />
+              </div>
+            </div>
+          </div>
+
           {/* Search Box */}
-          <div className="relative w-full md:w-80">
+          <div className="relative w-full lg:w-80">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-500" />
             </div>
@@ -459,6 +485,8 @@ const Rankings = () => {
   const [imageErrors, setImageErrors] = useState({});
   const [localProfileMap, setLocalProfileMap] = useState({});
 
+  const [selectedOrgId, setSelectedOrgId] = useState(15809); // 15809 = SAPA, 16317 = Broll Pro Tour, 16482 = SA Grand Tour
+
   // Search & Pagination State
   const [activeMainTab, setActiveMainTab] = useState('leaderboards'); // 'overview', 'leaderboards', 'rankings'
   const [activeTab, setActiveTab] = useState('men');
@@ -472,10 +500,11 @@ const Rankings = () => {
 
   useEffect(() => {
     const fetchRankings = async () => {
+      setRankingsLoading(true);
       try {
         const [mensData, ladiesData, { data: { session } }] = await Promise.all([
-          getOrganisationRankings(3, 82, 1000),
-          getOrganisationRankings(4, 83, 1000),
+          getOrganisationRankings(3, 82, 1000, selectedOrgId),
+          getOrganisationRankings(4, 83, 1000, selectedOrgId),
           supabase.auth.getSession()
         ]);
         setMensDataRaw(mensData || []);
@@ -490,7 +519,7 @@ const Rankings = () => {
       }
     };
     fetchRankings();
-  }, [getOrganisationRankings]);
+  }, [getOrganisationRankings, selectedOrgId]);
 
   // Fetch local player profiles once rankings load
   useEffect(() => {
@@ -766,6 +795,8 @@ const Rankings = () => {
                     setImageErrors={setImageErrors}
                     setSelectedPlayer={setSelectedPlayer}
                     getInitials={getInitials}
+                    selectedOrgId={selectedOrgId}
+                    setSelectedOrgId={setSelectedOrgId}
                   />
                 </div>
               </div>
@@ -797,6 +828,8 @@ const Rankings = () => {
               setImageErrors={setImageErrors}
               setSelectedPlayer={setSelectedPlayer}
               getInitials={getInitials}
+              selectedOrgId={selectedOrgId}
+              setSelectedOrgId={setSelectedOrgId}
             />
           </motion.div>
         )}
