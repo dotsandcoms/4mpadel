@@ -380,12 +380,16 @@ const FullRankingsTable = ({
                             <span className="text-xs md:text-sm font-bold text-gray-400">{getInitials(player.name)}</span>
                           )}
                         </div>
-                        <span className="text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate max-w-[120px] xs:max-w-[200px] sm:max-w-none">
-                          {player.name}
+                        <div className="flex items-center gap-1.5 min-w-0 max-w-[130px] xs:max-w-[200px] sm:max-w-none">
+                          <span className="text-xs sm:text-base md:text-lg font-bold text-white group-hover/link:text-padel-green transition-colors truncate">
+                            {player.name}
+                          </span>
                           {player.hasLocalProfile && (
-                            <span className="ml-2 inline-block px-1.5 py-0.5 rounded-md bg-padel-green/10 text-padel-green text-[8px] font-black uppercase tracking-widest border border-padel-green/20">4M</span>
+                            <span className="inline-block px-1 py-0.5 rounded bg-padel-green/10 text-padel-green text-[7px] md:text-[8px] font-black uppercase tracking-widest border border-padel-green/20 flex-shrink-0">
+                              4M
+                            </span>
                           )}
-                        </span>
+                        </div>
                       </div>
                     </td>
                     <td className="py-3 px-3 md:py-4 md:px-6 text-right">
