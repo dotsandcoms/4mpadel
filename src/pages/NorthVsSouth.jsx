@@ -585,10 +585,10 @@ const TOURNAMENT_DATA = {
   name: "Guardrisk North vs South 2026",
   lastUpdated: 'Live Updates',
   scores: {
-    overall: { north: 3, south: 2 },
-    friday: { north: 3, south: 2 },
-    saturday: { north: 0, south: 0 },
-    sunday: { north: 0, south: 0 }
+    overall: { north: 34, south: 22 },
+    friday: { north: 14, south: 10 },
+    saturday: { north: 12, south: 8 },
+    sunday: { north: 8, south: 4 }
   },
   matches: [
     { id: 1, team1: 'Adam Van Harte / Aidan Carrazedo', team2: 'Paul Waldburger / Jason Blakey-Milner', score: '1-0', winner: 'north', status: 'Completed', round: 'Men-Doubles' },
@@ -758,6 +758,58 @@ const ResultsSection = () => {
       <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-gold/5 blur-3xl rounded-full" style={{ background: `${GOLD}08` }} />
 
       <div className="max-w-7xl mx-auto px-6 relative z-10">
+        {/* 🏆 CHAMPIONSHIP VICTORY BANNER 🏆 */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95, y: -20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative w-full mb-16 rounded-[24px] md:rounded-[40px] overflow-hidden p-6 md:p-12 border border-magenta/25 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12"
+          style={{
+            background: 'linear-gradient(135deg, #09090b 0%, #170014 50%, #09090b 100%)',
+            boxShadow: `0 25px 50px -12px ${MAGENTA}30, inset 0 1px 1px rgba(255,255,255,0.1)`
+          }}
+        >
+          {/* Animated Glow effects inside the card */}
+          <div className="absolute top-0 left-0 w-full h-full pointer-events-none z-0">
+            <div className="absolute top-0 left-1/4 w-80 h-80 bg-magenta/20 blur-[120px] rounded-full animate-pulse" style={{ background: `${MAGENTA}22` }} />
+            <div className="absolute bottom-0 right-1/4 w-80 h-80 bg-gold/10 blur-[120px] rounded-full animate-pulse" style={{ background: `${GOLD}11` }} />
+          </div>
+
+          <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 md:gap-10 text-center md:text-left">
+            <div className="relative flex items-center justify-center w-20 h-20 md:w-24 md:h-24 rounded-full bg-magenta/10 border-2 border-magenta/40 shadow-inner shrink-0" style={{ background: `${MAGENTA}15` }}>
+              <Trophy className="w-10 h-10 md:w-12 md:h-12 text-gold animate-bounce" style={{ color: GOLD }} />
+              <div className="absolute inset-0 rounded-full border border-gold/30 animate-ping" />
+            </div>
+            <div>
+              <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
+                <span className="px-3 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest text-gold bg-gold/10 border border-gold/20" style={{ color: GOLD, borderColor: `${GOLD}30` }}>
+                  2026 CHAMPIONS
+                </span>
+                <span className="w-1.5 h-1.5 rounded-full bg-magenta animate-ping" style={{ backgroundColor: MAGENTA }} />
+              </div>
+              <h3 className="text-3xl md:text-5xl font-black uppercase tracking-tighter italic text-white leading-none mb-3">
+                TEAM NORTH <span style={{ color: MAGENTA }}>WINS!</span>
+              </h3>
+              <p className="text-gray-400 text-xs md:text-sm font-medium max-w-lg">
+                An absolute masterclass performance in Camps Bay. Team North seals the tournament victory after a spectacular weekend of elite padel action!
+              </p>
+            </div>
+          </div>
+
+          {/* Score display area */}
+          <div className="relative z-10 flex items-center gap-6 md:gap-8 shrink-0 bg-white/5 backdrop-blur-md px-8 py-6 md:px-10 md:py-6 rounded-[20px] md:rounded-[28px] border border-white/10 shadow-2xl">
+            <div className="text-center">
+              <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">NORTH</span>
+              <span className="text-4xl md:text-5xl font-black italic tracking-tighter text-white" style={{ color: MAGENTA }}>34</span>
+            </div>
+            <div className="text-2xl md:text-3xl font-black italic text-gray-500">-</div>
+            <div className="text-center">
+              <span className="block text-[9px] font-black tracking-widest text-gray-400 uppercase mb-1">SOUTH</span>
+              <span className="text-4xl md:text-5xl font-black italic tracking-tighter text-gray-300">22</span>
+            </div>
+          </div>
+        </motion.div>
+
         <div className="flex flex-col md:flex-row justify-between items-center mb-12 md:mb-20 gap-8">
           <div>
             <div className="flex items-center gap-3 mb-4">
