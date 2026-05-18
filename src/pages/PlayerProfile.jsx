@@ -7,7 +7,7 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -30,7 +30,8 @@ const PlayerProfile = () => {
     const [transactionsLoading, setTransactionsLoading] = useState(false);
     const [currentTransactionPage, setCurrentTransactionPage] = useState(1);
     const [transactionsPerPage] = useState(5);
-    const [activeTab, setActiveTab] = useState('personal');
+    const [activeTab, setActiveTab] = useState('events');
+    const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
     const [selectedRankingForBreakdown, setSelectedRankingForBreakdown] = useState(null);
     const [tempLicenseDetails, setTempLicenseDetails] = useState(null);
 
@@ -461,6 +462,7 @@ const PlayerProfile = () => {
             }
 
             setIsEditing(false);
+            setIsEditProfileModalOpen(false);
             await refetchPlayer();
         } catch (error) {
             showMessage(error.message, 'error');
@@ -725,9 +727,20 @@ const PlayerProfile = () => {
                                         )}
                                     </div>
                                     <div className="flex flex-col md:block overflow-hidden">
-                                        <h1 className="text-2xl md:text-7xl font-black uppercase tracking-tighter leading-tight md:leading-[0.85] mb-1 md:mb-2 drop-shadow-2xl truncate">
-                                            {player.name}
-                                        </h1>
+                                        <div className="flex flex-wrap items-center gap-3 md:gap-5 mb-1 md:mb-2">
+                                            <h1 className="text-2xl md:text-7xl font-black uppercase tracking-tighter leading-tight md:leading-[0.85] drop-shadow-2xl truncate">
+                                                {player.name}
+                                            </h1>
+                                            {!isImpersonating && (
+                                                <button
+                                                    onClick={() => setIsEditProfileModalOpen(true)}
+                                                    className="flex items-center gap-1.5 bg-[#0F172A]/85 hover:bg-padel-green hover:text-black border border-white/10 text-gray-300 px-3.5 py-2 rounded-2xl text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shadow-xl shadow-black/40 self-center"
+                                                >
+                                                    <Edit3 size={12} className="md:w-3.5 md:h-3.5" />
+                                                    Edit Profile
+                                                </button>
+                                            )}
+                                        </div>
                                         <div className="flex flex-wrap items-center gap-3">
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
                                                 <div className="flex flex-col items-start gap-1 md:gap-1.5">
@@ -999,12 +1012,6 @@ const PlayerProfile = () => {
                                 className="grid grid-cols-2 lg:flex lg:overflow-x-auto no-scrollbar gap-2 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
                             >
                                 <button
-                                    onClick={() => setActiveTab('personal')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
-                                >
-                                    <User size={16} /> Personal Info
-                                </button>
-                                <button
                                     onClick={() => setActiveTab('events')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
@@ -1044,7 +1051,7 @@ const PlayerProfile = () => {
                             </motion.div>
 
                             <AnimatePresence mode="wait">
-                                {activeTab === 'personal' && (
+                                {false && (
                                     <motion.div
                                         key="personal"
                                         initial={{ opacity: 0, x: 20 }}
@@ -2204,7 +2211,7 @@ const PlayerProfile = () => {
                     onPaymentSuccess={refetchPlayer}
                 />
 
-                {showCoachModal && coachApplication && (
+                 {showCoachModal && coachApplication && (
                     <CoachProfileModal
                         app={coachApplication}
                         isAdmin={false}
@@ -2212,6 +2219,365 @@ const PlayerProfile = () => {
                         onUpdate={(updatedApp) => setCoachApplication(updatedApp)}
                     />
                 )}
+
+                {/* Edit Profile Modal */}
+                <AnimatePresence>
+                    {isEditProfileModalOpen && (
+                        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-3 md:p-6">
+                            {/* Backdrop overlay */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setIsEditProfileModalOpen(false)}
+                                className="absolute inset-0 bg-black/80 backdrop-blur-md"
+                            />
+
+                            {/* Modal Container */}
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                transition={{ type: 'spring', duration: 0.5 }}
+                                className="relative w-full max-w-4xl max-h-[85vh] md:max-h-[90vh] bg-[#0F172A]/95 border border-white/10 backdrop-blur-xl rounded-[2rem] md:rounded-[2.5rem] p-5 md:p-10 shadow-2xl z-10 flex flex-col my-auto overflow-hidden"
+                            >
+                                {/* Glow accent */}
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32 pointer-events-none" />
+                                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/5 rounded-full blur-[80px] -ml-32 -mb-32 pointer-events-none" />
+
+                                {/* Header */}
+                                <div className="flex items-center justify-between mb-5 pb-4 border-b border-white/5 flex-shrink-0 relative z-10">
+                                    <div className="flex flex-col gap-0.5">
+                                        <h3 className="text-lg md:text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+                                            <Edit3 className="text-padel-green w-5 h-5 md:w-6 md:h-6" />
+                                            Edit Profile Details
+                                        </h3>
+                                        <p className="text-gray-500 text-[8px] md:text-xs uppercase tracking-widest">Update your personal information and play preferences</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsEditProfileModalOpen(false)}
+                                        className="p-2 md:p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-all cursor-pointer"
+                                    >
+                                        <X className="w-4 h-4 md:w-5 md:h-5" />
+                                    </button>
+                                </div>
+
+                                {/* Message alerts */}
+                                <AnimatePresence>
+                                    {message && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className={`mb-4 flex items-center gap-2 px-5 py-3 rounded-xl shadow-xl flex-shrink-0 ${message.type === 'error' ? 'bg-red-500/90 text-white' : 'bg-padel-green text-black'
+                                                } font-black text-[10px] md:text-xs uppercase tracking-widest`}
+                                        >
+                                            {message.type === 'error' ? <AlertCircle size={14} /> : <CheckCircle size={14} />}
+                                            {message.text}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+
+                                {/* Form content */}
+                                <form
+                                    onSubmit={handleSave}
+                                    className="flex flex-col flex-1 overflow-hidden"
+                                >
+                                    {/* Scrollable inputs container */}
+                                    <div className="flex-1 overflow-y-auto pr-1 md:pr-3 space-y-5 custom-scrollbar pb-3">
+                                        <fieldset disabled={isImpersonating} className="space-y-5">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Full Name</label>
+                                                    <div className="relative">
+                                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.name}
+                                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Enter full name"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Email Address</label>
+                                                    <div className="relative">
+                                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="email"
+                                                            value={formData.email}
+                                                            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Email Address"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Gender</label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={formData.gender}
+                                                            onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                        >
+                                                            <option value="" disabled>Select Gender</option>
+                                                            <option value="Male">Male</option>
+                                                            <option value="Female">Female</option>
+                                                        </select>
+                                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Age</label>
+                                                    <div className="relative">
+                                                        <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="number"
+                                                            value={formData.age}
+                                                            onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Your Age"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Nationality</label>
+                                                    <div className="relative">
+                                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.nationality}
+                                                            onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Nationality"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">ID Number</label>
+                                                    <div className="relative">
+                                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.id_number}
+                                                            onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="ID Number"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Phone Number</label>
+                                                    <div className="relative">
+                                                        <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="tel"
+                                                            value={formData.contact_number}
+                                                            onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Phone Number"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Home Club</label>
+                                                    <div className="relative">
+                                                        <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.home_club}
+                                                            onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="Your Home Club"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Instagram Link / Handle</label>
+                                                    <div className="relative">
+                                                        <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <input
+                                                            type="text"
+                                                            value={formData.instagram_link}
+                                                            onChange={(e) => setFormData({ ...formData, instagram_link: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            placeholder="@username or full URL"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-3 md:ml-4">Region</label>
+                                                    <div className="relative">
+                                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                        <select
+                                                            value={formData.region}
+                                                            onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                        >
+                                                            <option value="" disabled>Select Region</option>
+                                                            <option value="Eastern Cape">Eastern Cape</option>
+                                                            <option value="Free State">Free State</option>
+                                                            <option value="Gauteng">Gauteng</option>
+                                                            <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                                                            <option value="Limpopo">Limpopo</option>
+                                                            <option value="Mpumalanga">Mpumalanga</option>
+                                                            <option value="Northern Cape">Northern Cape</option>
+                                                            <option value="North West">North West</option>
+                                                            <option value="Western Cape">Western Cape</option>
+                                                        </select>
+                                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-3 md:ml-4">Racket Brand</label>
+                                                    <div className="relative space-y-2">
+                                                        <div className="relative">
+                                                            <select
+                                                                value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')}
+                                                                onChange={(e) => {
+                                                                    const val = e.target.value;
+                                                                    if (val === 'Other') {
+                                                                        setFormData({ ...formData, racket_brand: 'Other' });
+                                                                    } else {
+                                                                        setFormData({ ...formData, racket_brand: val });
+                                                                    }
+                                                                }}
+                                                                className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                            >
+                                                                <option value="" disabled>Select Brand</option>
+                                                                <option value="Adidas">Adidas</option>
+                                                                <option value="Babolat">Babolat</option>
+                                                                <option value="Bull Padel">Bull Padel</option>
+                                                                <option value="Nox">Nox</option>
+                                                                <option value="Varlion">Varlion</option>
+                                                                <option value="Oxdog">Oxdog</option>
+                                                                <option value="Wilson">Wilson</option>
+                                                                <option value="Head">Head</option>
+                                                                <option value="Siux">Siux</option>
+                                                                <option value="Other">Other</option>
+                                                            </select>
+                                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
+                                                        </div>
+                                                        
+                                                        {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
+                                                            <input
+                                                                type="text"
+                                                                value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
+                                                                onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
+                                                                placeholder="Specify your brand"
+                                                                className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold text-xs md:text-sm"
+                                                                required
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-3 md:ml-4">Category / Division</label>
+                                                    <div className="relative">
+                                                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4 md:w-5 md:h-5" />
+                                                        <select
+                                                            value={formData.category}
+                                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                        >
+                                                            <option value="" disabled>Select Category</option>
+                                                            <optgroup label="Men's" className="bg-[#0F172A]">
+                                                                <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
+                                                                <option value="Men's Advanced">Men's Advanced</option>
+                                                                <option value="Men's Intermediate">Men's Intermediate</option>
+                                                            </optgroup>
+                                                            <optgroup label="Ladies" className="bg-[#0F172A]">
+                                                                <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
+                                                                <option value="Ladies Advanced">Ladies Advanced</option>
+                                                                <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                            </optgroup>
+                                                        </select>
+                                                        <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Player Biography</label>
+                                                <div className="relative">
+                                                    <Briefcase className="absolute left-4 top-4 text-padel-green/40 w-4 h-4 md:w-5 md:h-5" />
+                                                    <textarea
+                                                        value={formData.bio}
+                                                        onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                                                        className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 min-h-[80px] md:min-h-[100px] text-xs md:text-sm"
+                                                        placeholder="Tell us about your padel journey..."
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] md:text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-3 md:ml-4">Sponsors (comma separated)</label>
+                                                <div className="relative">
+                                                    <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600 w-4 h-4 md:w-5 md:h-5" />
+                                                    <input
+                                                        type="text"
+                                                        value={formData.sponsors}
+                                                        onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
+                                                        className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                        placeholder="Babolat, Nike, Red Bull, etc."
+                                                    />
+                                                </div>
+                                            </div>
+                                        </fieldset>
+                                    </div>
+
+                                    {/* Fixed Footer */}
+                                    <div className="pt-4 mt-3 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 flex-shrink-0 relative z-10 bg-[#0F172A]/40 backdrop-blur-md">
+                                        <p className="text-[8px] md:text-[9px] font-medium text-gray-500 uppercase tracking-widest leading-relaxed text-center sm:text-left">
+                                            By saving, you agree to updated profile data being <br className="hidden sm:block" /> displayed on public leaderboards.
+                                        </p>
+                                        {!isImpersonating && (
+                                            <div className="flex items-center gap-3 w-full sm:w-auto">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsEditProfileModalOpen(false)}
+                                                    className="w-1/2 sm:w-auto bg-white/5 text-white font-black uppercase tracking-widest px-6 py-3.5 md:px-8 md:py-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/10 transition-all text-[10px] md:text-xs"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={saving}
+                                                    className="w-1/2 sm:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-6 py-3.5 md:px-8 md:py-4 rounded-lg md:rounded-xl flex items-center justify-center gap-2 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95 text-[10px] md:text-xs whitespace-nowrap"
+                                                >
+                                                    <Save className="w-4 h-4" />
+                                                    {saving ? 'Syncing...' : 'Save Changes'}
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
             </div>
         </>
     );
