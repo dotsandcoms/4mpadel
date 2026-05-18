@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { MapPin, Calendar, Trophy, Users, ChevronRight, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List, Edit3, Save } from 'lucide-react';
+import { MapPin, Calendar, Trophy, Users, ChevronRight, ChevronDown, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List, Edit3, Save } from 'lucide-react';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 
 // ── Assets ────────────────────────────────────────────────────────────────────
@@ -985,7 +985,7 @@ const ResultsSection = () => {
               {/* Stats Card */}
               <div className="bg-gray-50 rounded-[40px] p-8 md:p-10 border border-gray-100 flex flex-col justify-between">
                 <div>
-                  <h3 className="text-xl font-black uppercase tracking-tighter italic mb-8" style={{ color: MAGENTA }}>Current Advantage</h3>
+                  <h3 className="text-xl font-black uppercase tracking-tighter italic mb-8" style={{ color: MAGENTA }}>Tournament Stats</h3>
                   <div className="space-y-6">
                     <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
                       <div className="flex justify-between items-center mb-4">
@@ -1008,9 +1008,59 @@ const ResultsSection = () => {
                           <Users className="w-6 h-6 text-gold" style={{ color: GOLD }} />
                         </div>
                         <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches</p>
-                          <p className="text-xl font-black italic">{displayData.matches.filter(m => m.score !== 'Upcoming').length.toString().padStart(2, '0')} / 112</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches Complete</p>
+                          <p className="text-xl font-black italic">56 / 56</p>
                           <p className="text-[8px] text-gray-400 font-black uppercase tracking-wider mt-1">Fri: 14 · Sat: 28 · Sun: 14</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 🏆 Perpetual Cup / Roll of Honour Plaque */}
+                    <div className="relative p-6 bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden flex flex-col items-center justify-center text-center group">
+                      {/* plaque grid details overlay */}
+                      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808007_1px,transparent_1px),linear-gradient(to_bottom,#80808007_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
+
+                      {/* Floating Motion Trophy */}
+                      <motion.div
+                        animate={{
+                          y: [0, -8, 0],
+                          rotate: [0, 1.5, -1.5, 0]
+                        }}
+                        transition={{
+                          duration: 4.5,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                        className="relative z-10 w-20 h-20 mb-3 flex items-center justify-center"
+                      >
+                        <Trophy className="w-12 h-12 text-gold drop-shadow-[0_8px_16px_rgba(245,184,0,0.35)]" style={{ color: GOLD }} />
+                        <div className="absolute -inset-2 bg-gold/5 rounded-full blur-xl -z-10 group-hover:bg-gold/15 transition-colors duration-500" />
+                      </motion.div>
+
+                      <div className="relative z-10 w-full">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Kit Kat Team North Vs Team South </p>
+                        <p className="text-sm font-black uppercase tracking-tight italic mb-4" style={{ color: GOLD }}>Roll of Honour Plaque</p>
+
+                        {/* Plaque Years Engraved Grid */}
+                        <div className="grid grid-cols-2 gap-2 w-full">
+                          {[
+                            { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
+                            { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
+                            { year: '2024', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
+                            { year: '2023', winner: 'South', color: GOLD, bg: `${GOLD}08`, border: `${GOLD}15` },
+                          ].map((engraving) => (
+                            <div
+                              key={engraving.year}
+                              className="px-3 py-2 border rounded-2xl flex flex-col items-center justify-center transition-all hover:scale-105 hover:bg-white hover:shadow-md cursor-pointer border-dashed hover:border-solid"
+                              style={{ backgroundColor: engraving.bg, borderColor: engraving.border }}
+                            >
+                              <span className="text-[8px] font-black text-gray-400">{engraving.year}</span>
+                              <span className="text-[10px] font-black uppercase tracking-wider mt-0.5 flex items-center gap-1" style={{ color: engraving.color }}>
+                                <Star className="w-2.5 h-2.5 fill-current" />
+                                <span>{engraving.winner}</span>
+                              </span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     </div>
@@ -1099,6 +1149,25 @@ const NorthVsSouth = () => {
   const [activeDiv, setActiveDiv] = useState("Men's Open");
   const [selectedTeam, setSelectedTeam] = useState('north'); // 'north' or 'south'
   const [selectedPlayer, setSelectedPlayer] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Reset expansion state when division or team changes
+  useEffect(() => {
+    setIsExpanded(false);
+  }, [activeDiv, selectedTeam]);
+
+  const getCollapsedLimit = () => {
+    if (windowWidth >= 1024) return 4; // lg:grid-cols-4
+    if (windowWidth >= 768) return 3;  // md:grid-cols-3
+    return 2;                          // grid-cols-2 (mobile)
+  };
 
   useEffect(() => {
     supabase.from('players').select('name, image_url').then(({ data }) => {
@@ -1393,27 +1462,47 @@ const NorthVsSouth = () => {
               </div>
 
               {/* Player Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
-                {(selectedTeam === 'north' ? division.north : division.south).map((name) => (
-                  <PlayerGridCard
-                    key={name}
-                    name={name}
-                    imageUrl={findDbPlayer(name)?.image_url}
-                    accent={selectedTeam === 'north' ? MAGENTA : GOLD}
-                    onClick={() => setSelectedPlayer({ name, imageUrl: findDbPlayer(name)?.image_url })}
-                  />
-                ))}
-              </div>
+              <motion.div
+                layout
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8"
+              >
+                {(selectedTeam === 'north' ? division.north : division.south)
+                  .slice(0, isExpanded ? undefined : getCollapsedLimit())
+                  .map((name) => (
+                    <PlayerGridCard
+                      key={name}
+                      name={name}
+                      imageUrl={findDbPlayer(name)?.image_url}
+                      accent={selectedTeam === 'north' ? MAGENTA : GOLD}
+                      onClick={() => setSelectedPlayer({ name, imageUrl: findDbPlayer(name)?.image_url })}
+                    />
+                  ))}
+              </motion.div>
+
+              {/* Accordion / Toggle Button */}
+              {(selectedTeam === 'north' ? division.north : division.south).length > getCollapsedLimit() && (
+                <div className="flex justify-center pt-8">
+                  <button
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="group flex items-center gap-3 px-8 py-3.5 rounded-full bg-white border border-gray-100 hover:border-gray-200 text-gray-700 hover:text-black font-black uppercase tracking-widest text-[10px] transition-all shadow-md hover:shadow-lg active:scale-95"
+                  >
+                    <span>{isExpanded ? 'Show Less' : `Show Full Team (${(selectedTeam === 'north' ? division.north : division.south).length} Players)`}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 text-gray-400 group-hover:text-black transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+                    />
+                  </button>
+                </div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
       </section>
 
       {/* ═══════════════ QUOTE SECTION ══════════════════════════════════════════ */}
-      <section className="py-16 md:py-40 bg-white border-t border-gray-50">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <Quote className="w-10 h-10 md:w-20 md:h-20 text-magenta/10 mx-auto mb-6 md:mb-12" style={{ color: `${MAGENTA}20` }} />
-          <h2 className="text-xl md:text-5xl font-black uppercase tracking-tight italic leading-tight mb-8 md:mb-12" style={{ color: MAGENTA }}>
+      <section className="py-8 md:py-16 bg-white border-t border-gray-50">
+        <div className="max-w-3xl mx-auto px-6 text-center">
+          <Quote className="w-6 h-6 md:w-10 md:h-10 text-magenta/10 mx-auto mb-4 md:mb-6" style={{ color: `${MAGENTA}20` }} />
+          <h2 className="text-lg md:text-2xl font-black uppercase tracking-tight italic leading-tight" style={{ color: MAGENTA }}>
             "This is more than a tournament — it's where rivalries are forged and legends are born."
           </h2>
         </div>
