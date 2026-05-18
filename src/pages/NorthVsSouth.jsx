@@ -403,17 +403,17 @@ const InstagramFeedWidget = ({ config }) => {
     return (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 mb-10 md:mb-16 w-full">
         {[heroImg, actionImg, venueImg].map((img, idx) => (
-          <a 
-            key={idx} 
-            href={config.profileUrl} 
-            target="_blank" 
+          <a
+            key={idx}
+            href={config.profileUrl}
+            target="_blank"
             rel="noopener noreferrer"
             className="group relative aspect-square rounded-[24px] md:rounded-[32px] overflow-hidden bg-gray-100 shadow-lg block"
           >
             <img src={img} alt="Instagram Content" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-center justify-center">
               <div className="opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                  <Instagram className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg" />
+                <Instagram className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg" />
               </div>
             </div>
           </a>
@@ -609,10 +609,10 @@ const TOURNAMENT_DATA = {
 };
 
 const ResultsSection = () => {
-  const [activeTab, setActiveTab] = useState('standings'); 
+  const [activeTab, setActiveTab] = useState('standings');
   const [liveData, setLiveData] = useState(TOURNAMENT_DATA);
   const { getTeamTournamentResults, loading } = useRankedin();
-  
+
   const [user, setUser] = useState(null);
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUser(user));
@@ -620,7 +620,7 @@ const ResultsSection = () => {
 
   const { permissions } = useAdminPermissions(user?.email);
   const isAdmin = permissions?.role === 'super_admin' || (permissions && permissions.id) || new URLSearchParams(window.location.search).get('admin') === 'true';
-  
+
   const [isEditing, setIsEditing] = useState(false);
   const [manualScores, setManualScores] = useState(TOURNAMENT_DATA.scores);
 
@@ -634,7 +634,7 @@ const ResultsSection = () => {
           .select('scores')
           .eq('id', TOURNAMENT_DATA.id)
           .maybeSingle();
-        
+
         if (data && data.scores) {
           setManualScores(data.scores);
           return;
@@ -662,19 +662,19 @@ const ResultsSection = () => {
     try {
       const { error } = await supabase
         .from('nvs_scores')
-        .upsert({ 
-          id: TOURNAMENT_DATA.id, 
+        .upsert({
+          id: TOURNAMENT_DATA.id,
           scores: manualScores,
           updated_at: new Date().toISOString()
         });
-      
+
       if (error) throw error;
     } catch (e) {
       console.error("Failed to save to Supabase", e);
       // Fallback to localStorage
       localStorage.setItem('nvs_manual_scores', JSON.stringify(manualScores));
     }
-    
+
     setIsEditing(false);
   };
 
@@ -682,7 +682,7 @@ const ResultsSection = () => {
     const fetchLiveResults = async () => {
       try {
         const results = await getTeamTournamentResults(TOURNAMENT_DATA.id);
-        
+
         if (results && results.Matches && results.Matches.length > 0) {
           const formattedMatches = results.Matches.map((m, i) => ({
             id: i + 1,
@@ -696,10 +696,10 @@ const ResultsSection = () => {
 
           setLiveData(prev => ({
             ...prev,
-            scores: manualScores || { 
+            scores: manualScores || {
               overall: {
-                north: results.Team1Score || 0, 
-                south: results.Team2Score || 0 
+                north: results.Team1Score || 0,
+                south: results.Team2Score || 0
               },
               friday: { north: 0, south: 0 },
               saturday: { north: 0, south: 0 },
@@ -728,8 +728,8 @@ const ResultsSection = () => {
   const southWins = displayData.scores.overall.south;
   const totalWins = northWins + southWins;
   const winPercentage = totalWins > 0 ? Math.round((northWins / totalWins) * 100) : 50;
-  const leaderText = northWins > southWins 
-    ? `North +${northWins - southWins}` 
+  const leaderText = northWins > southWins
+    ? `North +${northWins - southWins}`
     : (southWins > northWins ? `South +${southWins - northWins}` : 'Teams Level');
 
   return (
@@ -851,8 +851,8 @@ const ResultsSection = () => {
         </div>
 
         {isEditing && (
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }} 
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-12 p-8 bg-gray-50 rounded-[32px] border border-gray-200 shadow-xl"
           >
@@ -869,19 +869,19 @@ const ResultsSection = () => {
                   <div className="space-y-4">
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-[10px] font-bold uppercase text-magenta" style={{ color: MAGENTA }}>North</span>
-                      <input 
-                        type="number" 
-                        value={manualScores[day].north} 
-                        onChange={e => setManualScores({...manualScores, [day]: {...manualScores[day], north: parseInt(e.target.value) || 0}})}
+                      <input
+                        type="number"
+                        value={manualScores[day].north}
+                        onChange={e => setManualScores({ ...manualScores, [day]: { ...manualScores[day], north: parseInt(e.target.value) || 0 } })}
                         className="w-16 p-2 bg-gray-50 border border-gray-100 rounded-lg text-center font-black"
                       />
                     </div>
                     <div className="flex items-center justify-between gap-4">
                       <span className="text-[10px] font-bold uppercase text-gold" style={{ color: GOLD }}>South</span>
-                      <input 
-                        type="number" 
-                        value={manualScores[day].south} 
-                        onChange={e => setManualScores({...manualScores, [day]: {...manualScores[day], south: parseInt(e.target.value) || 0}})}
+                      <input
+                        type="number"
+                        value={manualScores[day].south}
+                        onChange={e => setManualScores({ ...manualScores, [day]: { ...manualScores[day], south: parseInt(e.target.value) || 0 } })}
                         className="w-16 p-2 bg-gray-50 border border-gray-100 rounded-lg text-center font-black"
                       />
                     </div>
@@ -907,11 +907,11 @@ const ResultsSection = () => {
                   {/* Team Glows */}
                   <div className="absolute -left-20 top-0 w-80 h-full bg-magenta/20 blur-[100px] pointer-events-none" style={{ background: `${MAGENTA}33` }} />
                   <div className="absolute -right-20 top-0 w-80 h-full bg-gold/20 blur-[100px] pointer-events-none" style={{ background: `${GOLD}33` }} />
-                  
+
                   <div className="absolute top-0 right-0 p-8 opacity-5">
                     <Trophy className="w-48 h-48 text-white" />
                   </div>
-                  
+
                   <div className="relative z-10">
                     <div className="flex justify-center mb-6 md:mb-10">
                       <div className="flex items-center gap-3 bg-white/5 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
@@ -919,7 +919,7 @@ const ResultsSection = () => {
                         <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Overall Standing</span>
                       </div>
                     </div>
- 
+
                     <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12 py-4">
                       {/* Team North Side */}
                       <div className="flex flex-col items-center text-center md:items-start md:text-left flex-1">
@@ -933,13 +933,13 @@ const ResultsSection = () => {
                           {displayData.scores.overall.north}
                         </div>
                       </div>
- 
+
                       {/* Divider */}
                       <div className="flex flex-col items-center gap-2 px-4">
                         <div className="text-[10px] md:text-[12px] font-black uppercase tracking-[0.6em] text-white/10 italic">VS</div>
                         <div className="h-12 md:h-20 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent" />
                       </div>
- 
+
                       {/* Team South Side */}
                       <div className="flex flex-col items-center text-center md:items-end md:text-right flex-1">
                         <div className="mb-4">
@@ -953,7 +953,7 @@ const ResultsSection = () => {
                         </div>
                       </div>
                     </div>
- 
+
                     <div className="mt-8 md:mt-12 flex items-center justify-center gap-4 bg-white/5 py-4 rounded-3xl border border-white/5 backdrop-blur-sm">
                       <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Current Leader:</span>
                       <span className="text-sm md:text-lg font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
@@ -993,11 +993,11 @@ const ResultsSection = () => {
                         <span className="text-sm font-black text-magenta" style={{ color: MAGENTA }}>{winPercentage}%</span>
                       </div>
                       <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }} 
-                          animate={{ width: `${winPercentage}%` }} 
-                          className="h-full bg-magenta" 
-                          style={{ background: MAGENTA }} 
+                        <motion.div
+                          initial={{ width: 0 }}
+                          animate={{ width: `${winPercentage}%` }}
+                          className="h-full bg-magenta"
+                          style={{ background: MAGENTA }}
                         />
                       </div>
                     </div>
@@ -1010,7 +1010,7 @@ const ResultsSection = () => {
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">Total Matches</p>
                           <p className="text-xl font-black italic">{displayData.matches.filter(m => m.score !== 'Upcoming').length.toString().padStart(2, '0')} / 112</p>
-                          <p className="text-[8px] text-gray-400 font-black uppercase tracking-wider mt-1">Fri: 28 · Sat: 56 · Sun: 28</p>
+                          <p className="text-[8px] text-gray-400 font-black uppercase tracking-wider mt-1">Fri: 14 · Sat: 28 · Sun: 14</p>
                         </div>
                       </div>
                     </div>
@@ -1019,7 +1019,7 @@ const ResultsSection = () => {
 
                 <div className="mt-10 p-6 bg-magenta rounded-3xl text-white" style={{ background: MAGENTA }}>
                   <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-2">Next Milestone</p>
-                  <p className="text-lg font-black italic tracking-tight leading-tight">57 Matches wins to secure bragging rights</p>
+                  <p className="text-lg font-black italic tracking-tight leading-tight">See You Next Year!</p>
                 </div>
               </div>
             </motion.div>
@@ -1068,9 +1068,9 @@ const ResultsSection = () => {
 
                   <div className="hidden md:block">
                     {match.status === 'Completed' ? (
-                      <div 
+                      <div
                         className="px-4 py-2 rounded-full border text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
-                        style={{ 
+                        style={{
                           borderColor: match.winner === 'north' ? `${MAGENTA}40` : `${GOLD}40`,
                           color: match.winner === 'north' ? MAGENTA : GOLD,
                           background: match.winner === 'north' ? `${MAGENTA}08` : `${GOLD}08`
@@ -1499,7 +1499,7 @@ const NorthVsSouth = () => {
       {/* ═══════════════ INSTAGRAM FEED ═══════════════════════════════════════════ */}
       <section className="py-12 md:py-32 bg-white px-4 md:px-6 border-t border-gray-100">
         <div className="max-w-7xl mx-auto text-center">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
@@ -1517,7 +1517,7 @@ const NorthVsSouth = () => {
 
             <InstagramFeedWidget config={INSTAGRAM_WIDGET_CONFIG} />
 
-            <motion.a 
+            <motion.a
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               href="https://www.instagram.com/northvsouthpadel/"
