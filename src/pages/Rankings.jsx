@@ -5,6 +5,12 @@ import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import PlayerModal from '../components/PlayerModal';
 
+const ORG_LABELS = {
+  15809: 'SAPA',
+  16317: 'Broll Pro Tour',
+  16482: 'SA Grand Tour'
+};
+
 const getInitials = (name) => {
   if (!name) return '';
   const parts = name.split(' ');
@@ -278,17 +284,11 @@ const FullRankingsTable = ({
   selectedOrgId,
   setSelectedOrgId
 }) => {
-  const orgLabels = {
-    15809: 'SAPA',
-    16317: 'Broll Pro Tour',
-    16482: 'SA Grand Tour'
-  };
-
   return (
     <div className="max-w-7xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
       <div className="mb-10 text-center">
-        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">{orgLabels[selectedOrgId] || 'SAPA'}</span> Rankings</h2>
+        <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings</h2>
         <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
       </div>
 
@@ -314,23 +314,6 @@ const FullRankingsTable = ({
             </button>
           </div>
 
-          {/* Select Organization */}
-          <div className="relative w-full lg:w-64">
-            <div className="relative">
-              <select
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(Number(e.target.value))}
-                className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-3 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-xs tracking-wider cursor-pointer transition-all"
-              >
-                <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
-                <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
-                <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                <ChevronDown className="w-4 h-4 text-padel-green" />
-              </div>
-            </div>
-          </div>
 
           {/* Search Box */}
           <div className="relative w-full lg:w-80">
@@ -707,6 +690,27 @@ const Rankings = () => {
           </motion.p>
         </div>
 
+        {/* Organization Filter Header */}
+        <div className="flex justify-center mb-8 relative z-20">
+          <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3.5 flex flex-col sm:flex-row items-center gap-4 backdrop-blur-md">
+            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select Organisation:</span>
+            <div className="relative w-64">
+              <select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-xs tracking-wider cursor-pointer transition-all"
+              >
+                <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
+                <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
+                <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
+              </select>
+              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                <ChevronDown className="w-4 h-4 text-padel-green" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Categories Tab Navigation */}
         <div className="flex items-center gap-1 md:gap-2 mb-12 md:mb-16 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto">
           {[
@@ -771,9 +775,14 @@ const Rankings = () => {
           >
             {!rankingsLoading && (
               <div className="relative pt-4">
-                <div className="max-w-7xl mx-auto px-6 md:px-20 mb-12">
-                  <h2 className="text-4xl font-bold text-white mb-2 uppercase tracking-tighter">SA’s Top Players</h2>
-                  <p className="text-gray-400">Live rankings of the current top performers across South Africa.</p>
+                <div className="w-full px-6 md:px-20 mb-12 text-left">
+                  <h2 className="text-4xl font-bold text-white mb-2 uppercase tracking-tighter">
+                    <span className="text-padel-green">
+                      {ORG_LABELS[selectedOrgId] || "SAPA"}’s
+                    </span>{" "}
+                    Top Players
+                  </h2>
+                  <p className="text-gray-400">Live rankings of the current top performers across {selectedOrgId === 15809 ? "South Africa" : (ORG_LABELS[selectedOrgId] || "South Africa")}.</p>
                 </div>
                 <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                 <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
