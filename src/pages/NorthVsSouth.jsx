@@ -623,6 +623,7 @@ const ResultsSection = () => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [manualScores, setManualScores] = useState(TOURNAMENT_DATA.scores);
+  const [isTrophyModalOpen, setIsTrophyModalOpen] = useState(false);
 
   // Load scores from Supabase or localStorage on mount
   useEffect(() => {
@@ -1020,43 +1021,53 @@ const ResultsSection = () => {
                       {/* plaque grid details overlay */}
                       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808007_1px,transparent_1px),linear-gradient(to_bottom,#80808007_1px,transparent_1px)] bg-[size:14px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] pointer-events-none" />
 
-                      {/* Floating Motion Trophy */}
+                      {/* Floating Motion Trophy Image */}
                       <motion.div
-                        animate={{
-                          y: [0, -8, 0],
-                          rotate: [0, 1.5, -1.5, 0]
+                        animate={{ 
+                          y: [0, -6, 0],
                         }}
-                        transition={{
-                          duration: 4.5,
-                          repeat: Infinity,
-                          ease: "easeInOut"
+                        transition={{ 
+                          duration: 5, 
+                          repeat: Infinity, 
+                          ease: "easeInOut" 
                         }}
-                        className="relative z-10 w-20 h-20 mb-3 flex items-center justify-center"
+                        className="relative z-10 w-40 h-40 md:w-56 md:h-56 mb-4 flex items-center justify-center cursor-pointer"
+                        onClick={() => {
+                          setIsTrophyModalOpen(true);
+                        }}
                       >
-                        <Trophy className="w-12 h-12 text-gold drop-shadow-[0_8px_16px_rgba(245,184,0,0.35)]" style={{ color: GOLD }} />
+                        <img 
+                          src="/images/perpetual_trophy.png" 
+                          alt="Perpetual Trophy" 
+                          className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.15)] rounded-2xl hover:scale-105 transition-transform duration-300"
+                        />
                         <div className="absolute -inset-2 bg-gold/5 rounded-full blur-xl -z-10 group-hover:bg-gold/15 transition-colors duration-500" />
                       </motion.div>
 
                       <div className="relative z-10 w-full">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Kit Kat Team North Vs Team South </p>
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Kit Kat Team North Vs Team South</p>
                         <p className="text-sm font-black uppercase tracking-tight italic mb-4" style={{ color: GOLD }}>Roll of Honour Plaque</p>
 
                         {/* Plaque Years Engraved Grid */}
                         <div className="grid grid-cols-2 gap-2 w-full">
                           {[
-                            { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
-                            { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
-                            { year: '2024', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
                             { year: '2023', winner: 'South', color: GOLD, bg: `${GOLD}08`, border: `${GOLD}15` },
+                            { year: '2024', winner: 'Draw', color: '#4B5563', bg: '#F3F4F6', border: '#E5E7EB' },
+                            { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
+                            { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
                           ].map((engraving) => (
-                            <div
+                            <div 
                               key={engraving.year}
                               className="px-3 py-2 border rounded-2xl flex flex-col items-center justify-center transition-all hover:scale-105 hover:bg-white hover:shadow-md cursor-pointer border-dashed hover:border-solid"
                               style={{ backgroundColor: engraving.bg, borderColor: engraving.border }}
                             >
                               <span className="text-[8px] font-black text-gray-400">{engraving.year}</span>
                               <span className="text-[10px] font-black uppercase tracking-wider mt-0.5 flex items-center gap-1" style={{ color: engraving.color }}>
-                                <Star className="w-2.5 h-2.5 fill-current" />
+                                {engraving.winner === 'Draw' ? (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                                ) : (
+                                  <Star className="w-2.5 h-2.5 fill-current" />
+                                )}
                                 <span>{engraving.winner}</span>
                               </span>
                             </div>
@@ -1140,6 +1151,98 @@ const ResultsSection = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* 🏆 Perpetual Trophy Modal */}
+      <AnimatePresence>
+        {isTrophyModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsTrophyModalOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+            />
+
+            {/* Modal Content */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="relative max-w-4xl w-full bg-[#0F172A]/95 border border-white/10 rounded-[32px] p-6 md:p-10 shadow-2xl backdrop-blur-xl z-10 flex flex-col"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setIsTrophyModalOpen(false)}
+                className="absolute top-6 right-6 text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 p-2.5 rounded-full transition-all duration-300 z-20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex flex-col items-center mb-6">
+                <Trophy className="w-8 h-8 text-gold mb-3" style={{ color: GOLD }} />
+                <h3 className="text-xl md:text-3xl font-black uppercase tracking-tighter italic text-white mb-2 text-center">
+                  North vs South Perpetual Trophy
+                </h3>
+                <p className="text-xs text-gray-400 text-center max-w-md">
+                  Official annual Roll of Honour. Engraved with pride and awarded to the dominant region of South Africa.
+                </p>
+              </div>
+
+              {/* Grid Content */}
+              <div className="grid md:grid-cols-2 gap-8 w-full items-center">
+                {/* Left: Large Image Frame */}
+                <div className="w-full aspect-square bg-black/40 rounded-2xl overflow-hidden border border-white/5 flex items-center justify-center relative p-4">
+                  <img
+                    src="/images/perpetual_trophy.png"
+                    alt="Perpetual Trophy Engravings"
+                    className="w-full h-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.3)]"
+                  />
+                </div>
+
+                {/* Right: Roll of Honour list */}
+                <div className="flex flex-col space-y-4 bg-white/[0.03] border border-white/10 rounded-2xl p-6">
+                  <h4 className="text-xs font-black uppercase tracking-widest text-padel-green border-b border-white/10 pb-3 flex items-center gap-2">
+                    <Star className="w-4 h-4 fill-current text-padel-green" /> Engraving History
+                  </h4>
+                  <div className="space-y-3">
+                    {[
+                      { year: '2023', winner: 'South', color: GOLD, detail: 'Winner: South Team' },
+                      { year: '2024', winner: 'Draw', color: '#94A3B8', detail: 'Score tied, trophy shared' },
+                      { year: '2025', winner: 'North', color: MAGENTA, detail: 'Winner: North Team' },
+                      { year: '2026', winner: 'North', color: MAGENTA, detail: 'Winner: North Team' },
+                    ].map((item) => (
+                      <div key={item.year} className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
+                        <div>
+                          <span className="text-sm text-white font-black block">{item.year}</span>
+                          <span className="text-[10px] text-gray-400 font-medium">{item.detail}</span>
+                        </div>
+                        <span 
+                          className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full border flex items-center gap-1.5"
+                          style={{ 
+                            color: item.color, 
+                            borderColor: `${item.color}30`, 
+                            backgroundColor: `${item.color}08` 
+                          }}
+                        >
+                          {item.winner === 'Draw' ? (
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+                          ) : (
+                            <Star className="w-2.5 h-2.5 fill-current" />
+                          )}
+                          <span>{item.winner}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </section>
   );
 };
