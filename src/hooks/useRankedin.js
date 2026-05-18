@@ -576,8 +576,15 @@ export const useRankedin = () => {
                             
                             if (winnerId) {
                                 firstWon = (m.Challenger?.Id == winnerId || m.Challenger?.EventParticipantId == winnerId || m.Challenger?.Player1Id == winnerId);
+                            } else if (m.MatchResult?.Score) {
+                                const scoreObj = m.MatchResult.Score;
+                                if (scoreObj.FirstParticipantScore !== undefined && scoreObj.SecondParticipantScore !== undefined) {
+                                    firstWon = scoreObj.FirstParticipantScore > scoreObj.SecondParticipantScore;
+                                } else {
+                                    firstWon = scoreObj.IsFirstParticipantWinner !== undefined ? scoreObj.IsFirstParticipantWinner : m.MatchResult.IsFirstParticipantWinner;
+                                }
                             } else {
-                                firstWon = m.MatchResult?.IsFirstParticipantWinner || m.MatchResult?.Score?.IsFirstParticipantWinner;
+                                firstWon = m.MatchResult?.IsFirstParticipantWinner;
                             }
 
                             const pId = internalId;
