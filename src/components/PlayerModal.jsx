@@ -112,280 +112,311 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                 <motion.div
                     layoutId={`card-${player.id}`}
                     ref={cardRef}
-                    className="w-full max-w-lg bg-[#0F172A] rounded-3xl overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] flex flex-col"
+                    className="w-full max-w-lg md:max-w-4xl bg-[#0a0f1d] border border-white/10 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] overflow-y-auto md:overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] md:max-h-[85vh] flex flex-col my-auto"
                 >
-                    {/* Close Button */}
+                    {/* Floating Close Button */}
                     <button
                         onClick={onClose}
-                        className="absolute top-6 right-6 z-20 w-10 h-10 bg-black/20 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
+                        className="absolute top-6 right-6 z-50 w-11 h-11 bg-black/40 hover:bg-white text-white hover:text-black rounded-full flex items-center justify-center transition-all cursor-pointer shadow-2xl border border-white/10"
                     >
                         <X className="w-5 h-5" />
                     </button>
 
-                    {/* Image Section */}
-                    <div className="relative h-[40vh] min-h-[300px] overflow-hidden">
-                        {player.image_url ? (
-                            <motion.img
-                                layoutId={`image-${player.id}`}
-                                src={player.image_url}
-                                alt={player.name}
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            <motion.div
-                                layoutId={`image-${player.id}`}
-                                className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-white/10"
-                            >
-                                <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
-                                </svg>
-                            </motion.div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
+                    {/* Ambient Neon Glow Bubbles */}
+                    <div className="absolute top-0 right-0 w-72 h-72 bg-padel-green/5 rounded-full blur-[100px] pointer-events-none" />
+                    <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-                        {/* Big Stats Overlays on Image */}
-                        <motion.div layoutId={`level-${player.id}`} className="absolute top-4 left-4 bg-padel-green text-black font-black w-16 h-16 rounded-2xl flex flex-col items-center justify-center border-4 border-black shadow-xl z-20">
-                            <span className="text-xs uppercase font-bold opacity-60">SKILL</span>
-                            <span className="text-2xl leading-none">{player.skill_rating ? Number(player.skill_rating).toFixed(1) : player.skill_rating || '-'}</span>
-                        </motion.div>
-
-                        {player.rankedin_id && (
-                            <div className="absolute top-4 right-16 bg-black/40 backdrop-blur-md border border-white/10 text-white font-bold px-4 h-16 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
-                                <span className="text-[10px] uppercase font-black text-padel-green mb-1">Rankedin ID</span>
-                                <span className="text-xs opacity-70 font-mono tracking-tight">{player.rankedin_id}</span>
-                            </div>
-                        )}
-
-                        {/* Name Overlay */}
-                        <div className="absolute bottom-0 left-0 w-full p-8 pl-12 pt-20 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/40 to-transparent">
-                            <motion.h2 layoutId={`name-${player.id}`} className="text-4xl md:text-5xl font-black text-white leading-[0.85] tracking-tighter uppercase mb-2 drop-shadow-lg">
-                                {player.name?.split(' ').map((n, i) => (
-                                    <span key={i} className="block">{n}</span>
-                                ))}
-                            </motion.h2>
-                            <div className="flex items-center gap-2 text-gray-300 font-medium">
-                                <MapPin className="w-4 h-4 text-padel-green" />
-                                {player.home_club}, {player.nationality}
-                                {player.age && <span className="ml-2 px-2 py-0.5 bg-white/10 rounded text-xs font-bold uppercase">AGE: {player.age}</span>}
-                                {player.instagram_link && (
-                                    <a
-                                        href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="ml-2 p-1.5 bg-white/10 hover:bg-padel-green hover:text-black rounded-lg transition-all"
-                                        onClick={(e) => e.stopPropagation()}
+                    <div className="flex flex-col md:flex-row h-auto md:h-full overflow-visible md:overflow-hidden">
+                        
+                        {/* LEFT COLUMN: Player Identity & Hero Media Viewport */}
+                        <div className="w-full md:w-[40%] flex flex-col border-b md:border-b-0 md:border-r border-white/5 shrink-0 bg-black/30">
+                            
+                            {/* Hero Viewport */}
+                            <div className="relative h-[30vh] md:h-[48vh] overflow-hidden group shrink-0">
+                                {player.image_url ? (
+                                    <motion.img
+                                        layoutId={`image-${player.id}`}
+                                        src={player.image_url}
+                                        alt={player.name}
+                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    />
+                                ) : (
+                                    <motion.div
+                                        layoutId={`image-${player.id}`}
+                                        className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900 text-white/10"
                                     >
-                                        <Instagram size={14} />
-                                    </a>
+                                        <svg className="w-32 h-32 md:w-44 md:h-44" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
+                                        </svg>
+                                    </motion.div>
                                 )}
-                            </div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/30 to-black/30" />
 
-                            <motion.div layoutId={`category-${player.id}`} className="mt-4 bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold px-4 py-2 rounded-xl inline-flex flex-col items-start shadow-xl">
-                                <span className="text-[10px] uppercase font-bold text-padel-green mb-0.5 tracking-wider">Category</span>
-                                <span className="text-sm">{player.category}</span>
-                            </motion.div>
-                        </div>
-                    </div>
+                                {/* Skill Rating Badge Overlay */}
+                                <motion.div layoutId={`level-${player.id}`} className="absolute top-6 left-6 bg-padel-green text-black font-black w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-4 border-[#0a0f1d] shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
+                                    <span className="text-[9px] uppercase font-black opacity-60">SKILL</span>
+                                    <span className="text-xl leading-none">{player.skill_rating ? Number(player.skill_rating).toFixed(1) : player.skill_rating || '-'}</span>
+                                </motion.div>
 
-                    {/* Content Section (Scrollable) */}
-                    <div className="p-8 pb-12 space-y-8 overflow-y-auto flex-1 bg-[#0F172A] border-t border-white/5 nice-scrollbar">
-                        {/* Bio */}
-                        {player.bio && (
-                            <div>
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-3">Player Bio</h4>
-                                <p className="text-gray-300 leading-relaxed text-lg">
-                                    {player.bio}
-                                </p>
-                            </div>
-                        )}
+                                {/* Rankedin ID Overlay */}
+                                {player.rankedin_id && (
+                                    <div className="absolute top-6 right-16 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold px-3.5 h-14 rounded-2xl flex flex-col items-center justify-center shadow-xl z-20">
+                                        <span className="text-[8px] uppercase font-black text-padel-green mb-0.5 tracking-wider">Rankedin ID</span>
+                                        <span className="text-[10px] opacity-70 font-mono tracking-tight">{player.rankedin_id}</span>
+                                    </div>
+                                )}
 
-                        {/* Skill Rating Widget */}
-                        {player.skill_rating && (
-                            <div className="bg-white/5 rounded-3xl p-6 border border-white/10 flex items-center gap-6 relative overflow-hidden group/skill">
-                                <div className="absolute inset-0 bg-padel-green/5 opacity-0 group-hover/skill:opacity-100 transition-opacity" />
-                                <div className="relative w-24 h-24">
-                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
-                                        <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                                        <motion.circle
-                                            initial={{ strokeDashoffset: 283 }}
-                                            animate={{ strokeDashoffset: 283 - (283 * Math.min(player.skill_rating, 30) / 30) }}
-                                            transition={{ duration: 1.5, ease: "easeOut" }}
-                                            cx="50" cy="50" r="45" fill="none" stroke="#beff00" strokeWidth="8"
-                                            strokeDasharray="283"
-                                            strokeLinecap="round"
-                                        />
-                                    </svg>
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                        <span className="text-2xl font-black text-white">{player.skill_rating}</span>
-                                        <span className="text-[8px] uppercase font-black text-padel-green">Rating</span>
+                                {/* High-Contrast Name Overlay */}
+                                <div className="absolute bottom-0 left-0 w-full p-6 md:p-8 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/40 to-transparent">
+                                    <motion.h2 layoutId={`name-${player.id}`} className="text-3xl md:text-[2.65rem] font-black text-white leading-[0.88] tracking-tighter uppercase mb-3">
+                                        {player.name?.split(' ').map((n, i) => (
+                                            <span key={i} className="block">{n}</span>
+                                        ))}
+                                    </motion.h2>
+                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-gray-300 font-semibold">
+                                        <div className="flex items-center gap-1">
+                                            <MapPin className="w-3.5 h-3.5 text-padel-green" />
+                                            <span>{player.home_club || 'No Club'}, {player.nationality}</span>
+                                        </div>
+                                        {player.instagram_link && (
+                                            <a
+                                                href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="p-1.5 bg-white/10 hover:bg-padel-green hover:text-black rounded-lg transition-all"
+                                                onClick={(e) => e.stopPropagation()}
+                                            >
+                                                <Instagram size={12} />
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
-                                <div className="flex-1">
-                                    <h4 className="text-sm font-black text-white uppercase tracking-tight mb-1">Rankedin Skill Level</h4>
-                                    <p className="text-xs text-gray-400 leading-relaxed font-bold uppercase tracking-wider opacity-60">
-                                        Live performance index based on match intensity and win quality.
+                            </div>
+
+                            {/* Gallery Thumbnail Shelf */}
+                            {gallery.length > 1 && (
+                                <div className="p-6 bg-[#060a14]/60 flex flex-col gap-2.5 md:flex-1 md:justify-center border-t border-white/5 shrink-0 md:shrink">
+                                    <span className="text-[8px] font-black text-padel-green uppercase tracking-[0.25em] leading-none mb-1">
+                                        Player Gallery ({gallery.length})
+                                    </span>
+                                    <div className="flex flex-wrap items-center gap-2.5">
+                                        {gallery.map((imgUrl, idx) => (
+                                            <button
+                                                key={idx}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setLightboxImageIdx(idx);
+                                                    setIsLightboxOpen(true);
+                                                }}
+                                                className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 hover:border-padel-green hover:scale-105 active:scale-95 transition-all duration-300 shrink-0 relative group shadow-md"
+                                            >
+                                                <img src={imgUrl} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                                                <div className="absolute inset-0 bg-black/25 group-hover:bg-transparent transition-colors" />
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* RIGHT COLUMN: Spacious & Structured Information Pane */}
+                        <div className="flex-1 p-6 md:p-10 space-y-6 md:space-y-8 overflow-visible md:overflow-y-auto h-auto md:h-auto min-h-0 nice-scrollbar bg-[#0a0f1d]/50 backdrop-blur-md">
+                            
+                            {/* Tactile Information Panel Grid */}
+                            <div className="grid grid-cols-2 gap-3.5 shrink-0">
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-0.5 hover:border-white/20 transition-all duration-300">
+                                    <span className="text-[9px] uppercase font-black text-padel-green tracking-widest leading-none mb-1">Category / Division</span>
+                                    <span className="text-sm font-extrabold text-white truncate">{player.category || 'Open Division'}</span>
+                                </div>
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-0.5 hover:border-white/20 transition-all duration-300">
+                                    <span className="text-[9px] uppercase font-black text-padel-green tracking-widest leading-none mb-1">Racket Brand</span>
+                                    <span className="text-sm font-extrabold text-white truncate">{player.racket_brand || 'Not Specified'}</span>
+                                </div>
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-0.5 hover:border-white/20 transition-all duration-300">
+                                    <span className="text-[9px] uppercase font-black text-padel-green tracking-widest leading-none mb-1">Home Region</span>
+                                    <span className="text-sm font-extrabold text-white truncate">{player.region || 'Not Specified'}</span>
+                                </div>
+                                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex flex-col gap-0.5 hover:border-white/20 transition-all duration-300">
+                                    <span className="text-[9px] uppercase font-black text-padel-green tracking-widest leading-none mb-1">Age Group</span>
+                                    <span className="text-sm font-extrabold text-white truncate">{player.age ? `${player.age} Years Old` : 'Not Specified'}</span>
+                                </div>
+                            </div>
+
+                            {/* Player Biography (High-end Card with Quotes Watermark) */}
+                            {player.bio && (
+                                <div className="relative overflow-hidden bg-gradient-to-r from-white/5 to-transparent border border-white/10 rounded-2xl p-5 md:p-6 shadow-inner hover:border-white/20 transition-all duration-300">
+                                    <div className="absolute -top-4 -right-3 text-white/5 font-serif text-9xl pointer-events-none select-none select-none font-bold">“</div>
+                                    <h4 className="text-[9px] font-black text-gray-500 uppercase tracking-[0.25em] mb-2.5">Player Bio</h4>
+                                    <p className="text-gray-300 leading-relaxed text-sm md:text-[15px] italic font-medium relative z-10">
+                                        "{player.bio}"
                                     </p>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Recent Form */}
-                        {player.match_form && (
-                            <div className="flex items-center justify-between p-6 bg-white/5 border border-white/10 rounded-2xl">
-                                <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest">Recent Form</h4>
-                                <div className="flex gap-2">
-                                    {String(player.match_form).split(/\s+/).filter(Boolean).map((f, i) => (
-                                        <div key={i} className={`w-10 h-10 rounded-xl flex items-center justify-center text-xs font-black shadow-lg ${f === 'W' ? 'bg-padel-green text-black' : 'bg-red-500 text-white'}`}>
-                                            {f}
+                            {/* Skill Level Progress Bar / Radial Widget */}
+                            {player.skill_rating && (
+                                <div className="bg-white/5 rounded-2xl p-5 border border-white/10 flex items-center gap-5 relative overflow-hidden group">
+                                    <div className="absolute inset-0 bg-padel-green/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                                    <div className="relative w-16 h-16 shrink-0">
+                                        <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                                            <circle cx="50" cy="50" r="45" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                                            <motion.circle
+                                                initial={{ strokeDashoffset: 283 }}
+                                                animate={{ strokeDashoffset: 283 - (283 * Math.min(player.skill_rating, 30) / 30) }}
+                                                transition={{ duration: 1.5, ease: "easeOut" }}
+                                                cx="50" cy="50" r="45" fill="none" stroke="#beff00" strokeWidth="8"
+                                                strokeDasharray="283"
+                                                strokeLinecap="round"
+                                            />
+                                        </svg>
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                            <span className="text-lg font-black text-white">{player.skill_rating}</span>
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="text-xs font-black text-white uppercase tracking-wider mb-0.5">Rankedin Skill Rating</h4>
+                                        <p className="text-[10px] text-gray-400 font-semibold leading-relaxed uppercase opacity-75">
+                                            Live index based on match intensity and performance.
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Organizational Rankings */}
-                        {safeRankings && safeRankings.length > 0 && (
-                            <div className="space-y-4">
-                                <h4 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">Organizational Rankings</h4>
-                                <div className="grid grid-cols-1 gap-3">
-                                    {safeRankings.map((r, i) => {
-                                        const isBroll = r.org?.toLowerCase().includes('broll');
-                                        return (
-                                            <div 
-                                                key={i} 
-                                                className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-colors group cursor-pointer"
-                                                onClick={() => setExpandedRankingIdx(expandedRankingIdx === i ? null : i)}
-                                            >
-                                                <div className="flex items-center justify-between gap-4">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2 mb-1">
-                                                            <p className={`text-[10px] font-black uppercase tracking-widest ${isBroll ? 'text-[#F40020]' : 'text-padel-green'}`}>
-                                                                {r.org || 'Ranking'}
-                                                            </p>
-                                                            <span className="text-[10px] text-gray-600 font-bold">•</span>
-                                                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{r.match_type || 'Doubles'}</p>
+                            {/* Recent Match Form */}
+                            {player.match_form && (
+                                <div className="flex items-center justify-between p-5 bg-white/5 border border-white/10 rounded-2xl">
+                                    <h4 className="text-[9px] font-black text-gray-500 uppercase tracking-[0.25em]">Recent Form</h4>
+                                    <div className="flex gap-2">
+                                        {String(player.match_form).split(/\s+/).filter(Boolean).map((f, i) => (
+                                            <div key={i} className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black shadow-lg ${f === 'W' ? 'bg-padel-green text-black' : 'bg-red-500 text-white'}`}>
+                                                {f}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Organizational Rankings (Interactive Accordions) */}
+                            {safeRankings && safeRankings.length > 0 && (
+                                <div className="space-y-4">
+                                    <h4 className="text-[9px] font-black text-gray-500 uppercase tracking-[0.25em]">Official Rankings</h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        {safeRankings.map((r, i) => {
+                                            const isBroll = r.org?.toLowerCase().includes('broll');
+                                            const isSapa = r.org?.toLowerCase().includes('sapa');
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className="bg-white/5 border border-white/10 rounded-2xl p-5 hover:bg-white/10 transition-all duration-300 group cursor-pointer pointer-events-auto"
+                                                    onClick={() => setExpandedRankingIdx(expandedRankingIdx === i ? null : i)}
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <p className={`text-[10px] font-black uppercase tracking-widest ${isBroll ? 'text-[#F40020]' : isSapa ? 'text-padel-green' : 'text-gray-400'}`}>
+                                                                    {r.org || 'Ranking'}
+                                                                </p>
+                                                                <span className="text-[10px] text-gray-600 font-bold">•</span>
+                                                                <p className="text-[9px] text-gray-450 font-bold uppercase tracking-tight">{r.match_type || 'Doubles'}</p>
+                                                            </div>
+                                                            <p className="text-base font-bold text-white tracking-tight leading-tight">{r.age_group || r.division || 'Open'}</p>
                                                         </div>
-                                                        <p className="text-lg font-bold text-white tracking-tight leading-tight mb-1">{r.age_group || r.division || 'Open'}</p>
-                                                    </div>
-                                                    <div className="flex gap-4 items-center">
-                                                        <div className="text-right">
-                                                            <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Rank</p>
-                                                            <div className="flex items-baseline gap-0.5 justify-end">
-                                                                <span className={`${isBroll ? 'text-[#F40020]' : 'text-padel-green'} text-[10px] font-black`}>#</span>
-                                                                <span className="text-xl font-black text-white tracking-tighter">{r.rank}</span>
+                                                        <div className="flex gap-4 items-center">
+                                                            <div className="text-right">
+                                                                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Rank</p>
+                                                                <div className="flex items-baseline gap-0.5 justify-end">
+                                                                    <span className={`${isBroll ? 'text-[#F40020]' : 'text-padel-green'} text-[9px] font-black`}>#</span>
+                                                                    <span className="text-lg font-black text-white tracking-tighter">{r.rank}</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Points</p>
+                                                                <p className={`text-lg font-black tracking-tighter ${isBroll ? 'text-[#F40020]' : 'text-padel-green'}`}>{r.points}</p>
+                                                            </div>
+                                                            <div className="text-gray-400 pl-2">
+                                                                {expandedRankingIdx === i ? <ChevronUp size={14} className="text-padel-green" /> : <ChevronDown size={14} className="group-hover:text-padel-green transition-colors" />}
                                                             </div>
                                                         </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest mb-0.5">Points</p>
-                                                            <p className="text-xl font-black text-white tracking-tighter">{r.points}</p>
-                                                        </div>
-                                                        <div className="text-gray-400 pl-2">
-                                                            {expandedRankingIdx === i ? <ChevronUp size={16} className="text-padel-green" /> : <ChevronDown size={16} className="group-hover:text-padel-green transition-colors" />}
-                                                        </div>
                                                     </div>
-                                                </div>
 
-                                                {/* Expanded Points Breakdown */}
-                                                {expandedRankingIdx === i && (
-                                                    <div 
-                                                        className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
-                                                        onClick={(e) => e.stopPropagation()}
-                                                    >
-                                                        {r.details && r.details.length > 0 ? (
-                                                            <div className="space-y-2.5 max-h-[220px] overflow-y-auto no-scrollbar">
-                                                                {r.details.map((item, idx) => (
-                                                                    <div key={idx} className="flex justify-between items-center bg-black/30 border border-white/5 rounded-xl p-3 text-[11px]">
-                                                                        <div className="min-w-0 pr-2">
-                                                                            <div className="font-bold text-white truncate max-w-[200px] sm:max-w-xs">{item.name}</div>
-                                                                            <div className="flex gap-2 items-center text-[9px] text-gray-400 mt-0.5 font-semibold">
-                                                                                <span>{item.date}</span>
-                                                                                {item.class && (
-                                                                                    <>
-                                                                                        <span>•</span>
-                                                                                        <span className="text-padel-green uppercase font-black tracking-wider text-[8px]">{item.class}</span>
-                                                                                    </>
-                                                                                )}
+                                                    {/* Expanded Points Breakdown Accordion */}
+                                                    {expandedRankingIdx === i && (
+                                                        <div
+                                                            className="mt-4 pt-4 border-t border-white/10 overflow-hidden"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            {r.details && r.details.length > 0 ? (
+                                                                <div className="space-y-2 max-h-[160px] overflow-y-auto no-scrollbar">
+                                                                    {r.details.map((item, idx) => (
+                                                                        <div key={idx} className="flex justify-between items-center bg-black/30 border border-white/5 rounded-xl p-3 text-[10px]">
+                                                                            <div className="min-w-0 pr-2">
+                                                                                <div className="font-bold text-white truncate max-w-[200px]">{item.name}</div>
+                                                                                <div className="flex gap-2 items-center text-[8px] text-gray-455 mt-0.5 font-semibold">
+                                                                                    <span>{item.date}</span>
+                                                                                    {item.class && (
+                                                                                        <>
+                                                                                            <span>•</span>
+                                                                                            <span className="text-padel-green uppercase font-black tracking-wider text-[8px]">{item.class}</span>
+                                                                                        </>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                            <div className="text-right shrink-0">
+                                                                                <div className="text-padel-green font-black">+{item.points} PTS</div>
+                                                                                <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Place: {item.place}</div>
                                                                             </div>
                                                                         </div>
-                                                                        <div className="text-right shrink-0">
-                                                                            <div className="text-padel-green font-black text-[11px]">+{item.points} PTS</div>
-                                                                            <div className="text-[8px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Place: {item.place}</div>
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <div className="text-center py-4 text-[10px] text-gray-500 font-black uppercase tracking-wider bg-black/10 rounded-xl">
-                                                                No tournament details available for this ranking list.
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                                    ))}
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center py-4 text-[9px] text-gray-500 font-black uppercase tracking-wider bg-black/10 rounded-xl">
+                                                                    No tournament details available for this ranking list.
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Sponsors Section */}
+                            {safeSponsors && safeSponsors.length > 0 && (
+                                <div className="space-y-3.5">
+                                    <h4 className="text-[9px] font-black text-gray-500 uppercase tracking-[0.25em]">Official Sponsors</h4>
+                                    <div className="flex flex-wrap gap-2.5">
+                                        {safeSponsors.map(sponsor => (
+                                            <div key={sponsor} className="px-4 py-2 border border-white/10 hover:border-padel-green rounded-xl text-xs font-black text-gray-300 bg-white/5 uppercase tracking-wider shadow-md hover:scale-105 transition-all">
+                                                {sponsor}
                                             </div>
-                                        );
-                                    })}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Sponsors */}
-                        {safeSponsors && safeSponsors.length > 0 && (
-                            <div>
-                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Sponsors</h4>
-                                <div className="flex flex-wrap gap-4">
-                                    {safeSponsors.map(sponsor => (
-                                        <div key={sponsor} className="px-4 py-2 border border-white/10 rounded-lg text-sm font-bold text-gray-400 bg-white/5">
-                                            {sponsor}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Download & Share Section for Owners */}
-                        {(userEmail === player.email || (player.hasLocalProfile && userEmail === player.playerRecord?.email)) && (
-                            <div className="flex gap-4 pt-4">
-                                <button
-                                    onClick={downloadCard}
-                                    className="flex-1 bg-padel-green text-black font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 hover:bg-white transition-all pointer-events-auto"
-                                >
-                                    <Download size={18} />
-                                    Download Card
-                                </button>
-                                <button
-                                    onClick={shareCard}
-                                    className="bg-white/10 hover:bg-white text-white hover:text-black transition-all p-3 rounded-xl flex items-center justify-center pointer-events-auto"
-                                >
-                                    <Share2 size={20} />
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Gallery Thumbnails Shelf (Fixed at the very bottom of the card) */}
-                    {gallery.length > 1 && (
-                        <div className="px-8 py-4 border-t border-white/5 bg-[#080d19] flex flex-col gap-2 shrink-0">
-                            <span className="text-[9px] font-black text-padel-green uppercase tracking-[0.2em] leading-none">
-                                Player Photo Gallery ({gallery.length})
-                            </span>
-                            <div className="flex items-center gap-3 overflow-x-auto py-1 no-scrollbar">
-                                {gallery.map((imgUrl, idx) => (
+                            {/* Action Buttons for Card Owners */}
+                            {(userEmail === player.email || (player.hasLocalProfile && userEmail === player.playerRecord?.email)) && (
+                                <div className="flex gap-4 pt-4 border-t border-white/5 shrink-0">
                                     <button
-                                        key={idx}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setLightboxImageIdx(idx);
-                                            setIsLightboxOpen(true);
-                                        }}
-                                        className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 hover:border-padel-green hover:scale-105 active:scale-95 transition-all duration-300 shrink-0 relative group shadow-md"
+                                        onClick={downloadCard}
+                                        className="flex-1 bg-padel-green text-black font-extrabold uppercase tracking-widest text-[10px] md:text-xs py-4 px-6 rounded-xl flex items-center justify-center gap-2 hover:bg-white hover:scale-[1.02] active:scale-[0.98] transition-all pointer-events-auto shadow-lg shadow-padel-green/10"
                                     >
-                                        <img src={imgUrl} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
-                                        <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                                        <Download size={15} />
+                                        Download Pro Card
                                     </button>
-                                ))}
-                            </div>
+                                    <button
+                                        onClick={shareCard}
+                                        className="bg-white/5 hover:bg-white text-white hover:text-black transition-all p-4 rounded-xl flex items-center justify-center pointer-events-auto border border-white/10"
+                                    >
+                                        <Share2 size={16} />
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                    )}
+
+                    </div>
                 </motion.div>
             </div>
 
