@@ -16,6 +16,7 @@ const PlayerProfile = () => {
     const [isSecurityAccordionOpen, setIsSecurityAccordionOpen] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
+    const [uploadingGalleryImage, setUploadingGalleryImage] = useState(false);
     const [message, setMessage] = useState(null);
     const [newPassword, setNewPassword] = useState('');
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
@@ -58,7 +59,8 @@ const PlayerProfile = () => {
         age: '',
         instagram_link: '',
         region: '',
-        racket_brand: ''
+        racket_brand: '',
+        additional_images: []
     });
 
     const showMessage = (text, type = 'success') => {
@@ -138,7 +140,7 @@ const PlayerProfile = () => {
                                 .from('players')
                                 .update({ license_type: 'none', paid_registration: false })
                                 .eq('id', playerData.id);
-                            
+
                             // Update local state
                             setPlayer(prev => ({ ...prev, license_type: 'none', paid_registration: false }));
                             setTempLicenseDetails(null);
@@ -178,6 +180,18 @@ const PlayerProfile = () => {
                     }
                 }
 
+                let additionalImagesArray = [];
+                if (playerData.additional_images) {
+                    try {
+                        const parsed = typeof playerData.additional_images === 'string'
+                            ? JSON.parse(playerData.additional_images)
+                            : playerData.additional_images;
+                        additionalImagesArray = Array.isArray(parsed) ? parsed : [];
+                    } catch (e) {
+                        console.error("Failed to parse additional_images:", e);
+                    }
+                }
+
                 setFormData({
                     name: playerData.name || '',
                     email: playerData.email || '',
@@ -193,7 +207,8 @@ const PlayerProfile = () => {
                     age: playerData.age || '',
                     instagram_link: playerData.instagram_link || '',
                     region: playerData.region || '',
-                    racket_brand: playerData.racket_brand || ''
+                    racket_brand: playerData.racket_brand || '',
+                    additional_images: additionalImagesArray
                 });
 
                 // Fetch associated coach application if any
@@ -396,11 +411,11 @@ const PlayerProfile = () => {
 
     const refetchPlayer = async () => {
         const { data: { session } } = await supabase.auth.getSession();
-        
+
         // Use impersonated email if available
         const testEmail = sessionStorage.getItem('admin_test_login_email');
         const emailToFetch = testEmail || session?.user?.email;
-        
+
         if (!emailToFetch) return;
         const { data } = await supabase.from('players').select('*').ilike('email', emailToFetch).maybeSingle();
         if (data) setPlayer(data);
@@ -437,7 +452,8 @@ const PlayerProfile = () => {
             age: formData.age === '' || formData.age === null ? null : parseInt(formData.age),
             instagram_link: formData.instagram_link,
             region: formData.region,
-            racket_brand: formData.racket_brand
+            racket_brand: formData.racket_brand,
+            additional_images: JSON.stringify(formData.additional_images || [])
         };
 
         try {
@@ -465,7 +481,12 @@ const PlayerProfile = () => {
             setIsEditProfileModalOpen(false);
             await refetchPlayer();
         } catch (error) {
-            showMessage(error.message, 'error');
+            console.error("Save profile error:", error);
+            if (error.code === '42703') {
+                showMessage('Database update required! Please run the SQL migration (add_additional_images_column.sql) in your Supabase SQL editor to support multiple photos.', 'error');
+            } else {
+                showMessage(error.message, 'error');
+            }
         } finally {
             setSaving(false);
         }
@@ -479,7 +500,7 @@ const PlayerProfile = () => {
             // Format: Org|AgeGroup|MatchType
             const rankingId = `${ranking.org}|${ranking.age_group}|${ranking.match_type}`;
             const rankingLabel = `${ranking.org} - ${ranking.age_group || 'Open'}`;
-            
+
             const { error } = await supabase
                 .from('players')
                 .update({
@@ -491,7 +512,7 @@ const PlayerProfile = () => {
                 .eq('id', player.id);
 
             if (error) throw error;
-            
+
             // Optimistically update local state so header reflects change immediately
             setPlayer(prev => ({
                 ...prev,
@@ -507,23 +528,23 @@ const PlayerProfile = () => {
             console.error("Failed to update ranking:", error);
             // If the column doesn't exist yet, we still update the labels but won't persist the preference
             if (error.code === '42703') { // undefined_column
-                 const { error: retryError } = await supabase
+                const { error: retryError } = await supabase
                     .from('players')
                     .update({
                         rank_label: ranking.rank.toString(),
                         points: parseInt(ranking.points) || 0
                     })
                     .eq('id', player.id);
-                 if (retryError) throw retryError;
-                 
-                 setPlayer(prev => ({
+                if (retryError) throw retryError;
+
+                setPlayer(prev => ({
                     ...prev,
                     rank_label: ranking.rank.toString(),
                     points: parseInt(ranking.points) || 0
-                 }));
+                }));
 
-                 showMessage(`Primary ranking updated temporarily.`, 'success');
-                 await refetchPlayer();
+                showMessage(`Primary ranking updated temporarily.`, 'success');
+                await refetchPlayer();
             } else {
                 showMessage(error.message, 'error');
             }
@@ -568,6 +589,66 @@ const PlayerProfile = () => {
             showMessage(error.message, 'error');
         } finally {
             setUploadingImage(false);
+        }
+    };
+
+    const handleGalleryImageUpload = async (event) => {
+        try {
+            setUploadingGalleryImage(true);
+            if (!event.target.files || event.target.files.length === 0) {
+                throw new Error('You must select at least one image to upload.');
+            }
+
+            const files = Array.from(event.target.files);
+            const currentGallery = formData.additional_images || [];
+            const remainingSlots = 5 - currentGallery.length;
+
+            if (remainingSlots <= 0) {
+                throw new Error('You can only have up to 5 gallery images.');
+            }
+
+            // Take only what fits
+            const filesToUpload = files.slice(0, remainingSlots);
+
+            const uploadPromises = filesToUpload.map(async (file, index) => {
+                const fileExt = file.name.split('.').pop();
+                // Add index and timestamp to ensure unique filename for each uploaded file
+                const fileName = `gallery_${Date.now()}_${index}.${fileExt}`;
+                const filePath = `${player.id}/${fileName}`;
+
+                // Upload to Supabase Storage bucket 'profile-pics'
+                const { error: uploadError } = await supabase.storage
+                    .from('profile-pics')
+                    .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+                if (uploadError) throw uploadError;
+
+                // Get Public URL
+                const { data: publicUrlData } = supabase.storage
+                    .from('profile-pics')
+                    .getPublicUrl(filePath);
+
+                if (!publicUrlData) throw new Error('Failed to get public URL');
+                return publicUrlData.publicUrl;
+            });
+
+            const urls = await Promise.all(uploadPromises);
+
+            setFormData({
+                ...formData,
+                additional_images: [...currentGallery, ...urls].slice(0, 5)
+            });
+
+            if (files.length > remainingSlots) {
+                showMessage(`Uploaded ${urls.length} images. Some images were ignored because the gallery is limited to 5 images. Remember to Save Changes.`, 'success');
+            } else {
+                showMessage(`Uploaded ${urls.length} gallery image(s) successfully! Remember to Save Changes.`, 'success');
+            }
+
+        } catch (error) {
+            showMessage(error.message, 'error');
+        } finally {
+            setUploadingGalleryImage(false);
         }
     };
 
@@ -886,10 +967,10 @@ const PlayerProfile = () => {
                                                             {player.rankings.map((r, i) => {
                                                                 const isPreferred = player.preferred_ranking === `${r.org}|${r.age_group}|${r.match_type}` || (i === 0 && !player.preferred_ranking);
                                                                 const isBroll = r.org?.toLowerCase().includes('broll');
-                                                                
+
                                                                 return (
-                                                                    <div 
-                                                                        key={i} 
+                                                                    <div
+                                                                        key={i}
                                                                         onClick={() => handleSelectRanking(r)}
                                                                         className={`group/rank relative p-3 rounded-xl border transition-all cursor-pointer ${isPreferred ? 'bg-padel-green/10 border-padel-green/30' : 'bg-black/20 border-white/5 hover:border-white/20'}`}
                                                                     >
@@ -1015,19 +1096,13 @@ const PlayerProfile = () => {
                                     onClick={() => setActiveTab('events')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
-                                    <CalendarIcon size={16} /> My Tournaments
+                                    <CalendarIcon size={16} /> My Events
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('matches')}
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <Trophy size={16} /> My Matches
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('payments')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
-                                >
-                                    <CreditCard size={16} /> Payment History
                                 </button>
                                 <button
                                     onClick={() => {
@@ -1039,6 +1114,12 @@ const PlayerProfile = () => {
                                     className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <TrendingUp size={16} /> My Rankings
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('payments')}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <CreditCard size={16} /> Payment History
                                 </button>
                                 {coachApplication && (
                                     <button
@@ -1150,7 +1231,7 @@ const PlayerProfile = () => {
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
                                                                     <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
                                                                 </div>
-                                                                 <div className="space-y-1">
+                                                                <div className="space-y-1">
                                                                     <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
                                                                     <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
                                                                 </div>
@@ -1404,7 +1485,7 @@ const PlayerProfile = () => {
                                                                                 <option value="Other">Other</option>
                                                                             </select>
                                                                             <ChevronDown className="absolute right-6 top-6 text-padel-green/40 pointer-events-none" size={20} />
-                                                                            
+
                                                                             {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
                                                                                 <input
                                                                                     type="text"
@@ -1556,11 +1637,10 @@ const PlayerProfile = () => {
                                                                     <button
                                                                         key={i}
                                                                         onClick={() => setSelectedRankingForBreakdown(r)}
-                                                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${
-                                                                            isSelected
-                                                                                ? 'bg-padel-green text-black'
-                                                                                : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                                                        }`}
+                                                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${isSelected
+                                                                            ? 'bg-padel-green text-black'
+                                                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                                                            }`}
                                                                     >
                                                                         {r.org?.split(' ')[0]} ({r.age_group || 'Open'})
                                                                     </button>
@@ -1898,7 +1978,7 @@ const PlayerProfile = () => {
                                                                     return (
                                                                         <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
                                                                             <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
-                                                                            
+
                                                                             {event.isPaid && (
                                                                                 <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
                                                                                     <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
@@ -1949,7 +2029,7 @@ const PlayerProfile = () => {
                                                                                 )}
                                                                             </div>
 
-                                                                            
+
                                                                         </div>
                                                                     );
                                                                 })}
@@ -2211,7 +2291,7 @@ const PlayerProfile = () => {
                     onPaymentSuccess={refetchPlayer}
                 />
 
-                 {showCoachModal && coachApplication && (
+                {showCoachModal && coachApplication && (
                     <CoachProfileModal
                         app={coachApplication}
                         isAdmin={false}
@@ -2479,7 +2559,7 @@ const PlayerProfile = () => {
                                                             </select>
                                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                         </div>
-                                                        
+
                                                         {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
                                                             <input
                                                                 type="text"
@@ -2544,6 +2624,66 @@ const PlayerProfile = () => {
                                                         placeholder="Babolat, Nike, Red Bull, etc."
                                                     />
                                                 </div>
+                                            </div>
+
+                                            {/* Photo Gallery (Up to 5 Photos) */}
+                                            <div className="space-y-3 pt-2">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">
+                                                        Player Photo Gallery (Up to 5 Photos)
+                                                    </label>
+                                                    <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-gray-500 mr-2">
+                                                        {(formData.additional_images || []).length} / 5 Photos
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-black/20 border border-white/5 rounded-2xl p-4 md:p-6">
+                                                    {/* Existing gallery images */}
+                                                    {(formData.additional_images || []).map((imgUrl, index) => (
+                                                        <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border border-white/10 bg-[#0F172A]">
+                                                            <img src={imgUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const updated = formData.additional_images.filter((_, i) => i !== index);
+                                                                    setFormData({ ...formData, additional_images: updated });
+                                                                }}
+                                                                className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/80 hover:bg-red-600 text-white transition-all cursor-pointer opacity-0 group-hover:opacity-100 shadow-lg"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Upload placeholder buttons up to 5 */}
+                                                    {(!formData.additional_images || formData.additional_images.length < 5) && (
+                                                        <div
+                                                            onClick={() => document.getElementById('galleryImageUpload').click()}
+                                                            className="aspect-square rounded-xl border border-dashed border-white/20 hover:border-padel-green bg-white/5 hover:bg-white/10 flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 md:gap-2 group min-h-[80px]"
+                                                        >
+                                                            {uploadingGalleryImage ? (
+                                                                <div className="w-5 h-5 md:w-6 md:h-6 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
+                                                            ) : (
+                                                                <>
+                                                                    <PhotoIcon className="w-5 h-5 md:w-6 md:h-6 text-white/40 group-hover:text-padel-green transition-colors" />
+                                                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors text-center px-1">
+                                                                        Upload Photo
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <input
+                                                    type="file"
+                                                    id="galleryImageUpload"
+                                                    accept="image/*"
+                                                    multiple
+                                                    onChange={handleGalleryImageUpload}
+                                                    disabled={uploadingGalleryImage}
+                                                    className="hidden"
+                                                />
                                             </div>
                                         </fieldset>
                                     </div>

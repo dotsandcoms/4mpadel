@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
-import { motion } from 'framer-motion';
-import { X, Trophy, MapPin, Instagram, Download, Share2, ChevronDown, ChevronUp } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Trophy, MapPin, Instagram, Download, Share2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
 import { jsPDF } from 'jspdf';
 
@@ -8,8 +8,28 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
     const cardRef = useRef(null);
     const printRef = useRef(null);
     const [expandedRankingIdx, setExpandedRankingIdx] = useState(null);
+    const [isLightboxOpen, setIsLightboxOpen] = useState(false);
+    const [lightboxImageIdx, setLightboxImageIdx] = useState(0);
 
     if (!player) return null;
+
+    // Parse additional images safely
+    let safeAdditionalImages = [];
+    if (Array.isArray(player.additional_images)) {
+        safeAdditionalImages = player.additional_images;
+    } else if (typeof player.additional_images === 'string') {
+        const trimmed = player.additional_images.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                safeAdditionalImages = JSON.parse(trimmed);
+            } catch (e) {
+                safeAdditionalImages = [];
+            }
+        }
+    }
+
+    // Combined unique gallery URLs (main photo + up to 5 additional gallery photos)
+    const gallery = [player.image_url, ...safeAdditionalImages].filter(Boolean).filter((val, idx, self) => self.indexOf(val) === idx);
 
     // Safe data parsing
     let safeSponsors = [];
@@ -341,6 +361,31 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                             </div>
                         )}
                     </div>
+
+                    {/* Gallery Thumbnails Shelf (Fixed at the very bottom of the card) */}
+                    {gallery.length > 1 && (
+                        <div className="px-8 py-4 border-t border-white/5 bg-[#080d19] flex flex-col gap-2 shrink-0">
+                            <span className="text-[9px] font-black text-padel-green uppercase tracking-[0.2em] leading-none">
+                                Player Photo Gallery ({gallery.length})
+                            </span>
+                            <div className="flex items-center gap-3 overflow-x-auto py-1 no-scrollbar">
+                                {gallery.map((imgUrl, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLightboxImageIdx(idx);
+                                            setIsLightboxOpen(true);
+                                        }}
+                                        className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 hover:border-padel-green hover:scale-105 active:scale-95 transition-all duration-300 shrink-0 relative group shadow-md"
+                                    >
+                                        <img src={imgUrl} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                                        <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </motion.div>
             </div>
 
@@ -448,6 +493,72 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                     </div>
                 </div>
             </div>
+
+            {/* Lightbox / Fullscreen Image Viewer Modal */}
+            <AnimatePresence>
+                {isLightboxOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        onClick={() => setIsLightboxOpen(false)}
+                        className="fixed inset-0 z-[10000] flex flex-col items-center justify-center bg-black/95 backdrop-blur-xl p-4 md:p-8 pointer-events-auto"
+                    >
+                        {/* Close button */}
+                        <button
+                            onClick={() => setIsLightboxOpen(false)}
+                            className="absolute top-6 right-6 w-12 h-12 bg-white/10 hover:bg-white text-white hover:text-black rounded-full flex items-center justify-center transition-all cursor-pointer z-50 shadow-2xl"
+                        >
+                            <X className="w-6 h-6" />
+                        </button>
+
+                        {/* Prev button */}
+                        {gallery.length > 1 && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxImageIdx((prev) => (prev === 0 ? gallery.length - 1 : prev - 1));
+                                }}
+                                className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/5 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer z-50 shadow-xl"
+                            >
+                                <ChevronLeft className="w-6 h-6" />
+                            </button>
+                        )}
+
+                        {/* Main Lightbox Image Viewport */}
+                        <div className="relative max-w-4xl max-h-[80vh] w-full flex items-center justify-center">
+                            <motion.img
+                                key={lightboxImageIdx}
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                                src={gallery[lightboxImageIdx]}
+                                alt={`Gallery Photo ${lightboxImageIdx + 1}`}
+                                className="max-w-full max-h-[80vh] object-contain rounded-2xl border border-white/10 shadow-2xl"
+                                onClick={(e) => e.stopPropagation()}
+                            />
+                        </div>
+
+                        {/* Next button */}
+                        {gallery.length > 1 && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setLightboxImageIdx((prev) => (prev === gallery.length - 1 ? 0 : prev + 1));
+                                }}
+                                className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/5 hover:bg-white/20 text-white rounded-full flex items-center justify-center transition-all cursor-pointer z-50 shadow-xl"
+                            >
+                                <ChevronRight className="w-6 h-6" />
+                            </button>
+                        )}
+
+                        {/* Lightbox pagination indicator */}
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 text-gray-400 font-bold uppercase tracking-widest text-xs md:text-sm bg-white/5 px-4 py-2 rounded-xl border border-white/5">
+                            {lightboxImageIdx + 1} / {gallery.length}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </>
     );
 };

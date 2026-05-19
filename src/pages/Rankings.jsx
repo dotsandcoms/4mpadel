@@ -712,7 +712,7 @@ const Rankings = () => {
             transition={{ delay: 0.1 }}
             className="text-xl text-gray-400 max-w-2xl mx-auto"
           >
-            The SAPA Tour points breakdown for 2026. Master the tier system, compete in the right categories, and build your national profile.
+            4M Padel hosts various different ranking lists. Select from the dropdown below to view the different available ranking lists
           </motion.p>
         </div>
 
@@ -748,7 +748,7 @@ const Rankings = () => {
                 </motion.div>
               )}
             </AnimatePresence>
-            
+
             <div className="flex flex-col sm:flex-row items-center gap-4">
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select Organisation:</span>
               <div className="relative w-64">
