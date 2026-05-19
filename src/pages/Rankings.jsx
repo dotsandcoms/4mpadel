@@ -4,12 +4,20 @@ import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Sea
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import PlayerModal from '../components/PlayerModal';
+import sapaLogo from '../assets/sapa-logo.svg';
+import brollLogo from '../assets/BrollLogo.png';
 
 const ORG_LABELS = {
   15809: 'SAPA',
   16317: 'Broll Pro Tour',
   16482: 'SA Grand Tour'
 };
+
+const ORG_LOGOS = {
+  15809: sapaLogo,
+  16317: brollLogo
+};
+
 
 const getInitials = (name) => {
   if (!name) return '';
@@ -287,7 +295,21 @@ const FullRankingsTable = ({
   return (
     <div className="max-w-7xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
-      <div className="mb-10 text-center">
+      <div className="mb-10 flex flex-col items-center text-center">
+        {ORG_LOGOS[selectedOrgId] && (
+          <motion.div
+            key={selectedOrgId}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mb-6 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm h-20 w-44 flex items-center justify-center shadow-lg shadow-black/20"
+          >
+            <img
+              src={ORG_LOGOS[selectedOrgId]}
+              alt={`${ORG_LABELS[selectedOrgId]} Logo`}
+              className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+            />
+          </motion.div>
+        )}
         <h2 className="text-4xl md:text-5xl font-black text-white tracking-tighter uppercase mb-4">Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings</h2>
         <p className="text-gray-400 max-w-2xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
       </div>
@@ -696,20 +718,52 @@ const Rankings = () => {
 
         {/* Organization Filter Header */}
         <div className="flex justify-center mb-8 relative z-20">
-          <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3.5 flex flex-col sm:flex-row items-center gap-4 backdrop-blur-md">
-            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select Organisation:</span>
-            <div className="relative w-64">
-              <select
-                value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId(Number(e.target.value))}
-                className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-xs tracking-wider cursor-pointer transition-all"
-              >
-                <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
-                <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
-                <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
-              </select>
-              <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                <ChevronDown className="w-4 h-4 text-padel-green" />
+          <div className="bg-white/5 border border-white/10 rounded-2xl px-6 py-3.5 flex flex-col md:flex-row items-center gap-6 backdrop-blur-md shadow-xl transition-all duration-300">
+            <AnimatePresence mode="wait">
+              {ORG_LOGOS[selectedOrgId] ? (
+                <motion.div
+                  key={selectedOrgId}
+                  initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center justify-center bg-black/30 border border-white/5 px-4 py-2 rounded-xl h-14 w-28 md:w-32 flex-shrink-0"
+                >
+                  <img
+                    src={ORG_LOGOS[selectedOrgId]}
+                    alt={`${ORG_LABELS[selectedOrgId]} Logo`}
+                    className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                  />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="no-logo"
+                  initial={{ opacity: 0, scale: 0.8, x: -10 }}
+                  animate={{ opacity: 1, scale: 1, x: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, x: 10 }}
+                  transition={{ duration: 0.2 }}
+                  className="flex items-center justify-center bg-black/30 border border-white/5 px-4 py-2 rounded-xl h-14 w-28 md:w-32 flex-shrink-0"
+                >
+                  <Trophy className="w-6 h-6 text-padel-green" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Select Organisation:</span>
+              <div className="relative w-64">
+                <select
+                  value={selectedOrgId}
+                  onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                  className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-2.5 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-xs tracking-wider cursor-pointer transition-all"
+                >
+                  <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
+                  <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
+                  <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
+                </select>
+                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                  <ChevronDown className="w-4 h-4 text-padel-green" />
+                </div>
               </div>
             </div>
           </div>
@@ -779,14 +833,35 @@ const Rankings = () => {
           >
             {!rankingsLoading && (
               <div className="relative pt-4">
-                <div className="w-full px-6 md:px-20 mb-12 text-left">
-                  <h2 className="text-4xl font-bold text-white mb-2 uppercase tracking-tighter">
-                    <span className="text-padel-green">
-                      {ORG_LABELS[selectedOrgId] || "SAPA"}’s
-                    </span>{" "}
-                    Top Players
-                  </h2>
-                  <p className="text-gray-400">Live rankings of the current top performers across {selectedOrgId === 15809 ? "South Africa" : (ORG_LABELS[selectedOrgId] || "South Africa")}.</p>
+                <div className="w-full px-6 md:px-20 mb-12 flex flex-col items-center gap-6 text-center">
+                  <AnimatePresence mode="wait">
+                    {ORG_LOGOS[selectedOrgId] && (
+                      <motion.div
+                        key={selectedOrgId}
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        transition={{ duration: 0.3 }}
+                        className="mb-2 bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm h-20 w-44 flex items-center justify-center shadow-lg shadow-black/20"
+                      >
+                        <img
+                          src={ORG_LOGOS[selectedOrgId]}
+                          alt={`${ORG_LABELS[selectedOrgId]} Logo`}
+                          className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <div>
+                    <h2 className="text-4xl font-bold text-white mb-2 uppercase tracking-tighter">
+                      <span className="text-padel-green">
+                        {ORG_LABELS[selectedOrgId] || "SAPA"}’s
+                      </span>{" "}
+                      Top Players
+                    </h2>
+                    <p className="text-gray-400">Live rankings of the current top performers across {selectedOrgId === 15809 ? "South Africa" : (ORG_LABELS[selectedOrgId] || "South Africa")}.</p>
+                  </div>
                 </div>
                 <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
                 <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
