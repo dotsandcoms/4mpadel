@@ -733,6 +733,12 @@ const ResultsSection = () => {
     ? `North +${northWins - southWins}`
     : (southWins > northWins ? `South +${southWins - northWins}` : 'Teams Level');
 
+  const isNorthWinner = northWins > southWins;
+  const winnerColor = isNorthWinner ? MAGENTA : (southWins > northWins ? GOLD : '#FFFFFF');
+  const winnerText = isNorthWinner 
+    ? `Kit Kat Team North (+${northWins - southWins})` 
+    : (southWins > northWins ? `Team South (+${southWins - northWins})` : 'Draw');
+
   return (
     <section id="results" className="py-20 md:py-32 bg-white relative overflow-hidden">
       <style>
@@ -818,7 +824,7 @@ const ResultsSection = () => {
               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-gray-400">Live Tournament Results</p>
             </div>
             <h2 className="text-3xl md:text-6xl font-black uppercase tracking-tighter italic leading-none" style={{ color: MAGENTA }}>
-              Battle for Supremacy
+              Battle for Supremacy 2026 Results
             </h2>
           </div>
 
@@ -904,7 +910,10 @@ const ResultsSection = () => {
             >
               {/* Main Scoreboard */}
               <div className="lg:col-span-2 flex flex-col gap-6">
-                <div className="bg-[#0a0a0a] rounded-[32px] md:rounded-[40px] p-6 md:p-12 relative overflow-hidden shadow-2xl border border-white/5">
+                <div 
+                  onClick={() => setActiveTab('matches')}
+                  className="bg-[#0a0a0a] rounded-[32px] md:rounded-[40px] p-6 md:p-12 relative overflow-hidden shadow-2xl border border-white/5 cursor-pointer hover:border-white/20 hover:scale-[1.01] transition-all duration-300 group/scoreboard"
+                >
                   {/* Team Glows */}
                   <div className="absolute -left-20 top-0 w-80 h-full bg-magenta/20 blur-[100px] pointer-events-none" style={{ background: `${MAGENTA}33` }} />
                   <div className="absolute -right-20 top-0 w-80 h-full bg-gold/20 blur-[100px] pointer-events-none" style={{ background: `${GOLD}33` }} />
@@ -913,11 +922,11 @@ const ResultsSection = () => {
                     <Trophy className="w-48 h-48 text-white" />
                   </div>
 
-                  <div className="relative z-10">
+                  <div className="relative z-10 w-full">
                     <div className="flex justify-center mb-6 md:mb-10">
                       <div className="flex items-center gap-3 bg-white/5 backdrop-blur-xl px-5 py-2.5 rounded-full border border-white/10 shadow-lg">
-                        <Activity className="w-4 h-4 text-gold animate-pulse" style={{ color: GOLD }} />
-                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Overall Standing</span>
+                        <Trophy className="w-4.5 h-4.5 text-gold" style={{ color: GOLD }} />
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Final Result</span>
                       </div>
                     </div>
 
@@ -955,9 +964,14 @@ const ResultsSection = () => {
                       </div>
                     </div>
 
-                    <div className="mt-8 md:mt-12 flex items-center justify-center gap-4 bg-white/5 py-4 rounded-3xl border border-white/5 backdrop-blur-sm">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Current Leader:</span>
-                      <span className="text-sm md:text-lg font-black uppercase tracking-widest text-magenta italic" style={{ color: MAGENTA }}>{leaderText}</span>
+                    <div className="mt-8 md:mt-12 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 bg-white/5 py-4 px-6 rounded-3xl border border-white/5 backdrop-blur-sm group-hover/scoreboard:bg-white/10 transition-colors duration-300">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-white/30">Tournament Winners:</span>
+                        <span className="text-sm md:text-lg font-black uppercase tracking-widest italic" style={{ color: winnerColor }}>
+                          {winnerText}
+                        </span>
+                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-padel-green opacity-80 animate-pulse sm:ml-auto">Click to View Matches →</span>
                     </div>
                   </div>
                 </div>
@@ -988,20 +1002,7 @@ const ResultsSection = () => {
                 <div>
                   <h3 className="text-xl font-black uppercase tracking-tighter italic mb-8" style={{ color: MAGENTA }}>Tournament Stats</h3>
                   <div className="space-y-6">
-                    <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-gray-400">Winning Percentage</span>
-                        <span className="text-sm font-black text-magenta" style={{ color: MAGENTA }}>{winPercentage}%</span>
-                      </div>
-                      <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{ width: `${winPercentage}%` }}
-                          className="h-full bg-magenta"
-                          style={{ background: MAGENTA }}
-                        />
-                      </div>
-                    </div>
+                    {/* Winning Percentage removed as event is finished */}
 
                     <div className="p-6 bg-white rounded-3xl shadow-sm border border-gray-100">
                       <div className="flex items-center gap-4">
