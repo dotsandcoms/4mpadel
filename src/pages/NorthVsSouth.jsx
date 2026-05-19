@@ -1052,9 +1052,9 @@ const ResultsSection = () => {
                         <div className="grid grid-cols-2 gap-2 w-full">
                           {[
                             { year: '2023', winner: 'South', color: GOLD, bg: `${GOLD}08`, border: `${GOLD}15` },
-                            { year: '2024', winner: 'Draw', color: '#4B5563', bg: '#F3F4F6', border: '#E5E7EB' },
-                            { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
-                            { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${MAGENTA}15` },
+                            { year: '2024', winner: 'South', color: GOLD, bg: `${GOLD}08`, border: `${GOLD}15` },
+                            { year: '2025', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${GOLD}15` },
+                            { year: '2026', winner: 'North', color: MAGENTA, bg: `${MAGENTA}08`, border: `${GOLD}15` },
                           ].map((engraving) => (
                             <div
                               key={engraving.year}
