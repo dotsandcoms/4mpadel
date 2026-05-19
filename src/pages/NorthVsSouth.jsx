@@ -1210,7 +1210,7 @@ const ResultsSection = () => {
                   <div className="space-y-3">
                     {[
                       { year: '2023', winner: 'South', color: GOLD, detail: 'Winner: South Team' },
-                      { year: '2024', winner: 'Draw', color: '#94A3B8', detail: 'Score tied, trophy shared' },
+                      { year: '2024', winner: 'South', color: GOLD, detail: 'Winner: South Team' },
                       { year: '2025', winner: 'North', color: MAGENTA, detail: 'Winner: North Team' },
                       { year: '2026', winner: 'North', color: MAGENTA, detail: 'Winner: North Team' },
                     ].map((item) => (
