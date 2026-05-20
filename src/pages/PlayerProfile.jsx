@@ -748,37 +748,50 @@ const PlayerProfile = () => {
                             animate={{ opacity: 1, y: 0 }}
                             className="flex items-center md:items-end gap-4 md:gap-8"
                         >
-                            {/* Profile Image with Upload Trigger */}
-                            <div className="relative group shrink-0">
-                                <div
-                                    onClick={() => document.getElementById('imageUpload').click()}
-                                    className="w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-[2.5rem] bg-[#0F172A] border-2 md:border-4 border-black shadow-2xl overflow-hidden cursor-pointer relative"
-                                >
-                                    {formData.image_url ? (
-                                        <img src={formData.image_url} alt="Profile" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
-                                            <User className="w-10 h-10 md:w-16 md:h-16 text-white/20" />
+                            {/* Profile Image & Edit button column */}
+                            <div className="flex flex-col items-center gap-2 md:gap-3 shrink-0">
+                                {/* Profile Image with Upload Trigger */}
+                                <div className="relative group shrink-0">
+                                    <div
+                                        onClick={() => document.getElementById('imageUpload').click()}
+                                        className="w-24 h-24 md:w-40 md:h-40 rounded-2xl md:rounded-[2.5rem] bg-[#0F172A] border-2 md:border-4 border-black shadow-2xl overflow-hidden cursor-pointer relative"
+                                    >
+                                        {formData.image_url ? (
+                                            <img src={formData.image_url} alt="Profile" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-gray-900">
+                                                <User className="w-10 h-10 md:w-16 md:h-16 text-white/20" />
+                                            </div>
+                                        )}
+                                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-sm">
+                                            <PhotoIcon className="w-5 h-5 md:w-8 md:h-8 text-padel-green mb-1 md:mb-2" />
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-white">Change Photo</span>
                                         </div>
-                                    )}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all duration-300 flex flex-col items-center justify-center backdrop-blur-sm">
-                                        <PhotoIcon className="w-5 h-5 md:w-8 md:h-8 text-padel-green mb-1 md:mb-2" />
-                                        <span className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-white">Change Photo</span>
+                                        {uploadingImage && (
+                                            <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
+                                                <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
+                                            </div>
+                                        )}
                                     </div>
-                                    {uploadingImage && (
-                                        <div className="absolute inset-0 bg-black/80 flex items-center justify-center z-20">
-                                            <div className="w-6 h-6 md:w-8 md:h-8 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
-                                        </div>
-                                    )}
+                                    <input
+                                        type="file"
+                                        id="imageUpload"
+                                        accept="image/*"
+                                        onChange={handleImageUpload}
+                                        disabled={uploadingImage}
+                                        className="hidden"
+                                    />
                                 </div>
-                                <input
-                                    type="file"
-                                    id="imageUpload"
-                                    accept="image/*"
-                                    onChange={handleImageUpload}
-                                    disabled={uploadingImage}
-                                    className="hidden"
-                                />
+
+                                {!isImpersonating && (
+                                    <button
+                                        onClick={() => setIsEditProfileModalOpen(true)}
+                                        className="w-full flex items-center justify-center gap-1.5 bg-[#0F172A]/85 hover:bg-padel-green hover:text-black border border-white/10 text-gray-300 px-3.5 py-2 rounded-2xl text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shadow-xl shadow-black/40"
+                                    >
+                                        <Edit3 size={12} className="md:w-3.5 md:h-3.5" />
+                                        Edit Profile
+                                    </button>
+                                )}
                             </div>
 
                             <div className="flex-1 min-w-0">
@@ -812,15 +825,6 @@ const PlayerProfile = () => {
                                             <h1 className="text-2xl md:text-7xl font-black uppercase tracking-tighter leading-tight md:leading-[0.85] drop-shadow-2xl truncate">
                                                 {player.name}
                                             </h1>
-                                            {!isImpersonating && (
-                                                <button
-                                                    onClick={() => setIsEditProfileModalOpen(true)}
-                                                    className="flex items-center gap-1.5 bg-[#0F172A]/85 hover:bg-padel-green hover:text-black border border-white/10 text-gray-300 px-3.5 py-2 rounded-2xl text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer shadow-xl shadow-black/40 self-center"
-                                                >
-                                                    <Edit3 size={12} className="md:w-3.5 md:h-3.5" />
-                                                    Edit Profile
-                                                </button>
-                                            )}
                                         </div>
                                         <div className="flex flex-wrap items-center gap-3">
                                             {player.rank_label && player.rank_label !== 'Unranked' && (
