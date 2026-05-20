@@ -175,7 +175,7 @@ const Hero = () => {
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
-            <div className="relative min-h-[760px] lg:h-[85vh] lg:min-h-0 w-full overflow-hidden rounded-[2rem] border border-white/10">
+            <div className="relative min-h-[940px] lg:h-[85vh] lg:min-h-0 w-full overflow-hidden rounded-[2rem] border border-white/10">
                 {/* Parallax Background */}
                 <motion.div
                     style={{ y: yBackend }}
@@ -199,7 +199,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 h-full flex flex-col justify-start pt-24 pb-[345px] lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
+                    className="relative z-20 h-full flex flex-col justify-start pt-24 pb-[480px] lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
                 >
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
@@ -210,18 +210,35 @@ const Hero = () => {
                         The Home of 4M Padel
                     </motion.p>
 
-                    <div className="overflow-hidden">
+                    <div className="overflow-hidden mb-2">
                         <motion.h1
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="text-5xl md:text-7xl lg:text-8xl font-bold text-white leading-none mb-4 max-w-4xl"
+                            className="text-5xl md:text-7xl lg:text-8xl font-bold text-white leading-none max-w-4xl"
                         >
-                            FOR THE PLAYERS<br />
-                            <span className="text-padel-green text-[12px] sm:text-sm md:text-2xl lg:text-3xl block mt-2 whitespace-nowrap tracking-tighter">Calendar • Tournaments • Players • Leaderboard • Training • Media</span>
-
+                            FOR THE PLAYERS
                         </motion.h1>
                     </div>
+
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.7, duration: 0.8 }}
+                        className="text-padel-green text-[10px] xs:text-[12px] sm:text-sm md:text-2xl lg:text-3xl mt-1 mb-6 tracking-tighter flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-bold uppercase"
+                    >
+                        <span>Calendar</span>
+                        <span className="text-white/30 font-light">•</span>
+                        <span>Tournaments</span>
+                        <span className="text-white/30 font-light">•</span>
+                        <span>Players</span>
+                        <span className="text-white/30 font-light">•</span>
+                        <span>Leaderboard</span>
+                        <span className="text-white/30 font-light">•</span>
+                        <span>Training</span>
+                        <span className="text-white/30 font-light">•</span>
+                        <span>Media</span>
+                    </motion.div>
 
                     <motion.p
                         initial={{ opacity: 0 }}
