@@ -53,7 +53,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
 
       const { data } = await supabase
         .from('players')
-        .select('name, rankedin_id, rank_label, points, active_ranking_label, region')
+        .select('name, rankedin_id, rank_label, points, active_ranking_label, region, racket_brand')
         .ilike('email', targetEmail)
         .maybeSingle();
 

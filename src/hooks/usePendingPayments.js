@@ -156,16 +156,28 @@ export const usePendingPayments = (email, rankedinId) => {
                         paidRegs.forEach(r => findAndRemove(r.event_id, r.division));
                     }
                     if (paidParts) {
-                        paidParts.forEach(p => findAndRemove(p.event_id, p.class_name));
+                        paidParts.forEach(p => {
+                            findAndRemove(p.event_id, p.class_name);
+                            // Also remove ALL divisions for this event ID to handle mismatches
+                            const keysToRemove = [];
+                            for (const [key, val] of unpaidEvents.entries()) {
+                                if (val.id === p.event_id) keysToRemove.push(key);
+                            }
+                            keysToRemove.forEach(k => unpaidEvents.delete(k));
+                        });
                     }
                     if (directPayments) {
                         directPayments.forEach(p => {
                             const division = p.metadata?.division;
                             if (division) {
                                 findAndRemove(p.event_id, division);
-                            } else {
-                                findAndRemove(p.event_id, 'N/A');
                             }
+                            // Also remove ALL divisions for this event (handles division string mismatches)
+                            const keysToRemove = [];
+                            for (const [key, val] of unpaidEvents.entries()) {
+                                if (val.id === p.event_id) keysToRemove.push(key);
+                            }
+                            keysToRemove.forEach(k => unpaidEvents.delete(k));
                         });
                     }
                 }
