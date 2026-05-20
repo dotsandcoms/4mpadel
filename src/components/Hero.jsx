@@ -325,10 +325,47 @@ const Hero = () => {
                             className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5"
                         >
                             {/* Glass panel */}
-                            <div className="bg-neutral-950/85 lg:bg-gradient-to-b lg:from-neutral-900/60 lg:to-black/90 backdrop-blur-2xl border-t border-white/15 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative overflow-hidden">
-                                {/* Subtle corner accent glows */}
-                                <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-purple-500/5 blur-3xl pointer-events-none" />
-                                <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full bg-orange-500/5 blur-3xl pointer-events-none" />
+                            <div className="bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] relative overflow-hidden">
+                                {/* Animated Aurora glows underneath the glass */}
+                                <motion.div
+                                    animate={{
+                                        scale: [1, 1.25, 0.85, 1],
+                                        x: [0, 50, -25, 0],
+                                        y: [0, -30, 20, 0],
+                                    }}
+                                    transition={{
+                                        duration: 18,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
+                                />
+                                <motion.div
+                                    animate={{
+                                        scale: [1, 0.85, 1.2, 1],
+                                        x: [0, -40, 30, 0],
+                                        y: [0, 25, -25, 0],
+                                    }}
+                                    transition={{
+                                        duration: 22,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="absolute -bottom-20 right-1/4 w-80 h-80 rounded-full bg-padel-green/10 blur-[100px] pointer-events-none"
+                                />
+                                <motion.div
+                                    animate={{
+                                        scale: [1, 1.15, 0.9, 1],
+                                        x: [0, 25, -40, 0],
+                                        y: [0, -20, 30, 0],
+                                    }}
+                                    transition={{
+                                        duration: 20,
+                                        repeat: Infinity,
+                                        ease: "easeInOut"
+                                    }}
+                                    className="absolute bottom-0 right-10 w-64 h-64 rounded-full bg-orange-500/10 blur-[85px] pointer-events-none"
+                                />
 
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
                                     
@@ -388,7 +425,7 @@ const Hero = () => {
                                                                 if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
                                                                 else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                             }}
-                                                            className={`relative flex-shrink-0 w-48 md:w-56 bg-gradient-to-br from-neutral-900/60 to-black/80 border border-white/5 ${accent} rounded-xl p-3.5 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
+                                                            className={`relative flex-shrink-0 w-48 md:w-56 bg-white/[0.03] backdrop-blur-md border border-white/10 ${accent} rounded-xl p-3.5 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
                                                         >
                                                             {/* Subtle status top gradient bar */}
                                                             <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
@@ -458,7 +495,7 @@ const Hero = () => {
                                                 return (
                                                     <div 
                                                         onClick={() => navigate('/profile?tab=matches')}
-                                                        className="w-full bg-gradient-to-br from-neutral-900/60 to-black/80 border border-white/5 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                                                     >
                                                         {/* Soft background glow */}
                                                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
