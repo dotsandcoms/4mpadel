@@ -60,59 +60,60 @@ const Hero = () => {
             return;
         }
 
+        const CACHE_KEY = `hero_events_${session.user.email}`;
+        const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+        // ── Step 1: Show cache immediately so the strip appears on first render ──
+        try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) {
+                const { ts, events } = JSON.parse(cached);
+                if (Date.now() - ts < CACHE_TTL && events.length > 0) {
+                    setUpcomingEvents(events);
+                    // Still refresh in background but don't block render
+                }
+            }
+        } catch (_) {}
+
+        // ── Step 2: Fetch fresh data from RankedIn (in background) ──
         const fetchPlayerEvents = async () => {
-            setEventsLoading(true);
             try {
-                // Match same pattern as PlayerProfile: look up by email
                 const { data: playerData } = await supabase
                     .from('players')
                     .select('id, rankedin_id, email')
                     .ilike('email', session.user.email)
                     .maybeSingle();
 
-                if (!playerData?.rankedin_id) {
-                    console.log('[Hero] No player/rankedin_id found for email:', session.user.email);
-                    return;
-                }
+                if (!playerData?.rankedin_id) return;
 
-                console.log('[Hero] Fetching events for rankedin_id:', playerData.rankedin_id);
                 const rawEvents = await getPlayerEventsAsync(playerData.rankedin_id);
                 const now = new Date();
                 const filtered = (rawEvents || [])
                     .filter(e => new Date(e.start_date) >= now && e.state !== 2)
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
-                    .slice(0, 3); // max 3 in the banner
-
-                console.log('[Hero] Upcoming events:', filtered.length);
+                    .slice(0, 3);
 
                 if (filtered.length > 0) {
-                    // Enrich with DB data
-                    const { data: dbEvents } = await supabase
-                        .from('calendar')
-                        .select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees');
-
-                    // Check paid status
-                    const { data: paidParticipants } = await supabase
-                        .from('tournament_participants')
-                        .select('event_id')
-                        .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
-                        .eq('is_paid', true);
-
-                    const { data: directPayments } = await supabase
-                        .from('payments')
-                        .select('event_id')
-                        .eq('player_id', playerData.id)
-                        .eq('status', 'success')
-                        .eq('payment_type', 'event_entry_fee');
-
-                    const paidEventIds = new Set([
-                        ...(paidParticipants || []).map(p => p.event_id),
-                        ...(directPayments || []).map(p => p.event_id),
+                    // Run all enrichment queries in parallel
+                    const [dbEventsRes, paidParticipantsRes, directPaymentsRes] = await Promise.all([
+                        supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees'),
+                        supabase.from('tournament_participants').select('event_id')
+                            .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
+                            .eq('is_paid', true),
+                        supabase.from('payments').select('event_id')
+                            .eq('player_id', playerData.id)
+                            .eq('status', 'success')
+                            .eq('payment_type', 'event_entry_fee'),
                     ]);
 
-                    if (dbEvents) {
+                    const paidEventIds = new Set([
+                        ...(paidParticipantsRes.data || []).map(p => p.event_id),
+                        ...(directPaymentsRes.data || []).map(p => p.event_id),
+                    ]);
+
+                    if (dbEventsRes.data) {
                         filtered.forEach(e => {
-                            const match = dbEvents.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
+                            const match = dbEventsRes.data.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
                             if (match) {
                                 e.db_id = match.id;
                                 e.slug = match.slug;
@@ -125,11 +126,13 @@ const Hero = () => {
                     }
                 }
 
+                // Update UI and cache
                 setUpcomingEvents(filtered);
+                try {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
+                } catch (_) {}
             } catch (err) {
                 console.error('Hero events error:', err);
-            } finally {
-                setEventsLoading(false);
             }
         };
 
