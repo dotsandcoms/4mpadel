@@ -162,7 +162,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 h-full flex flex-col justify-center pt-24 md:pt-0 px-6 md:px-20 container mx-auto"
+                    className="relative z-20 h-full flex flex-col justify-start pt-28 md:justify-center md:pt-0 px-6 md:px-20 container mx-auto"
                 >
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
