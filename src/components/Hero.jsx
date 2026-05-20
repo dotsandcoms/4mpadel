@@ -308,17 +308,23 @@ const Hero = () => {
                             className="absolute bottom-0 left-0 right-0 z-30 px-4 md:px-8 pb-5"
                         >
                             {/* Glass panel */}
-                            <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-4">
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-0">
+                            <div className="bg-gradient-to-b from-neutral-900/60 to-black/90 backdrop-blur-2xl border-t border-white/15 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative overflow-hidden">
+                                {/* Subtle corner accent glows */}
+                                <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-purple-500/5 blur-3xl pointer-events-none" />
+                                <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full bg-orange-500/5 blur-3xl pointer-events-none" />
+
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
                                     
                                     {/* Left Side: Upcoming Events */}
                                     {upcomingEvents.length > 0 && (
-                                        <div className={`${nextMatch ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
+                                        <div className={`${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
                                             {/* Header row */}
-                                            <div className="flex items-center justify-between mb-2.5 px-1">
+                                            <div className="flex items-center justify-between mb-3.5 px-1">
                                                 <div className="flex items-center gap-2">
-                                                    <Calendar size={13} className="text-purple-400" />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Next Events</span>
+                                                    <div className="p-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+                                                        <Calendar size={13} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Events</span>
                                                 </div>
                                                 <button
                                                     onClick={() => navigate('/profile')}
@@ -333,37 +339,68 @@ const Hero = () => {
                                             <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
                                                 {upcomingEvents.map((event, idx) => {
                                                     // colour accent
-                                                    let accent = 'border-white/10 hover:border-padel-green/50';
+                                                    let accent = 'hover:border-padel-green/40 hover:shadow-[0_0_15px_rgba(46,213,115,0.1)]';
                                                     let dateCls = 'text-padel-green';
-                                                    if (event.sapa_status === 'Major') { accent = 'border-white/10 hover:border-red-500/50'; dateCls = 'text-red-400'; }
-                                                    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { accent = 'border-white/10 hover:border-amber-500/50'; dateCls = 'text-amber-400'; }
-                                                    else if (event.sapa_status === 'Gold') { accent = 'border-white/10 hover:border-yellow-500/50'; dateCls = 'text-yellow-400'; }
+                                                    let glowBg = 'from-padel-green/10 to-transparent';
+                                                    let ringCls = 'border-padel-green/30 text-padel-green';
+
+                                                    if (event.sapa_status === 'Major') {
+                                                        accent = 'hover:border-red-500/40 hover:shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+                                                        dateCls = 'text-red-400';
+                                                        glowBg = 'from-red-500/10 to-transparent';
+                                                        ringCls = 'border-red-500/30 text-red-400';
+                                                    } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                        accent = 'hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+                                                        dateCls = 'text-amber-400';
+                                                        glowBg = 'from-amber-500/10 to-transparent';
+                                                        ringCls = 'border-amber-500/30 text-amber-400';
+                                                    } else if (event.sapa_status === 'Gold') {
+                                                        accent = 'hover:border-yellow-500/40 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                                        dateCls = 'text-yellow-400';
+                                                        glowBg = 'from-yellow-500/10 to-transparent';
+                                                        ringCls = 'border-yellow-500/30 text-yellow-400';
+                                                    }
 
                                                     return (
                                                         <motion.button
                                                             key={event.id}
-                                                            initial={{ opacity: 0, x: 10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                            transition={{ delay: 1.2 + idx * 0.08 }}
+                                                            initial={{ opacity: 0, y: 15 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: 1.2 + idx * 0.08, type: 'spring', stiffness: 100 }}
                                                             onClick={() => {
                                                                 if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
                                                                 else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                             }}
-                                                            className={`relative flex-shrink-0 w-44 md:w-52 bg-white/5 border ${accent} rounded-xl p-2.5 text-left transition-all group overflow-hidden`}
+                                                            className={`relative flex-shrink-0 w-48 md:w-56 bg-gradient-to-br from-neutral-900/60 to-black/80 border border-white/5 ${accent} rounded-xl p-3.5 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
                                                         >
-                                                            {/* PAID badge */}
-                                                            {event.isPaid && (
-                                                                <span className="absolute top-2 right-2 flex items-center gap-0.5 bg-padel-green/20 border border-padel-green/30 text-padel-green text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full">
-                                                                    <CheckCircle2 size={7} strokeWidth={4} /> Paid
+                                                            {/* Subtle status top gradient bar */}
+                                                            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
+
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
+                                                                    {event.sapa_status || 'SAPA'}
                                                                 </span>
-                                                            )}
-                                                            <p className={`text-[8px] font-black uppercase tracking-wider mb-0.5 ${dateCls}`}>
-                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                            </p>
-                                                            <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug">
+                                                                
+                                                                {/* Paid Stamp / Icon */}
+                                                                {event.isPaid ? (
+                                                                    <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
+                                                                        <CheckCircle2 size={8} className="shrink-0" /> Paid
+                                                                    </span>
+                                                                ) : (
+                                                                    <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+                                                                )}
+                                                            </div>
+
+                                                            <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-8">
                                                                 {event.event_name}
                                                             </p>
-                                                            <ExternalLink size={9} className="absolute bottom-2 right-2 text-white/20 group-hover:text-white/50 transition-colors" />
+
+                                                            <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
+                                                                <span className={`text-[8px] font-bold ${dateCls} flex items-center gap-1`}>
+                                                                    <Calendar size={10} className="shrink-0" />
+                                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                </span>
+                                                            </div>
                                                         </motion.button>
                                                     );
                                                 })}
@@ -375,10 +412,12 @@ const Hero = () => {
                                     {nextMatch && (
                                         <div className={`${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
                                             {/* Header row */}
-                                            <div className="flex items-center justify-between mb-2.5 px-1">
+                                            <div className="flex items-center justify-between mb-3.5 px-1">
                                                 <div className="flex items-center gap-2">
-                                                    <Trophy size={13} className="text-orange-400" />
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Next Match</span>
+                                                    <div className="p-1 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.15)]">
+                                                        <Trophy size={13} />
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Match</span>
                                                 </div>
                                                 <button
                                                     onClick={() => navigate('/profile?tab=matches')}
@@ -392,49 +431,80 @@ const Hero = () => {
                                             {/* Match Card */}
                                             {(() => {
                                                 const info = nextMatch.Info || {};
+                                                
+                                                // Parse partners and names
+                                                const team1P1 = info.Challenger?.Name || 'TBD';
+                                                const team1P2 = info.Challenger1?.Name;
+                                                const team2P1 = info.Challenged?.Name || 'TBD';
+                                                const team2P2 = info.Challenged1?.Name;
+                                                
                                                 return (
                                                     <div 
                                                         onClick={() => navigate('/profile?tab=matches')}
-                                                        className="w-full bg-white/5 border border-white/10 hover:border-orange-500/50 rounded-xl p-2.5 text-left transition-all group overflow-hidden cursor-pointer flex flex-col justify-between h-[82px] relative"
+                                                        className="w-full bg-gradient-to-br from-neutral-900/60 to-black/80 border border-white/5 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                                                     >
-                                                        <div className="flex justify-between items-start gap-1">
-                                                            <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate max-w-[70%]">
-                                                                {info.EventName}
-                                                            </span>
+                                                        {/* Soft background glow */}
+                                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                        
+                                                        {/* Top Bar: Event Name and Date */}
+                                                        <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
+                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
+                                                                <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate">
+                                                                    {info.EventName || 'Next Match'}
+                                                                </span>
+                                                            </div>
                                                             {info.Date && (
-                                                                <span className="text-[8px] font-bold text-white/50 whitespace-nowrap">
+                                                                <span className="text-[8px] font-bold text-white/50 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
                                                                     {info.Date}
                                                                 </span>
                                                             )}
                                                         </div>
                                                         
-                                                        {/* Teams Grid */}
-                                                        <div className="grid grid-cols-5 gap-1 items-center my-0.5">
-                                                            <div className="col-span-2 text-[10px] font-bold text-white truncate text-right">
-                                                                {info.Challenger?.Name || 'TBD'}
-                                                                {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
-                                                            </div>
-                                                            <div className="col-span-1 flex justify-center">
-                                                                <span className="text-[7px] font-black text-white/40 bg-white/5 border border-white/10 px-1 py-0.2 rounded uppercase tracking-wider scale-90">
-                                                                    VS
+                                                        {/* Centered Matchup Section */}
+                                                        <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
+                                                            {/* Team 1 (Challengers) */}
+                                                            <div className="flex-1 flex flex-col items-end text-right min-w-0">
+                                                                <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                    {team1P1}
                                                                 </span>
+                                                                {team1P2 && (
+                                                                    <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                        {team1P2}
+                                                                    </span>
+                                                                )}
                                                             </div>
-                                                            <div className="col-span-2 text-[10px] font-bold text-white truncate text-left">
-                                                                {info.Challenged?.Name || 'TBD'}
-                                                                {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
+
+                                                            {/* VS Badge */}
+                                                            <div className="relative shrink-0 flex items-center justify-center">
+                                                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
+                                                                    <span className="text-[8px] font-black text-black tracking-widest font-sans scale-90">VS</span>
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Team 2 (Challenged) */}
+                                                            <div className="flex-1 flex flex-col items-start text-left min-w-0">
+                                                                <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                    {team2P1}
+                                                                </span>
+                                                                {team2P2 && (
+                                                                    <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                        {team2P2}
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                         </div>
 
-                                                        {/* Location & Court Tag */}
-                                                        <div className="flex items-center justify-between mt-0.5">
-                                                            <div className="flex items-center gap-1 min-w-0 max-w-[75%]">
-                                                                <MapPin size={9} className="text-padel-green shrink-0" />
-                                                                <span className="text-[8px] font-semibold text-white/50 truncate uppercase tracking-wider">
+                                                        {/* Bottom Bar: Location and Court */}
+                                                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                                                            <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
+                                                                <MapPin size={10} className="text-padel-green shrink-0" />
+                                                                <span className="text-[8px] font-bold text-white/50 truncate uppercase tracking-wider">
                                                                     {info.Location || info.Venue || 'Location TBD'}
                                                                 </span>
                                                             </div>
                                                             {info.Court && (
-                                                                <span className="text-[7px] font-black bg-orange-500/20 border border-orange-500/30 text-orange-400 px-1 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-90">
+                                                                <span className="text-[7px] font-black bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
                                                                     {info.Court}
                                                                 </span>
                                                             )}
