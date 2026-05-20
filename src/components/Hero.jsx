@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/hero_bg.png';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
@@ -19,8 +19,9 @@ const Hero = () => {
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const [session, setSession] = useState(null);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [nextMatch, setNextMatch] = useState(null);
     const [eventsLoading, setEventsLoading] = useState(false);
-    const { getPlayerEventsAsync } = useRankedin();
+    const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
 
     useEffect(() => {
         // Get initial session
@@ -53,30 +54,41 @@ const Hero = () => {
         return () => subscription.unsubscribe();
     }, []);
 
-    // Fetch upcoming events when session changes
+    // Fetch upcoming events and matches when session changes
     useEffect(() => {
         if (!session?.user) {
             setUpcomingEvents([]);
+            setNextMatch(null);
             return;
         }
 
         const CACHE_KEY = `hero_events_${session.user.email}`;
+        const MATCH_CACHE_KEY = `hero_match_${session.user.email}`;
         const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
         // ── Step 1: Show cache immediately so the strip appears on first render ──
         try {
-            const cached = localStorage.getItem(CACHE_KEY);
-            if (cached) {
-                const { ts, events } = JSON.parse(cached);
+            const cachedEvents = localStorage.getItem(CACHE_KEY);
+            if (cachedEvents) {
+                const { ts, events } = JSON.parse(cachedEvents);
                 if (Date.now() - ts < CACHE_TTL && events.length > 0) {
                     setUpcomingEvents(events);
-                    // Still refresh in background but don't block render
                 }
             }
-        } catch (_) {}
+        } catch (_) { }
+
+        try {
+            const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
+            if (cachedMatch) {
+                const { ts, match } = JSON.parse(cachedMatch);
+                if (Date.now() - ts < CACHE_TTL && match) {
+                    setNextMatch(match);
+                }
+            }
+        } catch (_) { }
 
         // ── Step 2: Fetch fresh data from RankedIn (in background) ──
-        const fetchPlayerEvents = async () => {
+        const fetchPlayerEventsAndMatches = async () => {
             try {
                 const { data: playerData } = await supabase
                     .from('players')
@@ -86,7 +98,12 @@ const Hero = () => {
 
                 if (!playerData?.rankedin_id) return;
 
-                const rawEvents = await getPlayerEventsAsync(playerData.rankedin_id);
+                // Fetch events and matches in parallel
+                const [rawEvents, rawMatches] = await Promise.all([
+                    getPlayerEventsAsync(playerData.rankedin_id),
+                    getPlayerMatches(playerData.rankedin_id, false)
+                ]);
+
                 const now = new Date();
                 const filtered = (rawEvents || [])
                     .filter(e => new Date(e.start_date) >= now && e.state !== 2)
@@ -126,18 +143,35 @@ const Hero = () => {
                     }
                 }
 
+                // Filter & sort matches in ascending chronological order to find next match
+                const validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
+                const parseDate = (dateStr) => {
+                    if (!dateStr) return new Date(0);
+                    if (dateStr.includes('T') || dateStr.includes('-')) {
+                        return new Date(dateStr);
+                    }
+                    const [datePart, timePart] = dateStr.split(' ');
+                    const [day, month, year] = datePart.split('/');
+                    return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
+                };
+                validMatches.sort((a, b) => parseDate(a.Info?.Date) - parseDate(b.Info?.Date));
+                const firstNextMatch = validMatches[0] || null;
+
                 // Update UI and cache
                 setUpcomingEvents(filtered);
+                setNextMatch(firstNextMatch);
+                
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
-                } catch (_) {}
+                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch }));
+                } catch (_) { }
             } catch (err) {
-                console.error('Hero events error:', err);
+                console.error('Hero events and matches error:', err);
             }
         };
 
-        fetchPlayerEvents();
-    }, [session, getPlayerEventsAsync]);
+        fetchPlayerEventsAndMatches();
+    }, [session, getPlayerEventsAsync, getPlayerMatches]);
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
@@ -263,9 +297,9 @@ const Hero = () => {
                     </motion.div>
                 </motion.div>
 
-                {/* ── Upcoming Events strip — pinned to the bottom of the hero ── */}
+                {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
                 <AnimatePresence>
-                    {session && upcomingEvents.length > 0 && (
+                    {session && (upcomingEvents.length > 0 || nextMatch) && (
                         <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -275,59 +309,142 @@ const Hero = () => {
                         >
                             {/* Glass panel */}
                             <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-4">
-                                {/* Header row */}
-                                <div className="flex items-center justify-between mb-3 px-1">
-                                    <div className="flex items-center gap-2">
-                                        <Calendar size={13} className="text-purple-400" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Upcoming Events</span>
-                                    </div>
-                                    <button
-                                        onClick={() => navigate('/profile')}
-                                        className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
-                                    >
-                                        View all
-                                        <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
-                                    </button>
-                                </div>
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-0">
+                                    
+                                    {/* Left Side: Upcoming Events */}
+                                    {upcomingEvents.length > 0 && (
+                                        <div className={`${nextMatch ? 'lg:col-span-8' : 'lg:col-span-12'}`}>
+                                            {/* Header row */}
+                                            <div className="flex items-center justify-between mb-2.5 px-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar size={13} className="text-purple-400" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Next Events</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => navigate('/profile')}
+                                                    className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
+                                                >
+                                                    View all
+                                                    <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                </button>
+                                            </div>
 
-                                {/* Event cards — horizontal scroll on mobile, row on desktop */}
-                                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                                    {upcomingEvents.map((event, idx) => {
-                                        // colour accent
-                                        let accent = 'border-white/10 hover:border-padel-green/50';
-                                        let dateCls = 'text-padel-green';
-                                        if (event.sapa_status === 'Major') { accent = 'border-white/10 hover:border-red-500/50'; dateCls = 'text-red-400'; }
-                                        else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { accent = 'border-white/10 hover:border-amber-500/50'; dateCls = 'text-amber-400'; }
-                                        else if (event.sapa_status === 'Gold') { accent = 'border-white/10 hover:border-yellow-500/50'; dateCls = 'text-yellow-400'; }
+                                            {/* Event cards — horizontal scroll */}
+                                            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                                                {upcomingEvents.map((event, idx) => {
+                                                    // colour accent
+                                                    let accent = 'border-white/10 hover:border-padel-green/50';
+                                                    let dateCls = 'text-padel-green';
+                                                    if (event.sapa_status === 'Major') { accent = 'border-white/10 hover:border-red-500/50'; dateCls = 'text-red-400'; }
+                                                    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { accent = 'border-white/10 hover:border-amber-500/50'; dateCls = 'text-amber-400'; }
+                                                    else if (event.sapa_status === 'Gold') { accent = 'border-white/10 hover:border-yellow-500/50'; dateCls = 'text-yellow-400'; }
 
-                                        return (
-                                            <motion.button
-                                                key={event.id}
-                                                initial={{ opacity: 0, x: 10 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: 1.2 + idx * 0.08 }}
-                                                onClick={() => {
-                                                    if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
-                                                    else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                }}
-                                                className={`relative flex-shrink-0 w-48 md:w-56 bg-white/5 border ${accent} rounded-xl p-3 text-left transition-all group overflow-hidden`}
-                                            >
-                                                {/* PAID badge */}
-                                                {event.isPaid && (
-                                                    <span className="absolute top-2 right-2 flex items-center gap-0.5 bg-padel-green/20 border border-padel-green/30 text-padel-green text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full">
-                                                        <CheckCircle2 size={7} strokeWidth={4} /> Paid
-                                                    </span>
-                                                )}
-                                                <p className={`text-[9px] font-black uppercase tracking-wider mb-1 ${dateCls}`}>
-                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                </p>
-                                                <p className="text-xs font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors">
-                                                    {event.event_name}
-                                                </p>
-                                                <ExternalLink size={10} className="absolute bottom-2.5 right-2.5 text-white/20 group-hover:text-white/50 transition-colors" />
-                                            </motion.button>
-                                        );
-                                    })}
+                                                    return (
+                                                        <motion.button
+                                                            key={event.id}
+                                                            initial={{ opacity: 0, x: 10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            transition={{ delay: 1.2 + idx * 0.08 }}
+                                                            onClick={() => {
+                                                                if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                            }}
+                                                            className={`relative flex-shrink-0 w-44 md:w-52 bg-white/5 border ${accent} rounded-xl p-2.5 text-left transition-all group overflow-hidden`}
+                                                        >
+                                                            {/* PAID badge */}
+                                                            {event.isPaid && (
+                                                                <span className="absolute top-2 right-2 flex items-center gap-0.5 bg-padel-green/20 border border-padel-green/30 text-padel-green text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full">
+                                                                    <CheckCircle2 size={7} strokeWidth={4} /> Paid
+                                                                </span>
+                                                            )}
+                                                            <p className={`text-[8px] font-black uppercase tracking-wider mb-0.5 ${dateCls}`}>
+                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                            </p>
+                                                            <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug">
+                                                                {event.event_name}
+                                                            </p>
+                                                            <ExternalLink size={9} className="absolute bottom-2 right-2 text-white/20 group-hover:text-white/50 transition-colors" />
+                                                        </motion.button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Right Side: My Next Match */}
+                                    {nextMatch && (
+                                        <div className={`${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
+                                            {/* Header row */}
+                                            <div className="flex items-center justify-between mb-2.5 px-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Trophy size={13} className="text-orange-400" />
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Next Match</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => navigate('/profile?tab=matches')}
+                                                    className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
+                                                >
+                                                    View Matches
+                                                    <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                </button>
+                                            </div>
+
+                                            {/* Match Card */}
+                                            {(() => {
+                                                const info = nextMatch.Info || {};
+                                                return (
+                                                    <div 
+                                                        onClick={() => navigate('/profile?tab=matches')}
+                                                        className="w-full bg-white/5 border border-white/10 hover:border-orange-500/50 rounded-xl p-2.5 text-left transition-all group overflow-hidden cursor-pointer flex flex-col justify-between h-[82px] relative"
+                                                    >
+                                                        <div className="flex justify-between items-start gap-1">
+                                                            <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate max-w-[70%]">
+                                                                {info.EventName}
+                                                            </span>
+                                                            {info.Date && (
+                                                                <span className="text-[8px] font-bold text-white/50 whitespace-nowrap">
+                                                                    {info.Date}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Teams Grid */}
+                                                        <div className="grid grid-cols-5 gap-1 items-center my-0.5">
+                                                            <div className="col-span-2 text-[10px] font-bold text-white truncate text-right">
+                                                                {info.Challenger?.Name || 'TBD'}
+                                                                {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
+                                                            </div>
+                                                            <div className="col-span-1 flex justify-center">
+                                                                <span className="text-[7px] font-black text-white/40 bg-white/5 border border-white/10 px-1 py-0.2 rounded uppercase tracking-wider scale-90">
+                                                                    VS
+                                                                </span>
+                                                            </div>
+                                                            <div className="col-span-2 text-[10px] font-bold text-white truncate text-left">
+                                                                {info.Challenged?.Name || 'TBD'}
+                                                                {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Location & Court Tag */}
+                                                        <div className="flex items-center justify-between mt-0.5">
+                                                            <div className="flex items-center gap-1 min-w-0 max-w-[75%]">
+                                                                <MapPin size={9} className="text-padel-green shrink-0" />
+                                                                <span className="text-[8px] font-semibold text-white/50 truncate uppercase tracking-wider">
+                                                                    {info.Location || info.Venue || 'Location TBD'}
+                                                                </span>
+                                                            </div>
+                                                            {info.Court && (
+                                                                <span className="text-[7px] font-black bg-orange-500/20 border border-orange-500/30 text-orange-400 px-1 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-90">
+                                                                    {info.Court}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    )}
+
                                 </div>
                             </div>
                         </motion.div>

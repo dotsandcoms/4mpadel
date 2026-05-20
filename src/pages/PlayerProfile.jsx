@@ -273,6 +273,10 @@ const PlayerProfile = () => {
         if (params.get('edit') === 'true') {
             setIsEditing(true);
         }
+        const tab = params.get('tab');
+        if (tab && ['events', 'matches', 'rankings', 'payments'].includes(tab)) {
+            setActiveTab(tab);
+        }
     }, []);
 
     const indexOfLastTransaction = currentTransactionPage * transactionsPerPage;
