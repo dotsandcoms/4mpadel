@@ -673,7 +673,7 @@ const PlayerProfile = () => {
 
     return (
         <>
-            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black pt-24 md:pt-0">
+            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
 
                 {/* Password Setup Modal (for new invites or recovery) */}
                 <AnimatePresence>
@@ -732,7 +732,7 @@ const PlayerProfile = () => {
                 </AnimatePresence>
 
                 {/* Hero Section */}
-                <div className="relative h-[12vh] md:h-[40vh] min-h-[140px] md:min-h-[400px] overflow-hidden">
+                <div className="relative h-[20vh] md:h-[40vh] min-h-[200px] md:min-h-[400px] overflow-hidden pt-20 md:pt-0">
                     <div className="absolute inset-0">
                         <img
                             src={heroBg}
