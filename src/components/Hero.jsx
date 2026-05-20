@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { motion, useScroll, useTransform } from 'framer-motion';
+import React, { useState, useCallback } from 'react';
+import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/hero_bg.png';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useEffect } from 'react';
+import { useRankedin } from '../hooks/useRankedin';
 
 const Hero = () => {
     const { scrollY } = useScroll();
@@ -17,6 +18,9 @@ const Hero = () => {
     const [liveEvent, setLiveEvent] = useState(null);
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const [session, setSession] = useState(null);
+    const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [eventsLoading, setEventsLoading] = useState(false);
+    const { getPlayerEventsAsync } = useRankedin();
 
     useEffect(() => {
         // Get initial session
@@ -48,6 +52,89 @@ const Hero = () => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    // Fetch upcoming events when session changes
+    useEffect(() => {
+        if (!session?.user) {
+            setUpcomingEvents([]);
+            return;
+        }
+
+        const fetchPlayerEvents = async () => {
+            setEventsLoading(true);
+            try {
+                // Match same pattern as PlayerProfile: look up by email
+                const { data: playerData } = await supabase
+                    .from('players')
+                    .select('id, rankedin_id, email')
+                    .ilike('email', session.user.email)
+                    .maybeSingle();
+
+                if (!playerData?.rankedin_id) {
+                    console.log('[Hero] No player/rankedin_id found for email:', session.user.email);
+                    return;
+                }
+
+                console.log('[Hero] Fetching events for rankedin_id:', playerData.rankedin_id);
+                const rawEvents = await getPlayerEventsAsync(playerData.rankedin_id);
+                const now = new Date();
+                const filtered = (rawEvents || [])
+                    .filter(e => new Date(e.start_date) >= now && e.state !== 2)
+                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
+                    .slice(0, 3); // max 3 in the banner
+
+                console.log('[Hero] Upcoming events:', filtered.length);
+
+                if (filtered.length > 0) {
+                    // Enrich with DB data
+                    const { data: dbEvents } = await supabase
+                        .from('calendar')
+                        .select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees');
+
+                    // Check paid status
+                    const { data: paidParticipants } = await supabase
+                        .from('tournament_participants')
+                        .select('event_id')
+                        .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
+                        .eq('is_paid', true);
+
+                    const { data: directPayments } = await supabase
+                        .from('payments')
+                        .select('event_id')
+                        .eq('player_id', playerData.id)
+                        .eq('status', 'success')
+                        .eq('payment_type', 'event_entry_fee');
+
+                    const paidEventIds = new Set([
+                        ...(paidParticipants || []).map(p => p.event_id),
+                        ...(directPayments || []).map(p => p.event_id),
+                    ]);
+
+                    if (dbEvents) {
+                        filtered.forEach(e => {
+                            const match = dbEvents.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
+                            if (match) {
+                                e.db_id = match.id;
+                                e.slug = match.slug;
+                                e.sapa_status = match.sapa_status;
+                                e.entry_fee = match.entry_fee;
+                                e.category_fees = match.category_fees;
+                                e.isPaid = paidEventIds.has(match.id);
+                            }
+                        });
+                    }
+                }
+
+                setUpcomingEvents(filtered);
+            } catch (err) {
+                console.error('Hero events error:', err);
+            } finally {
+                setEventsLoading(false);
+            }
+        };
+
+        fetchPlayerEvents();
+    }, [session, getPlayerEventsAsync]);
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
@@ -172,7 +259,78 @@ const Hero = () => {
                         )}
                     </motion.div>
                 </motion.div>
-            </div >
+
+                {/* ── Upcoming Events strip — pinned to the bottom of the hero ── */}
+                <AnimatePresence>
+                    {session && upcomingEvents.length > 0 && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                            className="absolute bottom-0 left-0 right-0 z-30 px-4 md:px-8 pb-5"
+                        >
+                            {/* Glass panel */}
+                            <div className="bg-black/60 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-4">
+                                {/* Header row */}
+                                <div className="flex items-center justify-between mb-3 px-1">
+                                    <div className="flex items-center gap-2">
+                                        <Calendar size={13} className="text-purple-400" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-white/70">My Upcoming Events</span>
+                                    </div>
+                                    <button
+                                        onClick={() => navigate('/profile')}
+                                        className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
+                                    >
+                                        View all
+                                        <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                    </button>
+                                </div>
+
+                                {/* Event cards — horizontal scroll on mobile, row on desktop */}
+                                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                                    {upcomingEvents.map((event, idx) => {
+                                        // colour accent
+                                        let accent = 'border-white/10 hover:border-padel-green/50';
+                                        let dateCls = 'text-padel-green';
+                                        if (event.sapa_status === 'Major') { accent = 'border-white/10 hover:border-red-500/50'; dateCls = 'text-red-400'; }
+                                        else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { accent = 'border-white/10 hover:border-amber-500/50'; dateCls = 'text-amber-400'; }
+                                        else if (event.sapa_status === 'Gold') { accent = 'border-white/10 hover:border-yellow-500/50'; dateCls = 'text-yellow-400'; }
+
+                                        return (
+                                            <motion.button
+                                                key={event.id}
+                                                initial={{ opacity: 0, x: 10 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                transition={{ delay: 1.2 + idx * 0.08 }}
+                                                onClick={() => {
+                                                    if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
+                                                    else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                }}
+                                                className={`relative flex-shrink-0 w-48 md:w-56 bg-white/5 border ${accent} rounded-xl p-3 text-left transition-all group overflow-hidden`}
+                                            >
+                                                {/* PAID badge */}
+                                                {event.isPaid && (
+                                                    <span className="absolute top-2 right-2 flex items-center gap-0.5 bg-padel-green/20 border border-padel-green/30 text-padel-green text-[7px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full">
+                                                        <CheckCircle2 size={7} strokeWidth={4} /> Paid
+                                                    </span>
+                                                )}
+                                                <p className={`text-[9px] font-black uppercase tracking-wider mb-1 ${dateCls}`}>
+                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                </p>
+                                                <p className="text-xs font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors">
+                                                    {event.event_name}
+                                                </p>
+                                                <ExternalLink size={10} className="absolute bottom-2.5 right-2.5 text-white/20 group-hover:text-white/50 transition-colors" />
+                                            </motion.button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+            </div>
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
             <VideoModal
                 isOpen={videoModal.isOpen}
@@ -180,7 +338,7 @@ const Hero = () => {
                 videoUrl={videoModal.url}
                 title={videoModal.title}
             />
-        </div >
+        </div>
     );
 };
 

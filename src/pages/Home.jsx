@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SEOHead } from '@burkcorp/reactmath';
 import Hero from '../components/Hero';
 import FeaturedSections from '../components/FeaturedSections';
@@ -6,11 +6,20 @@ import Services from '../components/Services';
 import Calendar from '../components/Calendar';
 import FAQ from '../components/FAQ';
 import Partners from '../components/Partners';
+import UpcomingEventsWidget from '../components/UpcomingEventsWidget';
 import dynamicsPlayer from '../assets/augustin.jpeg';
-// import Link from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { supabase } from '../supabaseClient';
 
 const Home = () => {
+    const [session, setSession] = useState(null);
+
+    useEffect(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+        return () => subscription.unsubscribe();
+    }, []);
+
     return (
         <>
             <SEOHead
@@ -19,9 +28,12 @@ const Home = () => {
                 keywords={["padel", "indoor courts", "sports", "premium", "4M Padel", "South Africa", "rankedin", "SAPA", "Padel South Africa", "Padel Rankings", "Padel Tournaments", "Padel Players", "Padel SA"]}
             />
 
-
             <main className="bg-[#0F172A] text-white">
                 <Hero />
+
+                {/* Upcoming Events Widget — visible only when logged in */}
+                <UpcomingEventsWidget session={session} />
+
                 <FeaturedSections />
 
                 {/* Intro / Dynamics Section */}
