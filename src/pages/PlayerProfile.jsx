@@ -42,6 +42,8 @@ const PlayerProfile = () => {
     const [isActivationRequired, setIsActivationRequired] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
+    const [eventViewTab, setEventViewTab] = useState('upcoming'); // 'upcoming' | 'past'
     const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
@@ -285,11 +287,18 @@ const PlayerProfile = () => {
                 const events = await getPlayerEventsAsync(player.rankedin_id);
                 // Filter for upcoming events and sort by date, excluding cancelled events (state 2)
                 const now = new Date();
-                const filtered = (events || [])
+                const upcoming = (events || [])
                     .filter(e => new Date(e.start_date) >= now && e.state !== 2)
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
 
-                if (filtered.length > 0) {
+                // Filter for past events (state === 4 or date is in past, excluding state 2)
+                const past = (events || [])
+                    .filter(e => e.state === 4 || (new Date(e.start_date) < now && e.state !== 2))
+                    .sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
+
+                const allFiltered = [...upcoming, ...past];
+
+                if (allFiltered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
                         .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees');
@@ -321,7 +330,7 @@ const PlayerProfile = () => {
                     ]);
 
                     if (dbEvents) {
-                        filtered.forEach(e => {
+                        allFiltered.forEach(e => {
                             const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
                             if (match) {
                                 e.db_id = match.id;
@@ -339,7 +348,8 @@ const PlayerProfile = () => {
                     }
                 }
 
-                setUpcomingEvents(filtered);
+                setUpcomingEvents(upcoming);
+                setPastEvents(past);
             };
             fetchEvents();
         }
@@ -1915,9 +1925,11 @@ const PlayerProfile = () => {
                                                     <div className="flex flex-col gap-1">
                                                         <h4 className="font-bold text-white flex items-center gap-3">
                                                             <CalendarIcon className="text-purple-400" size={24} />
-                                                            My Upcoming Events
+                                                            {eventViewTab === 'upcoming' ? 'My Upcoming Events' : 'My Past Events'}
                                                         </h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Scheduled tournaments from Rankedin</p>
+                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>
+                                                            {eventViewTab === 'upcoming' ? 'Scheduled tournaments from Rankedin' : 'Completed tournaments from Rankedin'}
+                                                        </p>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1933,117 +1945,145 @@ const PlayerProfile = () => {
                                                         exit={{ height: 0, opacity: 0 }}
                                                         className="overflow-hidden"
                                                     >
+                                                        {/* Switcher for Upcoming vs Past Events */}
+                                                        <div className="flex gap-2 mb-6 border-b border-white/5 pb-4">
+                                                            <button
+                                                                onClick={() => setEventViewTab('upcoming')}
+                                                                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                                    eventViewTab === 'upcoming'
+                                                                        ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                        : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                Upcoming ({upcomingEvents.length})
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setEventViewTab('past')}
+                                                                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                                                    eventViewTab === 'past'
+                                                                        ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                        : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                }`}
+                                                            >
+                                                                Past / Finished ({pastEvents.length})
+                                                            </button>
+                                                        </div>
+
                                                         {loadingEvents ? (
                                                             <div className="flex items-center justify-center py-12">
                                                                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
                                                             </div>
-                                                        ) : upcomingEvents && upcomingEvents.length > 0 ? (
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                {upcomingEvents.map((event) => {
-                                                                    let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
-                                                                    let hoverBorder = 'hover:border-padel-green/50';
-                                                                    let glowColor = 'bg-padel-green/10';
-                                                                    let textColor = 'group-hover:text-padel-green';
+                                                        ) : (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents) && (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).length > 0 ? (
+                                                            <div className={eventViewTab === 'past' && pastEvents.length > 6 ? "max-h-[580px] overflow-y-auto pr-3 custom-scrollbar" : ""}>
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    {(eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).map((event) => {
+                                                                        let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
+                                                                        let hoverBorder = 'hover:border-padel-green/50';
+                                                                        let glowColor = 'bg-padel-green/10';
+                                                                        let textColor = 'group-hover:text-padel-green';
 
-                                                                    if (event.sapa_status === 'Major') {
-                                                                        badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
-                                                                        hoverBorder = 'hover:border-red-500/50';
-                                                                        glowColor = 'bg-red-500/10';
-                                                                        textColor = 'group-hover:text-red-400';
-                                                                    } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                        badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-                                                                        hoverBorder = 'hover:border-amber-500/50';
-                                                                        glowColor = 'bg-amber-500/10';
-                                                                        textColor = 'group-hover:text-amber-400';
-                                                                    } else if (event.sapa_status === 'Gold') {
-                                                                        badgeColor = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-                                                                        hoverBorder = 'hover:border-yellow-500/50';
-                                                                        glowColor = 'bg-yellow-500/10';
-                                                                        textColor = 'group-hover:text-yellow-400';
-                                                                    } else if (event.sapa_status === 'Silver') {
-                                                                        badgeColor = 'bg-gray-500/20 text-gray-300 border-gray-400/30';
-                                                                        hoverBorder = 'hover:border-gray-400/50';
-                                                                        glowColor = 'bg-gray-400/10';
-                                                                        textColor = 'group-hover:text-gray-300';
-                                                                    } else if (event.sapa_status === 'Bronze') {
-                                                                        badgeColor = 'bg-orange-700/20 text-orange-400 border-orange-700/30';
-                                                                        hoverBorder = 'hover:border-orange-700/50';
-                                                                        glowColor = 'bg-orange-700/10';
-                                                                        textColor = 'group-hover:text-orange-400';
-                                                                    } else if (event.sapa_status === 'FIP event') {
-                                                                        badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-                                                                        hoverBorder = 'hover:border-blue-500/50';
-                                                                        glowColor = 'bg-blue-500/10';
-                                                                        textColor = 'group-hover:text-blue-400';
-                                                                    }
+                                                                        if (event.sapa_status === 'Major') {
+                                                                            badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
+                                                                            hoverBorder = 'hover:border-red-500/50';
+                                                                            glowColor = 'bg-red-500/10';
+                                                                            textColor = 'group-hover:text-red-400';
+                                                                        } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                                            badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                                                                            hoverBorder = 'hover:border-amber-500/50';
+                                                                            glowColor = 'bg-amber-500/10';
+                                                                            textColor = 'group-hover:text-amber-400';
+                                                                        } else if (event.sapa_status === 'Gold') {
+                                                                            badgeColor = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+                                                                            hoverBorder = 'hover:border-yellow-500/50';
+                                                                            glowColor = 'bg-yellow-500/10';
+                                                                            textColor = 'group-hover:text-yellow-400';
+                                                                        } else if (event.sapa_status === 'Silver') {
+                                                                            badgeColor = 'bg-gray-500/20 text-gray-300 border-gray-400/30';
+                                                                            hoverBorder = 'hover:border-gray-400/50';
+                                                                            glowColor = 'bg-gray-400/10';
+                                                                            textColor = 'group-hover:text-gray-300';
+                                                                        } else if (event.sapa_status === 'Bronze') {
+                                                                            badgeColor = 'bg-orange-700/20 text-orange-400 border-orange-700/30';
+                                                                            hoverBorder = 'hover:border-orange-700/50';
+                                                                            glowColor = 'bg-orange-700/10';
+                                                                            textColor = 'group-hover:text-orange-400';
+                                                                        } else if (event.sapa_status === 'FIP event') {
+                                                                            badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+                                                                            hoverBorder = 'hover:border-blue-500/50';
+                                                                            glowColor = 'bg-blue-500/10';
+                                                                            textColor = 'group-hover:text-blue-400';
+                                                                        }
 
-                                                                    const needsPayment = event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
+                                                                        const needsPayment = eventViewTab === 'upcoming' && event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
 
-                                                                    return (
-                                                                        <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
-                                                                            <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
+                                                                        return (
+                                                                            <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
+                                                                                <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
 
-                                                                            {event.isPaid && (
-                                                                                <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
-                                                                                    <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
-                                                                                        <CheckCircle2 size={8} strokeWidth={4} />
-                                                                                        PAID
+                                                                                {event.isPaid && (
+                                                                                    <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
+                                                                                        <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
+                                                                                            <CheckCircle2 size={8} strokeWidth={4} />
+                                                                                            PAID
+                                                                                        </div>
                                                                                     </div>
-                                                                                </div>
-                                                                            )}
-
-                                                                            <div className="relative z-10 flex-1">
-                                                                                <div className="flex justify-between items-start mb-4">
-                                                                                    <div className="flex flex-col">
-                                                                                        <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
-                                                                                        <span className="text-xs font-bold text-white">
-                                                                                            {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    <button
-                                                                                        onClick={() => {
-                                                                                            if (event.slug || event.db_id) {
-                                                                                                navigate(`/calendar/${event.slug || event.db_id}`);
-                                                                                            } else {
-                                                                                                window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                                                            }
-                                                                                        }}
-                                                                                        className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 group/btn"
-                                                                                    >
-                                                                                        <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
-                                                                                    </button>
-                                                                                </div>
-
-                                                                                <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
-                                                                                    {event.event_name}
-                                                                                </h4>
-
-                                                                                {needsPayment && (
-                                                                                    <motion.button
-                                                                                        whileHover={{ scale: 1.02 }}
-                                                                                        whileTap={{ scale: 0.98 }}
-                                                                                        onClick={() => {
-                                                                                            navigate(`/calendar/${event.slug || event.db_id}?register=true`);
-                                                                                        }}
-                                                                                        className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
-                                                                                    >
-                                                                                        <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
-                                                                                        Pay Event Fee
-                                                                                    </motion.button>
                                                                                 )}
+
+                                                                                <div className="relative z-10 flex-1">
+                                                                                    <div className="flex justify-between items-start mb-4">
+                                                                                        <div className="flex flex-col">
+                                                                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
+                                                                                            <span className="text-xs font-bold text-white">
+                                                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                            </span>
+                                                                                        </div>
+                                                                                        <button
+                                                                                            onClick={() => {
+                                                                                                if (event.slug || event.db_id) {
+                                                                                                    navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                                                } else {
+                                                                                                    window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                                                                }
+                                                                                            }}
+                                                                                            className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 group/btn"
+                                                                                        >
+                                                                                            <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
+                                                                                        </button>
+                                                                                    </div>
+
+                                                                                    <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
+                                                                                        {event.event_name}
+                                                                                    </h4>
+
+                                                                                    {needsPayment && (
+                                                                                        <motion.button
+                                                                                            whileHover={{ scale: 1.02 }}
+                                                                                            whileTap={{ scale: 0.98 }}
+                                                                                            onClick={() => {
+                                                                                                navigate(`/calendar/${event.slug || event.db_id}?register=true`);
+                                                                                            }}
+                                                                                            className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
+                                                                                        >
+                                                                                            <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
+                                                                                            Pay Event Fee
+                                                                                        </motion.button>
+                                                                                    )}
+                                                                                </div>
+
+
                                                                             </div>
-
-
-                                                                        </div>
-                                                                    );
-                                                                })}
+                                                                        );
+                                                                    })}
+                                                                </div>
                                                             </div>
                                                         ) : (
                                                             <div className="text-center py-16 bg-black/20 rounded-3xl border border-white/5 relative overflow-hidden">
                                                                 <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
                                                                 <div className="relative z-10">
                                                                     <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
-                                                                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">No upcoming matches listed</p>
+                                                                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">
+                                                                        {eventViewTab === 'upcoming' ? 'No upcoming events listed' : 'No past events listed'}
+                                                                    </p>
                                                                     <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
                                                                 </div>
                                                             </div>
