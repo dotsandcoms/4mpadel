@@ -673,7 +673,7 @@ const PlayerProfile = () => {
 
     return (
         <>
-            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black">
+            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black pt-2 md:pt-0">
 
                 {/* Password Setup Modal (for new invites or recovery) */}
                 <AnimatePresence>
@@ -1596,7 +1596,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-padel-green/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1896,7 +1896,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-purple-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -2058,7 +2058,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-orange-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
