@@ -840,29 +840,28 @@ const PlayerProfile = () => {
                                                 {player.name}
                                             </h1>
                                         </div>
-                                        <div className="flex flex-wrap items-center gap-3">
-                                            {player.rank_label && player.rank_label !== 'Unranked' && (
-                                                <div className="flex flex-col items-start gap-1 md:gap-1.5">
-                                                    <span className="text-sm md:text-xl text-yellow-500 font-black flex items-center gap-1.5 bg-yellow-500/10 md:bg-yellow-500/5 border border-yellow-500/20 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0">
-                                                        <Trophy className="w-4 h-4 md:w-6 md:h-6 text-yellow-500" /> #{player.rank_label}
+                                        <div className="flex flex-col items-start gap-1.5 md:gap-2">
+                                            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+                                                {player.rank_label && player.rank_label !== 'Unranked' && (
+                                                    <span className="text-[10px] md:text-xs text-yellow-500 font-black flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0">
+                                                        <Trophy className="w-3.5 h-3.5 text-yellow-500" /> #{player.rank_label}
                                                     </span>
-                                                    {player.active_ranking_label && (
-                                                        <span className="text-[7px] md:text-[9px] text-white/30 font-black uppercase tracking-[0.15em] whitespace-nowrap pl-2 md:pl-4">
-                                                            {player.active_ranking_label}
-                                                        </span>
-                                                    )}
+                                                )}
+                                                {player.points !== undefined && (
+                                                    <span className="text-[10px] md:text-xs text-yellow-500 font-black flex items-center bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0 uppercase tracking-wider">
+                                                        Points: {player.points}
+                                                    </span>
+                                                )}
+                                                <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs ml-0.5 md:ml-1">
+                                                    <MapPin size={14} className="md:w-4 md:h-4 shrink-0" />
+                                                    {player.home_club || 'Set Location'}
                                                 </div>
-                                            )}
-                                            {player.points !== undefined && (
-                                                <span className="text-[10px] md:text-base text-padel-green font-black flex items-center bg-padel-green/5 border border-padel-green/10 px-3 py-1 md:px-4 md:py-1.5 rounded-full md:rounded-2xl shrink-0 uppercase tracking-wider">
-                                                    Points: {player.points}
+                                            </div>
+                                            {player.rank_label && player.rank_label !== 'Unranked' && player.active_ranking_label && (
+                                                <span className="text-[7px] md:text-[9px] text-white/30 font-black uppercase tracking-[0.15em] whitespace-nowrap pl-2 md:pl-3">
+                                                    {player.active_ranking_label}
                                                 </span>
                                             )}
-                                            <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs">
-                                                <MapPin size={14} className="md:w-4 md:h-4" />
-                                                {player.home_club || 'Set Location'}
-                                            </div>
-
                                         </div>
                                     </div>
                                 </motion.div>
