@@ -174,8 +174,8 @@ const Hero = () => {
     }, [session, getPlayerEventsAsync, getPlayerMatches]);
 
     return (
-        <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
-            <div className="relative min-h-[940px] lg:h-[85vh] lg:min-h-0 w-full overflow-hidden rounded-[2rem] border border-white/10">
+        <div className="relative w-full px-0 md:px-6 pb-0 md:pb-6 bg-black">
+            <div className="relative w-full overflow-hidden rounded-none md:rounded-[2rem] border-y border-x-0 md:border border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0">
                 {/* Parallax Background */}
                 <motion.div
                     style={{ y: yBackend }}
@@ -199,7 +199,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 h-full flex flex-col justify-start pt-24 pb-[480px] lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
+                    className="relative z-20 flex flex-col justify-start pt-24 pb-8 lg:h-full lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
                 >
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
@@ -322,7 +322,7 @@ const Hero = () => {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 20 }}
                             transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                            className="absolute bottom-0 left-0 right-0 z-30 px-4 md:px-8 pb-5"
+                            className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5"
                         >
                             {/* Glass panel */}
                             <div className="bg-neutral-950/85 lg:bg-gradient-to-b lg:from-neutral-900/60 lg:to-black/90 backdrop-blur-2xl border-t border-white/15 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative overflow-hidden">
