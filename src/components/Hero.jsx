@@ -175,7 +175,7 @@ const Hero = () => {
 
     return (
         <div className="relative w-full px-4 md:px-6 pb-2 md:pb-6 bg-black">
-            <div className="relative h-[75vh] md:h-[85vh] w-full overflow-hidden rounded-[2rem] border border-white/10">
+            <div className="relative min-h-[760px] lg:h-[85vh] lg:min-h-0 w-full overflow-hidden rounded-[2rem] border border-white/10">
                 {/* Parallax Background */}
                 <motion.div
                     style={{ y: yBackend }}
@@ -199,7 +199,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 h-full flex flex-col justify-start pt-28 md:justify-center md:pt-0 px-6 md:px-20 container mx-auto"
+                    className="relative z-20 h-full flex flex-col justify-start pt-24 pb-[345px] lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
                 >
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
@@ -308,7 +308,7 @@ const Hero = () => {
                             className="absolute bottom-0 left-0 right-0 z-30 px-4 md:px-8 pb-5"
                         >
                             {/* Glass panel */}
-                            <div className="bg-gradient-to-b from-neutral-900/60 to-black/90 backdrop-blur-2xl border-t border-white/15 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative overflow-hidden">
+                            <div className="bg-neutral-950/85 lg:bg-gradient-to-b lg:from-neutral-900/60 lg:to-black/90 backdrop-blur-2xl border-t border-white/15 border-x border-b border-white/5 rounded-2xl p-4 md:p-5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.8)] relative overflow-hidden">
                                 {/* Subtle corner accent glows */}
                                 <div className="absolute -bottom-20 -left-20 w-40 h-40 rounded-full bg-purple-500/5 blur-3xl pointer-events-none" />
                                 <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full bg-orange-500/5 blur-3xl pointer-events-none" />
@@ -317,7 +317,7 @@ const Hero = () => {
                                     
                                     {/* Left Side: Upcoming Events */}
                                     {upcomingEvents.length > 0 && (
-                                        <div className={`${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
+                                        <div className={`order-2 lg:order-1 ${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
                                             {/* Header row */}
                                             <div className="flex items-center justify-between mb-3.5 px-1">
                                                 <div className="flex items-center gap-2">
@@ -410,7 +410,7 @@ const Hero = () => {
 
                                     {/* Right Side: My Next Match */}
                                     {nextMatch && (
-                                        <div className={`${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
+                                        <div className={`order-1 lg:order-2 ${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
                                             {/* Header row */}
                                             <div className="flex items-center justify-between mb-3.5 px-1">
                                                 <div className="flex items-center gap-2">
