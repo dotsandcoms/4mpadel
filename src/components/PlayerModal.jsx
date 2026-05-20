@@ -314,7 +314,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-2 mb-1">
                                                                 <p className={`text-[10px] font-black uppercase tracking-widest ${isBroll ? 'text-[#F40020]' : isSapa ? 'text-padel-green' : 'text-gray-400'}`}>
-                                                                    {r.org || 'Ranking'}
+                                                                    {r.org || 'SAPA RANKING'}
                                                                 </p>
                                                                 <span className="text-[10px] text-gray-600 font-bold">•</span>
                                                                 <p className="text-[9px] text-gray-450 font-bold uppercase tracking-tight">{r.match_type || 'Doubles'}</p>
@@ -486,7 +486,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                         return (
                                             <div key={i} className="flex items-center justify-between border-b border-white/5 pb-4 last:border-0 last:pb-0">
                                                 <div>
-                                                    <p className={`${isBroll ? 'text-[#F40020]' : 'text-padel-green'} text-xs font-black uppercase tracking-widest mb-1`}>{r.org}</p>
+                                                    <p className={`${isBroll ? 'text-[#F40020]' : 'text-padel-green'} text-xs font-black uppercase tracking-widest mb-1`}>{r.org || 'SAPA RANKING'}</p>
                                                     <p className="text-xl font-bold text-white">{r.age_group || 'Open'}</p>
                                                     <p className="text-sm text-gray-500 font-bold uppercase">{r.match_type}</p>
                                                 </div>

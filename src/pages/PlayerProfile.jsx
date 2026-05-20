@@ -673,7 +673,7 @@ const PlayerProfile = () => {
 
     return (
         <>
-            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black pt-8 md:pt-0">
+            <div className="min-h-screen bg-black text-white selection:bg-padel-green selection:text-black pt-24 md:pt-0">
 
                 {/* Password Setup Modal (for new invites or recovery) */}
                 <AnimatePresence>
@@ -981,7 +981,7 @@ const PlayerProfile = () => {
                                                                         <div className="flex justify-between items-start gap-2">
                                                                             <div className="min-w-0">
                                                                                 <p className={`text-[8px] font-black uppercase tracking-widest ${isBroll ? 'text-red-500' : 'text-padel-green'}`}>
-                                                                                    {r.org}
+                                                                                    {r.org || 'SAPA RANKING'}
                                                                                 </p>
                                                                                 <p className="text-xs font-bold text-white truncate uppercase tracking-tight">{r.age_group || r.division || 'Open'}</p>
                                                                                 <p className="text-[8px] text-gray-500 font-bold uppercase">{r.match_type}</p>
@@ -1600,9 +1600,9 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-padel-green/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-yellow-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                         <div
                                             onClick={() => {
@@ -1613,13 +1613,13 @@ const PlayerProfile = () => {
                                             <div className="flex items-center justify-between w-full">
                                                 <div className="flex flex-col gap-1">
                                                     <h4 className="font-bold text-white flex items-center gap-3">
-                                                        <TrendingUp className="text-padel-green" size={24} />
+                                                        <TrendingUp className="text-yellow-500" size={24} />
                                                         Rankings Points Breakdown
                                                     </h4>
                                                     <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Detailed list of tournaments and points accumulated</p>
                                                 </div>
                                                 <div className="md:hidden">
-                                                    <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                    <ChevronDown className={`text-yellow-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </div>
                                         </div>
@@ -1646,7 +1646,7 @@ const PlayerProfile = () => {
                                                                             : 'text-gray-400 hover:text-white hover:bg-white/5'
                                                                             }`}
                                                                     >
-                                                                        {r.org?.split(' ')[0]} ({r.age_group || 'Open'})
+                                                                        {(r.org || 'SAPA').split(' ')[0]} ({r.age_group || 'Open'})
                                                                     </button>
                                                                 );
                                                             })}
