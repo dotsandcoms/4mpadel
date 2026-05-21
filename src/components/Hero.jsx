@@ -160,7 +160,7 @@ const Hero = () => {
                 // Update UI and cache
                 setUpcomingEvents(filtered);
                 setNextMatch(firstNextMatch);
-                
+
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
                     localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch }));
@@ -272,7 +272,7 @@ const Hero = () => {
                                 onClick={() => setIsAuthModalOpen(true)}
                                 className="group px-8 py-4 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full font-bold text-white hover:bg-white/20 transition-colors w-full sm:w-auto flex justify-center items-center"
                             >
-                                Register
+                                Register / Login
                             </button>
                         )}
 
@@ -368,7 +368,7 @@ const Hero = () => {
                                 />
 
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
-                                    
+
                                     {/* Left Side: Upcoming Events */}
                                     {upcomingEvents.length > 0 && (
                                         <div className={`order-2 lg:order-1 ${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
@@ -434,7 +434,7 @@ const Hero = () => {
                                                                 <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
                                                                     {event.sapa_status || 'SAPA'}
                                                                 </span>
-                                                                
+
                                                                 {/* Paid Stamp / Icon */}
                                                                 {event.isPaid ? (
                                                                     <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
@@ -485,21 +485,21 @@ const Hero = () => {
                                             {/* Match Card */}
                                             {(() => {
                                                 const info = nextMatch.Info || {};
-                                                
+
                                                 // Parse partners and names
                                                 const team1P1 = info.Challenger?.Name || 'TBD';
                                                 const team1P2 = info.Challenger1?.Name;
                                                 const team2P1 = info.Challenged?.Name || 'TBD';
                                                 const team2P2 = info.Challenged1?.Name;
-                                                
+
                                                 return (
-                                                    <div 
+                                                    <div
                                                         onClick={() => navigate('/profile?tab=matches')}
                                                         className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                                                     >
                                                         {/* Soft background glow */}
                                                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                                        
+
                                                         {/* Top Bar: Event Name and Date */}
                                                         <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
                                                             <div className="flex items-center gap-1.5 min-w-0">
@@ -514,7 +514,7 @@ const Hero = () => {
                                                                 </span>
                                                             )}
                                                         </div>
-                                                        
+
                                                         {/* Centered Matchup Section */}
                                                         <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
                                                             {/* Team 1 (Challengers) */}
