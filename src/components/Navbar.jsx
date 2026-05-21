@@ -311,7 +311,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         )}
                         {pendingPayments.map(payment => (
                           <a
-                            key={payment.id}
+                            key={`${payment.id}_${payment.division || 'N/A'}`}
                             href={`/calendar/${payment.slug}?register=true`}
                             className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                           >

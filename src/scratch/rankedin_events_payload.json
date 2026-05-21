@@ -1,0 +1,175 @@
+{
+  "Payload": [
+    {
+      "Id": 68377,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/68377/atlantic-padel-sapa-gold-1200",
+      "Type": 4,
+      "State": 1,
+      "StartDate": "2026-07-24T16:00:00",
+      "Name": "Atlantic Padel SAPA Gold 1200 🏆",
+      "IsPremium": false
+    },
+    {
+      "Id": 68336,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/68336/aura-open-sapa-gold-1000",
+      "Type": 4,
+      "State": 1,
+      "StartDate": "2026-06-26T16:00:00",
+      "Name": "Aura Open SAPA Gold 1000 ",
+      "IsPremium": false
+    },
+    {
+      "Id": 67915,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/67915/karibu-pro-sapa-gold-1000",
+      "Type": 4,
+      "State": 1,
+      "StartDate": "2026-06-05T09:00:00",
+      "Name": "Karibu Pro 🌴🍹 SAPA Gold 1000",
+      "IsPremium": false
+    },
+    {
+      "Id": 68718,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/68718/the-arch-padel-challenge-2026",
+      "Type": 4,
+      "State": 1,
+      "StartDate": "2026-05-31T07:30:00",
+      "Name": "The Arch Padel Challenge 2026",
+      "IsPremium": false
+    },
+    {
+      "Id": 65168,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/65168/arturf-open-sapa-super-gold-cape-town",
+      "Type": 4,
+      "State": 3,
+      "StartDate": "2026-05-22T15:00:00",
+      "Name": "Arturf Open SAPA Super Gold 🏆 Cape Town",
+      "IsPremium": false
+    },
+    {
+      "Id": 68674,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/68674/guardrisk-north-vs-south-2026",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-05-15T16:00:00",
+      "Name": "Guardrisk North vs South 2026",
+      "IsPremium": false
+    },
+    {
+      "Id": 66263,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/66263/sa-grand-legends-sapa-1000-gold",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-04-24T18:00:00",
+      "Name": "SA Grand Legends SAPA 1000 Gold",
+      "IsPremium": false
+    },
+    {
+      "Id": 64467,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/64467/padel-365-sapa-cape-town-major-presented-by-broll",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-04-16T16:00:00",
+      "Name": "Padel 365 SAPA Cape Town Major presented by Broll",
+      "IsPremium": true
+    },
+    {
+      "Id": 65676,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/65676/sapa-golden-point-gold",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-04-10T16:00:00",
+      "Name": "SAPA Golden Point Gold ⭐️ ",
+      "IsPremium": false
+    },
+    {
+      "Id": 64466,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/64466/broll-kcc-cup-sapa-2000-major-jhb",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-03-26T14:00:00",
+      "Name": "BROLL KCC CUP 🏆 - SAPA 2000 MAJOR JHB",
+      "IsPremium": true
+    },
+    {
+      "Id": 64714,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/64714/daytona-open-sapa-super-gold-men-s-cape-town",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-03-13T08:00:00",
+      "Name": "Daytona Open SAPA Super Gold Men's 🏆 Cape Town",
+      "IsPremium": true
+    },
+    {
+      "Id": 64057,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/64057/ricky-s-test-tournament-2026",
+      "Type": 4,
+      "State": 5,
+      "StartDate": "2026-02-19T10:00:00",
+      "Name": "Ricky's test tournament 2026",
+      "IsPremium": false
+    },
+    {
+      "Id": 68719,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/68719/padel-odyssey-2025-6-finals-recreate-sapa-gold-1000",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-02-07T10:00:00",
+      "Name": "Padel Odyssey 2025/6 Finals recreate - SAPA Gold 1000",
+      "IsPremium": false
+    },
+    {
+      "Id": 64151,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/64151/autumn-league-division-1",
+      "Type": 4,
+      "State": 3,
+      "StartDate": "2026-02-04T17:00:00",
+      "Name": "Autumn League Division 1",
+      "IsPremium": false
+    },
+    {
+      "Id": 63201,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/63201/10by20-lenasia-sapa-bronze-tournament",
+      "Type": 4,
+      "State": 5,
+      "StartDate": "2026-01-23T17:00:00",
+      "Name": "10by20 Lenasia SAPA Bronze Tournament ",
+      "IsPremium": false
+    },
+    {
+      "Id": 63574,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/63574/summer-sessions-the-trenches",
+      "Type": 4,
+      "State": 4,
+      "StartDate": "2026-01-17T10:00:00",
+      "Name": "Summer Sessions The Trenches",
+      "IsPremium": false
+    },
+    {
+      "Id": 62731,
+      "Sport": "icon-rin-sports-padel",
+      "Link": "/en/tournament/62731/demo-test-tournament",
+      "Type": 4,
+      "State": 5,
+      "StartDate": "2025-12-27T11:00:00",
+      "Name": "Demo test tournament ",
+      "IsPremium": true
+    }
+  ],
+  "TotalCount": 17
+}

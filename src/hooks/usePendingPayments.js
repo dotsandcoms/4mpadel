@@ -170,6 +170,22 @@ export const usePendingPayments = (email, rankedinId) => {
                         }
                     };
 
+                    // Remove generic/N/A entries for any event where we have division-specific records in the database
+                    const dbEventIds = new Set([
+                        ...(participants || []).map(p => p.event_id),
+                        ...(registrations || []).map(r => r.event_id),
+                        ...(paidRegs || []).map(r => r.event_id),
+                        ...(paidParts || []).map(p => p.event_id),
+                        ...(directPayments || []).map(p => p.event_id)
+                    ]);
+
+                    for (const [key, val] of unpaidEvents.entries()) {
+                        const isGeneric = !val.division || val.division === 'N/A' || val.division === 'null' || val.division === 'undefined';
+                        if (isGeneric && dbEventIds.has(val.id)) {
+                            unpaidEvents.delete(key);
+                        }
+                    }
+
                     if (paidRegs) {
                         paidRegs.forEach(r => findAndRemove(r.event_id, r.division));
                     }
