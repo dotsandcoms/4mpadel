@@ -125,7 +125,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
         transition={{ duration: 0.4 }}
         className={`fixed top-0 left-0 right-0 z-[999] transition-all duration-300 ${isScrolled
           ? 'py-4 glass-panel bg-black/80 backdrop-blur-xl border-b border-white/10'
-          : 'py-6 bg-gradient-to-b from-black/80 to-transparent md:bg-gradient-to-b max-md:bg-black/80 max-md:backdrop-blur-xl max-md:py-4 max-md:border-b max-md:border-white/10'
+          : 'py-6 bg-gradient-to-b from-black/80 to-transparent lg:bg-gradient-to-b max-lg:bg-black/80 max-lg:backdrop-blur-xl max-lg:py-4 max-lg:border-b max-lg:border-white/10'
           }`}
       >
         {/* Impersonation Banner */}
@@ -155,34 +155,34 @@ const Navbar = ({ isDark = false, accentColor }) => {
               </>
             )}
             {session && player && (
-              <div className={`${isMobileMenuOpen ? 'flex' : 'hidden sm:flex'} items-center gap-3 sm:gap-4 ml-0 sm:ml-3 text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'}`}>
-                <div className="flex flex-col">
-                  <span className={`leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter`} style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{player.name}</span>
+              <div className={`${isMobileMenuOpen ? 'flex flex-col items-start gap-1 ml-0' : 'hidden sm:flex sm:items-center sm:gap-2.5 xl:gap-3.5 sm:ml-2'} text-xs font-medium ${isDark ? 'text-slate-600' : 'text-white/80'} shrink-0`}>
+                <div className={`${isMobileMenuOpen ? 'flex flex-row items-baseline gap-2' : 'hidden xl:flex xl:flex-col'} shrink-0`}>
+                  <span className="leading-tight font-black text-xs sm:text-sm uppercase tracking-tighter whitespace-nowrap" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{player.name}</span>
                   {player.rankedin_id && (
-                    <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] leading-none mt-1 opacity-40`}>
+                    <span className={`text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.1em] leading-none opacity-45 whitespace-nowrap mt-0.5 xl:mt-1 ${isMobileMenuOpen ? 'block' : 'hidden xl:block 2xl:block'}`}>
                       ID: {player.rankedin_id}
                     </span>
                   )}
                 </div>
 
-                <div className="flex items-center gap-1.5 sm:gap-2 border-l border-white/10 pl-3 sm:pl-4 ml-0.5 sm:ml-1">
-                  {player.rank_label && player.rank_label !== 'Unranked' && (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full shadow-lg shadow-yellow-500/5">
-                        <Trophy className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-yellow-500" />
-                        <span className="text-yellow-500 font-black text-[10px] sm:text-[11px]">#{player.rank_label}</span>
+                <div className={`flex flex-col items-start gap-0.5 pl-0 shrink-0 ${isMobileMenuOpen ? 'pl-0 mt-0.5' : 'xl:border-l xl:border-white/10 xl:pl-3 xl:ml-0.5'}`}>
+                  <div className="flex items-center gap-1.5 xl:gap-2 shrink-0">
+                    {player.rank_label && player.rank_label !== 'Unranked' && (
+                      <div className="flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/30 px-1.5 xl:px-2 py-0.5 rounded-full shadow-lg shadow-yellow-500/5 shrink-0 whitespace-nowrap">
+                        <Trophy className="w-2.5 h-2.5 xl:w-3 xl:h-3 text-yellow-500 shrink-0" />
+                        <span className="text-yellow-500 font-black text-[7.5px] xl:text-[9px] tracking-wide whitespace-nowrap">#{player.rank_label}</span>
                       </div>
-                      {player.active_ranking_label && (
-                        <span className="text-[5.5px] sm:text-[7px] font-black text-white/30 uppercase tracking-widest whitespace-nowrap">
-                          {player.active_ranking_label}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {player.points !== undefined && (
-                    <div className="bg-padel-green/10 border border-padel-green/20 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full">
-                      <span className="text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-wider">{player.points} PTS</span>
-                    </div>
+                    )}
+                    {player.points !== undefined && player.points !== null && (
+                      <div className="bg-[#beff00]/10 border border-[#beff00]/30 px-1.5 xl:px-2 py-0.5 rounded-full shrink-0 shadow-lg shadow-[#beff00]/5 flex items-center justify-center whitespace-nowrap">
+                        <span className="text-padel-green font-black text-[7.5px] xl:text-[9px] uppercase tracking-wider whitespace-nowrap">{player.points} PTS</span>
+                      </div>
+                    )}
+                  </div>
+                  {player.rank_label && player.rank_label !== 'Unranked' && player.active_ranking_label && (
+                    <span className="text-[5px] sm:text-[6px] md:text-[6.5px] font-black text-white/30 uppercase tracking-widest whitespace-nowrap pl-0.5 shrink-0">
+                      {player.active_ranking_label}
+                    </span>
                   )}
                 </div>
               </div>
@@ -190,12 +190,12 @@ const Navbar = ({ isDark = false, accentColor }) => {
           </div>
 
           {/* Desktop Links */}
-          <div className={`hidden md:flex items-center gap-6 px-8 py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
+          <div className={`hidden lg:flex items-center gap-2 xl:gap-5 px-4 xl:px-8 py-2 xl:py-3 rounded-full transition-all duration-300 z-50 overflow-visible ${isScrolled ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')}`}>
             {visibleLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
                   href={link.href}
-                  className={`flex items-center gap-1 text-sm font-medium transition-colors py-2 ${isDark ? '!text-slate-700' : 'text-white/80 hover:text-padel-green'}`}
+                  className={`flex items-center gap-0.5 xl:gap-1 text-xs xl:text-sm font-semibold transition-colors py-2 ${isDark ? '!text-slate-700' : 'text-white/80 hover:text-padel-green'}`}
                   style={isDark && accentColor ? { color: link.dropdown ? undefined : undefined } : {}}
                   onMouseEnter={(e) => {
                     if (isDark && accentColor) e.target.style.setProperty('color', accentColor, 'important');
@@ -206,7 +206,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                   }}
                 >
                   {link.name}
-                  {link.dropdown && <ChevronDown className="w-4 h-4 transition-transform group-hover:rotate-180" />}
+                  {link.dropdown && <ChevronDown className="w-3.5 h-3.5 xl:w-4 xl:h-4 transition-transform group-hover:rotate-180" />}
                 </a>
 
                 {/* Dropdown Menu */}
@@ -229,7 +229,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             {/* Desktop Search Trigger */}
             <button
               onClick={toggleSearch}
-              className={`p-2 rounded-full transition-all duration-300 group ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
+              className={`p-1.5 xl:p-2 rounded-full transition-all duration-300 group ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
               title="Search (Cmd+K)"
             >
               <Search
@@ -245,7 +245,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
               <div className="relative">
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                  className={`p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
+                  className={`p-1.5 xl:p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
                   title="Notifications"
                 >
                   <motion.div
@@ -339,19 +339,19 @@ const Navbar = ({ isDark = false, accentColor }) => {
             )}
 
             {session ? (
-              <div className="flex items-center gap-4 ml-2">
+              <div className="flex items-center gap-2 xl:gap-4 ml-1 xl:ml-2">
                 {isSuperAdmin && (
                   <a
                     href="/admin"
                     target='_blank'
-                    className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300 bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-black hover:border-transparent mr-1"
+                    className="px-3 xl:px-4 py-1 xl:py-1.5 rounded-full text-[10px] xl:text-xs font-black uppercase tracking-wider transition-all duration-300 bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-black hover:border-transparent mr-0.5 xl:mr-1"
                   >
                     Admin
                   </a>
                 )}
                 <a
                   href="/profile"
-                  className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900' : 'text-white hover:text-padel-green'}`}
+                  className={`text-xs xl:text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900' : 'text-white hover:text-padel-green'}`}
                   onMouseEnter={(e) => {
                     if (isDark && accentColor) e.target.style.setProperty('color', accentColor, 'important');
                     else if (isDark) e.target.style.setProperty('color', '#F40020', 'important');
@@ -364,7 +364,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 </a>
                 <button
                   onClick={handleLogout}
-                  className="px-5 py-2 rounded-full text-sm font-bold transition-all duration-300"
+                  className="px-3.5 xl:px-5 py-1.5 xl:py-2 rounded-full text-xs xl:text-sm font-bold transition-all duration-300"
                   style={{ backgroundColor: `${accentColor || '#ef4444'}33`, color: accentColor || '#f87171' }}
                   onMouseEnter={(e) => {
                     e.target.style.backgroundColor = accentColor || '#ef4444';
@@ -381,7 +381,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             ) : (
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className={`px-5 py-2 mt-0 ml-2 rounded-full text-sm font-bold hover:scale-105 transition-all duration-300 text-black`}
+                className={`px-3.5 xl:px-5 py-1.5 xl:py-2 mt-0 ml-1 xl:ml-2 rounded-full text-xs xl:text-sm font-bold hover:scale-105 transition-all duration-300 text-black`}
                 style={{ backgroundColor: accentColor || (isDark ? '#F40020' : '#ccff00') }}
               >
                 Login / Register ↗
@@ -390,7 +390,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
           </div>
 
           {/* Mobile Search & Menu Button */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2 lg:hidden">
             <button
               onClick={toggleSearch}
               className={`p-2 rounded-full ${isDark ? 'text-slate-900' : 'text-white'}`}
