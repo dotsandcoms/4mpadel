@@ -105,8 +105,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
       case 'players': return <Users className="w-4 h-4 shrink-0" />;
       case 'rankings': return <TrendingUp className="w-4 h-4 shrink-0" />;
       case 'media': return <Image className="w-4 h-4 shrink-0" />;
-      case 'academy': return <GraduationCap className="w-4 h-4 shrink-0" />;
       case 'events': return <Zap className="w-4 h-4 shrink-0" />;
+      case 'academy': return <GraduationCap className="w-4 h-4 shrink-0" />;
       case 'contact': return <Mail className="w-4 h-4 shrink-0" />;
       default: return <Zap className="w-4 h-4 shrink-0" />;
     }
@@ -119,15 +119,6 @@ const Navbar = ({ isDark = false, accentColor }) => {
     { name: 'Rankings', href: '/rankings' },
     { name: 'Media', href: '/gallery' },
     {
-      name: 'Academy',
-      href: '#',
-      dropdown: [
-        { name: 'Approved Coaches', href: '/academy/coaches' },
-        { name: 'Coaching Videos', href: '/academy/videos' },
-        { name: 'Register', href: '/academy/register' },
-      ]
-    },
-    {
       name: 'Events',
       href: '#',
       dropdown: [
@@ -136,6 +127,15 @@ const Navbar = ({ isDark = false, accentColor }) => {
         { name: 'Broll Pro Tour', href: '/tournaments/broll' },
         { name: 'Kit Kat League', href: '/tournaments/kit-kat-league' },
         { name: 'North vs South', href: '/tournaments/north-vs-south' },
+      ]
+    },
+    {
+      name: 'Academy',
+      href: '#',
+      dropdown: [
+        { name: 'Approved Coaches', href: '/academy/coaches' },
+        { name: 'Coaching Videos', href: '/academy/videos' },
+        { name: 'Register', href: '/academy/register' },
       ]
     },
     { name: 'Contact', href: '/contact' },
@@ -177,7 +177,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
               </a>
               <img src={saFlag} alt="South Africa Flag" className="h-4 w-auto mt-0.5 object-contain" />
             </div>
-            
+
             {session && player && (
               <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-3 ml-1 text-xs font-medium text-white/80 shrink-0">
                 <div className="flex flex-col shrink-0">
@@ -209,49 +209,47 @@ const Navbar = ({ isDark = false, accentColor }) => {
           </div>
 
           <div className="flex-1 hidden lg:flex justify-center mx-4 xl:mx-8 z-40 overflow-visible">
-            <div 
-              className={`flex items-center gap-1.5 xl:gap-2 px-3 xl:px-5 py-1.5 xl:py-2 rounded-full transition-all duration-300 overflow-visible ${
-                isScrolled 
-                  ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') 
-                  : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')
-              }`}
+            <div
+              className={`flex items-center gap-1.5 xl:gap-2 px-3 xl:px-5 py-1.5 xl:py-2 rounded-full transition-all duration-300 overflow-visible ${isScrolled
+                ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10')
+                : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')
+                }`}
             >
-            {visibleLinks.map((link) => (
-              <div key={link.name} className="relative group">
-                <a
-                  href={link.href}
-                  className={`flex items-center gap-0.5 xl:gap-1 text-[10px] xl:text-[11px] 2xl:text-xs font-bold uppercase tracking-wider transition-colors py-1.5 px-2.5 rounded-full relative ${
-                    location.pathname === link.href 
-                      ? (isDark ? 'text-black' : 'text-padel-green') 
+              {visibleLinks.map((link) => (
+                <div key={link.name} className="relative group">
+                  <a
+                    href={link.href}
+                    className={`flex items-center gap-0.5 xl:gap-1 text-[10px] xl:text-[11px] 2xl:text-xs font-bold uppercase tracking-wider transition-colors py-1.5 px-2.5 rounded-full relative ${location.pathname === link.href
+                      ? (isDark ? 'text-black' : 'text-padel-green')
                       : (isDark ? '!text-slate-700 hover:text-black' : 'text-white/70 hover:text-padel-green')
-                  }`}
-                >
-                  {location.pathname === link.href && (
-                    <motion.span 
-                      layoutId="activeNavTab"
-                      className={`absolute inset-0 rounded-full -z-10 ${isDark ? 'bg-slate-200/80' : 'bg-white/5'}`}
-                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  {link.name}
-                  {link.dropdown && <ChevronDown className="w-3 h-3 transition-transform group-hover:rotate-180" />}
-                </a>
+                      }`}
+                  >
+                    {location.pathname === link.href && (
+                      <motion.span
+                        layoutId="activeNavTab"
+                        className={`absolute inset-0 rounded-full -z-10 ${isDark ? 'bg-slate-200/80' : 'bg-white/5'}`}
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    {link.name}
+                    {link.dropdown && <ChevronDown className="w-3 h-3 transition-transform group-hover:rotate-180" />}
+                  </a>
 
-                {link.dropdown && (
-                  <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 py-1.5 z-[60]">
-                    {link.dropdown.map((subItem) => (
-                      <a
-                        key={subItem.name}
-                        href={subItem.href}
-                        className="block px-5 py-2 text-[10px] font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green"
-                      >
-                        {subItem.name}
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
+                  {link.dropdown && (
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-52 bg-black/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 py-1.5 z-[60]">
+                      {link.dropdown.map((subItem) => (
+                        <a
+                          key={subItem.name}
+                          href={subItem.href}
+                          className="block px-5 py-2 text-[10px] font-bold text-gray-300 hover:text-padel-green hover:bg-white/5 transition-all uppercase tracking-wider border-l-2 border-transparent hover:border-padel-green"
+                        >
+                          {subItem.name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -312,15 +310,15 @@ const Navbar = ({ isDark = false, accentColor }) => {
                           </a>
                         )}
                         {pendingPayments.map(payment => (
-                            <a
-                              key={payment.id}
-                              href={`/calendar/${payment.slug}?register=true`}
-                              className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
-                            >
-                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
-                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className="font-bold" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{payment.name}</span>.</p>
-                              <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green">Click to pay now</p>
-                            </a>
+                          <a
+                            key={payment.id}
+                            href={`/calendar/${payment.slug}?register=true`}
+                            className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                          >
+                            <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
+                            <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className="font-bold" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{payment.name}</span>.</p>
+                            <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green">Click to pay now</p>
+                          </a>
                         ))}
                       </div>
                     </motion.div>
@@ -469,11 +467,10 @@ const Navbar = ({ isDark = false, accentColor }) => {
                             window.location.href = link.href;
                           }
                         }}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-bold uppercase tracking-widest transition-all ${
-                          isActive 
-                            ? 'bg-padel-green/10 border-padel-green/35 text-padel-green shadow-[0_0_15px_rgba(204,255,0,0.05)]' 
-                            : 'bg-transparent border-transparent text-gray-300 hover:text-white hover:bg-white/5'
-                        }`}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border text-xs font-bold uppercase tracking-widest transition-all ${isActive
+                          ? 'bg-padel-green/10 border-padel-green/35 text-padel-green shadow-[0_0_15px_rgba(204,255,0,0.05)]'
+                          : 'bg-transparent border-transparent text-gray-300 hover:text-white hover:bg-white/5'
+                          }`}
                       >
                         <div className="flex items-center gap-3">
                           {getLinkIcon(link.name)}
@@ -498,9 +495,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
                                 key={subItem.name}
                                 href={subItem.href}
                                 onClick={() => setIsMobileMenuOpen(false)}
-                                className={`block py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${
-                                  location.pathname === subItem.href ? 'text-padel-green' : 'text-gray-400 hover:text-white'
-                                }`}
+                                className={`block py-2 text-[10px] font-black uppercase tracking-wider transition-colors ${location.pathname === subItem.href ? 'text-padel-green' : 'text-gray-400 hover:text-white'
+                                  }`}
                               >
                                 {subItem.name}
                               </a>
@@ -520,8 +516,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     <span className="text-[10px] font-black text-padel-green">{calculateCompleteness(player)}%</span>
                   </div>
                   <div className="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className="bg-padel-green h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(204,255,0,0.5)]" 
+                    <div
+                      className="bg-padel-green h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(204,255,0,0.5)]"
                       style={{ width: `${calculateCompleteness(player)}%` }}
                     />
                   </div>
