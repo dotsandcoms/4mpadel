@@ -17,6 +17,7 @@ const PlayerProfile = () => {
     const [saving, setSaving] = useState(false);
     const [uploadingImage, setUploadingImage] = useState(false);
     const [uploadingGalleryImage, setUploadingGalleryImage] = useState(false);
+    const [activeLightboxImg, setActiveLightboxImg] = useState(null);
     const [message, setMessage] = useState(null);
     const [newPassword, setNewPassword] = useState('');
     const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
@@ -648,22 +649,60 @@ const PlayerProfile = () => {
             });
 
             const urls = await Promise.all(uploadPromises);
+            const newGallery = [...currentGallery, ...urls].slice(0, 5);
 
-            setFormData({
-                ...formData,
-                additional_images: [...currentGallery, ...urls].slice(0, 5)
-            });
+            setFormData(prev => ({
+                ...prev,
+                additional_images: newGallery
+            }));
+
+            // Auto-save to Supabase
+            const { error: dbError } = await supabase
+                .from('players')
+                .update({ additional_images: JSON.stringify(newGallery) })
+                .eq('id', player.id);
+
+            if (dbError) throw dbError;
+
+            // Sync main player state to instantly reflect on dashboard
+            setPlayer(prev => ({ ...prev, additional_images: newGallery }));
 
             if (files.length > remainingSlots) {
-                showMessage(`Uploaded ${urls.length} images. Some images were ignored because the gallery is limited to 5 images. Remember to Save Changes.`, 'success');
+                showMessage(`Uploaded ${urls.length} images. Some images were ignored because the gallery is limited to 5 images.`, 'success');
             } else {
-                showMessage(`Uploaded ${urls.length} gallery image(s) successfully! Remember to Save Changes.`, 'success');
+                showMessage(`Uploaded ${urls.length} gallery image(s) successfully!`, 'success');
             }
 
         } catch (error) {
             showMessage(error.message, 'error');
         } finally {
             setUploadingGalleryImage(false);
+        }
+    };
+
+    const handleDeleteGalleryImage = async (index) => {
+        try {
+            const currentGallery = formData.additional_images || [];
+            const updated = currentGallery.filter((_, i) => i !== index);
+
+            setFormData(prev => ({
+                ...prev,
+                additional_images: updated
+            }));
+
+            // Auto-save to Supabase
+            const { error: dbError } = await supabase
+                .from('players')
+                .update({ additional_images: JSON.stringify(updated) })
+                .eq('id', player.id);
+
+            if (dbError) throw dbError;
+
+            // Sync main player state
+            setPlayer(prev => ({ ...prev, additional_images: updated }));
+            showMessage('Gallery photo removed successfully!', 'success');
+        } catch (error) {
+            showMessage(error.message, 'error');
         }
     };
 
@@ -1108,6 +1147,88 @@ const PlayerProfile = () => {
                         {/* Right Panel: Content */}
                         <div className="lg:col-span-8 space-y-8 order-1 lg:order-2">
 
+                            {/* Player Photo Gallery Row */}
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.1 }}
+                                className="relative"
+                            >
+                                <div className="flex justify-between items-center mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.25em] text-[#beff00] flex items-center gap-1.5">
+                                            <PhotoIcon size={12} className="text-[#beff00]" />
+                                            Player Gallery
+                                        </h4>
+                                        <span className="bg-white/5 border border-white/10 text-white/50 px-2 py-0.5 rounded-full text-[8px] font-bold">
+                                            {(formData.additional_images || []).length} / 5
+                                        </span>
+                                    </div>
+                                    {uploadingGalleryImage && (
+                                        <span className="text-[9px] font-bold text-[#beff00] animate-pulse">
+                                            Uploading...
+                                        </span>
+                                    )}
+                                </div>
+
+                                <div className="flex overflow-x-auto no-scrollbar flex-nowrap gap-3 pb-1">
+                                    {/* Existing gallery images */}
+                                    {(formData.additional_images || []).map((imgUrl, index) => (
+                                        <div
+                                            key={index}
+                                            onClick={() => setActiveLightboxImg(imgUrl)}
+                                            className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-2xl border border-white/10 overflow-hidden relative group cursor-pointer bg-[#0F172A] transition-all hover:border-[#beff00]/50 hover:shadow-lg hover:shadow-[#beff00]/5"
+                                        >
+                                            <img src={imgUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <span className="text-[9px] font-black uppercase tracking-wider text-white bg-black/60 px-2 py-1 rounded-md">View</span>
+                                            </div>
+                                            {!isImpersonating && (
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteGalleryImage(index);
+                                                    }}
+                                                    className="absolute top-1.5 right-1.5 p-1 rounded-full bg-red-500/80 hover:bg-red-600 text-white transition-all cursor-pointer opacity-0 group-hover:opacity-100 shadow-lg hover:scale-110 active:scale-90"
+                                                >
+                                                    <X size={10} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    ))}
+
+                                    {/* Upload slot card */}
+                                    {!isImpersonating && (formData.additional_images || []).length < 5 && (
+                                        <div
+                                            onClick={() => document.getElementById('galleryImageUploadDashboard').click()}
+                                            className="w-20 h-20 sm:w-24 sm:h-24 shrink-0 rounded-2xl border border-dashed border-white/20 hover:border-[#beff00] bg-white/5 hover:bg-white/10 flex flex-col items-center justify-center cursor-pointer transition-all gap-1 group"
+                                        >
+                                            {uploadingGalleryImage ? (
+                                                <div className="w-5 h-5 border-2 border-[#beff00] border-t-transparent rounded-full animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <PhotoIcon className="w-5 h-5 text-white/40 group-hover:text-[#beff00] transition-colors" />
+                                                    <span className="text-[8px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors text-center px-1">
+                                                        Upload
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <input
+                                    type="file"
+                                    id="galleryImageUploadDashboard"
+                                    accept="image/*"
+                                    multiple
+                                    onChange={handleGalleryImageUpload}
+                                    disabled={uploadingGalleryImage}
+                                    className="hidden"
+                                />
+                            </motion.div>
+
                             {/* Tab Navigation */}
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
@@ -1198,7 +1319,7 @@ const PlayerProfile = () => {
                                                         <User className="text-padel-green" size={24} />
                                                         Personal Management
                                                     </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Complete your profile to unlock premium player features</p>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -2703,66 +2824,6 @@ const PlayerProfile = () => {
                                                     />
                                                 </div>
                                             </div>
-
-                                            {/* Photo Gallery (Up to 5 Photos) */}
-                                            <div className="space-y-3 pt-2">
-                                                <div className="flex justify-between items-center">
-                                                    <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">
-                                                        Player Photo Gallery (Up to 5 Photos)
-                                                    </label>
-                                                    <span className="text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-gray-500 mr-2">
-                                                        {(formData.additional_images || []).length} / 5 Photos
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-4 bg-black/20 border border-white/5 rounded-2xl p-4 md:p-6">
-                                                    {/* Existing gallery images */}
-                                                    {(formData.additional_images || []).map((imgUrl, index) => (
-                                                        <div key={index} className="relative group aspect-square rounded-xl overflow-hidden border border-white/10 bg-[#0F172A]">
-                                                            <img src={imgUrl} alt={`Gallery ${index + 1}`} className="w-full h-full object-cover" />
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const updated = formData.additional_images.filter((_, i) => i !== index);
-                                                                    setFormData({ ...formData, additional_images: updated });
-                                                                }}
-                                                                className="absolute top-2 right-2 p-1.5 rounded-full bg-red-500/80 hover:bg-red-600 text-white transition-all cursor-pointer opacity-0 group-hover:opacity-100 shadow-lg"
-                                                            >
-                                                                <X size={12} />
-                                                            </button>
-                                                        </div>
-                                                    ))}
-
-                                                    {/* Upload placeholder buttons up to 5 */}
-                                                    {(!formData.additional_images || formData.additional_images.length < 5) && (
-                                                        <div
-                                                            onClick={() => document.getElementById('galleryImageUpload').click()}
-                                                            className="aspect-square rounded-xl border border-dashed border-white/20 hover:border-padel-green bg-white/5 hover:bg-white/10 flex flex-col items-center justify-center cursor-pointer transition-all gap-1.5 md:gap-2 group min-h-[80px]"
-                                                        >
-                                                            {uploadingGalleryImage ? (
-                                                                <div className="w-5 h-5 md:w-6 md:h-6 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
-                                                            ) : (
-                                                                <>
-                                                                    <PhotoIcon className="w-5 h-5 md:w-6 md:h-6 text-white/40 group-hover:text-padel-green transition-colors" />
-                                                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-white/40 group-hover:text-white transition-colors text-center px-1">
-                                                                        Upload Photo
-                                                                    </span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <input
-                                                    type="file"
-                                                    id="galleryImageUpload"
-                                                    accept="image/*"
-                                                    multiple
-                                                    onChange={handleGalleryImageUpload}
-                                                    disabled={uploadingGalleryImage}
-                                                    className="hidden"
-                                                />
-                                            </div>
                                         </fieldset>
                                     </div>
 
@@ -2794,6 +2855,40 @@ const PlayerProfile = () => {
                                 </form>
                             </motion.div>
                         </div>
+                    )}
+                </AnimatePresence>
+
+                {/* Lightbox for Gallery Photos */}
+                <AnimatePresence>
+                    {activeLightboxImg && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setActiveLightboxImg(null)}
+                            className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 md:p-8"
+                        >
+                            <button
+                                onClick={() => setActiveLightboxImg(null)}
+                                className="absolute top-6 right-6 p-3 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 hover:scale-105 active:scale-95 transition-all cursor-pointer z-[110]"
+                            >
+                                <X size={20} />
+                            </button>
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                onClick={(e) => e.stopPropagation()}
+                                className="relative max-w-full max-h-[85vh] flex items-center justify-center"
+                            >
+                                <img
+                                    src={activeLightboxImg}
+                                    alt="Gallery Preview"
+                                    className="max-w-full max-h-[85vh] object-contain block rounded-2xl shadow-2xl shadow-black/80"
+                                />
+                            </motion.div>
+                        </motion.div>
                     )}
                 </AnimatePresence>
             </div>
