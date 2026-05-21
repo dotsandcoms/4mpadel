@@ -420,21 +420,25 @@ const Navbar = ({ isDark = false, accentColor }) => {
 
               <div className="px-5 pt-5 pb-1">
                 {session && player ? (
-                  <div className="p-4 bg-gradient-to-br from-white/5 to-white/[0.01] border border-white/10 rounded-2xl shadow-xl flex items-center gap-3">
+                  <a
+                    href="/profile"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="p-4 bg-gradient-to-br from-white/5 to-white/[0.01] border border-white/10 hover:border-padel-green/30 hover:bg-white/10 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 cursor-pointer group hover:scale-[1.01] active:scale-[0.99]"
+                  >
                     {player.image_url ? (
-                      <img src={player.image_url} alt={player.name} className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-lg shrink-0" />
+                      <img src={player.image_url} alt={player.name} className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-lg shrink-0 group-hover:border-padel-green/50 transition-colors duration-300" />
                     ) : (
-                      <div className="w-12 h-12 rounded-xl bg-padel-green/10 border border-padel-green/30 flex items-center justify-center text-padel-green text-lg font-black uppercase shrink-0">
+                      <div className="w-12 h-12 rounded-xl bg-padel-green/10 border border-padel-green/30 flex items-center justify-center text-padel-green text-lg font-black uppercase shrink-0 transition-colors duration-300 group-hover:bg-padel-green/20">
                         {player.name ? player.name.charAt(0) : 'P'}
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-white uppercase tracking-tight truncate leading-tight">{player.name}</p>
+                      <p className="text-sm font-black text-white uppercase tracking-tight truncate leading-tight group-hover:text-padel-green transition-colors duration-300">{player.name}</p>
                       {player.rankedin_id && (
                         <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5 truncate">ID: {player.rankedin_id}</p>
                       )}
                     </div>
-                  </div>
+                  </a>
                 ) : (
                   <div className="p-4 bg-gradient-to-br from-[#ccff00]/10 to-[#ccff00]/5 border border-[#ccff00]/20 rounded-2xl text-center">
                     <p className="text-xs text-gray-300 font-bold mb-2.5">Sign in to track your stats, tournaments and calendar!</p>
