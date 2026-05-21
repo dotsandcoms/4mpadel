@@ -1288,7 +1288,12 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-[#beff00]/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        onClick={() => {
+                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                                setIsMobileAccordionOpen(true);
+                                            }
+                                        }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-[#beff00]/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1308,8 +1313,11 @@ const PlayerProfile = () => {
                                         </AnimatePresence>
 
                                         <div
-                                            onClick={() => {
-                                                if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                            onClick={(e) => {
+                                                if (window.innerWidth < 768) {
+                                                    e.stopPropagation();
+                                                    setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                }
                                             }}
                                             className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
@@ -1745,13 +1753,21 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-yellow-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        onClick={() => {
+                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                                setIsMobileAccordionOpen(true);
+                                            }
+                                        }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-yellow-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                         <div
-                                            onClick={() => {
-                                                if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                            onClick={(e) => {
+                                                if (window.innerWidth < 768) {
+                                                    e.stopPropagation();
+                                                    setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                }
                                             }}
                                             className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
@@ -1761,7 +1777,7 @@ const PlayerProfile = () => {
                                                         <TrendingUp className="text-yellow-500" size={24} />
                                                         Rankings Points Breakdown
                                                     </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Detailed list of tournaments and points accumulated</p>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-yellow-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1908,13 +1924,21 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-blue-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        onClick={() => {
+                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                                setIsMobileAccordionOpen(true);
+                                            }
+                                        }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-blue-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                         <div
-                                            onClick={() => {
-                                                if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                            onClick={(e) => {
+                                                if (window.innerWidth < 768) {
+                                                    e.stopPropagation();
+                                                    setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                }
                                             }}
                                             className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
@@ -2045,14 +2069,22 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-purple-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        onClick={() => {
+                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                                setIsMobileAccordionOpen(true);
+                                            }
+                                        }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-purple-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                         <div className="relative z-10">
                                             <div
-                                                onClick={() => {
-                                                    if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                onClick={(e) => {
+                                                    if (window.innerWidth < 768) {
+                                                        e.stopPropagation();
+                                                        setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                    }
                                                 }}
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
@@ -2062,9 +2094,7 @@ const PlayerProfile = () => {
                                                             <CalendarIcon className="text-purple-400" size={24} />
                                                             {eventViewTab === 'upcoming' ? 'My Upcoming Events' : 'My Past Events'}
                                                         </h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>
-                                                            {eventViewTab === 'upcoming' ? '' : ''}
-                                                        </p>
+
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -2235,14 +2265,22 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-orange-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        onClick={() => {
+                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                                setIsMobileAccordionOpen(true);
+                                            }
+                                        }}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-orange-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
                                         <div className="relative z-10">
                                             <div
-                                                onClick={() => {
-                                                    if (window.innerWidth < 768) setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                onClick={(e) => {
+                                                    if (window.innerWidth < 768) {
+                                                        e.stopPropagation();
+                                                        setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                    }
                                                 }}
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
                                             >
@@ -2252,9 +2290,7 @@ const PlayerProfile = () => {
                                                             <Trophy className="text-orange-500" size={24} />
                                                             {matchViewTab === 'upcoming' ? 'My Upcoming Matches' : 'My Past Matches'}
                                                         </h4>
-                                                        <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>
-                                                            {matchViewTab === 'upcoming' ? '' : ''}
-                                                        </p>
+
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
