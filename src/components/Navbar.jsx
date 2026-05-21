@@ -24,6 +24,15 @@ const Navbar = ({ isDark = false, accentColor }) => {
     player?.rankedin_id
   );
 
+  const SUPER_ADMINS = [
+    'bradein@dotsandcoms.co.za',
+    'brad@dotsandcoms.co.za',
+    'admin@4mpadel.co.za',
+    'markstillerman@gmail.com'
+  ];
+  const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
+  const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -331,6 +340,14 @@ const Navbar = ({ isDark = false, accentColor }) => {
 
             {session ? (
               <div className="flex items-center gap-4 ml-2">
+                {isSuperAdmin && (
+                  <a
+                    href="/admin"
+                    className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300 bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-black hover:border-transparent mr-1"
+                  >
+                    Admin
+                  </a>
+                )}
                 <a 
                   href="/profile" 
                   className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900' : 'text-white hover:text-padel-green'}`}
@@ -537,6 +554,18 @@ const Navbar = ({ isDark = false, accentColor }) => {
             ))}
             {session ? (
               <>
+                {isSuperAdmin && (
+                  <motion.a
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.25 }}
+                    href="/admin"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="bg-amber-500 text-black border-2 border-transparent px-6 py-3 rounded-full text-lg font-bold mt-2 flex items-center justify-center gap-2 w-[180px] shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                  >
+                    Admin Panel
+                  </motion.a>
+                )}
                 <motion.a
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
