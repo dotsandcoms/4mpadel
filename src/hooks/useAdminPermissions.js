@@ -5,7 +5,7 @@ export const useAdminPermissions = (userEmail) => {
     const [permissions, setPermissions] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za'];
+    const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
 
     useEffect(() => {
         const fetchPermissions = async () => {
