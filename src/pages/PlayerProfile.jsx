@@ -1355,7 +1355,7 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-[#beff00]/25 border-x border-[#beff00]/15 border-b border-[#beff00]/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(190,255,0,0.08)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                     >
                                         <motion.div
                                             animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
@@ -1822,7 +1822,7 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(true);
                                                 }
                                             }}
-                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-yellow-500/25 border-x border-yellow-500/15 border-b border-yellow-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(234,179,8,0.08)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                         >
                                             <motion.div
                                                 animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
@@ -2005,7 +2005,7 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(true);
                                                 }
                                             }}
-                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-blue-500/25 border-x border-blue-500/15 border-b border-blue-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(59,130,246,0.08)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                         >
                                             <motion.div
                                                 animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
@@ -2162,7 +2162,7 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(true);
                                                 }
                                             }}
-                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-purple-500/25 border-x border-purple-500/15 border-b border-purple-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(168,85,247,0.08)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                         >
                                             <motion.div
                                                 animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
@@ -2368,7 +2368,7 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(true);
                                                 }
                                             }}
-                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-orange-500/25 border-x border-orange-500/15 border-b border-orange-500/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85),0_0_40px_rgba(249,115,22,0.08)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                         >
                                             <motion.div
                                                 animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
