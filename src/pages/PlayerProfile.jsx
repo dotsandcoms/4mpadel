@@ -1233,17 +1233,17 @@ const PlayerProfile = () => {
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="flex overflow-x-auto no-scrollbar flex-nowrap gap-2 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
+                                className="flex overflow-x-auto no-scrollbar flex-nowrap gap-2 sm:gap-3 md:gap-4 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
                             >
                                 <button
                                     onClick={() => setActiveTab('events')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'events' ? 'bg-purple-500 border border-purple-500 text-white shadow-xl shadow-purple-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <CalendarIcon size={16} /> My Events
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('matches')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'matches' ? 'bg-orange-500 border border-orange-500 text-white shadow-xl shadow-orange-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <Trophy size={16} /> My Matches
                                 </button>
@@ -1254,13 +1254,13 @@ const PlayerProfile = () => {
                                             setSelectedRankingForBreakdown(player.rankings[0]);
                                         }
                                     }}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'rankings' ? 'bg-padel-green border border-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <TrendingUp size={16} /> My Rankings
                                 </button>
                                 <button
                                     onClick={() => setActiveTab('payments')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'payments' ? 'bg-blue-500 border border-blue-500 text-white shadow-xl shadow-blue-500/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <CreditCard size={16} /> Payments
                                 </button>
@@ -1274,7 +1274,7 @@ const PlayerProfile = () => {
                                 )}
                                 <button
                                     onClick={() => setActiveTab('personal')}
-                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green border border-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
                                 >
                                     <User size={16} /> My Profile
                                 </button>
@@ -1293,9 +1293,18 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-[#beff00]/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-[#beff00]/10 blur-[90px] pointer-events-none"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-[#beff00]/10 blur-[90px] pointer-events-none"
+                                        />
 
                                         <AnimatePresence>
                                             {message && (
@@ -1319,18 +1328,24 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }
                                             }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div className="flex flex-col gap-1">
-                                                    <h4 className="font-bold text-white flex items-center gap-3">
-                                                        <User className="text-padel-green" size={24} />
-                                                        Personal Management
-                                                    </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-[#beff00]/10 border border-[#beff00]/20 text-[#beff00] shadow-[0_0_15px_rgba(190,255,0,0.15)] flex items-center justify-center shrink-0">
+                                                        <User size={24} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
+                                                            Personal Management
+                                                        </h4>
+                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
+                                                            Manage your personal profile and preferences
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <div className="md:hidden">
-                                                    <ChevronDown className={`text-padel-green transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                    <ChevronDown className={`text-[#beff00] transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </div>
                                         </div>
@@ -1413,11 +1428,11 @@ const PlayerProfile = () => {
 
                                                             <div className="pt-8 border-t border-white/5">
                                                                 <div className="flex flex-wrap gap-4">
-                                                                    <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                                                                    <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
                                                                         <Phone size={14} className="text-padel-green" />
                                                                         <span className="text-xs font-bold text-white">{player.contact_number || 'No phone'}</span>
                                                                     </div>
-                                                                    <div className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/10">
+                                                                    <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
                                                                         <Mail size={14} className="text-padel-green" />
                                                                         <span className="text-xs font-bold text-white">{player.email}</span>
                                                                     </div>
@@ -1426,7 +1441,7 @@ const PlayerProfile = () => {
                                                                             href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                                                                             target="_blank"
                                                                             rel="noopener noreferrer"
-                                                                            className="flex items-center gap-2 bg-white/5 px-4 py-2 rounded-lg border border-white/10 hover:bg-white/10 transition-all group"
+                                                                            className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all group"
                                                                         >
                                                                             <Instagram size={14} className="text-padel-green group-hover:scale-110 transition-transform" />
                                                                             <span className="text-xs font-bold text-white">Instagram</span>
@@ -1456,7 +1471,7 @@ const PlayerProfile = () => {
                                                                                 type="text"
                                                                                 value={formData.name}
                                                                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Enter full name"
                                                                             />
                                                                         </div>
@@ -1470,7 +1485,7 @@ const PlayerProfile = () => {
                                                                                 type="email"
                                                                                 value={formData.email}
                                                                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Email Address"
                                                                             />
                                                                         </div>
@@ -1484,7 +1499,7 @@ const PlayerProfile = () => {
                                                                             <select
                                                                                 value={formData.gender}
                                                                                 onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
                                                                             >
                                                                                 <option value="" disabled>Select Gender</option>
                                                                                 <option value="Male">Male</option>
@@ -1502,7 +1517,7 @@ const PlayerProfile = () => {
                                                                                 type="number"
                                                                                 value={formData.age}
                                                                                 onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Your Age"
                                                                             />
                                                                         </div>
@@ -1518,7 +1533,7 @@ const PlayerProfile = () => {
                                                                                 type="text"
                                                                                 value={formData.nationality}
                                                                                 onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Nationality"
                                                                             />
                                                                         </div>
@@ -1532,7 +1547,7 @@ const PlayerProfile = () => {
                                                                                 type="text"
                                                                                 value={formData.id_number}
                                                                                 onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="ID Number"
                                                                             />
                                                                         </div>
@@ -1548,7 +1563,7 @@ const PlayerProfile = () => {
                                                                                 type="tel"
                                                                                 value={formData.contact_number}
                                                                                 onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Phone Number"
                                                                             />
                                                                         </div>
@@ -1562,7 +1577,7 @@ const PlayerProfile = () => {
                                                                                 type="text"
                                                                                 value={formData.home_club}
                                                                                 onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="Your Home Club"
                                                                             />
                                                                         </div>
@@ -1576,7 +1591,7 @@ const PlayerProfile = () => {
                                                                                 type="text"
                                                                                 value={formData.instagram_link}
                                                                                 onChange={(e) => setFormData({ ...formData, instagram_link: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                                 placeholder="@username or full URL"
                                                                             />
                                                                         </div>
@@ -1588,7 +1603,7 @@ const PlayerProfile = () => {
                                                                             <select
                                                                                 value={formData.region}
                                                                                 onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none transition-all font-bold appearance-none cursor-pointer"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
                                                                             >
                                                                                 <option value="" disabled>Select Region</option>
                                                                                 <option value="Eastern Cape">Eastern Cape</option>
@@ -1617,7 +1632,7 @@ const PlayerProfile = () => {
                                                                                         setFormData({ ...formData, racket_brand: val });
                                                                                     }
                                                                                 }}
-                                                                                className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-padel-green outline-none transition-all font-bold appearance-none cursor-pointer"
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
                                                                             >
                                                                                 <option value="" disabled>Select Brand</option>
                                                                                 <option value="Adidas">Adidas</option>
@@ -1639,7 +1654,7 @@ const PlayerProfile = () => {
                                                                                     value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
                                                                                     onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
                                                                                     placeholder="Specify your brand"
-                                                                                    className="w-full bg-black/40 border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none transition-all font-bold"
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold"
                                                                                     required
                                                                                 />
                                                                             )}
@@ -1654,7 +1669,7 @@ const PlayerProfile = () => {
                                                                         <textarea
                                                                             value={formData.bio}
                                                                             onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
+                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
                                                                             placeholder="Tell us about your padel journey..."
                                                                         />
                                                                     </div>
@@ -1667,7 +1682,7 @@ const PlayerProfile = () => {
                                                                             type="text"
                                                                             value={formData.sponsors}
                                                                             onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
+                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
                                                                             placeholder="Babolat, Nike, Red Bull, etc."
                                                                         />
                                                                     </div>
@@ -1679,7 +1694,7 @@ const PlayerProfile = () => {
                                                                         <select
                                                                             value={formData.category}
                                                                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                                                            className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer"
+                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
                                                                         >
                                                                             <option value="" disabled>Select Category</option>
                                                                             <optgroup label="Men's" className="bg-[#0F172A]">
@@ -1748,9 +1763,18 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-yellow-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
+                                        />
 
                                         <div
                                             onClick={(e) => {
@@ -1759,15 +1783,21 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }
                                             }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div className="flex flex-col gap-1">
-                                                    <h4 className="font-bold text-white flex items-center gap-3">
-                                                        <TrendingUp className="text-yellow-500" size={24} />
-                                                        Rankings Points Breakdown
-                                                    </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center justify-center shrink-0">
+                                                        <TrendingUp size={24} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
+                                                            Rankings Points Breakdown
+                                                        </h4>
+                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
+                                                            Track your performance points and standings
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-yellow-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1781,11 +1811,11 @@ const PlayerProfile = () => {
                                                     initial={{ height: 0, opacity: 0 }}
                                                     animate={{ height: "auto", opacity: 1 }}
                                                     exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden space-y-6"
+                                                    className="overflow-hidden space-y-6 pt-6"
                                                 >
                                                     {/* Small ranking list select pills */}
                                                     {player.rankings && player.rankings.length > 0 && (
-                                                        <div className="relative z-10 flex flex-wrap gap-1.5 bg-black/40 p-1 rounded-xl w-fit">
+                                                        <div className="relative z-10 flex flex-wrap gap-1.5 bg-white/[0.03] backdrop-blur-md p-1 rounded-xl w-fit border border-white/10">
                                                             {player.rankings.map((r, i) => {
                                                                 const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
                                                                 return (
@@ -1793,8 +1823,8 @@ const PlayerProfile = () => {
                                                                         key={i}
                                                                         onClick={() => setSelectedRankingForBreakdown(r)}
                                                                         className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${isSelected
-                                                                            ? 'bg-padel-green text-black'
-                                                                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                                                                            ? 'bg-padel-green text-black font-extrabold shadow-lg shadow-padel-green/20'
+                                                                            : 'text-gray-400 hover:text-white hover:bg-white/[0.08]'
                                                                             }`}
                                                                     >
                                                                         {(r.org || 'SAPA').split(' ')[0]} ({r.age_group || 'Open'})
@@ -1808,26 +1838,26 @@ const PlayerProfile = () => {
                                                         <div className="relative z-10 space-y-6">
                                                             {/* Header Stats */}
                                                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Standing</p>
                                                                     <p className="text-2xl font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
                                                                 </div>
-                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Points</p>
                                                                     <p className="text-2xl font-black text-white">{selectedRankingForBreakdown.points}</p>
                                                                 </div>
-                                                                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 text-center">
+                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
                                                                     <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Match Type</p>
                                                                     <p className="text-xs font-bold text-gray-300 uppercase mt-2">{selectedRankingForBreakdown.match_type}</p>
                                                                 </div>
                                                             </div>
 
                                                             {/* Desktop Table View */}
-                                                            <div className="hidden md:block bg-black/40 border border-white/10 rounded-2xl overflow-hidden">
+                                                            <div className="hidden md:block bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden">
                                                                 <div className="overflow-x-auto">
                                                                     <table className="w-full text-left border-collapse">
                                                                         <thead>
-                                                                            <tr className="bg-white/5 border-b border-white/5">
+                                                                            <tr className="bg-white/[0.05] border-b border-white/10">
                                                                                 <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Date</th>
                                                                                 <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Tournament Name | Class</th>
                                                                                 <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-center">Standing</th>
@@ -1838,7 +1868,7 @@ const PlayerProfile = () => {
                                                                         <tbody>
                                                                             {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
                                                                                 selectedRankingForBreakdown.details.map((item, idx) => (
-                                                                                    <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                                                                    <tr key={idx} className="border-b border-white/10 hover:bg-white/[0.05] transition-colors">
                                                                                         <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">{item.date}</td>
                                                                                         <td className="py-4 px-6">
                                                                                             <div className="font-bold text-xs text-white">{item.name}</div>
@@ -1846,7 +1876,7 @@ const PlayerProfile = () => {
                                                                                         </td>
                                                                                         <td className="py-4 px-6 text-xs font-black text-center text-white">{item.place}</td>
                                                                                         <td className="py-4 px-6">
-                                                                                            <span className="inline-block px-2 py-0.5 rounded-full bg-white/5 border border-white/5 text-[9px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                                                                                            <span className="inline-block px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[9px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                                                                                                 {item.event_type}
                                                                                             </span>
                                                                                         </td>
@@ -1869,7 +1899,7 @@ const PlayerProfile = () => {
                                                             <div className="block md:hidden space-y-3">
                                                                 {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
                                                                     selectedRankingForBreakdown.details.map((item, idx) => (
-                                                                        <div key={idx} className="bg-black/40 border border-white/10 rounded-2xl p-4 space-y-3">
+                                                                        <div key={idx} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 space-y-3 hover:bg-white/[0.06] transition-all duration-300">
                                                                             <div className="flex justify-between items-start gap-2">
                                                                                 <div className="min-w-0">
                                                                                     <h5 className="font-bold text-xs text-white uppercase tracking-tight">{item.name}</h5>
@@ -1879,7 +1909,7 @@ const PlayerProfile = () => {
                                                                                     <span className="text-xs font-black text-padel-green">+{item.points} PTS</span>
                                                                                 </div>
                                                                             </div>
-                                                                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-bold uppercase tracking-wider pt-2.5 border-t border-white/5">
+                                                                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-bold uppercase tracking-wider pt-2.5 border-t border-white/10">
                                                                                 <div>{item.date}</div>
                                                                                 <div className="flex gap-2">
                                                                                     <span>Standing: {item.place}</span>
@@ -1890,7 +1920,7 @@ const PlayerProfile = () => {
                                                                         </div>
                                                                     ))
                                                                 ) : (
-                                                                    <div className="text-center py-8 text-xs text-gray-500 font-bold uppercase tracking-wider bg-black/40 border border-white/10 rounded-2xl">
+                                                                    <div className="text-center py-8 text-xs text-gray-500 font-bold uppercase tracking-wider bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl">
                                                                         No tournaments counted yet or detailed breakdown pending sync.
                                                                     </div>
                                                                 )}
@@ -1919,9 +1949,18 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-blue-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
+                                        />
 
                                         <div
                                             onClick={(e) => {
@@ -1930,15 +1969,21 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }
                                             }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
-                                                <div className="flex flex-col gap-1">
-                                                    <h4 className="font-bold text-white flex items-center gap-3">
-                                                        <CreditCard className="text-blue-400" size={24} />
-                                                        Payment Transactions
-                                                    </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] flex items-center justify-center shrink-0">
+                                                        <CreditCard size={24} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
+                                                            Payment Transactions
+                                                        </h4>
+                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
+                                                            View and manage your secure transaction history
+                                                        </p>
+                                                    </div>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-blue-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -1952,7 +1997,7 @@ const PlayerProfile = () => {
                                                     initial={{ height: 0, opacity: 0 }}
                                                     animate={{ height: "auto", opacity: 1 }}
                                                     exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden"
+                                                    className="overflow-hidden pt-6"
                                                 >
                                                     {transactionsLoading ? (
                                                         <div className="flex flex-col items-center justify-center py-12">
@@ -1960,14 +2005,14 @@ const PlayerProfile = () => {
                                                             <p className="text-gray-500 text-xs font-black uppercase tracking-widest">Fetching payment history...</p>
                                                         </div>
                                                     ) : transactions.length === 0 ? (
-                                                        <div className="bg-white/5 rounded-3xl p-12 text-center border border-white/5">
+                                                        <div className="bg-white/[0.03] backdrop-blur-md rounded-3xl p-12 text-center border border-white/10">
                                                             <AlertCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
                                                             <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No transactions found</p>
                                                             <p className="text-gray-600 text-xs mt-2">Payments are processed securely via Paystack</p>
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-4">
-                                                            <div className="hidden md:grid grid-cols-5 gap-4 px-6 py-4 bg-white/5 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                                            <div className="hidden md:grid grid-cols-5 gap-4 px-6 py-4 bg-white/[0.03] border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
                                                                 <div>Reference</div>
                                                                 <div>Date</div>
                                                                 <div>Type</div>
@@ -1976,8 +2021,8 @@ const PlayerProfile = () => {
                                                             </div>
 
                                                             {currentTransactionsList.map((trx) => (
-                                                                <div key={trx.id} className="group bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-6 transition-all flex flex-col md:grid md:grid-cols-5 md:items-center gap-4">
-                                                                    <div className="flex flex-col text-sm border-b md:border-none border-white/5 pb-2 md:pb-0">
+                                                                <div key={trx.id} className="group bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 transition-all duration-300 flex flex-col md:grid md:grid-cols-5 md:items-center gap-4 hover:bg-white/[0.08] hover:border-white/20">
+                                                                    <div className="flex flex-col text-sm border-b md:border-none border-white/10 pb-2 md:pb-0">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
                                                                         <span className="font-mono text-gray-400">{trx.id}</span>
                                                                     </div>
@@ -2013,7 +2058,7 @@ const PlayerProfile = () => {
                                                                             {trx.status}
                                                                         </span>
                                                                     </div>
-                                                                </div>
+                                                                 </div>
                                                             ))}
 
                                                             {transactions.length > transactionsPerPage && (
@@ -2025,14 +2070,14 @@ const PlayerProfile = () => {
                                                                         <button
                                                                             onClick={() => setCurrentTransactionPage(prev => Math.max(prev - 1, 1))}
                                                                             disabled={currentTransactionPage === 1}
-                                                                            className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 transition-all shadow-xl"
+                                                                            className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
                                                                         >
                                                                             Prev
                                                                         </button>
                                                                         <button
                                                                             onClick={() => setCurrentTransactionPage(prev => Math.min(prev + 1, totalTransactionPages))}
                                                                             disabled={currentTransactionPage === totalTransactionPages}
-                                                                            className="px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/10 transition-all shadow-xl"
+                                                                            className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
                                                                         >
                                                                             Next
                                                                         </button>
@@ -2064,9 +2109,18 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-purple-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
+                                        />
 
                                         <div className="relative z-10">
                                             <div
@@ -2079,12 +2133,18 @@ const PlayerProfile = () => {
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
-                                                    <div className="flex flex-col gap-1">
-                                                        <h4 className="font-bold text-white flex items-center gap-3">
-                                                            <CalendarIcon className="text-purple-400" size={24} />
-                                                            {eventViewTab === 'upcoming' ? 'My Upcoming Events' : 'My Past Events'}
-                                                        </h4>
-
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)] flex items-center justify-center shrink-0">
+                                                            <CalendarIcon size={24} />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
+                                                                {eventViewTab === 'upcoming' ? 'My Upcoming Events' : 'My Past Events'}
+                                                            </h4>
+                                                            <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
+                                                                Manage and view tournament schedules
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -2098,24 +2158,24 @@ const PlayerProfile = () => {
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: "auto", opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden"
+                                                        className="overflow-hidden pt-6"
                                                     >
                                                         {/* Switcher for Upcoming vs Past Events */}
-                                                        <div className="flex gap-2 mb-6 border-b border-white/5 pb-4">
+                                                        <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4">
                                                             <button
                                                                 onClick={() => setEventViewTab('upcoming')}
-                                                                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'upcoming'
-                                                                    ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                                                                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'upcoming'
+                                                                    ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                    : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                     }`}
                                                             >
                                                                 Upcoming ({upcomingEvents.length})
                                                             </button>
                                                             <button
                                                                 onClick={() => setEventViewTab('past')}
-                                                                className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'past'
-                                                                    ? 'bg-purple-500 text-white shadow-lg shadow-purple-500/20'
-                                                                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'past'
+                                                                    ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                    : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                     }`}
                                                             >
                                                                 Complete ({pastEvents.length})
@@ -2170,7 +2230,7 @@ const PlayerProfile = () => {
                                                                         const needsPayment = eventViewTab === 'upcoming' && event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
 
                                                                         return (
-                                                                            <div key={event.id} className={`bg-black/40 border border-white/5 rounded-2xl p-6 ${hoverBorder} transition-all group relative overflow-hidden flex flex-col justify-between`}>
+                                                                            <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
                                                                                 <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
 
                                                                                 {event.isPaid && (
@@ -2198,7 +2258,7 @@ const PlayerProfile = () => {
                                                                                                     window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                                                                 }
                                                                                             }}
-                                                                                            className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 group/btn"
+                                                                                            className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 hover:border-padel-green/30 group/btn"
                                                                                         >
                                                                                             <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
                                                                                         </button>
@@ -2230,7 +2290,7 @@ const PlayerProfile = () => {
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-center py-16 bg-black/20 rounded-3xl border border-white/5 relative overflow-hidden">
+                                                            <div className="text-center py-16 bg-white/[0.03] backdrop-blur-md rounded-3xl border border-white/10 relative overflow-hidden">
                                                                 <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
                                                                 <div className="relative z-10">
                                                                     <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
@@ -2260,9 +2320,18 @@ const PlayerProfile = () => {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-orange-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
                                     >
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
+                                        <motion.div
+                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
+                                        />
+                                        <motion.div
+                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
+                                        />
 
                                         <div className="relative z-10">
                                             <div
@@ -2275,12 +2344,18 @@ const PlayerProfile = () => {
                                                 className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
-                                                    <div className="flex flex-col gap-1">
-                                                        <h4 className="font-bold text-white flex items-center gap-3">
-                                                            <Trophy className="text-orange-500" size={24} />
-                                                            {matchViewTab === 'upcoming' ? 'My Upcoming Matches' : 'My Past Matches'}
-                                                        </h4>
-
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.15)] flex items-center justify-center shrink-0">
+                                                            <Trophy size={24} />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
+                                                                {matchViewTab === 'upcoming' ? 'My Upcoming Matches' : 'My Past Matches'}
+                                                            </h4>
+                                                            <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
+                                                                Track and view match scores and history
+                                                            </p>
+                                                        </div>
                                                     </div>
                                                     <div className="md:hidden">
                                                         <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
@@ -2294,7 +2369,7 @@ const PlayerProfile = () => {
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: "auto", opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden"
+                                                        className="overflow-hidden pt-6"
                                                     >
                                                         {loadingMatches ? (
                                                             <div className="flex items-center justify-center py-12">
@@ -2303,21 +2378,21 @@ const PlayerProfile = () => {
                                                         ) : (
                                                             <>
                                                                 {/* Switcher for Upcoming vs Past Matches */}
-                                                                <div className="flex gap-2 mb-6 border-b border-white/5 pb-4">
+                                                                <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4">
                                                                     <button
                                                                         onClick={() => setMatchViewTab('upcoming')}
-                                                                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'upcoming'
-                                                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                        className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'upcoming'
+                                                                            ? 'bg-orange-500 border border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                                                            : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                             }`}
                                                                     >
                                                                         Upcoming ({matchHistory.upcoming.length})
                                                                     </button>
                                                                     <button
                                                                         onClick={() => setMatchViewTab('past')}
-                                                                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'past'
-                                                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                                                                        className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'past'
+                                                                            ? 'bg-orange-500 border border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                                                            : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                             }`}
                                                                     >
                                                                         Past ({matchHistory.history.length})
@@ -2332,7 +2407,7 @@ const PlayerProfile = () => {
                                                                                 const date = info.Date;
 
                                                                                 return (
-                                                                                    <div key={`upcoming-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
+                                                                                    <div key={`upcoming-${idx}`} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group">
                                                                                         <div className="flex flex-col lg:flex-row justify-between gap-6">
                                                                                             <div className="flex-1 min-w-0">
                                                                                                 <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -2346,14 +2421,14 @@ const PlayerProfile = () => {
                                                                                                 </div>
 
                                                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                    <div className="p-3.5 rounded-xl border bg-white/5 border-white/5 transition-colors group-hover:bg-white/10">
+                                                                                                    <div className="p-3.5 rounded-xl border bg-white/[0.04] border-white/10 transition-colors duration-300 group-hover:bg-white/[0.08]">
                                                                                                         <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Team 1</p>
                                                                                                         <p className="text-sm font-bold text-white truncate">
                                                                                                             {info.Challenger?.Name || 'TBD'}
                                                                                                             {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                                                         </p>
                                                                                                     </div>
-                                                                                                    <div className="p-3.5 rounded-xl border bg-white/5 border-white/5 transition-colors group-hover:bg-white/10">
+                                                                                                    <div className="p-3.5 rounded-xl border bg-white/[0.04] border-white/10 transition-colors duration-300 group-hover:bg-white/[0.08]">
                                                                                                         <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1.5">Team 2</p>
                                                                                                         <p className="text-sm font-bold text-white truncate">
                                                                                                             {info.Challenged?.Name || 'TBD'}
@@ -2371,7 +2446,7 @@ const PlayerProfile = () => {
                                                                                                             </div>
                                                                                                         )}
                                                                                                         {info.Court && (
-                                                                                                            <div className="flex items-center gap-1.5 bg-orange-500/10 text-orange-500 px-2.5 py-1 rounded-lg border border-orange-500/20 shadow-lg shadow-orange-500/5">
+                                                                                                            <div className="flex items-center gap-1.5 bg-orange-500/[0.08] text-orange-500 px-2.5 py-1 rounded-lg border border-orange-500/30 backdrop-blur-sm shadow-lg shadow-orange-500/5">
                                                                                                                 <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{info.Court}</span>
                                                                                                             </div>
                                                                                                         )}
@@ -2379,8 +2454,8 @@ const PlayerProfile = () => {
                                                                                                 )}
                                                                                             </div>
 
-                                                                                            <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/5">
-                                                                                                <div className="px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-orange-500/10 text-orange-500 border border-orange-500/20 shadow-lg">
+                                                                                            <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/10">
+                                                                                                <div className="px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-orange-500/[0.08] text-orange-500 border border-orange-500/30 shadow-lg backdrop-blur-sm">
                                                                                                     Upcoming
                                                                                                 </div>
                                                                                             </div>
@@ -2398,7 +2473,7 @@ const PlayerProfile = () => {
                                                                                 const hasResult = match.Score?.Score && match.Score.Score.length > 0;
 
                                                                                 return (
-                                                                                    <div key={`history-${idx}`} className="bg-black/40 border border-white/5 rounded-2xl p-6 hover:border-white/10 transition-all group">
+                                                                                    <div key={`history-${idx}`} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group">
                                                                                         <div className="flex flex-col lg:flex-row justify-between gap-6">
                                                                                             <div className="flex-1 min-w-0">
                                                                                                 <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -2412,7 +2487,7 @@ const PlayerProfile = () => {
                                                                                                 </div>
 
                                                                                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                    <div className={`p-3.5 rounded-xl border transition-colors ${hasResult && isWinner ? 'bg-padel-green/5 border-padel-green/20 ring-1 ring-padel-green/10' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && isWinner ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
                                                                                                         <div className="flex justify-between items-center mb-1.5">
                                                                                                             <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 1</p>
                                                                                                             {hasResult && isWinner && <Trophy size={10} className="text-padel-green" />}
@@ -2422,7 +2497,7 @@ const PlayerProfile = () => {
                                                                                                             {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                                                         </p>
                                                                                                     </div>
-                                                                                                    <div className={`p-3.5 rounded-xl border transition-colors ${hasResult && !isWinner ? 'bg-padel-green/5 border-padel-green/20 ring-1 ring-padel-green/10' : 'bg-white/5 border-white/5'}`}>
+                                                                                                    <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && !isWinner ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
                                                                                                         <div className="flex justify-between items-center mb-1.5">
                                                                                                             <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 2</p>
                                                                                                             {hasResult && !isWinner && <Trophy size={10} className="text-padel-green" />}
@@ -2443,7 +2518,7 @@ const PlayerProfile = () => {
                                                                                                             </div>
                                                                                                         )}
                                                                                                         {info.Court && (
-                                                                                                            <div className="flex items-center gap-1.5 bg-white/10 text-gray-300 px-2.5 py-1 rounded-lg border border-white/10">
+                                                                                                            <div className="flex items-center gap-1.5 bg-white/[0.05] text-gray-300 px-2.5 py-1 rounded-lg border border-white/10 backdrop-blur-sm">
                                                                                                                 <span className="text-[10px] font-black uppercase tracking-widest whitespace-nowrap">{info.Court}</span>
                                                                                                             </div>
                                                                                                         )}
@@ -2451,12 +2526,12 @@ const PlayerProfile = () => {
                                                                                                 )}
                                                                                             </div>
 
-                                                                                            <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/5">
+                                                                                            <div className="flex flex-col items-center lg:items-end justify-center min-w-[140px] pt-4 lg:pt-0 border-t lg:border-t-0 border-white/10">
                                                                                                 {hasResult ? (
                                                                                                     <div className="flex flex-col items-center lg:items-end w-full gap-3">
                                                                                                         <div className="flex items-center gap-1.5">
                                                                                                             {match.Score?.Score?.map((set, sIdx) => (
-                                                                                                                <div key={sIdx} className="bg-white/10 px-2.5 py-1.5 rounded-lg text-xs font-black text-white border border-white/10 shadow-inner flex flex-col items-center min-w-[32px]">
+                                                                                                                <div key={sIdx} className="bg-white/[0.05] backdrop-blur-md px-2.5 py-1.5 rounded-lg text-xs font-black text-white border border-white/10 shadow-inner flex flex-col items-center min-w-[32px]">
                                                                                                                     <span className={set.Score1 > set.Score2 ? 'text-padel-green' : 'text-white/60'}>{set.Score1}</span>
                                                                                                                     <div className="w-full h-[1px] bg-white/10 my-0.5" />
                                                                                                                     <span className={set.Score2 > set.Score1 ? 'text-padel-green' : 'text-white/60'}>{set.Score2}</span>
@@ -2471,7 +2546,7 @@ const PlayerProfile = () => {
                                                                                                         </div>
                                                                                                     </div>
                                                                                                 ) : (
-                                                                                                    <div className="flex items-center gap-2 text-gray-500 bg-white/5 px-4 py-2 rounded-full border border-white/5">
+                                                                                                    <div className="flex items-center gap-2 text-gray-500 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
                                                                                                         <CheckCircle2 size={12} />
                                                                                                         <span className="text-[10px] font-black uppercase tracking-widest">Played</span>
                                                                                                     </div>
@@ -2484,7 +2559,7 @@ const PlayerProfile = () => {
                                                                         )}
                                                                     </div>
                                                                 ) : (
-                                                                    <div className="text-center py-16 bg-black/20 rounded-3xl border border-white/5 relative overflow-hidden">
+                                                                    <div className="text-center py-16 bg-white/[0.03] backdrop-blur-md rounded-3xl border border-white/10 relative overflow-hidden">
                                                                         <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 to-transparent opacity-50" />
                                                                         <div className="relative z-10">
                                                                             <Trophy className="w-12 h-12 text-white/5 mx-auto mb-4" />
@@ -2600,7 +2675,7 @@ const PlayerProfile = () => {
                                                             type="text"
                                                             value={formData.name}
                                                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Enter full name"
                                                         />
                                                     </div>
@@ -2614,7 +2689,7 @@ const PlayerProfile = () => {
                                                             type="email"
                                                             value={formData.email}
                                                             onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Email Address"
                                                         />
                                                     </div>
@@ -2628,11 +2703,11 @@ const PlayerProfile = () => {
                                                         <select
                                                             value={formData.gender}
                                                             onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled>Select Gender</option>
-                                                            <option value="Male">Male</option>
-                                                            <option value="Female">Female</option>
+                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Gender</option>
+                                                            <option value="Male" className="bg-[#0F172A] text-white">Male</option>
+                                                            <option value="Female" className="bg-[#0F172A] text-white">Female</option>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                     </div>
@@ -2646,7 +2721,7 @@ const PlayerProfile = () => {
                                                             type="number"
                                                             value={formData.age}
                                                             onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Your Age"
                                                         />
                                                     </div>
@@ -2662,7 +2737,7 @@ const PlayerProfile = () => {
                                                             type="text"
                                                             value={formData.nationality}
                                                             onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Nationality"
                                                         />
                                                     </div>
@@ -2676,7 +2751,7 @@ const PlayerProfile = () => {
                                                             type="text"
                                                             value={formData.id_number}
                                                             onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="ID Number"
                                                         />
                                                     </div>
@@ -2692,7 +2767,7 @@ const PlayerProfile = () => {
                                                             type="tel"
                                                             value={formData.contact_number}
                                                             onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Phone Number"
                                                         />
                                                     </div>
@@ -2706,7 +2781,7 @@ const PlayerProfile = () => {
                                                             type="text"
                                                             value={formData.home_club}
                                                             onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="Your Home Club"
                                                         />
                                                     </div>
@@ -2722,7 +2797,7 @@ const PlayerProfile = () => {
                                                             type="text"
                                                             value={formData.instagram_link}
                                                             onChange={(e) => setFormData({ ...formData, instagram_link: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                             placeholder="@username or full URL"
                                                         />
                                                     </div>
@@ -2735,18 +2810,18 @@ const PlayerProfile = () => {
                                                         <select
                                                             value={formData.region}
                                                             onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled>Select Region</option>
-                                                            <option value="Eastern Cape">Eastern Cape</option>
-                                                            <option value="Free State">Free State</option>
-                                                            <option value="Gauteng">Gauteng</option>
-                                                            <option value="KwaZulu-Natal">KwaZulu-Natal</option>
-                                                            <option value="Limpopo">Limpopo</option>
-                                                            <option value="Mpumalanga">Mpumalanga</option>
-                                                            <option value="Northern Cape">Northern Cape</option>
-                                                            <option value="North West">North West</option>
-                                                            <option value="Western Cape">Western Cape</option>
+                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Region</option>
+                                                            <option value="Eastern Cape" className="bg-[#0F172A] text-white">Eastern Cape</option>
+                                                            <option value="Free State" className="bg-[#0F172A] text-white">Free State</option>
+                                                            <option value="Gauteng" className="bg-[#0F172A] text-white">Gauteng</option>
+                                                            <option value="KwaZulu-Natal" className="bg-[#0F172A] text-white">KwaZulu-Natal</option>
+                                                            <option value="Limpopo" className="bg-[#0F172A] text-white">Limpopo</option>
+                                                            <option value="Mpumalanga" className="bg-[#0F172A] text-white">Mpumalanga</option>
+                                                            <option value="Northern Cape" className="bg-[#0F172A] text-white">Northern Cape</option>
+                                                            <option value="North West" className="bg-[#0F172A] text-white">North West</option>
+                                                            <option value="Western Cape" className="bg-[#0F172A] text-white">Western Cape</option>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                     </div>
@@ -2768,19 +2843,19 @@ const PlayerProfile = () => {
                                                                         setFormData({ ...formData, racket_brand: val });
                                                                     }
                                                                 }}
-                                                                className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                             >
-                                                                <option value="" disabled>Select Brand</option>
-                                                                <option value="Adidas">Adidas</option>
-                                                                <option value="Babolat">Babolat</option>
-                                                                <option value="Bull Padel">Bull Padel</option>
-                                                                <option value="Nox">Nox</option>
-                                                                <option value="Varlion">Varlion</option>
-                                                                <option value="Oxdog">Oxdog</option>
-                                                                <option value="Wilson">Wilson</option>
-                                                                <option value="Head">Head</option>
-                                                                <option value="Siux">Siux</option>
-                                                                <option value="Other">Other</option>
+                                                                <option value="" disabled className="bg-[#0F172A] text-white">Select Brand</option>
+                                                                <option value="Adidas" className="bg-[#0F172A] text-white">Adidas</option>
+                                                                <option value="Babolat" className="bg-[#0F172A] text-white">Babolat</option>
+                                                                <option value="Bull Padel" className="bg-[#0F172A] text-white">Bull Padel</option>
+                                                                <option value="Nox" className="bg-[#0F172A] text-white">Nox</option>
+                                                                <option value="Varlion" className="bg-[#0F172A] text-white">Varlion</option>
+                                                                <option value="Oxdog" className="bg-[#0F172A] text-white">Oxdog</option>
+                                                                <option value="Wilson" className="bg-[#0F172A] text-white">Wilson</option>
+                                                                <option value="Head" className="bg-[#0F172A] text-white">Head</option>
+                                                                <option value="Siux" className="bg-[#0F172A] text-white">Siux</option>
+                                                                <option value="Other" className="bg-[#0F172A] text-white">Other</option>
                                                             </select>
                                                             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
                                                         </div>
@@ -2791,7 +2866,7 @@ const PlayerProfile = () => {
                                                                 value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
                                                                 onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
                                                                 placeholder="Specify your brand"
-                                                                className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl px-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold text-xs md:text-sm"
+                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl px-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold text-xs md:text-sm"
                                                                 required
                                                             />
                                                         )}
@@ -2805,18 +2880,18 @@ const PlayerProfile = () => {
                                                         <select
                                                             value={formData.category}
                                                             onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                                            className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
+                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-10 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer text-xs md:text-sm"
                                                         >
-                                                            <option value="" disabled>Select Category</option>
+                                                            <option value="" disabled className="bg-[#0F172A] text-white">Select Category</option>
                                                             <optgroup label="Men's" className="bg-[#0F172A]">
-                                                                <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
-                                                                <option value="Men's Advanced">Men's Advanced</option>
-                                                                <option value="Men's Intermediate">Men's Intermediate</option>
+                                                                <option value="Men's Open (Pro/Elite)" className="bg-[#0F172A] text-white">Men's Open (Pro/Elite)</option>
+                                                                <option value="Men's Advanced" className="bg-[#0F172A] text-white">Men's Advanced</option>
+                                                                <option value="Men's Intermediate" className="bg-[#0F172A] text-white">Men's Intermediate</option>
                                                             </optgroup>
                                                             <optgroup label="Ladies" className="bg-[#0F172A]">
-                                                                <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
-                                                                <option value="Ladies Advanced">Ladies Advanced</option>
-                                                                <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                                <option value="Ladies Open (Pro/Elite)" className="bg-[#0F172A] text-white">Ladies Open (Pro/Elite)</option>
+                                                                <option value="Ladies Advanced" className="bg-[#0F172A] text-white">Ladies Advanced</option>
+                                                                <option value="Ladies Intermediate" className="bg-[#0F172A] text-white">Ladies Intermediate</option>
                                                             </optgroup>
                                                         </select>
                                                         <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none w-4 h-4 md:w-5 md:h-5" />
@@ -2831,7 +2906,7 @@ const PlayerProfile = () => {
                                                     <textarea
                                                         value={formData.bio}
                                                         onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 min-h-[80px] md:min-h-[100px] text-xs md:text-sm"
+                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 min-h-[80px] md:min-h-[100px] text-xs md:text-sm"
                                                         placeholder="Tell us about your padel journey..."
                                                     />
                                                 </div>
@@ -2845,7 +2920,7 @@ const PlayerProfile = () => {
                                                         type="text"
                                                         value={formData.sponsors}
                                                         onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
-                                                        className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
+                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
                                                         placeholder="Babolat, Nike, Red Bull, etc."
                                                     />
                                                 </div>
@@ -2863,7 +2938,7 @@ const PlayerProfile = () => {
                                                 <button
                                                     type="button"
                                                     onClick={() => setIsEditProfileModalOpen(false)}
-                                                    className="w-1/2 sm:w-auto bg-white/5 text-white font-black uppercase tracking-widest px-6 py-3.5 md:px-8 md:py-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/10 transition-all text-[10px] md:text-xs"
+                                                    className="w-1/2 sm:w-auto bg-white/[0.03] text-white font-black uppercase tracking-widest px-6 py-3.5 md:px-8 md:py-4 rounded-lg md:rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all backdrop-blur-md text-[10px] md:text-xs"
                                                 >
                                                     Cancel
                                                 </button>
