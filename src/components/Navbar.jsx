@@ -31,6 +31,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
     'markstillerman@gmail.com'
   ];
   const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
+  const isLoggedIn = !!targetEmail;
   const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
 
   useEffect(() => {
@@ -73,6 +74,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
   }, [session?.user?.email, location.pathname]);
 
   const handleLogout = async () => {
+    sessionStorage.removeItem('admin_test_login_email');
     await supabase.auth.signOut();
     window.location.href = '/';
   };
@@ -178,7 +180,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
               <img src={saFlag} alt="South Africa Flag" className="h-4 w-auto mt-0.5 object-contain" />
             </div>
 
-            {session && player && (
+            {isLoggedIn && player && (
               <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-3 ml-1 text-xs font-medium text-white/80 shrink-0">
                 <div className="flex flex-col shrink-0">
                   <span className="leading-tight font-black text-xs uppercase tracking-tight whitespace-nowrap" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>
@@ -265,18 +267,18 @@ const Navbar = ({ isDark = false, accentColor }) => {
               />
             </button>
 
-            {session && (
+            {isLoggedIn && (
               <div className="relative hidden lg:block">
                 <button
                   onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                  className={`p-1.5 xl:p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
+                  className={`p-2 lg:p-1.5 xl:p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
                   title="Notifications"
                 >
                   <motion.div
                     animate={(pendingPayments.length > 0 || (player && !player.region)) ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
                     transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
                   >
-                    <Bell className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} />
+                    <Bell className={`w-5 h-5 lg:w-4 lg:h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} />
                   </motion.div>
                   {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
                     <span className="absolute top-0 right-0 flex h-2 w-2">
@@ -292,7 +294,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 10 }}
-                      className={`absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl z-[60] overflow-hidden ${isDark ? 'bg-white border border-slate-200' : 'bg-black/95 backdrop-blur-xl border border-white/10'}`}
+                      className={`absolute top-full right-0 w-80 rounded-2xl shadow-2xl z-[9999] overflow-hidden ${isDark ? 'bg-white border border-slate-200' : 'bg-black/95 backdrop-blur-xl border border-white/10'}`}
                     >
                       <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
                         <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
@@ -334,7 +336,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             )}
 
             <div className="hidden lg:block">
-              {session ? (
+              {isLoggedIn ? (
                 <div className="flex items-center relative group py-2">
                   <button className="flex items-center gap-1.5 xl:gap-2 px-2.5 xl:px-3.5 py-1.5 xl:py-2 rounded-full text-xs xl:text-sm font-black transition-all duration-300 bg-white/5 border border-white/10 hover:bg-white/10 text-white cursor-pointer select-none">
                     {player?.image_url ? (
@@ -384,6 +386,73 @@ const Navbar = ({ isDark = false, accentColor }) => {
             </div>
 
             <div className="flex items-center gap-1.5 lg:hidden">
+              {isLoggedIn && (
+                <div className="relative">
+                  <button
+                    onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                    className={`p-2 rounded-full transition-all duration-300 group relative ${isDark ? 'text-slate-900' : 'text-white hover:text-padel-green'}`}
+                    title="Notifications"
+                  >
+                    <motion.div
+                      animate={(pendingPayments.length > 0 || (player && !player.region)) ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                      transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
+                    >
+                      <Bell className="w-5 h-5 transition-transform group-hover:scale-110" />
+                    </motion.div>
+                    {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
+                      <span className="absolute top-1 right-1 flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                      </span>
+                    )}
+                  </button>
+
+                  <AnimatePresence>
+                    {isNotificationsOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className={`fixed top-[72px] left-4 right-4 w-auto rounded-2xl shadow-2xl z-[9999] overflow-hidden ${isDark ? 'bg-white border border-slate-200' : 'bg-black/95 backdrop-blur-xl border border-white/10'}`}
+                      >
+                        <div className={`p-4 border-b flex items-center justify-between ${isDark ? 'border-slate-100' : 'border-white/10'}`}>
+                          <h3 className={`font-bold text-sm ${isDark ? 'text-slate-800' : 'text-white'}`}>Notifications</h3>
+                          {(pendingPayments.length > 0 || (player && (!player.region || !player.racket_brand))) && (
+                            <span className="bg-red-500/20 text-red-500 text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                              {pendingPayments.length + (player && !player.region ? 1 : 0) + (player && !player.racket_brand ? 1 : 0)} Total
+                            </span>
+                          )}
+                        </div>
+                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                          {player && !player.region && (
+                            <a href="/profile?edit=true" className={`block p-4 transition-colors border-b flex items-start gap-3 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}>
+                              <div className="mt-1 bg-padel-green/20 p-2 rounded-lg"><MapPin className="w-4 h-4 text-padel-green" /></div>
+                              <div><p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Region Missing</p><p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>Please select your home region.</p></div>
+                            </a>
+                          )}
+                          {pendingPayments.map(payment => (
+                            <a
+                              key={`${payment.id}_${payment.division || 'N/A'}`}
+                              href={`/calendar/${payment.slug}?register=true`}
+                              className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
+                            >
+                              <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
+                              <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                                You have a pending entry fee for{' '}
+                                <span className="font-bold" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>
+                                  {payment.name}
+                                </span>
+                                {payment.division && payment.division !== 'N/A' && ` (${payment.division})`}.
+                              </p>
+                              <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green">Click to pay now</p>
+                            </a>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
               <button onClick={toggleSearch} className={`p-2 rounded-full ${isDark ? 'text-slate-900' : 'text-white'}`}>
                 <Search className="w-5 h-5" />
               </button>
@@ -423,26 +492,76 @@ const Navbar = ({ isDark = false, accentColor }) => {
               </div>
 
               <div className="px-5 pt-5 pb-1">
-                {session && player ? (
-                  <a
-                    href="/profile"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-4 bg-gradient-to-br from-white/5 to-white/[0.01] border border-white/10 hover:border-padel-green/30 hover:bg-white/10 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 cursor-pointer group hover:scale-[1.01] active:scale-[0.99]"
-                  >
-                    {player.image_url ? (
-                      <img src={player.image_url} alt={player.name} className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-lg shrink-0 group-hover:border-padel-green/50 transition-colors duration-300" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-padel-green/10 border border-padel-green/30 flex items-center justify-center text-padel-green text-lg font-black uppercase shrink-0 transition-colors duration-300 group-hover:bg-padel-green/20">
-                        {player.name ? player.name.charAt(0) : 'P'}
+                {isLoggedIn && player ? (
+                  <>
+                    <a
+                      href="/profile"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="p-4 bg-gradient-to-br from-white/5 to-white/[0.01] border border-white/10 hover:border-padel-green/30 hover:bg-white/10 rounded-2xl shadow-xl flex items-center gap-3 transition-all duration-300 cursor-pointer group hover:scale-[1.01] active:scale-[0.99]"
+                    >
+                      {player.image_url ? (
+                        <img src={player.image_url} alt={player.name} className="w-12 h-12 rounded-xl object-cover border border-white/20 shadow-lg shrink-0 group-hover:border-padel-green/50 transition-colors duration-300" />
+                      ) : (
+                        <div className="w-12 h-12 rounded-xl bg-padel-green/10 border border-padel-green/30 flex items-center justify-center text-padel-green text-lg font-black uppercase shrink-0 transition-colors duration-300 group-hover:bg-padel-green/20">
+                          {player.name ? player.name.charAt(0) : 'P'}
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-black text-white uppercase tracking-tight truncate leading-tight group-hover:text-padel-green transition-colors duration-300">{player.name}</p>
+                        {player.rankedin_id && (
+                          <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5 truncate">ID: {player.rankedin_id}</p>
+                        )}
+                      </div>
+                    </a>
+
+                    {/* Mobile Drawer Notifications block */}
+                    {(pendingPayments.length > 0 || (player && !player.region)) && (
+                      <div className="mt-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl shadow-lg">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Bell className="w-4 h-4 text-amber-500 animate-bounce" />
+                          <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider">Notifications</span>
+                          <span className="ml-auto bg-amber-500 text-black text-[8px] font-black uppercase px-2 py-0.5 rounded-full">
+                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
+                          </span>
+                        </div>
+                        <div className="flex flex-col gap-2.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
+                          {player && !player.region && (
+                            <a
+                              href="/profile?edit=true"
+                              onClick={() => setIsMobileMenuOpen(false)}
+                              className="block p-2.5 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl transition-all"
+                            >
+                              <div className="flex items-start gap-2">
+                                <MapPin className="w-3.5 h-3.5 text-padel-green shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-[10px] font-bold text-white leading-tight">Region Missing</p>
+                                  <p className="text-[9px] text-gray-400 mt-0.5">Please select your home region.</p>
+                                </div>
+                              </div>
+                            </a>
+                          )}
+                          {pendingPayments.map(payment => (
+                            <a
+                              key={`${payment.id}_${payment.division || 'N/A'}`}
+                              href={`/calendar/${payment.slug}?register=true`}
+                              onClick={() => setIsMobileMenuOpen(false)}
+                              className="block p-2.5 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl transition-all"
+                            >
+                              <p className="text-[10px] font-bold text-gray-300 leading-tight">
+                                Outstanding fee for <span className="text-amber-500 font-extrabold">{payment.name}</span>
+                                {payment.division && payment.division !== 'N/A' && (
+                                  <span className="text-gray-400 font-semibold"> ({payment.division})</span>
+                                )}
+                              </p>
+                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-padel-green uppercase tracking-widest mt-1.5">
+                                Pay Now ↗
+                              </span>
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-black text-white uppercase tracking-tight truncate leading-tight group-hover:text-padel-green transition-colors duration-300">{player.name}</p>
-                      {player.rankedin_id && (
-                        <p className="text-[9px] font-bold text-white/40 uppercase tracking-widest mt-0.5 truncate">ID: {player.rankedin_id}</p>
-                      )}
-                    </div>
-                  </a>
+                  </>
                 ) : (
                   <div className="p-4 bg-gradient-to-br from-[#ccff00]/10 to-[#ccff00]/5 border border-[#ccff00]/20 rounded-2xl text-center">
                     <p className="text-xs text-gray-300 font-bold mb-2.5">Sign in to track your stats, tournaments and calendar!</p>
@@ -515,7 +634,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 })}
               </div>
 
-              {session && player && (
+              {isLoggedIn && player && (
                 <div className="px-5 py-4 border-t border-white/5 bg-white/[0.01]">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[8px] font-black uppercase tracking-widest text-gray-400">Profile Completeness</span>
@@ -531,7 +650,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
               )}
 
               <div className="p-5 border-t border-white/5 bg-slate-950 flex flex-col gap-2">
-                {session && (
+                {isLoggedIn && (
                   <>
                     {isSuperAdmin && (
                       <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 active:scale-95 transition-all">
