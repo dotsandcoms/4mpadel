@@ -1112,7 +1112,7 @@ const PlayerProfile = () => {
                             <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                className="grid grid-cols-2 lg:flex lg:overflow-x-auto no-scrollbar gap-2 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
+                                className="flex overflow-x-auto no-scrollbar flex-nowrap gap-2 pb-2 -mx-6 px-6 sm:mx-0 sm:px-0"
                             >
                                 <button
                                     onClick={() => setActiveTab('events')}
@@ -1151,17 +1151,23 @@ const PlayerProfile = () => {
                                         <Briefcase size={16} /> Coach Profile
                                     </button>
                                 )}
+                                <button
+                                    onClick={() => setActiveTab('personal')}
+                                    className={`whitespace-nowrap px-4 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] transition-all flex items-center justify-center sm:justify-start gap-3 ${activeTab === 'personal' ? 'bg-padel-green text-black shadow-xl shadow-padel-green/20' : 'bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white hover:border-white/20'}`}
+                                >
+                                    <User size={16} /> My Profile
+                                </button>
                             </motion.div>
 
                             <AnimatePresence mode="wait">
-                                {false && (
+                                {activeTab === 'personal' && (
                                     <motion.div
                                         key="personal"
                                         initial={{ opacity: 0, x: 20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-[#beff00]/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-padel-green/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1781,7 +1787,7 @@ const PlayerProfile = () => {
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
-                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
+                                        className={`bg-[#0F172A]/80 backdrop-blur-xl border border-blue-500/30 rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12'} relative overflow-hidden`}
                                     >
                                         <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/5 rounded-full blur-[80px] -mr-32 -mt-32" />
 
@@ -1797,7 +1803,7 @@ const PlayerProfile = () => {
                                                         <CreditCard className="text-blue-400" size={24} />
                                                         Payment Transactions
                                                     </h4>
-                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}>Your financial history with SAPA</p>
+                                                    <p className={`text-gray-500 text-sm uppercase tracking-widest mb-6 ${isMobileAccordionOpen ? 'block' : 'hidden md:block'}`}></p>
                                                 </div>
                                                 <div className="md:hidden">
                                                     <ChevronDown className={`text-blue-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
