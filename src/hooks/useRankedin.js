@@ -7,6 +7,33 @@ const SAPA_ORG_ID = '11331';
 // Global cache for the anonymous token to avoid redundant fetches
 let cachedAnonymousToken = null;
 
+/**
+ * Custom fetch helper that implements a standard timeout and signal merging.
+ */
+const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const mergedOptions = { ...options };
+    if (options.signal) {
+        if (options.signal.aborted) {
+            controller.abort();
+        } else {
+            options.signal.addEventListener('abort', () => controller.abort());
+        }
+    }
+    mergedOptions.signal = controller.signal;
+
+    try {
+        const response = await fetch(url, mergedOptions);
+        clearTimeout(timeoutId);
+        return response;
+    } catch (error) {
+        clearTimeout(timeoutId);
+        throw error;
+    }
+};
+
 export const useRankedin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -248,13 +275,13 @@ export const useRankedin = () => {
      * @param {string} playerId Rankedin Player ID (e.g. R000328907)
      * @returns {Promise<Array>} Array of player events
      */
-    const getPlayerEventsAsync = useCallback(async (playerId) => {
+    const getPlayerEventsAsync = useCallback(async (playerId, signal) => {
         if (!playerId) return [];
         setLoading(true);
         setError(null);
         try {
             // Step 1: Get internal PlayerId from string ID (e.g. R000328907)
-            const profileRes = await fetch(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`);
+            const profileRes = await fetchWithTimeout(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`, { signal }, 8000);
             if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
             const profileData = await profileRes.json();
             const internalId = profileData.Header?.PlayerId;
@@ -262,8 +289,10 @@ export const useRankedin = () => {
             if (!internalId) throw new Error("Could not extract internal PlayerId");
 
             // Step 2: Fetch events using internal ID
-            const eventsRes = await fetch(
-                `${API_BASE}/player/ParticipatedEventsAsync?playerId=${internalId}&language=en&skip=0&take=100`
+            const eventsRes = await fetchWithTimeout(
+                `${API_BASE}/player/ParticipatedEventsAsync?playerId=${internalId}&language=en&skip=0&take=100`,
+                { signal },
+                8000
             );
 
             if (!eventsRes.ok) throw new Error(`Rankedin Events API Error: ${eventsRes.status}`);
@@ -488,13 +517,13 @@ export const useRankedin = () => {
      * @param {number} take Number of matches to fetch
      * @returns {Promise<Array>} Array of matches
      */
-    const getPlayerMatches = useCallback(async (rankedinId, takeHistory = true, take = 20) => {
+    const getPlayerMatches = useCallback(async (rankedinId, takeHistory = true, take = 20, signal) => {
         if (!rankedinId) return [];
         setLoading(true);
         setError(null);
         try {
             // Step 1: Get internal PlayerId
-            const profileRes = await fetch(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`);
+            const profileRes = await fetchWithTimeout(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`, { signal }, 8000);
             if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
             const profileData = await profileRes.json();
             const internalId = profileData.Id || profileData.Header?.PlayerId;
@@ -507,14 +536,16 @@ export const useRankedin = () => {
             // Step 3: Fetch matches
             // NOTE: takehistory=true often returns placeholders for anonymous users.
             // We use this for "Upcoming" (false) as it works well, but we'll try it for history too.
-            const response = await fetch(
+            const response = await fetchWithTimeout(
                 `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`,
                 {
+                    signal,
                     headers: {
                         ...(token ? { 'x-anonymous-token': token } : {}),
                         'Accept': 'application/json'
                     }
-                }
+                },
+                8000
             );
 
             if (!response.ok) throw new Error(`Rankedin Matches API Error: ${response.status}`);
@@ -527,7 +558,7 @@ export const useRankedin = () => {
             
             if (takeHistory && (payload.length === 0 || isPlaceholder)) {
                 // FALLBACK: Fetch events and then their matches
-                const events = await getPlayerEventsAsync(rankedinId);
+                const events = await getPlayerEventsAsync(rankedinId, signal);
                 const now = new Date();
                 const pastEvents = events
                     .filter(e => new Date(e.start_date) < now)
@@ -535,14 +566,14 @@ export const useRankedin = () => {
                     .slice(0, 5); // Limit to last 5 tournaments to avoid too many requests
 
                 const historyMatches = [];
-                for (const event of pastEvents) {
+                const matchPromises = pastEvents.map(async (event) => {
                     try {
                         let url = `${API_BASE}/tournament/GetMatchesSectionAsync?Id=${event.id}&LanguageCode=en&IsReadonly=true`;
                         if (event.id === 68674 || event.id === '68674' || (event.event_name || '').toLowerCase().includes('north vs south')) {
                             url = `${API_BASE}/tournament/GetTournamentTeamsMatchesAsync?tournamentId=${event.id}&challengeId=6404918&language=en`;
                         }
-                        const res = await fetch(url);
-                        if (!res.ok) continue;
+                        const res = await fetchWithTimeout(url, { signal }, 8000);
+                        if (!res.ok) return [];
                         const mData = await res.json();
                         const matches = (mData[0] && mData[0].Matches && mData[0].Matches.Matches) ? mData[0].Matches.Matches : (mData.Matches || []);
                         
@@ -555,6 +586,7 @@ export const useRankedin = () => {
                             return isThisPlayer && m.MatchResult?.IsPlayed;
                         });
 
+                        const eventMatches = [];
                         // Normalize to match structure
                         filtered.forEach(m => {
                             // Format ISO date to DD/MM/YYYY HH:MM
@@ -593,7 +625,7 @@ export const useRankedin = () => {
                             const isOnTeam1 = (m.Challenger?.Player1Id === pId || m.Challenger?.Player2Id === pId);
                             const playerIsWinner = isOnTeam1 ? firstWon : !firstWon;
 
-                            historyMatches.push({
+                            eventMatches.push({
                                 Info: {
                                     EventName: event.event_name,
                                     Date: formattedDate,
@@ -622,10 +654,15 @@ export const useRankedin = () => {
                                 }
                             });
                         });
+                        return eventMatches;
                     } catch (e) {
                         console.error(`Error fetching matches for event ${event.id}:`, e);
+                        return [];
                     }
-                }
+                });
+
+                const results = await Promise.all(matchPromises);
+                historyMatches.push(...results.flat());
                 return historyMatches;
             }
 
