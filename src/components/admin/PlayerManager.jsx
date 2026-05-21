@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin, Download, Calendar } from 'lucide-react';
+import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, CreditCard, Eye, EyeOff, Mail, ShieldAlert, Key, Image as ImageIcon, Upload, MapPin, Download, Calendar, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
@@ -69,6 +69,10 @@ const PlayerManager = () => {
     const [eventSearchTerm, setEventSearchTerm] = useState('');
     const [assignLoading, setAssignLoading] = useState(false);
     const itemsPerPage = 50;
+    const [showCharts, setShowCharts] = useState(() => {
+        const saved = localStorage.getItem('show_admin_charts');
+        return saved !== 'false';
+    });
 
     // Form State
     const [formData, setFormData] = useState({
@@ -699,151 +703,188 @@ const PlayerManager = () => {
                 <StatCard title="Current Temp License" value={loading ? '—' : stats.temp} subtext="Event specific" icon={CreditCard} color="amber" delay={0.15} />
             </div>
 
-            {/* Charts Row */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Payment Status</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <PieChart>
-                                <Pie data={paymentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`}>
-                                    {paymentChartData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
+            {/* Collapsible Charts Section */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                    <button
+                        onClick={() => {
+                            const nextVal = !showCharts;
+                            setShowCharts(nextVal);
+                            localStorage.setItem('show_admin_charts', String(nextVal));
+                        }}
+                        className="flex items-center gap-2 group cursor-pointer text-left focus:outline-none"
+                    >
+                        <div className="flex items-center gap-2">
+                            <span className="p-1.5 rounded-lg bg-padel-green/10 text-padel-green transition-transform duration-300 group-hover:scale-105">
+                                <TrendingUp size={16} />
+                            </span>
+                            <span className="text-sm font-black uppercase tracking-wider text-white group-hover:text-padel-green transition-colors">
+                                Analytics & Insights
+                            </span>
+                        </div>
+                        <span className="text-gray-400 group-hover:text-white transition-colors">
+                            {showCharts ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </span>
+                    </button>
+                </div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.25 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Category</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={categoryChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Bar dataKey="count" fill="#beff00" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Region</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={regionChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
-
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.35 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Gender Distribution</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <PieChart>
-                                <Pie 
-                                    data={genderChartData} 
-                                    dataKey="value" 
-                                    nameKey="name" 
-                                    cx="50%" 
-                                    cy="50%" 
-                                    innerRadius={50}
-                                    outerRadius={70} 
-                                    paddingAngle={5}
-                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                <AnimatePresence initial={false}>
+                    {showCharts && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: 'easeInOut' }}
+                            className="overflow-hidden"
+                        >
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-2">
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.2 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
                                 >
-                                    {genderChartData.map((entry, i) => (
-                                        <Cell key={i} fill={entry.color} />
-                                    ))}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Payment Status</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <PieChart>
+                                                <Pie data={paymentChartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, value }) => `${name}: ${value}`}>
+                                                    {paymentChartData.map((entry, i) => (
+                                                        <Cell key={i} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Registrations</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={registrationChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </motion.div>
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.25 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                >
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Category</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <BarChart data={categoryChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Bar dataKey="count" fill="#beff00" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
 
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45 }}
-                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
-                >
-                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-green-400">Full License Sales</h3>
-                    {loading ? (
-                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height={180}>
-                            <BarChart data={fullLicenseChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
-                                <Bar dataKey="licenses" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.3 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                >
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">By Region</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <BarChart data={regionChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Bar dataKey="count" fill="#38bdf8" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
+
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.35 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                >
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider">Gender Distribution</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <PieChart>
+                                                <Pie 
+                                                    data={genderChartData} 
+                                                    dataKey="value" 
+                                                    nameKey="name" 
+                                                    cx="50%" 
+                                                    cy="50%" 
+                                                    innerRadius={50}
+                                                    outerRadius={70} 
+                                                    paddingAngle={5}
+                                                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                                                >
+                                                    {genderChartData.map((entry, i) => (
+                                                        <Cell key={i} fill={entry.color} />
+                                                    ))}
+                                                </Pie>
+                                                <Tooltip />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
+
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.4 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                >
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-padel-green">Registrations</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <BarChart data={registrationChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Bar dataKey="registrations" fill="#beff00" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
+
+                                <motion.div
+                                    initial={{ opacity: 0, y: 20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: 0.45 }}
+                                    className="bg-[#1E293B]/50 backdrop-blur-md p-6 rounded-2xl border border-white/10"
+                                >
+                                    <h3 className="text-sm font-bold text-white mb-4 uppercase tracking-wider text-green-400">Full License Sales</h3>
+                                    {loading ? (
+                                        <div className="h-48 flex items-center justify-center text-gray-500">Loading...</div>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={180}>
+                                            <BarChart data={fullLicenseChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                                <XAxis dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <YAxis tick={{ fill: '#94a3b8', fontSize: 10 }} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#1E293B', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }} />
+                                                <Bar dataKey="licenses" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </motion.div>
+                            </div>
+                        </motion.div>
                     )}
-                </motion.div>
+                </AnimatePresence>
             </div>
 
             {/* Filters */}
