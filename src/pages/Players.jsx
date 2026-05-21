@@ -105,7 +105,7 @@ const Players = () => {
         )}
       </Helmet>
       <main className="bg-[#060a14] min-h-screen pb-24 text-white relative overflow-hidden">
-        
+
         {/* Ambient Neon Glow Bubbles */}
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[150px] pointer-events-none" />
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
@@ -135,7 +135,7 @@ const Players = () => {
               transition={{ delay: 0.2 }}
               className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
             >
-              Meet the elite talent driving the sport forward. From rising tournament stars to seasoned SAPA champions.
+              Meet the elite talent driving the sport forward. From rising tournament stars to seasoned champions.
             </motion.p>
             <motion.p
               initial={{ opacity: 0, y: 20 }}
@@ -143,7 +143,7 @@ const Players = () => {
               transition={{ delay: 0.3 }}
               className="text-gray-500 text-xs max-w-2xl mx-auto mt-3.5 uppercase tracking-widest font-black"
             >
-              *Only players holding a valid SAPA Player’s License are listed
+              *Only players holding a valid Player’s License are listed
             </motion.p>
           </div>
         </section>
@@ -290,7 +290,7 @@ const Players = () => {
                           <span className="truncate max-w-[90px]">{player.home_club || 'No Club'}</span>
                         </div>
                         {player.instagram_link && (
-                          <a 
+                          <a
                             href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
@@ -329,9 +329,9 @@ const Players = () => {
         {/* Player Modal Overlay container */}
         <AnimatePresence>
           {selectedPlayer && (
-            <PlayerModal 
-              player={selectedPlayer} 
-              onClose={() => handleSetSelectedPlayer(null)} 
+            <PlayerModal
+              player={selectedPlayer}
+              onClose={() => handleSetSelectedPlayer(null)}
               userEmail={userEmail}
             />
           )}
