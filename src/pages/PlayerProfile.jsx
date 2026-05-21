@@ -796,7 +796,7 @@ const PlayerProfile = () => {
                         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
                     </div>
 
-                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-1 md:pb-12 relative z-10">
+                    <div className="container mx-auto px-6 h-full flex flex-col justify-end pb-0 lg:pb-16 relative z-10">
                         <motion.div
                             initial={{ opacity: 0, y: 30 }}
                             animate={{ opacity: 1, y: 0 }}
@@ -915,7 +915,7 @@ const PlayerProfile = () => {
                 </div>
 
                 {/* Main Content Area */}
-                <div className="container mx-auto px-6 mt-16 md:-mt-10 pb-24 relative z-20">
+                <div className="container mx-auto px-6 mt-6 lg:-mt-10 pb-24 relative z-20">
                     {/* Payment Required Banner - shown when profile is not visible (none or temporary) */}
                     {player && (player.license_type !== 'full') && (
                         <motion.div
