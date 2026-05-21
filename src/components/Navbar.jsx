@@ -232,8 +232,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
               className={`p-2 rounded-full transition-all duration-300 group ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
               title="Search (Cmd+K)"
             >
-              <Search 
-                className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} 
+              <Search
+                className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`}
                 style={isDark ? { color: 'inherit' } : {}}
                 onMouseEnter={(e) => { if (isDark) e.target.style.color = accentColor || '#F40020' }}
                 onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
@@ -252,8 +252,8 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     animate={(pendingPayments.length > 0 || (player && !player.region)) ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
                     transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
                   >
-                    <Bell 
-                      className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`} 
+                    <Bell
+                      className={`w-4 h-4 group-hover:scale-110 transition-transform ${!isDark ? 'group-hover:text-padel-green' : ''}`}
                       onMouseEnter={(e) => { if (isDark) e.target.style.color = accentColor || '#F40020' }}
                       onMouseLeave={(e) => { if (isDark) e.target.style.color = '' }}
                     />
@@ -343,13 +343,14 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 {isSuperAdmin && (
                   <a
                     href="/admin"
+                    target='_blank'
                     className="px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider transition-all duration-300 bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500 hover:text-black hover:border-transparent mr-1"
                   >
                     Admin
                   </a>
                 )}
-                <a 
-                  href="/profile" 
+                <a
+                  href="/profile"
                   className={`text-sm font-bold transition-colors py-2 ${isDark ? '!text-slate-900' : 'text-white hover:text-padel-green'}`}
                   onMouseEnter={(e) => {
                     if (isDark && accentColor) e.target.style.setProperty('color', accentColor, 'important');
@@ -415,7 +416,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     </span>
                   )}
                 </button>
-                
+
                 {/* Mobile Notifications Dropdown */}
                 <AnimatePresence>
                   {isNotificationsOpen && (
