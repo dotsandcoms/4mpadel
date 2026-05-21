@@ -7,6 +7,7 @@ import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
+import { usePendingPayments } from '../hooks/usePendingPayments';
 import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X } from 'lucide-react';
 
 const PlayerProfile = () => {
@@ -44,11 +45,15 @@ const PlayerProfile = () => {
     const [isEditing, setIsEditing] = useState(false);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [pastEvents, setPastEvents] = useState([]);
-    const [eventViewTab, setEventViewTab] = useState('upcoming'); // 'upcoming' | 'past'
+    const [eventViewTab, setEventViewTab] = useState('upcoming'); // 'upcoming' | 'past' | 'pending'
     const [matchViewTab, setMatchViewTab] = useState('upcoming'); // 'upcoming' | 'past'
     const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
+    const { pendingPayments } = usePendingPayments(player?.email, player?.rankedin_id);
+    const pendingPaymentEvents = upcomingEvents.filter(event => pendingPayments?.some(p => p.id === event.db_id));
+    const currentTab = (eventViewTab === 'pending' && pendingPaymentEvents.length === 0) ? 'upcoming' : eventViewTab;
+    const filteredEvents = currentTab === 'pending' ? pendingPaymentEvents : (currentTab === 'past' ? pastEvents : upcomingEvents);
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -2192,7 +2197,7 @@ const PlayerProfile = () => {
                                                             </div>
                                                             <div className="flex flex-col min-w-0">
                                                                 <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
-                                                                    {eventViewTab === 'upcoming' ? 'MY UPCOMING EVENTS' : 'MY PAST EVENTS'}
+                                                                    {currentTab === 'upcoming' ? 'MY UPCOMING EVENTS' : currentTab === 'pending' ? 'MY PENDING PAYMENTS' : 'MY PAST EVENTS'}
                                                                 </h4>
                                                             </div>
                                                         </div>
@@ -2211,10 +2216,21 @@ const PlayerProfile = () => {
                                                             className="overflow-hidden pt-6"
                                                         >
                                                             {/* Switcher for Upcoming vs Past Events */}
-                                                            <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4">
+                                                            <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4 flex-wrap">
+                                                                {pendingPaymentEvents.length > 0 && (
+                                                                    <button
+                                                                        onClick={() => setEventViewTab('pending')}
+                                                                        className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentTab === 'pending'
+                                                                            ? 'bg-amber-500 border border-amber-500 text-black shadow-lg shadow-amber-500/20'
+                                                                            : 'bg-white/[0.03] text-amber-500 hover:bg-white/[0.08] hover:text-amber-400 border border-amber-500/20 hover:border-amber-500/30'
+                                                                            }`}
+                                                                    >
+                                                                        Pending Payments ({pendingPaymentEvents.length})
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     onClick={() => setEventViewTab('upcoming')}
-                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'upcoming'
+                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentTab === 'upcoming'
                                                                         ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
                                                                         : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                         }`}
@@ -2223,7 +2239,7 @@ const PlayerProfile = () => {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => setEventViewTab('past')}
-                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'past'
+                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${currentTab === 'past'
                                                                         ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
                                                                         : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
                                                                         }`}
@@ -2236,10 +2252,10 @@ const PlayerProfile = () => {
                                                                 <div className="flex items-center justify-center py-12">
                                                                     <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
                                                                 </div>
-                                                            ) : (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents) && (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).length > 0 ? (
-                                                                <div className={eventViewTab === 'past' && pastEvents.length > 6 ? "max-h-[580px] overflow-y-auto pr-3 custom-scrollbar" : ""}>
+                                                            ) : filteredEvents && filteredEvents.length > 0 ? (
+                                                                <div className={currentTab === 'past' && pastEvents.length > 6 ? "max-h-[580px] overflow-y-auto pr-3 custom-scrollbar" : ""}>
                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                        {(eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).map((event) => {
+                                                                        {filteredEvents.map((event) => {
                                                                             let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
                                                                             let hoverBorder = 'hover:border-padel-green/50';
                                                                             let glowColor = 'bg-padel-green/10';
@@ -2277,20 +2293,29 @@ const PlayerProfile = () => {
                                                                                 textColor = 'group-hover:text-blue-400';
                                                                             }
 
-                                                                            const needsPayment = eventViewTab === 'upcoming' && event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
+                                                                            const hasPending = pendingPayments?.some(p => p.id === event.db_id);
+                                                                            const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
+                                                                            const needsPayment = currentTab !== 'past' && event.db_id && (hasPending || (!event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0))));
 
                                                                             return (
                                                                                 <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
                                                                                     <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
 
-                                                                                    {event.isPaid && (
+                                                                                    {showPendingRibbon ? (
+                                                                                        <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
+                                                                                            <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-amber-500 text-black text-[7.5px] font-black uppercase tracking-wider py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
+                                                                                                <AlertCircle size={8} strokeWidth={4} />
+                                                                                                PENDING
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : event.isPaid ? (
                                                                                         <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
                                                                                             <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
                                                                                                 <CheckCircle2 size={8} strokeWidth={4} />
                                                                                                 PAID
                                                                                             </div>
                                                                                         </div>
-                                                                                    )}
+                                                                                    ) : null}
 
                                                                                     <div className="relative z-10 flex-1">
                                                                                         <div className="flex justify-between items-start mb-4">
@@ -2343,7 +2368,7 @@ const PlayerProfile = () => {
                                                                     <div className="relative z-10">
                                                                         <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
                                                                         <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">
-                                                                            {eventViewTab === 'upcoming' ? 'No upcoming events listed' : 'No past events listed'}
+                                                                            {currentTab === 'upcoming' ? 'No upcoming events listed' : currentTab === 'pending' ? 'No pending payments listed' : 'No past events listed'}
                                                                         </p>
                                                                         <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
                                                                     </div>

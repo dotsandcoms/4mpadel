@@ -316,7 +316,13 @@ const Navbar = ({ isDark = false, accentColor }) => {
                             className={`block p-4 transition-colors border-b last:border-0 ${isDark ? 'hover:bg-slate-50 border-slate-100' : 'hover:bg-white/5 border-white/5'}`}
                           >
                             <p className={`text-sm font-bold mb-1 ${isDark ? 'text-slate-800' : 'text-white'}`}>Payment Required</p>
-                            <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>You have a pending entry fee for <span className="font-bold" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>{payment.name}</span>.</p>
+                            <p className={`text-xs ${isDark ? 'text-slate-600' : 'text-gray-400'}`}>
+                              You have a pending entry fee for{' '}
+                              <span className="font-bold" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>
+                                {payment.name}
+                              </span>
+                              {payment.division && payment.division !== 'N/A' && ` (${payment.division})`}.
+                            </p>
                             <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-padel-green">Click to pay now</p>
                           </a>
                         ))}
