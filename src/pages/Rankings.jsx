@@ -597,12 +597,12 @@ const Rankings = () => {
   const rankingData = [
     {
       type: 'MAJOR',
-      maxPoints: '2,000',
+      maxPoints: '2,600',
       bgGradient: 'bg-red-500',
       bgIcon: 'bg-red-500/20',
       iconColor: 'text-red-500',
       rows: [
-        { cat: '1', winner: '2,000', finals: '1,200', semis: '720', quarters: '360', r16: '180', r32: '90', bold: true },
+        { cat: '1', winner: '2,600', finals: '1,200', semis: '720', quarters: '360', r16: '180', r32: '90', bold: true },
         { cat: '2', winner: '600', finals: '360', semis: '180', quarters: '90', r16: '45', r32: '23', bold: false },
         { cat: '3', winner: '240', finals: '144', semis: '72', quarters: '36', r16: '18', r32: '9', bold: false },
         { cat: '4', winner: '96', finals: '86', semis: '36', quarters: '18', r16: '9', r32: '5', bold: false }
