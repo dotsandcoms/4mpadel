@@ -1435,17 +1435,7 @@ const PlayerProfile = () => {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="pt-8 flex justify-end">
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        setIsEditing(true);
-                                                                    }}
-                                                                    className="w-full md:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-8 py-4 rounded-xl hover:bg-white hover:scale-105 transition-all shadow-lg shadow-padel-green/20 text-xs"
-                                                                >
-                                                                    Edit Profile
-                                                                </button>
-                                                            </div>
+
                                                         </motion.div>
                                                     ) : (
                                                         <motion.form
@@ -1769,7 +1759,7 @@ const PlayerProfile = () => {
                                                     setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }
                                             }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
+                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                         >
                                             <div className="flex items-center justify-between w-full">
                                                 <div className="flex flex-col gap-1">
@@ -2086,7 +2076,7 @@ const PlayerProfile = () => {
                                                         setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                     }
                                                 }}
-                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
+                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex flex-col gap-1">
@@ -2282,7 +2272,7 @@ const PlayerProfile = () => {
                                                         setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                     }
                                                 }}
-                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-8' : 'mb-0'}`}
+                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex flex-col gap-1">
