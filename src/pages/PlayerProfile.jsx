@@ -969,7 +969,7 @@ const PlayerProfile = () => {
                     )}
 
 
-                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
 
                         {/* Left Panel: Statistics & Quick Updates */}
                         <div className="lg:col-span-4 space-y-6 order-2 lg:order-1">
@@ -977,20 +977,47 @@ const PlayerProfile = () => {
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: 0.3 }}
-                                className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isCareerAccordionOpen ? 'p-8' : 'p-5'} lg:p-8 transition-all relative overflow-hidden`}
+                                onClick={() => {
+                                    if (window.innerWidth < 1024 && !isCareerAccordionOpen) {
+                                        setIsCareerAccordionOpen(true);
+                                    }
+                                }}
+                                className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isCareerAccordionOpen ? 'p-8' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} transition-all duration-300 relative overflow-hidden`}
                             >
+                                <motion.div
+                                    animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                    transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-[#beff00]/5 blur-[90px] pointer-events-none"
+                                />
+                                <motion.div
+                                    animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                    transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-[#beff00]/5 blur-[90px] pointer-events-none"
+                                />
+
                                 <div
-                                    onClick={() => {
-                                        if (window.innerWidth < 1024) setIsCareerAccordionOpen(!isCareerAccordionOpen);
+                                    onClick={(e) => {
+                                        if (window.innerWidth < 1024) {
+                                            e.stopPropagation();
+                                            setIsCareerAccordionOpen(!isCareerAccordionOpen);
+                                        }
                                     }}
-                                    className={`flex items-center justify-between w-full cursor-pointer lg:cursor-default ${isCareerAccordionOpen ? 'mb-6' : 'mb-0 lg:mb-6'}`}
+                                    className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default relative z-10 ${isCareerAccordionOpen ? 'mb-6' : 'mb-0'}`}
                                 >
-                                    <h4 className="font-bold text-white flex items-center gap-3">
-                                        <Trophy className="text-padel-green" size={24} />
-                                        Career Overview
-                                    </h4>
-                                    <div className="lg:hidden">
-                                        <ChevronDown className={`text-padel-green transition-transform duration-300 ${isCareerAccordionOpen ? 'rotate-180' : ''}`} />
+                                    <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2.5 rounded-xl bg-[#beff00]/10 border border-[#beff00]/20 text-[#beff00] shadow-[0_0_15px_rgba(190,255,0,0.15)] flex items-center justify-center shrink-0">
+                                                <Trophy size={24} />
+                                            </div>
+                                            <div className="flex flex-col min-w-0">
+                                                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                    CAREER OVERVIEW
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div className="lg:hidden">
+                                            <ChevronDown className={`text-padel-green transition-transform duration-300 ${isCareerAccordionOpen ? 'rotate-180' : ''}`} size={24} />
+                                        </div>
                                     </div>
                                 </div>
 
@@ -1107,16 +1134,51 @@ const PlayerProfile = () => {
                                 </AnimatePresence>
                             </motion.div>
 
-                            <div className={`bg-[#0F172A]/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] ${isSecurityAccordionOpen ? 'p-8' : 'p-5'} transition-all relative overflow-hidden`}>
+                            <div 
+                                onClick={() => {
+                                    if (window.innerWidth < 1024 && !isSecurityAccordionOpen) {
+                                        setIsSecurityAccordionOpen(true);
+                                    }
+                                }}
+                                className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isSecurityAccordionOpen ? 'p-8' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} transition-all duration-300 relative overflow-hidden`}
+                            >
+                                <motion.div
+                                    animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                    transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-[#beff00]/5 blur-[90px] pointer-events-none"
+                                />
+                                <motion.div
+                                    animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                    transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                    className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-[#beff00]/5 blur-[90px] pointer-events-none"
+                                />
+
                                 <div
-                                    onClick={() => setIsSecurityAccordionOpen(!isSecurityAccordionOpen)}
-                                    className={`flex items-center justify-between w-full cursor-pointer ${isSecurityAccordionOpen ? 'mb-6' : 'mb-0'}`}
+                                    onClick={(e) => {
+                                        if (window.innerWidth < 1024) {
+                                            e.stopPropagation();
+                                            setIsSecurityAccordionOpen(!isSecurityAccordionOpen);
+                                        } else {
+                                            setIsSecurityAccordionOpen(!isSecurityAccordionOpen);
+                                        }
+                                    }}
+                                    className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer relative z-10 ${isSecurityAccordionOpen ? 'mb-6' : 'mb-0'}`}
                                 >
-                                    <h4 className="font-bold text-white flex items-center gap-3">
-                                        <ShieldCheck className="text-padel-green" size={24} />
-                                        Account Security
-                                    </h4>
-                                    <ChevronDown className={`text-padel-green transition-transform duration-300 ${isSecurityAccordionOpen ? 'rotate-180' : ''}`} size={20} />
+                                    <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-4">
+                                            <div className="p-2.5 rounded-xl bg-[#beff00]/10 border border-[#beff00]/20 text-[#beff00] shadow-[0_0_15px_rgba(190,255,0,0.15)] flex items-center justify-center shrink-0">
+                                                <ShieldCheck size={24} />
+                                            </div>
+                                            <div className="flex flex-col min-w-0">
+                                                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                    ACCOUNT SECURITY
+                                                </h4>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <ChevronDown className={`text-padel-green transition-transform duration-300 ${isSecurityAccordionOpen ? 'rotate-180' : ''}`} size={24} />
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <AnimatePresence>
@@ -1145,7 +1207,7 @@ const PlayerProfile = () => {
                         </div>
 
                         {/* Right Panel: Content */}
-                        <div className="lg:col-span-8 space-y-8 order-1 lg:order-2">
+                        <div className="lg:col-span-8 space-y-6 lg:space-y-8 order-1 lg:order-2">
 
                             {/* Player Photo Gallery Row */}
                             <motion.div
@@ -1289,11 +1351,11 @@ const PlayerProfile = () => {
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ duration: 0.2 }}
                                         onClick={() => {
-                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
+                                            if (window.innerWidth < 1024 && !isMobileAccordionOpen) {
                                                 setIsMobileAccordionOpen(true);
                                             }
                                         }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
+                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
                                     >
                                         <motion.div
                                             animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
@@ -1323,1054 +1385,1037 @@ const PlayerProfile = () => {
 
                                         <div
                                             onClick={(e) => {
-                                                if (window.innerWidth < 768) {
+                                                if (window.innerWidth < 1024) {
                                                     e.stopPropagation();
                                                     setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                 }
                                             }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
+                                            className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                         >
-                                            <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-[#beff00]/10 border border-[#beff00]/20 text-[#beff00] shadow-[0_0_15px_rgba(190,255,0,0.15)] flex items-center justify-center shrink-0">
-                                                        <User size={24} />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
-                                                            Personal Management
-                                                        </h4>
-                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
-                                                            Manage your personal profile and preferences
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="md:hidden">
-                                                    <ChevronDown className={`text-[#beff00] transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence mode="wait">
-                                            {(isMobileAccordionOpen || window.innerWidth >= 768) && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: "auto", opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden"
-                                                >
-                                                    {!isEditing ? (
-                                                        <motion.div
-                                                            key="summary"
-                                                            initial={{ opacity: 0, y: 10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -10 }}
-                                                            className="space-y-8"
-                                                        >
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Full Name</p>
-                                                                    <p className="text-lg font-bold text-white">{player.name || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Email Address</p>
-                                                                    <p className="text-lg font-bold text-white truncate">{player.email}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Gender</p>
-                                                                    <p className="text-lg font-bold text-white">{player.gender || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Age</p>
-                                                                    <p className="text-lg font-bold text-white">{player.age || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Nationality</p>
-                                                                    <p className="text-lg font-bold text-white">{player.nationality || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">ID Number</p>
-                                                                    <p className="text-lg font-bold text-white">{player.id_number || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Phone Number</p>
-                                                                    <p className="text-lg font-bold text-white">{player.contact_number || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Home Club</p>
-                                                                    <p className="text-lg font-bold text-white">{player.home_club || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
-                                                                    <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
-                                                                    <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Racket Brand</p>
-                                                                    <p className="text-lg font-bold text-white">{player.racket_brand || 'Not set'}</p>
-                                                                </div>
-                                                                {player.sponsors && (
-                                                                    <div className="space-y-1 md:col-span-2 lg:col-span-3">
-                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Sponsors</p>
-                                                                        <p className="text-lg font-bold text-white">{player.sponsors}</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            {player.bio && (
-                                                                <div className="space-y-2">
-                                                                    <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Biography</p>
-                                                                    <p className="text-gray-400 leading-relaxed font-medium">{player.bio}</p>
-                                                                </div>
-                                                            )}
-
-                                                            <div className="pt-8 border-t border-white/5">
-                                                                <div className="flex flex-wrap gap-4">
-                                                                    <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
-                                                                        <Phone size={14} className="text-padel-green" />
-                                                                        <span className="text-xs font-bold text-white">{player.contact_number || 'No phone'}</span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
-                                                                        <Mail size={14} className="text-padel-green" />
-                                                                        <span className="text-xs font-bold text-white">{player.email}</span>
-                                                                    </div>
-                                                                    {player.instagram_link && (
-                                                                        <a
-                                                                            href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all group"
-                                                                        >
-                                                                            <Instagram size={14} className="text-padel-green group-hover:scale-110 transition-transform" />
-                                                                            <span className="text-xs font-bold text-white">Instagram</span>
-                                                                        </a>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-
-                                                        </motion.div>
-                                                    ) : (
-                                                        <motion.form
-                                                            key="form"
-                                                            initial={{ opacity: 0, y: 10 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -10 }}
-                                                            onSubmit={handleSave}
-                                                            className="space-y-8"
-                                                        >
-                                                            <fieldset disabled={isImpersonating} className="space-y-8">
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Full Name</label>
-                                                                        <div className="relative">
-                                                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.name}
-                                                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Enter full name"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Email Address</label>
-                                                                        <div className="relative">
-                                                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="email"
-                                                                                value={formData.email}
-                                                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Email Address"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Gender</label>
-                                                                        <div className="relative">
-                                                                            <select
-                                                                                value={formData.gender}
-                                                                                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
-                                                                            >
-                                                                                <option value="" disabled>Select Gender</option>
-                                                                                <option value="Male">Male</option>
-                                                                                <option value="Female">Female</option>
-                                                                            </select>
-                                                                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={18} />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Age</label>
-                                                                        <div className="relative">
-                                                                            <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="number"
-                                                                                value={formData.age}
-                                                                                onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Your Age"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Nationality</label>
-                                                                        <div className="relative">
-                                                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.nationality}
-                                                                                onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Nationality"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">ID Number</label>
-                                                                        <div className="relative">
-                                                                            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.id_number}
-                                                                                onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="ID Number"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Phone Number</label>
-                                                                        <div className="relative">
-                                                                            <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="tel"
-                                                                                value={formData.contact_number}
-                                                                                onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Phone Number"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Home Club</label>
-                                                                        <div className="relative">
-                                                                            <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.home_club}
-                                                                                onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Your Home Club"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Instagram Link / Handle</label>
-                                                                        <div className="relative">
-                                                                            <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.instagram_link}
-                                                                                onChange={(e) => setFormData({ ...formData, instagram_link: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="@username or full URL"
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Region</label>
-                                                                        <div className="relative">
-                                                                            <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-padel-green/40" size={20} />
-                                                                            <select
-                                                                                value={formData.region}
-                                                                                onChange={(e) => setFormData({ ...formData, region: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
-                                                                            >
-                                                                                <option value="" disabled>Select Region</option>
-                                                                                <option value="Eastern Cape">Eastern Cape</option>
-                                                                                <option value="Free State">Free State</option>
-                                                                                <option value="Gauteng">Gauteng</option>
-                                                                                <option value="KwaZulu-Natal">KwaZulu-Natal</option>
-                                                                                <option value="Limpopo">Limpopo</option>
-                                                                                <option value="Mpumalanga">Mpumalanga</option>
-                                                                                <option value="Northern Cape">Northern Cape</option>
-                                                                                <option value="North West">North West</option>
-                                                                                <option value="Western Cape">Western Cape</option>
-                                                                            </select>
-                                                                            <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={20} />
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="space-y-2">
-                                                                        <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Racket Brand</label>
-                                                                        <div className="relative space-y-3">
-                                                                            <select
-                                                                                value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')}
-                                                                                onChange={(e) => {
-                                                                                    const val = e.target.value;
-                                                                                    if (val === 'Other') {
-                                                                                        setFormData({ ...formData, racket_brand: 'Other' });
-                                                                                    } else {
-                                                                                        setFormData({ ...formData, racket_brand: val });
-                                                                                    }
-                                                                                }}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
-                                                                            >
-                                                                                <option value="" disabled>Select Brand</option>
-                                                                                <option value="Adidas">Adidas</option>
-                                                                                <option value="Babolat">Babolat</option>
-                                                                                <option value="Bull Padel">Bull Padel</option>
-                                                                                <option value="Nox">Nox</option>
-                                                                                <option value="Varlion">Varlion</option>
-                                                                                <option value="Oxdog">Oxdog</option>
-                                                                                <option value="Wilson">Wilson</option>
-                                                                                <option value="Head">Head</option>
-                                                                                <option value="Siux">Siux</option>
-                                                                                <option value="Other">Other</option>
-                                                                            </select>
-                                                                            <ChevronDown className="absolute right-6 top-6 text-padel-green/40 pointer-events-none" size={20} />
-
-                                                                            {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
-                                                                                    onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
-                                                                                    placeholder="Specify your brand"
-                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold"
-                                                                                    required
-                                                                                />
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-2">
-                                                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Player Biography</label>
-                                                                    <div className="relative">
-                                                                        <Briefcase className="absolute left-4 top-6 text-padel-green/40" size={18} />
-                                                                        <textarea
-                                                                            value={formData.bio}
-                                                                            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
-                                                                            placeholder="Tell us about your padel journey..."
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="md:col-span-2 space-y-2">
-                                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Sponsors (comma separated)</label>
-                                                                    <div className="relative">
-                                                                        <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
-                                                                        <input
-                                                                            type="text"
-                                                                            value={formData.sponsors}
-                                                                            onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
-                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                            placeholder="Babolat, Nike, Red Bull, etc."
-                                                                        />
-                                                                    </div>
-                                                                </div>
-                                                                <div className="space-y-2">
-                                                                    <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Category / Division</label>
-                                                                    <div className="relative">
-                                                                        <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
-                                                                        <select
-                                                                            value={formData.category}
-                                                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
-                                                                        >
-                                                                            <option value="" disabled>Select Category</option>
-                                                                            <optgroup label="Men's" className="bg-[#0F172A]">
-                                                                                <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
-                                                                                <option value="Men's Advanced">Men's Advanced</option>
-                                                                                <option value="Men's Intermediate">Men's Intermediate</option>
-                                                                            </optgroup>
-                                                                            <optgroup label="Ladies" className="bg-[#0F172A]">
-                                                                                <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
-                                                                                <option value="Ladies Advanced">Ladies Advanced</option>
-                                                                                <option value="Ladies Intermediate">Ladies Intermediate</option>
-                                                                            </optgroup>
-                                                                        </select>
-                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
-                                                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                                                                            </svg>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
-                                                                    <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest leading-loose">
-                                                                        By saving, you agree to updated profile data <br />
-                                                                        being displayed on public community leaderboards.
-                                                                    </p>
-                                                                    {!isImpersonating && (
-                                                                        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setIsEditing(false)}
-                                                                                className="w-full sm:w-auto bg-white/5 text-white font-black uppercase tracking-widest px-10 py-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all font-bold"
-                                                                            >
-                                                                                Cancel
-                                                                            </button>
-                                                                            <button
-                                                                                type="submit"
-                                                                                disabled={saving}
-                                                                                className="w-full sm:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95 whitespace-nowrap"
-                                                                            >
-                                                                                <Save size={20} className="group-hover:rotate-12 transition-transform" />
-                                                                                {saving ? 'Syncing...' : 'Save Profile'}
-                                                                            </button>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </fieldset>
-                                                        </motion.form>
-                                                    )}
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </motion.div>
-                                )}
-
-                                {/* Payment Transactions Section */}
-                                {activeTab === 'rankings' && (
-                                    <motion.div
-                                        key="rankings"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ duration: 0.2 }}
-                                        onClick={() => {
-                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
-                                                setIsMobileAccordionOpen(true);
-                                            }
-                                        }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
-                                    >
-                                        <motion.div
-                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
-                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
-                                        />
-                                        <motion.div
-                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
-                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
-                                        />
-
-                                        <div
-                                            onClick={(e) => {
-                                                if (window.innerWidth < 768) {
-                                                    e.stopPropagation();
-                                                    setIsMobileAccordionOpen(!isMobileAccordionOpen);
-                                                }
-                                            }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
-                                        >
-                                            <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center justify-center shrink-0">
-                                                        <TrendingUp size={24} />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
-                                                            Rankings Points Breakdown
-                                                        </h4>
-                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
-                                                            Track your performance points and standings
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="md:hidden">
-                                                    <ChevronDown className={`text-yellow-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence mode="wait">
-                                            {(isMobileAccordionOpen || window.innerWidth >= 768) && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: "auto", opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden space-y-6 pt-6"
-                                                >
-                                                    {/* Small ranking list select pills */}
-                                                    {player.rankings && player.rankings.length > 0 && (
-                                                        <div className="relative z-10 flex flex-wrap gap-1.5 bg-white/[0.03] backdrop-blur-md p-1 rounded-xl w-fit border border-white/10">
-                                                            {player.rankings.map((r, i) => {
-                                                                const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
-                                                                return (
-                                                                    <button
-                                                                        key={i}
-                                                                        onClick={() => setSelectedRankingForBreakdown(r)}
-                                                                        className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${isSelected
-                                                                            ? 'bg-padel-green text-black font-extrabold shadow-lg shadow-padel-green/20'
-                                                                            : 'text-gray-400 hover:text-white hover:bg-white/[0.08]'
-                                                                            }`}
-                                                                    >
-                                                                        {(r.org || 'SAPA').split(' ')[0]} ({r.age_group || 'Open'})
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-
-                                                    {selectedRankingForBreakdown ? (
-                                                        <div className="relative z-10 space-y-6">
-                                                            {/* Header Stats */}
-                                                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
-                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Standing</p>
-                                                                    <p className="text-2xl font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
-                                                                </div>
-                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
-                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Points</p>
-                                                                    <p className="text-2xl font-black text-white">{selectedRankingForBreakdown.points}</p>
-                                                                </div>
-                                                                <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
-                                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Match Type</p>
-                                                                    <p className="text-xs font-bold text-gray-300 uppercase mt-2">{selectedRankingForBreakdown.match_type}</p>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Desktop Table View */}
-                                                            <div className="hidden md:block bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden">
-                                                                <div className="overflow-x-auto">
-                                                                    <table className="w-full text-left border-collapse">
-                                                                        <thead>
-                                                                            <tr className="bg-white/[0.05] border-b border-white/10">
-                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Date</th>
-                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Tournament Name | Class</th>
-                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-center">Standing</th>
-                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Type</th>
-                                                                                <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-right">Points</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody>
-                                                                            {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
-                                                                                selectedRankingForBreakdown.details.map((item, idx) => (
-                                                                                    <tr key={idx} className="border-b border-white/10 hover:bg-white/[0.05] transition-colors">
-                                                                                        <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">{item.date}</td>
-                                                                                        <td className="py-4 px-6">
-                                                                                            <div className="font-bold text-xs text-white">{item.name}</div>
-                                                                                            {item.class && <div className="text-[9px] text-padel-green font-bold uppercase mt-0.5">{item.class}</div>}
-                                                                                        </td>
-                                                                                        <td className="py-4 px-6 text-xs font-black text-center text-white">{item.place}</td>
-                                                                                        <td className="py-4 px-6">
-                                                                                            <span className="inline-block px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[9px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
-                                                                                                {item.event_type}
-                                                                                            </span>
-                                                                                        </td>
-                                                                                        <td className="py-4 px-6 text-xs font-black text-right text-padel-green whitespace-nowrap">+{item.points}</td>
-                                                                                    </tr>
-                                                                                ))
-                                                                            ) : (
-                                                                                <tr>
-                                                                                    <td colSpan="5" className="py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
-                                                                                        No tournaments counted yet or detailed breakdown pending sync.
-                                                                                    </td>
-                                                                                </tr>
-                                                                            )}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            </div>
-
-                                                            {/* Mobile Card list */}
-                                                            <div className="block md:hidden space-y-3">
-                                                                {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
-                                                                    selectedRankingForBreakdown.details.map((item, idx) => (
-                                                                        <div key={idx} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 space-y-3 hover:bg-white/[0.06] transition-all duration-300">
-                                                                            <div className="flex justify-between items-start gap-2">
-                                                                                <div className="min-w-0">
-                                                                                    <h5 className="font-bold text-xs text-white uppercase tracking-tight">{item.name}</h5>
-                                                                                    {item.class && <p className="text-[9px] text-padel-green font-black uppercase mt-0.5">{item.class}</p>}
-                                                                                </div>
-                                                                                <div className="text-right shrink-0">
-                                                                                    <span className="text-xs font-black text-padel-green">+{item.points} PTS</span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="flex justify-between items-center text-[9px] text-gray-400 font-bold uppercase tracking-wider pt-2.5 border-t border-white/10">
-                                                                                <div>{item.date}</div>
-                                                                                <div className="flex gap-2">
-                                                                                    <span>Standing: {item.place}</span>
-                                                                                    <span>•</span>
-                                                                                    <span className="text-gray-500">{item.event_type}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                        </div>
-                                                                    ))
-                                                                ) : (
-                                                                    <div className="text-center py-8 text-xs text-gray-500 font-bold uppercase tracking-wider bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl">
-                                                                        No tournaments counted yet or detailed breakdown pending sync.
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="relative z-10 py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
-                                                            No rankings details available.
-                                                        </div>
-                                                    )}
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </motion.div>
-                                )}
-
-                                {activeTab === 'payments' && (
-                                    <motion.div
-                                        key="payments"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ duration: 0.2 }}
-                                        onClick={() => {
-                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
-                                                setIsMobileAccordionOpen(true);
-                                            }
-                                        }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
-                                    >
-                                        <motion.div
-                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
-                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
-                                        />
-                                        <motion.div
-                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
-                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
-                                        />
-
-                                        <div
-                                            onClick={(e) => {
-                                                if (window.innerWidth < 768) {
-                                                    e.stopPropagation();
-                                                    setIsMobileAccordionOpen(!isMobileAccordionOpen);
-                                                }
-                                            }}
-                                            className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
-                                        >
-                                            <div className="flex items-center justify-between w-full">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] flex items-center justify-center shrink-0">
-                                                        <CreditCard size={24} />
-                                                    </div>
-                                                    <div className="flex flex-col">
-                                                        <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
-                                                            Payment Transactions
-                                                        </h4>
-                                                        <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
-                                                            View and manage your secure transaction history
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                                <div className="md:hidden">
-                                                    <ChevronDown className={`text-blue-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <AnimatePresence mode="wait">
-                                            {(isMobileAccordionOpen || window.innerWidth >= 768) && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: "auto", opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden pt-6"
-                                                >
-                                                    {transactionsLoading ? (
-                                                        <div className="flex flex-col items-center justify-center py-12">
-                                                            <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-                                                            <p className="text-gray-500 text-xs font-black uppercase tracking-widest">Fetching payment history...</p>
-                                                        </div>
-                                                    ) : transactions.length === 0 ? (
-                                                        <div className="bg-white/[0.03] backdrop-blur-md rounded-3xl p-12 text-center border border-white/10">
-                                                            <AlertCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                                                            <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No transactions found</p>
-                                                            <p className="text-gray-600 text-xs mt-2">Payments are processed securely via Paystack</p>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="space-y-4">
-                                                            <div className="hidden md:grid grid-cols-5 gap-4 px-6 py-4 bg-white/[0.03] border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
-                                                                <div>Reference</div>
-                                                                <div>Date</div>
-                                                                <div>Type</div>
-                                                                <div>Amount</div>
-                                                                <div className="text-right">Status</div>
-                                                            </div>
-
-                                                            {currentTransactionsList.map((trx) => (
-                                                                <div key={trx.id} className="group bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 transition-all duration-300 flex flex-col md:grid md:grid-cols-5 md:items-center gap-4 hover:bg-white/[0.08] hover:border-white/20">
-                                                                    <div className="flex flex-col text-sm border-b md:border-none border-white/10 pb-2 md:pb-0">
-                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
-                                                                        <span className="font-mono text-gray-400">{trx.id}</span>
-                                                                    </div>
-                                                                    <div className="flex flex-col text-sm">
-                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Date</span>
-                                                                        <span className="text-gray-200">{trx.date}</span>
-                                                                    </div>
-                                                                    <div className="flex flex-col text-sm">
-                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Type</span>
-                                                                        <div className="flex flex-col gap-0.5">
-                                                                            <span className="text-white font-black uppercase text-[10px] tracking-tight">
-                                                                                {trx.payment_type?.replace('_', ' ') || 'Payment'}
-                                                                            </span>
-                                                                            {trx.event_name && (
-                                                                                <span className="text-[10px] text-padel-green font-bold">
-                                                                                    {trx.event_name}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex flex-col text-sm">
-                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
-                                                                        <span className="text-white font-black">{trx.amount}</span>
-                                                                    </div>
-                                                                    <div className="flex flex-col items-start md:items-end">
-                                                                        <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Status</span>
-                                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${trx.status === 'Success'
-                                                                            ? 'bg-padel-green text-black'
-                                                                            : trx.status === 'Failed'
-                                                                                ? 'bg-red-500/20 text-red-500 border border-red-500/20'
-                                                                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20'
-                                                                            }`}>
-                                                                            {trx.status}
-                                                                        </span>
-                                                                    </div>
-                                                                 </div>
-                                                            ))}
-
-                                                            {transactions.length > transactionsPerPage && (
-                                                                <div className="flex justify-between items-center mt-8 px-2">
-                                                                    <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
-                                                                        Page {currentTransactionPage} of {totalTransactionPages}
-                                                                    </span>
-                                                                    <div className="flex gap-2">
-                                                                        <button
-                                                                            onClick={() => setCurrentTransactionPage(prev => Math.max(prev - 1, 1))}
-                                                                            disabled={currentTransactionPage === 1}
-                                                                            className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
-                                                                        >
-                                                                            Prev
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setCurrentTransactionPage(prev => Math.min(prev + 1, totalTransactionPages))}
-                                                                            disabled={currentTransactionPage === totalTransactionPages}
-                                                                            className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
-                                                                        >
-                                                                            Next
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-
-                                                            <p className="text-[10px] text-gray-600 font-bold uppercase tracking-[0.2em] text-center pt-8">
-                                                                Only your 50 most recent transactions are displayed.
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </motion.div>
-                                            )}
-                                        </AnimatePresence>
-                                    </motion.div>
-                                )}
-
-
-                                {activeTab === 'events' && (
-                                    <motion.div
-                                        key="events"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ duration: 0.2 }}
-                                        onClick={() => {
-                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
-                                                setIsMobileAccordionOpen(true);
-                                            }
-                                        }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
-                                    >
-                                        <motion.div
-                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
-                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
-                                        />
-                                        <motion.div
-                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
-                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
-                                        />
-
-                                        <div className="relative z-10">
-                                            <div
-                                                onClick={(e) => {
-                                                    if (window.innerWidth < 768) {
-                                                        e.stopPropagation();
-                                                        setIsMobileAccordionOpen(!isMobileAccordionOpen);
-                                                    }
-                                                }}
-                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
-                                            >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)] flex items-center justify-center shrink-0">
-                                                            <CalendarIcon size={24} />
+                                                        <div className="p-2.5 rounded-xl bg-[#beff00]/10 border border-[#beff00]/20 text-[#beff00] shadow-[0_0_15px_rgba(190,255,0,0.15)] flex items-center justify-center shrink-0">
+                                                            <User size={24} />
                                                         </div>
-                                                        <div className="flex flex-col">
-                                                            <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
-                                                                {eventViewTab === 'upcoming' ? 'My Upcoming Events' : 'My Past Events'}
+                                                        <div className="flex flex-col min-w-0">
+                                                            <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                                PERSONAL MANAGEMENT
                                                             </h4>
-                                                            <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
-                                                                Manage and view tournament schedules
-                                                            </p>
                                                         </div>
                                                     </div>
-                                                    <div className="md:hidden">
-                                                        <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                    <div className="lg:hidden">
+                                                        <ChevronDown className={`text-[#beff00] transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} size={24} />
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <AnimatePresence mode="wait">
-                                                {(isMobileAccordionOpen || window.innerWidth >= 768) && (
+                                                {(isMobileAccordionOpen || window.innerWidth >= 1024) && (
                                                     <motion.div
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: "auto", opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden pt-6"
+                                                        className="overflow-hidden"
                                                     >
-                                                        {/* Switcher for Upcoming vs Past Events */}
-                                                        <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4">
-                                                            <button
-                                                                onClick={() => setEventViewTab('upcoming')}
-                                                                className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'upcoming'
-                                                                    ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
-                                                                    : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
-                                                                    }`}
+                                                        {!isEditing ? (
+                                                            <motion.div
+                                                                key="summary"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                className="space-y-8"
                                                             >
-                                                                Upcoming ({upcomingEvents.length})
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setEventViewTab('past')}
-                                                                className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'past'
-                                                                    ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
-                                                                    : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
-                                                                    }`}
+                                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Full Name</p>
+                                                                        <p className="text-lg font-bold text-white">{player.name || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Email Address</p>
+                                                                        <p className="text-lg font-bold text-white truncate">{player.email}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Gender</p>
+                                                                        <p className="text-lg font-bold text-white">{player.gender || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Age</p>
+                                                                        <p className="text-lg font-bold text-white">{player.age || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Nationality</p>
+                                                                        <p className="text-lg font-bold text-white">{player.nationality || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">ID Number</p>
+                                                                        <p className="text-lg font-bold text-white">{player.id_number || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Phone Number</p>
+                                                                        <p className="text-lg font-bold text-white">{player.contact_number || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Home Club</p>
+                                                                        <p className="text-lg font-bold text-white">{player.home_club || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Category / Division</p>
+                                                                        <p className="text-lg font-bold text-padel-green uppercase">{player.category || 'Unassigned'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Region</p>
+                                                                        <p className="text-lg font-bold text-white uppercase">{player.region || 'Not set'}</p>
+                                                                    </div>
+                                                                    <div className="space-y-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Racket Brand</p>
+                                                                        <p className="text-lg font-bold text-white">{player.racket_brand || 'Not set'}</p>
+                                                                    </div>
+                                                                    {player.sponsors && (
+                                                                        <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                                                                            <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Sponsors</p>
+                                                                            <p className="text-lg font-bold text-white">{player.sponsors}</p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {player.bio && (
+                                                                    <div className="space-y-2">
+                                                                        <p className="text-[10px] font-black uppercase tracking-widest text-padel-green">Biography</p>
+                                                                        <p className="text-gray-400 leading-relaxed font-medium">{player.bio}</p>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="pt-8 border-t border-white/5">
+                                                                    <div className="flex flex-wrap gap-4">
+                                                                        <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
+                                                                            <Phone size={14} className="text-padel-green" />
+                                                                            <span className="text-xs font-bold text-white">{player.contact_number || 'No phone'}</span>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all">
+                                                                            <Mail size={14} className="text-padel-green" />
+                                                                            <span className="text-xs font-bold text-white">{player.email}</span>
+                                                                        </div>
+                                                                        {player.instagram_link && (
+                                                                            <a
+                                                                                href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md px-4 py-2 rounded-xl border border-white/10 hover:bg-white/[0.08] hover:border-white/20 transition-all group"
+                                                                            >
+                                                                                <Instagram size={14} className="text-padel-green group-hover:scale-110 transition-transform" />
+                                                                                <span className="text-xs font-bold text-white">Instagram</span>
+                                                                            </a>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+
+                                                            </motion.div>
+                                                        ) : (
+                                                            <motion.form
+                                                                key="form"
+                                                                initial={{ opacity: 0, y: 10 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                exit={{ opacity: 0, y: -10 }}
+                                                                onSubmit={handleSave}
+                                                                className="space-y-8"
                                                             >
-                                                                Complete ({pastEvents.length})
-                                                            </button>
-                                                        </div>
-
-                                                        {loadingEvents ? (
-                                                            <div className="flex items-center justify-center py-12">
-                                                                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
-                                                            </div>
-                                                        ) : (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents) && (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).length > 0 ? (
-                                                            <div className={eventViewTab === 'past' && pastEvents.length > 6 ? "max-h-[580px] overflow-y-auto pr-3 custom-scrollbar" : ""}>
-                                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                    {(eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).map((event) => {
-                                                                        let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
-                                                                        let hoverBorder = 'hover:border-padel-green/50';
-                                                                        let glowColor = 'bg-padel-green/10';
-                                                                        let textColor = 'group-hover:text-padel-green';
-
-                                                                        if (event.sapa_status === 'Major') {
-                                                                            badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
-                                                                            hoverBorder = 'hover:border-red-500/50';
-                                                                            glowColor = 'bg-red-500/10';
-                                                                            textColor = 'group-hover:text-red-400';
-                                                                        } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                            badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-                                                                            hoverBorder = 'hover:border-amber-500/50';
-                                                                            glowColor = 'bg-amber-500/10';
-                                                                            textColor = 'group-hover:text-amber-400';
-                                                                        } else if (event.sapa_status === 'Gold') {
-                                                                            badgeColor = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
-                                                                            hoverBorder = 'hover:border-yellow-500/50';
-                                                                            glowColor = 'bg-yellow-500/10';
-                                                                            textColor = 'group-hover:text-yellow-400';
-                                                                        } else if (event.sapa_status === 'Silver') {
-                                                                            badgeColor = 'bg-gray-500/20 text-gray-300 border-gray-400/30';
-                                                                            hoverBorder = 'hover:border-gray-400/50';
-                                                                            glowColor = 'bg-gray-400/10';
-                                                                            textColor = 'group-hover:text-gray-300';
-                                                                        } else if (event.sapa_status === 'Bronze') {
-                                                                            badgeColor = 'bg-orange-700/20 text-orange-400 border-orange-700/30';
-                                                                            hoverBorder = 'hover:border-orange-700/50';
-                                                                            glowColor = 'bg-orange-700/10';
-                                                                            textColor = 'group-hover:text-orange-400';
-                                                                        } else if (event.sapa_status === 'FIP event') {
-                                                                            badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-                                                                            hoverBorder = 'hover:border-blue-500/50';
-                                                                            glowColor = 'bg-blue-500/10';
-                                                                            textColor = 'group-hover:text-blue-400';
-                                                                        }
-
-                                                                        const needsPayment = eventViewTab === 'upcoming' && event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
-
-                                                                        return (
-                                                                            <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
-                                                                                <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
-
-                                                                                {event.isPaid && (
-                                                                                    <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
-                                                                                        <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
-                                                                                            <CheckCircle2 size={8} strokeWidth={4} />
-                                                                                            PAID
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-
-                                                                                <div className="relative z-10 flex-1">
-                                                                                    <div className="flex justify-between items-start mb-4">
-                                                                                        <div className="flex flex-col">
-                                                                                            <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
-                                                                                            <span className="text-xs font-bold text-white">
-                                                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                        <button
-                                                                                            onClick={() => {
-                                                                                                if (event.slug || event.db_id) {
-                                                                                                    navigate(`/calendar/${event.slug || event.db_id}`);
-                                                                                                } else {
-                                                                                                    window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                                                                }
-                                                                                            }}
-                                                                                            className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 hover:border-padel-green/30 group/btn"
-                                                                                        >
-                                                                                            <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
-                                                                                        </button>
-                                                                                    </div>
-
-                                                                                    <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
-                                                                                        {event.event_name}
-                                                                                    </h4>
-
-                                                                                    {needsPayment && (
-                                                                                        <motion.button
-                                                                                            whileHover={{ scale: 1.02 }}
-                                                                                            whileTap={{ scale: 0.98 }}
-                                                                                            onClick={() => {
-                                                                                                navigate(`/calendar/${event.slug || event.db_id}?register=true`);
-                                                                                            }}
-                                                                                            className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
-                                                                                        >
-                                                                                            <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
-                                                                                            Pay Event Fee
-                                                                                        </motion.button>
-                                                                                    )}
-                                                                                </div>
-
-
+                                                                <fieldset disabled={isImpersonating} className="space-y-8">
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Full Name</label>
+                                                                            <div className="relative">
+                                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.name}
+                                                                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Enter full name"
+                                                                                />
                                                                             </div>
-                                                                        );
-                                                                    })}
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Email Address</label>
+                                                                            <div className="relative">
+                                                                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="email"
+                                                                                    value={formData.email}
+                                                                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Email Address"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Gender</label>
+                                                                            <div className="relative">
+                                                                                <select
+                                                                                    value={formData.gender}
+                                                                                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
+                                                                                >
+                                                                                    <option value="" disabled>Select Gender</option>
+                                                                                    <option value="Male">Male</option>
+                                                                                    <option value="Female">Female</option>
+                                                                                </select>
+                                                                                <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={18} />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Age</label>
+                                                                            <div className="relative">
+                                                                                <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="number"
+                                                                                    value={formData.age}
+                                                                                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Your Age"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Nationality</label>
+                                                                            <div className="relative">
+                                                                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.nationality}
+                                                                                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Nationality"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">ID Number</label>
+                                                                            <div className="relative">
+                                                                                <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.id_number}
+                                                                                    onChange={(e) => setFormData({ ...formData, id_number: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="ID Number"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Phone Number</label>
+                                                                            <div className="relative">
+                                                                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="tel"
+                                                                                    value={formData.contact_number}
+                                                                                    onChange={(e) => setFormData({ ...formData, contact_number: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Phone Number"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Home Club</label>
+                                                                            <div className="relative">
+                                                                                <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.home_club}
+                                                                                    onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="Your Home Club"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Instagram Link / Handle</label>
+                                                                            <div className="relative">
+                                                                                <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/40" size={18} />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={formData.instagram_link}
+                                                                                    onChange={(e) => setFormData({ ...formData, instagram_link: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                    placeholder="@username or full URL"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Region</label>
+                                                                            <div className="relative">
+                                                                                <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-padel-green/40" size={20} />
+                                                                                <select
+                                                                                    value={formData.region}
+                                                                                    onChange={(e) => setFormData({ ...formData, region: e.target.value })}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-16 pr-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
+                                                                                >
+                                                                                    <option value="" disabled>Select Region</option>
+                                                                                    <option value="Eastern Cape">Eastern Cape</option>
+                                                                                    <option value="Free State">Free State</option>
+                                                                                    <option value="Gauteng">Gauteng</option>
+                                                                                    <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                                                                                    <option value="Limpopo">Limpopo</option>
+                                                                                    <option value="Mpumalanga">Mpumalanga</option>
+                                                                                    <option value="Northern Cape">Northern Cape</option>
+                                                                                    <option value="North West">North West</option>
+                                                                                    <option value="Western Cape">Western Cape</option>
+                                                                                </select>
+                                                                                <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-padel-green/40 pointer-events-none" size={20} />
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-2">
+                                                                            <label className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] ml-2">Racket Brand</label>
+                                                                            <div className="relative space-y-3">
+                                                                                <select
+                                                                                    value={['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux'].includes(formData.racket_brand) ? formData.racket_brand : (formData.racket_brand ? 'Other' : '')}
+                                                                                    onChange={(e) => {
+                                                                                        const val = e.target.value;
+                                                                                        if (val === 'Other') {
+                                                                                            setFormData({ ...formData, racket_brand: 'Other' });
+                                                                                        } else {
+                                                                                            setFormData({ ...formData, racket_brand: val });
+                                                                                        }
+                                                                                    }}
+                                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-5 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
+                                                                                >
+                                                                                    <option value="" disabled>Select Brand</option>
+                                                                                    <option value="Adidas">Adidas</option>
+                                                                                    <option value="Babolat">Babolat</option>
+                                                                                    <option value="Bull Padel">Bull Padel</option>
+                                                                                    <option value="Nox">Nox</option>
+                                                                                    <option value="Varlion">Varlion</option>
+                                                                                    <option value="Oxdog">Oxdog</option>
+                                                                                    <option value="Wilson">Wilson</option>
+                                                                                    <option value="Head">Head</option>
+                                                                                    <option value="Siux">Siux</option>
+                                                                                    <option value="Other">Other</option>
+                                                                                </select>
+                                                                                <ChevronDown className="absolute right-6 top-6 text-padel-green/40 pointer-events-none" size={20} />
+
+                                                                                {(formData.racket_brand === 'Other' || (!['Adidas', 'Babolat', 'Bull Padel', 'Nox', 'Varlion', 'Oxdog', 'Wilson', 'Head', 'Siux', ''].includes(formData.racket_brand))) && (
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={formData.racket_brand === 'Other' ? '' : formData.racket_brand}
+                                                                                        onChange={(e) => setFormData({ ...formData, racket_brand: e.target.value })}
+                                                                                        placeholder="Specify your brand"
+                                                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-white focus:border-padel-green outline-none hover:border-white/20 transition-all font-bold"
+                                                                                        required
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Player Biography</label>
+                                                                        <div className="relative">
+                                                                            <Briefcase className="absolute left-4 top-6 text-padel-green/40" size={18} />
+                                                                            <textarea
+                                                                                value={formData.bio}
+                                                                                onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 min-h-[120px]"
+                                                                                placeholder="Tell us about your padel journey..."
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="md:col-span-2 space-y-2">
+                                                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Sponsors (comma separated)</label>
+                                                                        <div className="relative">
+                                                                            <ShieldCheck className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
+                                                                            <input
+                                                                                type="text"
+                                                                                value={formData.sponsors}
+                                                                                onChange={(e) => setFormData({ ...formData, sponsors: e.target.value })}
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
+                                                                                placeholder="Babolat, Nike, Red Bull, etc."
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="space-y-2">
+                                                                        <label className="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] ml-2">Category / Division</label>
+                                                                        <div className="relative">
+                                                                            <Briefcase className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-600" size={18} />
+                                                                            <select
+                                                                                value={formData.category}
+                                                                                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-10 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold appearance-none cursor-pointer"
+                                                                            >
+                                                                                <option value="" disabled>Select Category</option>
+                                                                                <optgroup label="Men's" className="bg-[#0F172A]">
+                                                                                    <option value="Men's Open (Pro/Elite)">Men's Open (Pro/Elite)</option>
+                                                                                    <option value="Men's Advanced">Men's Advanced</option>
+                                                                                    <option value="Men's Intermediate">Men's Intermediate</option>
+                                                                                </optgroup>
+                                                                                <optgroup label="Ladies" className="bg-[#0F172A]">
+                                                                                    <option value="Ladies Open (Pro/Elite)">Ladies Open (Pro/Elite)</option>
+                                                                                    <option value="Ladies Advanced">Ladies Advanced</option>
+                                                                                    <option value="Ladies Intermediate">Ladies Intermediate</option>
+                                                                                </optgroup>
+                                                                            </select>
+                                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-600">
+                                                                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                                                </svg>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row items-center justify-between gap-6">
+                                                                        <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest leading-loose">
+                                                                            By saving, you agree to updated profile data <br />
+                                                                            being displayed on public community leaderboards.
+                                                                        </p>
+                                                                        {!isImpersonating && (
+                                                                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setIsEditing(false)}
+                                                                                    className="w-full sm:w-auto bg-white/5 text-white font-black uppercase tracking-widest px-10 py-5 rounded-2xl border border-white/10 hover:bg-white/10 transition-all font-bold"
+                                                                                >
+                                                                                    Cancel
+                                                                                </button>
+                                                                                <button
+                                                                                    type="submit"
+                                                                                    disabled={saving}
+                                                                                    className="w-full sm:w-auto bg-padel-green text-black font-black uppercase tracking-widest px-10 py-5 rounded-2xl flex items-center justify-center gap-3 hover:bg-white hover:scale-105 transition-all shadow-xl shadow-padel-green/10 disabled:opacity-50 group active:scale-95 whitespace-nowrap"
+                                                                                >
+                                                                                    <Save size={20} className="group-hover:rotate-12 transition-transform" />
+                                                                                    {saving ? 'Syncing...' : 'Save Profile'}
+                                                                                </button>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </fieldset>
+                                                            </motion.form>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </motion.div>
+                                    )}
+
+                                    {/* Payment Transactions Section */}
+                                    {activeTab === 'rankings' && (
+                                        <motion.div
+                                            key="rankings"
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                            transition={{ duration: 0.2 }}
+                                            onClick={() => {
+                                                if (window.innerWidth < 1024 && !isMobileAccordionOpen) {
+                                                    setIsMobileAccordionOpen(true);
+                                                }
+                                            }}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                        >
+                                            <motion.div
+                                                animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
+                                            />
+                                            <motion.div
+                                                animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-yellow-500/10 blur-[90px] pointer-events-none"
+                                            />
+
+                                            <div
+                                                onClick={(e) => {
+                                                    if (window.innerWidth < 1024) {
+                                                        e.stopPropagation();
+                                                        setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                    }
+                                                }}
+                                                className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-4 lg:mb-8' : 'mb-0'}`}
+                                            >
+                                                <div className="flex items-center justify-between w-full">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="p-2.5 rounded-xl bg-yellow-500/10 border border-yellow-500/20 text-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.15)] flex items-center justify-center shrink-0">
+                                                            <TrendingUp size={24} />
+                                                        </div>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                                RANKINGS POINTS BREAKDOWN
+                                                            </h4>
+                                                        </div>
+                                                    </div>
+                                                    <div className="lg:hidden">
+                                                        <ChevronDown className={`text-yellow-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} size={24} />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <AnimatePresence mode="wait">
+                                                {(isMobileAccordionOpen || window.innerWidth >= 1024) && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: "auto", opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        className="overflow-hidden space-y-6 pt-6"
+                                                    >
+                                                        {/* Small ranking list select pills */}
+                                                        {player.rankings && player.rankings.length > 0 && (
+                                                            <div className="relative z-10 flex flex-wrap gap-1.5 bg-white/[0.03] backdrop-blur-md p-1 rounded-xl w-fit border border-white/10">
+                                                                {player.rankings.map((r, i) => {
+                                                                    const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
+                                                                    return (
+                                                                        <button
+                                                                            key={i}
+                                                                            onClick={() => setSelectedRankingForBreakdown(r)}
+                                                                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all ${isSelected
+                                                                                ? 'bg-padel-green text-black font-extrabold shadow-lg shadow-padel-green/20'
+                                                                                : 'text-gray-400 hover:text-white hover:bg-white/[0.08]'
+                                                                                }`}
+                                                                        >
+                                                                            {(r.org || 'SAPA').split(' ')[0]} ({r.age_group || 'Open'})
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+
+                                                        {selectedRankingForBreakdown ? (
+                                                            <div className="relative z-10 space-y-6">
+                                                                {/* Header Stats */}
+                                                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                                                    <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
+                                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Current Standing</p>
+                                                                        <p className="text-2xl font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
+                                                                    </div>
+                                                                    <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
+                                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Total Points</p>
+                                                                        <p className="text-2xl font-black text-white">{selectedRankingForBreakdown.points}</p>
+                                                                    </div>
+                                                                    <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 text-center hover:bg-white/[0.06] transition-all duration-300">
+                                                                        <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-1">Match Type</p>
+                                                                        <p className="text-xs font-bold text-gray-300 uppercase mt-2">{selectedRankingForBreakdown.match_type}</p>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Desktop Table View */}
+                                                                <div className="hidden md:block bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden">
+                                                                    <div className="overflow-x-auto">
+                                                                        <table className="w-full text-left border-collapse">
+                                                                            <thead>
+                                                                                <tr className="bg-white/[0.05] border-b border-white/10">
+                                                                                    <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Date</th>
+                                                                                    <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Tournament Name | Class</th>
+                                                                                    <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-center">Standing</th>
+                                                                                    <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider">Type</th>
+                                                                                    <th className="py-4 px-6 font-black text-[9px] text-gray-400 uppercase tracking-wider text-right">Points</th>
+                                                                                </tr>
+                                                                            </thead>
+                                                                            <tbody>
+                                                                                {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
+                                                                                    selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                                        <tr key={idx} className="border-b border-white/10 hover:bg-white/[0.05] transition-colors">
+                                                                                            <td className="py-4 px-6 text-xs text-gray-400 font-medium whitespace-nowrap">{item.date}</td>
+                                                                                            <td className="py-4 px-6">
+                                                                                                <div className="font-bold text-xs text-white">{item.name}</div>
+                                                                                                {item.class && <div className="text-[9px] text-padel-green font-bold uppercase mt-0.5">{item.class}</div>}
+                                                                                            </td>
+                                                                                            <td className="py-4 px-6 text-xs font-black text-center text-white">{item.place}</td>
+                                                                                            <td className="py-4 px-6">
+                                                                                                <span className="inline-block px-2 py-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[9px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                                                                                                    {item.event_type}
+                                                                                                </span>
+                                                                                            </td>
+                                                                                            <td className="py-4 px-6 text-xs font-black text-right text-padel-green whitespace-nowrap">+{item.points}</td>
+                                                                                        </tr>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <tr>
+                                                                                        <td colSpan="5" className="py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                                                                            No tournaments counted yet or detailed breakdown pending sync.
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                )}
+                                                                            </tbody>
+                                                                        </table>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Mobile Card list */}
+                                                                <div className="block md:hidden space-y-3">
+                                                                    {selectedRankingForBreakdown.details && selectedRankingForBreakdown.details.length > 0 ? (
+                                                                        selectedRankingForBreakdown.details.map((item, idx) => (
+                                                                            <div key={idx} className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-4 space-y-3 hover:bg-white/[0.06] transition-all duration-300">
+                                                                                <div className="flex justify-between items-start gap-2">
+                                                                                    <div className="min-w-0">
+                                                                                        <h5 className="font-bold text-xs text-white uppercase tracking-tight">{item.name}</h5>
+                                                                                        {item.class && <p className="text-[9px] text-padel-green font-black uppercase mt-0.5">{item.class}</p>}
+                                                                                    </div>
+                                                                                    <div className="text-right shrink-0">
+                                                                                        <span className="text-xs font-black text-padel-green">+{item.points} PTS</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex justify-between items-center text-[9px] text-gray-400 font-bold uppercase tracking-wider pt-2.5 border-t border-white/10">
+                                                                                    <div>{item.date}</div>
+                                                                                    <div className="flex gap-2">
+                                                                                        <span>Standing: {item.place}</span>
+                                                                                        <span>•</span>
+                                                                                        <span className="text-gray-500">{item.event_type}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        <div className="text-center py-8 text-xs text-gray-500 font-bold uppercase tracking-wider bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl">
+                                                                            No tournaments counted yet or detailed breakdown pending sync.
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         ) : (
-                                                            <div className="text-center py-16 bg-white/[0.03] backdrop-blur-md rounded-3xl border border-white/10 relative overflow-hidden">
-                                                                <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
-                                                                <div className="relative z-10">
-                                                                    <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
-                                                                    <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">
-                                                                        {eventViewTab === 'upcoming' ? 'No upcoming events listed' : 'No past events listed'}
-                                                                    </p>
-                                                                    <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
-                                                                </div>
+                                                            <div className="relative z-10 py-12 text-center text-xs text-gray-500 font-bold uppercase tracking-wider">
+                                                                No rankings details available.
                                                             </div>
                                                         )}
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
-                                        </div>
-                                    </motion.div>
-                                )}
+                                        </motion.div>
+                                    )}
 
-                                {activeTab === 'matches' && (
-                                    <motion.div
-                                        key="matches"
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ duration: 0.2 }}
-                                        onClick={() => {
-                                            if (window.innerWidth < 768 && !isMobileAccordionOpen) {
-                                                setIsMobileAccordionOpen(true);
-                                            }
-                                        }}
-                                        className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 md:p-12' : 'p-5 md:p-12 cursor-pointer md:cursor-default'} relative overflow-hidden`}
-                                    >
+                                    {activeTab === 'payments' && (
                                         <motion.div
-                                            animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
-                                            transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
-                                        />
-                                        <motion.div
-                                            animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
-                                            transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
-                                            className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
-                                        />
+                                            key="payments"
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                            transition={{ duration: 0.2 }}
+                                            onClick={() => {
+                                                if (window.innerWidth < 1024 && !isMobileAccordionOpen) {
+                                                    setIsMobileAccordionOpen(true);
+                                                }
+                                            }}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                        >
+                                            <motion.div
+                                                animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
+                                            />
+                                            <motion.div
+                                                animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-blue-500/10 blur-[90px] pointer-events-none"
+                                            />
 
-                                        <div className="relative z-10">
                                             <div
                                                 onClick={(e) => {
-                                                    if (window.innerWidth < 768) {
+                                                    if (window.innerWidth < 1024) {
                                                         e.stopPropagation();
                                                         setIsMobileAccordionOpen(!isMobileAccordionOpen);
                                                     }
                                                 }}
-                                                className={`flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer md:cursor-default ${isMobileAccordionOpen ? 'mb-4' : 'mb-0'}`}
+                                                className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default relative z-10 ${isMobileAccordionOpen ? 'mb-10' : 'mb-0'}`}
                                             >
                                                 <div className="flex items-center justify-between w-full">
                                                     <div className="flex items-center gap-4">
-                                                        <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.15)] flex items-center justify-center shrink-0">
-                                                            <Trophy size={24} />
+                                                        <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)] flex items-center justify-center shrink-0">
+                                                            <CreditCard size={24} />
                                                         </div>
-                                                        <div className="flex flex-col">
-                                                            <h4 className="font-black text-white uppercase tracking-wider text-base sm:text-lg">
-                                                                {matchViewTab === 'upcoming' ? 'My Upcoming Matches' : 'My Past Matches'}
+                                                        <div className="flex flex-col min-w-0">
+                                                            <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                                PAYMENT TRANSACTIONS
                                                             </h4>
-                                                            <p className="text-gray-400 text-[10px] sm:text-xs font-semibold uppercase tracking-widest mt-0.5">
-                                                                Track and view match scores and history
-                                                            </p>
                                                         </div>
                                                     </div>
-                                                    <div className="md:hidden">
-                                                        <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} />
+                                                    <div className="lg:hidden">
+                                                        <ChevronDown className={`text-blue-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} size={24} />
                                                     </div>
                                                 </div>
                                             </div>
 
                                             <AnimatePresence mode="wait">
-                                                {(isMobileAccordionOpen || window.innerWidth >= 768) && (
+                                                {(isMobileAccordionOpen || window.innerWidth >= 1024) && (
                                                     <motion.div
                                                         initial={{ height: 0, opacity: 0 }}
                                                         animate={{ height: "auto", opacity: 1 }}
                                                         exit={{ height: 0, opacity: 0 }}
                                                         className="overflow-hidden pt-6"
                                                     >
+                                                        {transactionsLoading ? (
+                                                            <div className="flex flex-col items-center justify-center py-12">
+                                                                <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+                                                                <p className="text-gray-500 text-xs font-black uppercase tracking-widest">Fetching payment history...</p>
+                                                            </div>
+                                                        ) : transactions.length === 0 ? (
+                                                            <div className="bg-white/[0.03] backdrop-blur-md rounded-3xl p-12 text-center border border-white/10">
+                                                                <AlertCircle className="w-12 h-12 text-gray-700 mx-auto mb-4" />
+                                                                <p className="text-gray-500 font-bold uppercase tracking-widest text-sm">No transactions found</p>
+                                                                <p className="text-gray-600 text-xs mt-2">Payments are processed securely via Paystack</p>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="space-y-4">
+                                                                <div className="hidden md:grid grid-cols-5 gap-4 px-6 py-4 bg-white/[0.03] border border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500">
+                                                                    <div>Reference</div>
+                                                                    <div>Date</div>
+                                                                    <div>Type</div>
+                                                                    <div>Amount</div>
+                                                                    <div className="text-right">Status</div>
+                                                                </div>
+
+                                                                {currentTransactionsList.map((trx) => (
+                                                                    <div key={trx.id} className="group bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 transition-all duration-300 flex flex-col md:grid md:grid-cols-5 md:items-center gap-4 hover:bg-white/[0.08] hover:border-white/20">
+                                                                        <div className="flex flex-col text-sm border-b md:border-none border-white/10 pb-2 md:pb-0">
+                                                                            <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
+                                                                            <span className="font-mono text-gray-400">{trx.id}</span>
+                                                                        </div>
+                                                                        <div className="flex flex-col text-sm">
+                                                                            <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Date</span>
+                                                                            <span className="text-gray-200">{trx.date}</span>
+                                                                        </div>
+                                                                        <div className="flex flex-col text-sm">
+                                                                            <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Type</span>
+                                                                            <div className="flex flex-col gap-0.5">
+                                                                                <span className="text-white font-black uppercase text-[10px] tracking-tight">
+                                                                                    {trx.payment_type?.replace('_', ' ') || 'Payment'}
+                                                                                </span>
+                                                                                {trx.event_name && (
+                                                                                    <span className="text-[10px] text-padel-green font-bold">
+                                                                                        {trx.event_name}
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex flex-col text-sm">
+                                                                            <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
+                                                                            <span className="text-white font-black">{trx.amount}</span>
+                                                                        </div>
+                                                                        <div className="flex flex-col items-start md:items-end">
+                                                                            <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Status</span>
+                                                                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${trx.status === 'Success'
+                                                                                ? 'bg-padel-green text-black'
+                                                                                : trx.status === 'Failed'
+                                                                                    ? 'bg-red-500/20 text-red-500 border border-red-500/20'
+                                                                                    : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20'
+                                                                                }`}>
+                                                                                {trx.status}
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+
+                                                                {transactions.length > transactionsPerPage && (
+                                                                    <div className="flex justify-between items-center mt-8 px-2">
+                                                                        <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
+                                                                            Page {currentTransactionPage} of {totalTransactionPages}
+                                                                        </span>
+                                                                        <div className="flex gap-2">
+                                                                            <button
+                                                                                onClick={() => setCurrentTransactionPage(prev => Math.max(prev - 1, 1))}
+                                                                                disabled={currentTransactionPage === 1}
+                                                                                className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
+                                                                            >
+                                                                                Prev
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => setCurrentTransactionPage(prev => Math.min(prev + 1, totalTransactionPages))}
+                                                                                disabled={currentTransactionPage === totalTransactionPages}
+                                                                                className="px-4 py-2 bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-widest text-white disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 shadow-xl"
+                                                                            >
+                                                                                Next
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <p className="text-[10px] text-gray-600 font-bold uppercase tracking-[0.2em] text-center pt-8">
+                                                                    Only your 50 most recent transactions are displayed.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </motion.div>
+                                    )}
+
+
+                                    {activeTab === 'events' && (
+                                        <motion.div
+                                            key="events"
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                            transition={{ duration: 0.2 }}
+                                            onClick={() => {
+                                                if (window.innerWidth < 1024 && !isMobileAccordionOpen) {
+                                                    setIsMobileAccordionOpen(true);
+                                                }
+                                            }}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                        >
+                                            <motion.div
+                                                animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
+                                            />
+                                            <motion.div
+                                                animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-purple-500/10 blur-[90px] pointer-events-none"
+                                            />
+
+                                            <div className="relative z-10">
+                                                <div
+                                                    onClick={(e) => {
+                                                        if (window.innerWidth < 1024) {
+                                                            e.stopPropagation();
+                                                            setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                        }
+                                                    }}
+                                                    className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default ${isMobileAccordionOpen ? 'mb-4 lg:mb-8' : 'mb-0'}`}
+                                                >
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.15)] flex items-center justify-center shrink-0">
+                                                                <CalendarIcon size={24} />
+                                                            </div>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                                    {eventViewTab === 'upcoming' ? 'MY UPCOMING EVENTS' : 'MY PAST EVENTS'}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+                                                        <div className="lg:hidden">
+                                                            <ChevronDown className={`text-purple-400 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} size={24} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <AnimatePresence mode="wait">
+                                                    {(isMobileAccordionOpen || window.innerWidth >= 1024) && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden pt-6"
+                                                        >
+                                                            {/* Switcher for Upcoming vs Past Events */}
+                                                            <div className="flex gap-2 sm:gap-3 md:gap-4 mb-6 border-b border-white/10 pb-4">
+                                                                <button
+                                                                    onClick={() => setEventViewTab('upcoming')}
+                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'upcoming'
+                                                                        ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                        : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
+                                                                        }`}
+                                                                >
+                                                                    Upcoming ({upcomingEvents.length})
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setEventViewTab('past')}
+                                                                    className={`md:px-5 md:py-3 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${eventViewTab === 'past'
+                                                                        ? 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20'
+                                                                        : 'bg-white/[0.03] text-gray-400 hover:bg-white/[0.08] hover:text-white border border-white/10 hover:border-white/20'
+                                                                        }`}
+                                                                >
+                                                                    Complete ({pastEvents.length})
+                                                                </button>
+                                                            </div>
+
+                                                            {loadingEvents ? (
+                                                                <div className="flex items-center justify-center py-12">
+                                                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
+                                                                </div>
+                                                            ) : (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents) && (eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).length > 0 ? (
+                                                                <div className={eventViewTab === 'past' && pastEvents.length > 6 ? "max-h-[580px] overflow-y-auto pr-3 custom-scrollbar" : ""}>
+                                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                        {(eventViewTab === 'upcoming' ? upcomingEvents : pastEvents).map((event) => {
+                                                                            let badgeColor = 'bg-padel-green/20 text-padel-green border-padel-green/30';
+                                                                            let hoverBorder = 'hover:border-padel-green/50';
+                                                                            let glowColor = 'bg-padel-green/10';
+                                                                            let textColor = 'group-hover:text-padel-green';
+
+                                                                            if (event.sapa_status === 'Major') {
+                                                                                badgeColor = 'bg-red-500/20 text-red-400 border-red-500/30';
+                                                                                hoverBorder = 'hover:border-red-500/50';
+                                                                                glowColor = 'bg-red-500/10';
+                                                                                textColor = 'group-hover:text-red-400';
+                                                                            } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                                                badgeColor = 'bg-amber-500/20 text-amber-400 border-amber-500/30';
+                                                                                hoverBorder = 'hover:border-amber-500/50';
+                                                                                glowColor = 'bg-amber-500/10';
+                                                                                textColor = 'group-hover:text-amber-400';
+                                                                            } else if (event.sapa_status === 'Gold') {
+                                                                                badgeColor = 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30';
+                                                                                hoverBorder = 'hover:border-yellow-500/50';
+                                                                                glowColor = 'bg-yellow-500/10';
+                                                                                textColor = 'group-hover:text-yellow-400';
+                                                                            } else if (event.sapa_status === 'Silver') {
+                                                                                badgeColor = 'bg-gray-500/20 text-gray-300 border-gray-400/30';
+                                                                                hoverBorder = 'hover:border-gray-400/50';
+                                                                                glowColor = 'bg-gray-400/10';
+                                                                                textColor = 'group-hover:text-gray-300';
+                                                                            } else if (event.sapa_status === 'Bronze') {
+                                                                                badgeColor = 'bg-orange-700/20 text-orange-400 border-orange-700/30';
+                                                                                hoverBorder = 'hover:border-orange-700/50';
+                                                                                glowColor = 'bg-orange-700/10';
+                                                                                textColor = 'group-hover:text-orange-400';
+                                                                            } else if (event.sapa_status === 'FIP event') {
+                                                                                badgeColor = 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+                                                                                hoverBorder = 'hover:border-blue-500/50';
+                                                                                glowColor = 'bg-blue-500/10';
+                                                                                textColor = 'group-hover:text-blue-400';
+                                                                            }
+
+                                                                            const needsPayment = eventViewTab === 'upcoming' && event.db_id && !event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0));
+
+                                                                            return (
+                                                                                <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
+                                                                                    <div className={`absolute top-0 right-0 w-32 h-32 ${glowColor} rounded-full blur-3xl -mr-16 -mt-16 group-hover:opacity-100 opacity-50 transition-all`} />
+
+                                                                                    {event.isPaid && (
+                                                                                        <div className="absolute top-0 right-0 w-20 h-20 overflow-hidden z-20 pointer-events-none rounded-tr-2xl">
+                                                                                            <div className="absolute top-0 right-0 translate-x-[30%] translate-y-[20%] rotate-45 bg-[#ccff00] text-black text-[8px] font-black uppercase tracking-widest py-1 w-[140%] text-center shadow-lg flex items-center justify-center gap-1">
+                                                                                                <CheckCircle2 size={8} strokeWidth={4} />
+                                                                                                PAID
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    <div className="relative z-10 flex-1">
+                                                                                        <div className="flex justify-between items-start mb-4">
+                                                                                            <div className="flex flex-col">
+                                                                                                <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-1">Date</span>
+                                                                                                <span className="text-xs font-bold text-white">
+                                                                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                                </span>
+                                                                                            </div>
+                                                                                            <button
+                                                                                                onClick={() => {
+                                                                                                    if (event.slug || event.db_id) {
+                                                                                                        navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                                                    } else {
+                                                                                                        window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                                                                    }
+                                                                                                }}
+                                                                                                className="w-8 h-8 rounded-lg bg-white/[0.05] border border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-all hover:bg-padel-green/20 hover:border-padel-green/30 group/btn"
+                                                                                            >
+                                                                                                <ExternalLink size={14} className="group-hover/btn:scale-110 transition-transform" />
+                                                                                            </button>
+                                                                                        </div>
+
+                                                                                        <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
+                                                                                            {event.event_name}
+                                                                                        </h4>
+
+                                                                                        {needsPayment && (
+                                                                                            <motion.button
+                                                                                                whileHover={{ scale: 1.02 }}
+                                                                                                whileTap={{ scale: 0.98 }}
+                                                                                                onClick={() => {
+                                                                                                    navigate(`/calendar/${event.slug || event.db_id}?register=true`);
+                                                                                                }}
+                                                                                                className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[10px] py-3 rounded-xl hover:bg-white transition-all shadow-lg shadow-padel-green/20 flex items-center justify-center gap-2 mt-2 group/pay"
+                                                                                            >
+                                                                                                <CreditCard size={14} className="group-hover/pay:rotate-12 transition-transform" />
+                                                                                                Pay Event Fee
+                                                                                            </motion.button>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="text-center py-16 bg-white/[0.03] backdrop-blur-md rounded-3xl border border-white/10 relative overflow-hidden">
+                                                                    <div className="absolute inset-0 bg-gradient-to-br from-padel-green/5 to-transparent opacity-50" />
+                                                                    <div className="relative z-10">
+                                                                        <CalendarIcon className="w-12 h-12 text-white/5 mx-auto mb-4" />
+                                                                        <p className="text-gray-500 font-black uppercase tracking-[0.2em] text-[10px]">
+                                                                            {eventViewTab === 'upcoming' ? 'No upcoming events listed' : 'No past events listed'}
+                                                                        </p>
+                                                                        <p className="text-gray-600 text-[9px] mt-2 font-bold uppercase tracking-widest">Connect your Rankedin profile to see your schedule</p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        </motion.div>
+                                    )}
+
+                                    {activeTab === 'matches' && (
+                                        <motion.div
+                                            key="matches"
+                                            initial={{ opacity: 0, x: 20 }}
+                                            animate={{ opacity: 1, x: 0 }}
+                                            exit={{ opacity: 0, x: -20 }}
+                                            transition={{ duration: 0.2 }}
+                                            onClick={() => {
+                                                if (window.innerWidth < 1024 && !isMobileAccordionOpen) {
+                                                    setIsMobileAccordionOpen(true);
+                                                }
+                                            }}
+                                            className={`bg-neutral-950/35 backdrop-blur-2xl border-t border-white/12 border-x border-b border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.85)] rounded-[2.5rem] ${isMobileAccordionOpen ? 'p-8 lg:p-12' : 'py-5 px-6 lg:p-8 cursor-pointer lg:cursor-default'} relative overflow-hidden`}
+                                        >
+                                            <motion.div
+                                                animate={{ scale: [1, 1.15, 0.9, 1], x: [0, 20, -15, 0], y: [0, -15, 10, 0] }}
+                                                transition={{ duration: 15, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -top-20 left-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
+                                            />
+                                            <motion.div
+                                                animate={{ scale: [1, 0.9, 1.1, 1], x: [0, -15, 20, 0], y: [0, 15, -10, 0] }}
+                                                transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }}
+                                                className="absolute -bottom-20 right-10 w-72 h-72 rounded-full bg-orange-500/10 blur-[90px] pointer-events-none"
+                                            />
+
+                                            <div className="relative z-10">
+                                                <div
+                                                    onClick={(e) => {
+                                                        if (window.innerWidth < 1024) {
+                                                            e.stopPropagation();
+                                                            setIsMobileAccordionOpen(!isMobileAccordionOpen);
+                                                        }
+                                                    }}
+                                                    className={`flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer lg:cursor-default ${isMobileAccordionOpen ? 'mb-4 lg:mb-8' : 'mb-0'}`}
+                                                >
+                                                    <div className="flex items-center justify-between w-full">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.15)] flex items-center justify-center shrink-0">
+                                                                <Trophy size={24} />
+                                                            </div>
+                                                            <div className="flex flex-col min-w-0">
+                                                                <h4 className="font-black text-white uppercase tracking-wider text-sm sm:text-base lg:text-lg truncate">
+                                                                    {matchViewTab === 'upcoming' ? 'MY UPCOMING MATCHES' : 'MY PAST MATCHES'}
+                                                                </h4>
+                                                            </div>
+                                                        </div>
+                                                        <div className="lg:hidden">
+                                                            <ChevronDown className={`text-orange-500 transition-transform duration-300 ${isMobileAccordionOpen ? 'rotate-180' : ''}`} size={24} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <AnimatePresence mode="wait">
+                                                    {(isMobileAccordionOpen || window.innerWidth >= 1024) && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden pt-6"
+                                                        >
                                                         {loadingMatches ? (
                                                             <div className="flex items-center justify-center py-12">
                                                                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-orange-500"></div>
