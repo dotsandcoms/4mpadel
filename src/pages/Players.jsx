@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import Navbar from '../components/Navbar';
-import { Search, Filter, MapPin, Trophy, Instagram, ArrowUpRight, Zap } from 'lucide-react';
+import { Search, Filter, MapPin, Trophy, Instagram, ArrowUpRight, Zap, Image } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import heroBg from '../assets/hero_bg.png';
 import PlayerModal from '../components/PlayerModal';
@@ -48,10 +48,27 @@ const Players = () => {
               sponsorsList = player.sponsors.split(',').map(s => s.trim()).filter(Boolean);
             }
           }
+
+          let safeAdditionalImages = [];
+          if (Array.isArray(player.additional_images)) {
+            safeAdditionalImages = player.additional_images;
+          } else if (typeof player.additional_images === 'string') {
+            const trimmed = player.additional_images.trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+              try {
+                safeAdditionalImages = JSON.parse(trimmed);
+              } catch (e) {
+                safeAdditionalImages = [];
+              }
+            }
+          }
+
           return {
             ...player,
             image_url: player.image_url || '',
             sponsors: sponsorsList,
+            additional_images: safeAdditionalImages,
+            hasGallery: safeAdditionalImages.length > 0,
           };
         });
         setPlayers(processedPlayers);
@@ -299,6 +316,14 @@ const Players = () => {
                           >
                             <Instagram className="w-3.5 h-3.5" />
                           </a>
+                        )}
+                        {player.hasGallery && (
+                          <div
+                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-1.5 rounded-lg transition-colors cursor-pointer"
+                            title="Player Photo Gallery Available"
+                          >
+                            <Image className="w-3.5 h-3.5" />
+                          </div>
                         )}
                       </div>
                     </div>
