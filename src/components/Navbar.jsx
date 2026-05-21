@@ -170,7 +170,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
         )}
 
         <div className="container mx-auto px-6 flex items-center justify-between relative">
-          <div className="flex items-center gap-4 z-50">
+          <div className="flex items-center gap-4 z-50 shrink-0">
             <div className="flex items-center gap-3">
               <a href="/">
                 <img src={logo} alt="4M Padel Logo" className="h-10 w-auto" style={{ filter: 'none', boxShadow: 'none' }} />
@@ -208,13 +208,14 @@ const Navbar = ({ isDark = false, accentColor }) => {
             )}
           </div>
 
-          <div 
-            className={`absolute left-1/2 transform -translate-x-1/2 top-1/2 -translate-y-1/2 hidden lg:flex items-center gap-1.5 xl:gap-2.5 px-3 xl:px-5 py-1.5 xl:py-2 rounded-full transition-all duration-300 z-40 overflow-visible ${
-              isScrolled 
-                ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') 
-                : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')
-            }`}
-          >
+          <div className="flex-1 hidden lg:flex justify-center mx-4 xl:mx-8 z-40 overflow-visible">
+            <div 
+              className={`flex items-center gap-1.5 xl:gap-2 px-3 xl:px-5 py-1.5 xl:py-2 rounded-full transition-all duration-300 overflow-visible ${
+                isScrolled 
+                  ? (isDark ? 'bg-white/80 backdrop-blur-md border border-slate-200 shadow-lg' : 'bg-white/10 backdrop-blur-md border border-white/10') 
+                  : (isDark ? 'bg-slate-100/50 backdrop-blur-sm border border-slate-200 hover:bg-slate-200/50' : 'bg-black/20 backdrop-blur-sm border border-white/5 hover:bg-black/40')
+              }`}
+            >
             {visibleLinks.map((link) => (
               <div key={link.name} className="relative group">
                 <a
@@ -251,9 +252,10 @@ const Navbar = ({ isDark = false, accentColor }) => {
                 )}
               </div>
             ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5 xl:gap-3 z-50">
+          <div className="flex items-center gap-1.5 xl:gap-3 z-50 shrink-0">
             <button
               onClick={toggleSearch}
               className={`p-1.5 xl:p-2 rounded-full transition-all duration-300 group hidden lg:block ${isDark ? 'hover:bg-slate-200 text-slate-600' : 'hover:bg-white/10 text-white/60'}`}
