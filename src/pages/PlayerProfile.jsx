@@ -842,15 +842,19 @@ const PlayerProfile = () => {
                                         </div>
                                         <div className="flex flex-col items-start gap-1.5 md:gap-2">
                                             <div className="flex flex-wrap items-center gap-2 md:gap-3">
-                                                {player.rank_label && player.rank_label !== 'Unranked' && (
-                                                    <span className="text-[10px] md:text-xs text-yellow-500 font-black flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0">
-                                                        <Trophy className="w-3.5 h-3.5 text-yellow-500" /> #{player.rank_label}
-                                                    </span>
-                                                )}
-                                                {player.points !== undefined && (
-                                                    <span className="text-[10px] md:text-xs text-yellow-500 font-black flex items-center bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0 uppercase tracking-wider">
-                                                        Points: {player.points}
-                                                    </span>
+                                                {((player.rank_label && player.rank_label !== 'Unranked') || (player.points !== undefined && player.points !== null)) && (
+                                                    <div className="flex items-center gap-1.5 md:gap-2 flex-nowrap shrink-0">
+                                                        {player.rank_label && player.rank_label !== 'Unranked' && (
+                                                            <span className="text-[10px] md:text-xs text-yellow-500 font-black flex items-center gap-1 bg-yellow-500/10 border border-yellow-500/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0">
+                                                                <Trophy className="w-3.5 h-3.5 text-yellow-500 shrink-0" /> #{player.rank_label}
+                                                            </span>
+                                                        )}
+                                                        {player.points !== undefined && player.points !== null && (
+                                                            <span className="text-[10px] md:text-xs text-padel-green font-black flex items-center bg-[#beff00]/10 border border-[#beff00]/20 px-2.5 py-0.5 md:px-3 md:py-1 rounded-full shrink-0 uppercase tracking-wider">
+                                                                {player.points} PTS
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
                                                 <div className="flex items-center gap-1.5 text-padel-green font-bold uppercase tracking-widest text-[10px] md:text-xs ml-0.5 md:ml-1">
                                                     <MapPin size={14} className="md:w-4 md:h-4 shrink-0" />
