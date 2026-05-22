@@ -25,7 +25,8 @@ const Admin = () => {
     const [loginLoading, setLoginLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-    const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(session?.user?.email);
+    const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
+    const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(targetEmail);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -207,7 +208,7 @@ const Admin = () => {
                                     {activeTab === 'calendar' && <CalendarManager />}
                                     {activeTab === 'event-mgmt' && <EventManagement allowedEvents={permissions?.module_permissions?.['event-mgmt']?.allowedEvents || []} />}
                                     {activeTab === 'gallery' && (
-                                        <GalleryManager />
+                                        <GalleryManager permissions={permissions} />
                                     )}
                                     {activeTab === 'coaches' && (
                                         <CoachManager />

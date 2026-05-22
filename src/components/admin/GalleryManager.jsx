@@ -4,7 +4,12 @@ import { Edit2, Trash2, Plus, FileText, Eye, X, Save, Image as ImageIcon, Upload
 import { supabase } from '../../supabaseClient';
 import { toast } from 'sonner';
 
-const GalleryManager = () => {
+const GalleryManager = ({ permissions }) => {
+    console.log('[GalleryManager] permissions:', permissions);
+    const isSuperAdmin = permissions?.role === 'super_admin';
+    const allowedAlbums = permissions?.module_permissions?.gallery?.allowedAlbums;
+    const hasAlbumRestriction = !isSuperAdmin && Array.isArray(allowedAlbums) && allowedAlbums.length > 0;
+
     const fileInputRef = React.useRef(null);
     const [albums, setAlbums] = useState([]);
     const [events, setEvents] = useState([]); // Fetch calendar events
@@ -205,6 +210,10 @@ const GalleryManager = () => {
     };
 
     const selectAlbum = (album) => {
+        if (hasAlbumRestriction && !allowedAlbums.includes(album.id)) {
+            toast.error('You do not have permission to access this album.');
+            return;
+        }
         setSelectedAlbum(album);
         fetchImages(album.id);
     };
@@ -293,7 +302,7 @@ const GalleryManager = () => {
                     const randomId = Math.random().toString(36).substring(2, 8);
                     const timestamp = Date.now();
                     const baseFileName = `${randomId}_${timestamp}`;
-                    
+
                     const fullPath = `${folderName}/${baseFileName}_full.jpg`;
                     const thumbPath = `${folderName}/${baseFileName}_thumb.jpg`;
 
@@ -353,7 +362,7 @@ const GalleryManager = () => {
     };
 
     const toggleImageSelection = (id) => {
-        setSelectedImages(prev => 
+        setSelectedImages(prev =>
             prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
         );
     };
@@ -372,11 +381,11 @@ const GalleryManager = () => {
 
         try {
             setLoadingImages(true);
-            
+
             // Get URLs for storage deletion
             const imagesToDelete = images.filter(img => selectedImages.includes(img.id));
             const storagePaths = [];
-            
+
             imagesToDelete.forEach(img => {
                 const fullParts = img.image_url.split('/gallery/');
                 const thumbParts = img.thumbnail_url?.split('/gallery/');
@@ -417,7 +426,7 @@ const GalleryManager = () => {
                 .eq('id', selectedAlbum.id);
 
             if (error) throw error;
-            
+
             setSelectedAlbum(prev => ({ ...prev, cover_image_url: imageUrl }));
             toast.success('Album cover updated');
             fetchAlbums(); // refresh main list
@@ -453,6 +462,10 @@ const GalleryManager = () => {
         }
     };
 
+
+    const displayedAlbums = hasAlbumRestriction
+        ? albums.filter(album => allowedAlbums.includes(album.id))
+        : albums;
 
     if (selectedAlbum) {
         return (
@@ -560,17 +573,17 @@ const GalleryManager = () => {
                 ) : (
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
                         {images.map(img => (
-                            <div 
-                                key={img.id} 
+                            <div
+                                key={img.id}
                                 className={`relative group border-2 rounded-xl overflow-hidden aspect-square transition-all duration-300 ${selectedImages.includes(img.id) ? 'border-padel-green ring-4 ring-padel-green/20' : 'border-white/5 bg-slate-900'}`}
                             >
-                                <img 
-                                    src={img.thumbnail_url || img.image_url} 
-                                    alt="Gallery" 
-                                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${selectedImages.includes(img.id) ? 'opacity-70' : ''}`} 
+                                <img
+                                    src={img.thumbnail_url || img.image_url}
+                                    alt="Gallery"
+                                    className={`w-full h-full object-cover transition-transform group-hover:scale-105 ${selectedImages.includes(img.id) ? 'opacity-70' : ''}`}
                                     loading="lazy"
                                 />
-                                
+
                                 {/* Selection Checkbox */}
                                 <button
                                     onClick={(e) => { e.stopPropagation(); toggleImageSelection(img.id); }}
@@ -623,13 +636,15 @@ const GalleryManager = () => {
                     <h2 className="text-3xl font-bold text-white">Gallery Manager</h2>
                     <p className="text-gray-400">Manage albums and bulk upload images</p>
                 </div>
-                <button
-                    onClick={() => { resetAlbumForm(); setIsAlbumModalOpen(true); }}
-                    className="flex items-center gap-2 bg-padel-green text-black px-6 py-3 rounded-xl font-bold hover:bg-white transition-colors"
-                >
-                    <Plus size={20} />
-                    New Album
-                </button>
+                {!hasAlbumRestriction && (
+                    <button
+                        onClick={() => { resetAlbumForm(); setIsAlbumModalOpen(true); }}
+                        className="flex items-center gap-2 bg-padel-green text-black px-6 py-3 rounded-xl font-bold hover:bg-white transition-colors"
+                    >
+                        <Plus size={20} />
+                        New Album
+                    </button>
+                )}
             </div>
 
             {/* Albums List */}
@@ -637,14 +652,14 @@ const GalleryManager = () => {
                 <div className="flex justify-center py-12">
                     <div className="w-12 h-12 border-4 border-white/10 border-t-padel-green rounded-full animate-spin"></div>
                 </div>
-            ) : albums.length === 0 ? (
+            ) : displayedAlbums.length === 0 ? (
                 <div className="text-center py-12 bg-[#1E293B]/50 rounded-2xl border border-white/10">
                     <ImageIcon className="w-12 h-12 text-gray-500 mx-auto mb-4" />
                     <p className="text-gray-400 font-medium">No albums found</p>
                 </div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {albums.map((album) => (
+                    {displayedAlbums.map((album) => (
                         <motion.div
                             key={album.id}
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -690,26 +705,32 @@ const GalleryManager = () => {
                                 </div>
 
                                 <div className="flex justify-between items-center pt-4 border-t border-white/10">
-                                    <button
-                                        onClick={() => handleToggleAlbumStatus(album)}
-                                        className="text-sm text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        Toggle Status
-                                    </button>
-                                    <div className="flex gap-2">
+                                    {!hasAlbumRestriction ? (
                                         <button
-                                            onClick={() => openEditAlbumModal(album)}
-                                            className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors border border-white/10"
+                                            onClick={() => handleToggleAlbumStatus(album)}
+                                            className="text-sm text-gray-400 hover:text-white transition-colors"
                                         >
-                                            <Edit2 size={16} />
+                                            Toggle Status
                                         </button>
-                                        <button
-                                            onClick={() => handleDeleteAlbum(album.id)}
-                                            className="p-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-500 transition-colors border border-red-500/20"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <span className="text-xs text-padel-green font-bold uppercase tracking-wider bg-padel-green/10 px-2 py-1 rounded-md border border-padel-green/20">Authorized Upload</span>
+                                    )}
+                                    {!hasAlbumRestriction && (
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => openEditAlbumModal(album)}
+                                                className="p-2 bg-white/5 hover:bg-white/10 rounded-lg text-white transition-colors border border-white/10"
+                                            >
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteAlbum(album.id)}
+                                                className="p-2 bg-red-500/10 hover:bg-red-500/20 rounded-lg text-red-500 transition-colors border border-red-500/20"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </motion.div>
