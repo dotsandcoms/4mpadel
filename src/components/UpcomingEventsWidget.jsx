@@ -40,9 +40,14 @@ const UpcomingEventsWidget = ({ session }) => {
             setLoading(true);
             try {
                 const rawEvents = await getPlayerEventsAsync(player.rankedin_id);
-                const now = new Date();
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
                 const filtered = (rawEvents || [])
-                    .filter(e => new Date(e.start_date) >= now && e.state !== 2)
+                    .filter(e => {
+                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                        eventEnd.setHours(23, 59, 59, 999);
+                        return eventEnd >= startOfToday && e.state !== 2;
+                    })
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
                     .slice(0, 4); // Show max 4 on homepage
 

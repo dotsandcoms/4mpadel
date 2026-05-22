@@ -296,15 +296,24 @@ const PlayerProfile = () => {
         if (player?.rankedin_id) {
             const fetchEvents = async () => {
                 const events = await getPlayerEventsAsync(player.rankedin_id);
-                // Filter for upcoming events and sort by date, excluding cancelled events (state 2)
-                const now = new Date();
+                const startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+
                 const upcoming = (events || [])
-                    .filter(e => new Date(e.start_date) >= now && e.state !== 2)
+                    .filter(e => {
+                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                        eventEnd.setHours(23, 59, 59, 999);
+                        return eventEnd >= startOfToday && e.state !== 2;
+                    })
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
 
                 // Filter for past events (state === 4 or date is in past, excluding state 2)
                 const past = (events || [])
-                    .filter(e => e.state === 4 || (new Date(e.start_date) < now && e.state !== 2))
+                    .filter(e => {
+                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                        eventEnd.setHours(23, 59, 59, 999);
+                        return e.state === 4 || (eventEnd < startOfToday && e.state !== 2);
+                    })
                     .sort((a, b) => new Date(b.start_date) - new Date(a.start_date));
 
                 const allFiltered = [...upcoming, ...past];
@@ -810,14 +819,14 @@ const PlayerProfile = () => {
                             <div className="relative group shrink-0">
                                 <div
                                     onClick={() => document.getElementById('imageUpload').click()}
-                                    className="w-24 h-24 md:w-36 md:h-36 rounded-full bg-neutral-900 border border-white/10 p-1 shadow-xl overflow-hidden cursor-pointer relative transition-transform duration-300 hover:scale-105"
+                                    className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-neutral-900 border border-white/10 p-1 shadow-xl overflow-hidden cursor-pointer relative transition-transform duration-300 hover:scale-105"
                                 >
                                     <div className="w-full h-full rounded-full overflow-hidden border border-white/20 relative">
                                         {formData.image_url ? (
                                             <img src={formData.image_url} alt="Profile" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                                         ) : (
                                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-neutral-800 to-neutral-950">
-                                                <User className="w-10 h-10 md:w-16 md:h-16 text-white/20" />
+                                                <User className="w-12 h-12 md:w-18 md:h-18 text-white/20" />
                                             </div>
                                         )}
                                     </div>

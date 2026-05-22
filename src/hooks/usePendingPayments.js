@@ -37,7 +37,11 @@ export const usePendingPayments = (email, rankedinId) => {
                 // 1. Fetch from Rankedin API if rankedinId is provided
                 if (pRankedinId) {
                     const rEvents = await getPlayerEventsAsync(pRankedinId);
-                    const upcomingREvents = (rEvents || []).filter(e => new Date(e.start_date) >= today && e.state !== 2);
+                    const upcomingREvents = (rEvents || []).filter(e => {
+                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                        eventEnd.setHours(23, 59, 59, 999);
+                        return eventEnd >= today && e.state !== 2;
+                    });
 
                     if (upcomingREvents.length > 0) {
                         const { data: dbEvents } = await supabase
