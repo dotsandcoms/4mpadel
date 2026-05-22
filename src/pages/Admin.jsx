@@ -122,14 +122,15 @@ const Admin = () => {
         <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row">
             {/* Impersonation Banner */}
             {sessionStorage.getItem('admin_test_login_email') && (
-                <div className="fixed top-0 left-0 right-0 z-[1000] bg-amber-500 text-black py-2 px-4 text-center text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-4 shadow-xl">
-                    <span>Testing Mode: Impersonating {sessionStorage.getItem('admin_test_login_email')}</span>
+                <div className="fixed top-0 left-0 right-0 z-[1000] w-full bg-amber-500/10 backdrop-blur-md border-b border-amber-500/20 py-2.5 px-4 text-center text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 shadow-[0_4px_20px_rgba(245,158,11,0.05)] text-amber-400">
+                    <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+                    <span>Testing Mode: Impersonating <span className="text-white font-extrabold">{sessionStorage.getItem('admin_test_login_email')}</span></span>
                     <button
                         onClick={() => {
                             sessionStorage.removeItem('admin_test_login_email');
                             window.location.href = '/admin';
                         }}
-                        className="bg-black text-white px-3 py-1 rounded-full hover:bg-white hover:text-black transition-colors"
+                        className="bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500 hover:text-black px-3.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 hover:scale-105 active:scale-95 shadow-md cursor-pointer shrink-0"
                     >
                         Exit & Return to Admin
                     </button>

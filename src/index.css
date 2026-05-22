@@ -12,7 +12,8 @@
 
   color-scheme: light dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #0F172A; /* Deep Navy/Black */
+  background-color: #0F172A;
+  /* Deep Navy/Black */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -28,7 +29,8 @@
 
 /* Premium Color Palette Utilities (Custom) */
 .text-padel-green {
-  color: #CCFF00; /* Electric Green/Yellow */
+  color: #CCFF00;
+  /* Electric Green/Yellow */
 }
 
 .bg-padel-green {
@@ -51,6 +53,7 @@ a {
   text-decoration: inherit;
   transition: color 0.3s ease;
 }
+
 a:hover {
   color: #ffffff;
 }
@@ -62,7 +65,12 @@ body {
   overflow-x: hidden;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: "Montserrat", sans-serif;
   letter-spacing: -0.02em;
 }
@@ -70,8 +78,13 @@ h1, h2, h3, h4, h5, h6 {
 /* Smooth Scrolling */
 /* Custom Animations */
 @keyframes shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 html {
@@ -105,6 +118,8 @@ html {
 
 /* Hide scrollbar for IE, Edge and Firefox */
 .scrollbar-hide {
-  -ms-overflow-style: none;  /* IE and Edge */
-  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }

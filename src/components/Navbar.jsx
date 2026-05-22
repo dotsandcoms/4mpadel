@@ -157,21 +157,22 @@ const Navbar = ({ isDark = false, accentColor }) => {
           }`}
       >
         {sessionStorage.getItem('admin_test_login_email') && (
-          <div className="bg-amber-500 text-black py-1.5 px-4 text-center text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-4">
-            <span>Testing Mode: Impersonating {sessionStorage.getItem('admin_test_login_email')}</span>
+          <div className="w-full bg-amber-500/10 backdrop-blur-md border-b border-amber-500/20 py-2.5 px-4 text-center text-[10px] md:text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-3 md:gap-4 shadow-[0_4px_20px_rgba(245,158,11,0.05)] text-amber-400">
+            <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0 animate-pulse" />
+            <span>Testing Mode: Impersonating <span className="text-white font-extrabold">{sessionStorage.getItem('admin_test_login_email')}</span></span>
             <button
               onClick={() => {
                 sessionStorage.removeItem('admin_test_login_email');
                 window.location.href = '/admin';
               }}
-              className="bg-black text-white px-3 py-0.5 rounded-full hover:bg-white hover:text-black transition-colors"
+              className="bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500 hover:text-black px-3.5 py-1 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-wider transition-all duration-300 hover:scale-105 active:scale-95 shadow-md cursor-pointer shrink-0"
             >
               Exit & Return to Admin
             </button>
           </div>
         )}
 
-        <div className="container mx-auto px-6 flex items-center justify-between relative">
+        <div className="max-w-[1440px] mx-auto px-4 xl:px-8 w-full flex items-center justify-between relative">
           <div className="flex items-center gap-4 z-50 shrink-0">
             <div className="flex items-center gap-3">
               <a href="/">
@@ -181,7 +182,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             </div>
 
             {isLoggedIn && player && (
-              <div className="hidden md:flex items-center gap-2 border-l border-white/10 pl-3 ml-1 text-xs font-medium text-white/80 shrink-0">
+              <div className="hidden md:flex lg:hidden 2xl:flex items-center gap-2 border-l border-white/10 pl-3 ml-1 text-xs font-medium text-white/80 shrink-0">
                 <div className="flex flex-col shrink-0">
                   <span className="leading-tight font-black text-xs uppercase tracking-tight whitespace-nowrap" style={{ color: accentColor || (isDark ? '#F40020' : undefined) }}>
                     {player.name}
