@@ -183,6 +183,7 @@ const RankingSlider = ({ title, playersData, onPlayerClick }) => {
 
 const TierCard = ({ tier }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const headers = tier.headers || ['Winner', 'Finals', 'Semis', 'Quarters', 'R16', 'R32'];
 
   return (
     <motion.div
@@ -240,30 +241,51 @@ const TierCard = ({ tier }) => {
                 <thead>
                   <tr>
                     <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 w-24">Cat</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right">Winner</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right">Finals</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right">Semis</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right">Quarters</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right">R16</th>
-                    <th className="py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right pr-8">R32</th>
+                    {headers.map((header, hIdx) => (
+                      <th
+                        key={hIdx}
+                        className={`py-4 px-4 text-xs uppercase tracking-widest font-bold text-gray-400 border-b border-white/10 text-right ${
+                          hIdx === headers.length - 1 ? 'pr-8' : ''
+                        }`}
+                      >
+                        {header}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {tier.rows.map((row, idx) => (
-                    <tr key={idx} className="hover:bg-white/5 transition-colors">
-                      <td className="py-4 px-4 border-b border-white/5">
-                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${row.cat === '1' ? tier.bgIcon + ' ' + tier.iconColor : 'bg-white/10 text-gray-300'}`}>
-                          {row.cat}
-                        </span>
-                      </td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 ${row.bold ? 'font-black text-white text-lg' : 'font-medium text-gray-400'}`}>{row.winner}</td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 ${row.bold ? 'font-bold text-gray-200' : 'text-gray-400'}`}>{row.finals}</td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 ${row.bold ? 'font-bold text-gray-200' : 'text-gray-400'}`}>{row.semis}</td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 ${row.bold ? 'font-bold text-gray-200' : 'text-gray-400'}`}>{row.quarters}</td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 ${row.bold ? 'font-bold text-gray-200' : 'text-gray-400'}`}>{row.r16}</td>
-                      <td className={`py-4 px-4 text-right border-b border-white/5 pr-8 ${row.bold ? 'font-bold text-gray-200' : 'text-gray-400'}`}>{row.r32}</td>
-                    </tr>
-                  ))}
+                  {tier.rows.map((row, idx) => {
+                    const rowPoints = row.points || [row.winner, row.finals, row.semis, row.quarters, row.r16, row.r32];
+                    return (
+                      <tr key={idx} className="hover:bg-white/5 transition-colors">
+                        <td className="py-4 px-4 border-b border-white/5">
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold ${row.cat === '1' ? tier.bgIcon + ' ' + tier.iconColor : 'bg-white/10 text-gray-300'}`}>
+                            {row.cat}
+                          </span>
+                        </td>
+                        {rowPoints.map((pt, ptIdx) => {
+                          const isFirst = ptIdx === 0;
+                          const isLast = ptIdx === rowPoints.length - 1;
+                          let textClass = 'text-gray-400';
+                          if (row.bold) {
+                            if (isFirst) {
+                              textClass = 'font-black text-white text-lg';
+                            } else {
+                              textClass = 'font-bold text-gray-200';
+                            }
+                          }
+                          return (
+                            <td
+                              key={ptIdx}
+                              className={`py-4 px-4 text-right border-b border-white/5 ${textClass} ${isLast ? 'pr-8' : ''}`}
+                            >
+                              {pt}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -601,11 +623,22 @@ const Rankings = () => {
       bgGradient: 'bg-red-500',
       bgIcon: 'bg-red-500/20',
       iconColor: 'text-red-500',
+      headers: [
+        'Winner (1st)',
+        'Finalist (2nd)',
+        'Semi-Final (3rd / 4th)',
+        'Quarter-Final (5th - 8th)',
+        'R16 Playoff - 9th Place',
+        'R16 Playoff - 10th Place',
+        'R16 Playoff - 11th / 12th',
+        'R16 Playoff - 13th - 16th',
+        'R32 Playoff - 17th'
+      ],
       rows: [
-        { cat: '1', winner: '2,600', finals: '1,200', semis: '720', quarters: '360', r16: '180', r32: '90', bold: true },
-        { cat: '2', winner: '600', finals: '360', semis: '180', quarters: '90', r16: '45', r32: '23', bold: false },
-        { cat: '3', winner: '240', finals: '144', semis: '72', quarters: '36', r16: '18', r32: '9', bold: false },
-        { cat: '4', winner: '96', finals: '86', semis: '36', quarters: '18', r16: '9', r32: '5', bold: false }
+        { cat: '1', points: ['2,600', '1,560', '936', '468', '410', '351', '293', '234', '211'], bold: true },
+        { cat: '2', points: ['780', '468', '234', '117', '103', '88', '74', '59', '53'], bold: false },
+        { cat: '3', points: ['312', '188', '94', '47', '41', '36', '30', '24', '22'], bold: false },
+        { cat: '4', points: ['125', '113', '47', '24', '21', '18', '15', '12', '11'], bold: false }
       ]
     },
     {
