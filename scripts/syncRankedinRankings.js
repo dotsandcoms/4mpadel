@@ -59,7 +59,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
 
         for (const p of players) {
             const name = p.Name;
-            const points = p.ParticipantPoints?.Points || 0;
+            const points = Math.round(parseFloat(p.ParticipantPoints?.Points) || 0);
             const rank = p.Standing;
             const rankedinId = p.RankedinId || p.Participant?.Id;
             const profileUrl = p.ParticipantUrl ? `https://www.rankedin.com${p.ParticipantUrl}` : null;
