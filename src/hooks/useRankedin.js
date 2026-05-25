@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { supabase } from '../supabaseClient';
 
 // Rankedin API Base URL
 const API_BASE = 'https://api.rankedin.com/v1';
@@ -34,6 +35,70 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
     }
 };
 
+/**
+ * Generic fetch helper that implements a standard timeout, abort signal merging,
+ * and caches the response in Supabase `rankedin_cache` for high availability and sub-second loads.
+ */
+const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6) => { // Default 6 hours cache
+    // 1. Attempt to read from Supabase cache first
+    try {
+        const { data, error } = await supabase
+            .from('rankedin_cache')
+            .select('payload, updated_at')
+            .eq('url', url)
+            .maybeSingle();
+
+        if (data) {
+            const ageMs = Date.now() - new Date(data.updated_at).getTime();
+            if (ageMs < cacheDurationMs) {
+                console.log(`[Cache HIT - Fresh]: ${url}`);
+                return data.payload;
+            }
+            console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs/1000)}s]: ${url}`);
+        }
+    } catch (e) {
+        console.error("Cache read error:", e);
+    }
+
+    // 2. Fetch live from RankedIn API
+    try {
+        const response = await fetchWithTimeout(url, options);
+        if (!response.ok) throw new Error(`Rankedin API status ${response.status}`);
+        const data = await response.json();
+
+        // 3. Save to Supabase cache asynchronously so we don't block the client
+        supabase
+            .from('rankedin_cache')
+            .upsert({ url, payload: data, updated_at: new Date().toISOString() }, { onConflict: 'url' })
+            .then(({ error }) => {
+                if (error) console.error("Cache write error:", error.message);
+            });
+
+        return data;
+    } catch (liveError) {
+        console.warn(`[Rankedin Offline/Timeout]: ${liveError.message}. Attempting stale cache fallback...`);
+        
+        // 4. Fallback to stale cache if Rankedin is offline
+        try {
+            const { data } = await supabase
+                .from('rankedin_cache')
+                .select('payload')
+                .eq('url', url)
+                .maybeSingle();
+
+            if (data && data.payload) {
+                console.warn(`[Offline Mode]: Successfully served stale cache for ${url}`);
+                return data.payload;
+            }
+        } catch (cacheErr) {
+            console.error("Fallback cache read error:", cacheErr);
+        }
+
+        // If no cache at all and live fetch failed, throw the original error
+        throw liveError;
+    }
+};
+
 export const useRankedin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
@@ -48,13 +113,9 @@ export const useRankedin = () => {
         setError(null);
         try {
             // Organization/GetOrganisationEventsAsync endpoint
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=${take}`
             );
-
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
             return data.payload || [];
         } catch (err) {
             console.error('Error fetching recent tournaments:', err);
@@ -75,11 +136,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/teamleague/GetStandingsSectionAsync?teamleagueId=${teamleagueId}&poolid=${poolId}&language=en`
             );
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            const data = await response.json();
             return data;
         } catch (err) {
             console.error("Rankedin TeamLeague Standings fetch error:", err);
@@ -99,11 +158,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            return await fetchWithCache(
                 `${API_BASE}/teamleague/GetPoolTeamsAsync?poolid=${poolId}&language=en`
             );
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            return await response.json();
         } catch (err) {
             console.error("Rankedin TeamLeague Teams fetch error:", err);
             setError(err.message);
@@ -120,11 +177,9 @@ export const useRankedin = () => {
      */
     const getTeamMatchResults = useCallback(async (teamMatchId) => {
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/teamleague/GetTeamLeagueTeamsMatchesAsync?teamMatchId=${teamMatchId}&language=en`
             );
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            const data = await response.json();
             // Data is usually an array of sections, the first one contains the matches
             return data[0]?.Matches?.Matches || [];
         } catch (err) {
@@ -135,21 +190,15 @@ export const useRankedin = () => {
 
     /**
      * Fetches the upcoming tournaments for SAPA.
-
-
      * @returns {Promise<Array>} Array of upcoming tournament objects
      */
     const getUpcomingOrganisationEvents = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`
             );
-
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
             return data.payload || [];
         } catch (err) {
             console.error('Error fetching upcoming tournaments:', err);
@@ -169,13 +218,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/tournament/GetClassesAndDrawNamesAsync/?tournamentId=${tournamentId}`
             );
-
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
             return data || [];
         } catch (err) {
             console.error('Error fetching tournament classes:', err);
@@ -187,24 +232,19 @@ export const useRankedin = () => {
     }, []);
 
     /**
-   * Fetches the knockout bracket / draw data for a specific tournament class.
-   * @param {string|number} tournamentClassId 
-   * @param {number} drawStage
-   * @param {number} drawStrength
-   * @returns {Promise<Object>} Formatted draw data
-   */
+     * Fetches the knockout bracket / draw data for a specific tournament class.
+     * @param {string|number} tournamentClassId 
+     * @param {number} drawStage
+     * @param {number} drawStrength
+     * @returns {Promise<Object>} Formatted draw data
+     */
     const getDrawsForClass = useCallback(async (tournamentClassId, drawStage = 0, drawStrength = 0) => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/tournament/GetDrawsForStageAndStrengthAsync?tournamentClassId=${tournamentClassId}&drawStrength=${drawStrength}&drawStage=${drawStage}&isReadonly=true&language=en`
             );
-
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
-
             // Return the raw data array so KnockoutBracket can parse BaseType (RoundRobin or Elimination)
             return data;
         } catch (err) {
@@ -224,15 +264,13 @@ export const useRankedin = () => {
     const getTournamentDetails = useCallback(async (tournamentId) => {
         try {
             // Check finished events
-            const finishedRes = await fetch(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=100`);
-            const finishedData = await finishedRes.json();
+            const finishedData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=100`);
             let tour = finishedData.payload?.find(t => t.eventId.toString() === tournamentId.toString());
 
             if (tour) return tour;
 
             // Check upcoming/ongoing events
-            const upcomingRes = await fetch(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`);
-            const upcomingData = await upcomingRes.json();
+            const upcomingData = await fetchWithCache(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`);
             tour = upcomingData.payload?.find(t => t.eventId.toString() === tournamentId.toString());
 
             return tour || null;
@@ -253,13 +291,9 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(
+            const data = await fetchWithCache(
                 `${API_BASE}/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${rankingType}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=${take}`
             );
-
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
             return data.Payload || [];
         } catch (err) {
             console.error('Error fetching rankings:', err);
@@ -281,23 +315,17 @@ export const useRankedin = () => {
         setError(null);
         try {
             // Step 1: Get internal PlayerId from string ID (e.g. R000328907)
-            const profileRes = await fetchWithTimeout(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`, { signal }, 8000);
-            if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
-            const profileData = await profileRes.json();
+            const profileData = await fetchWithCache(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`, { signal });
             const internalId = profileData.Header?.PlayerId;
 
             if (!internalId) throw new Error("Could not extract internal PlayerId");
 
             // Step 2: Fetch events using internal ID
-            const eventsRes = await fetchWithTimeout(
+            const data = await fetchWithCache(
                 `${API_BASE}/player/ParticipatedEventsAsync?playerId=${internalId}&language=en&skip=0&take=100`,
-                { signal },
-                8000
+                { signal }
             );
 
-            if (!eventsRes.ok) throw new Error(`Rankedin Events API Error: ${eventsRes.status}`);
-
-            const data = await eventsRes.json();
             const rawEvents = data.Payload || data.payload || [];
 
             return rawEvents.map(e => {
@@ -345,10 +373,7 @@ export const useRankedin = () => {
             if (drawStrength !== undefined) url += `&drawStrength=${drawStrength}`;
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-
-            const data = await response.json();
+            const data = await fetchWithCache(url);
             return data.Matches || [];
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
@@ -489,13 +514,10 @@ export const useRankedin = () => {
     const getAnonymousToken = useCallback(async () => {
         if (cachedAnonymousToken) return cachedAnonymousToken;
         try {
-            const res = await fetch(`${API_BASE}/player/getlayoutinfoasync?language=en`);
-            if (res.ok) {
-                const data = await res.json();
-                if (data.AnonymousToken) {
-                    cachedAnonymousToken = data.AnonymousToken;
-                    return cachedAnonymousToken;
-                }
+            const data = await fetchWithCache(`${API_BASE}/player/getlayoutinfoasync?language=en`);
+            if (data && data.AnonymousToken) {
+                cachedAnonymousToken = data.AnonymousToken;
+                return cachedAnonymousToken;
             }
         } catch (err) {
             console.error('Failed to fetch anonymous token:', err);
@@ -510,22 +532,13 @@ export const useRankedin = () => {
      * @param {number} take Number of matches to fetch
      * @returns {Promise<Array>} Array of matches
      */
-    /**
-     * Fetches match history for a specific player by their Rankedin ID.
-     * @param {string} rankedinId Rankedin Player ID (e.g. R000328907)
-     * @param {boolean} takeHistory Whether to fetch past matches (true) or upcoming (false)
-     * @param {number} take Number of matches to fetch
-     * @returns {Promise<Array>} Array of matches
-     */
     const getPlayerMatches = useCallback(async (rankedinId, takeHistory = true, take = 20, signal) => {
         if (!rankedinId) return [];
         setLoading(true);
         setError(null);
         try {
             // Step 1: Get internal PlayerId
-            const profileRes = await fetchWithTimeout(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`, { signal }, 8000);
-            if (!profileRes.ok) throw new Error(`Rankedin Profile API Error: ${profileRes.status}`);
-            const profileData = await profileRes.json();
+            const profileData = await fetchWithCache(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`, { signal });
             const internalId = profileData.Id || profileData.Header?.PlayerId;
 
             if (!internalId) throw new Error("Could not extract internal PlayerId");
@@ -534,9 +547,7 @@ export const useRankedin = () => {
             const token = await getAnonymousToken();
 
             // Step 3: Fetch matches
-            // NOTE: takehistory=true often returns placeholders for anonymous users.
-            // We use this for "Upcoming" (false) as it works well, but we'll try it for history too.
-            const response = await fetchWithTimeout(
+            const data = await fetchWithCache(
                 `${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=${takeHistory}&skip=0&take=${take}&language=en`,
                 {
                     signal,
@@ -544,13 +555,9 @@ export const useRankedin = () => {
                         ...(token ? { 'x-anonymous-token': token } : {}),
                         'Accept': 'application/json'
                     }
-                },
-                8000
+                }
             );
 
-            if (!response.ok) throw new Error(`Rankedin Matches API Error: ${response.status}`);
-
-            const data = await response.json();
             const payload = data.Payload || [];
 
             // If we're fetching history and only got placeholders, use the tournament fallback
@@ -572,9 +579,7 @@ export const useRankedin = () => {
                         if (event.id === 68674 || event.id === '68674' || (event.event_name || '').toLowerCase().includes('north vs south')) {
                             url = `${API_BASE}/tournament/GetTournamentTeamsMatchesAsync?tournamentId=${event.id}&challengeId=6404918&language=en`;
                         }
-                        const res = await fetchWithTimeout(url, { signal }, 8000);
-                        if (!res.ok) return [];
-                        const mData = await res.json();
+                        const mData = await fetchWithCache(url, { signal });
                         const matches = (mData[0] && mData[0].Matches && mData[0].Matches.Matches) ? mData[0].Matches.Matches : (mData.Matches || []);
                         
                         // Filter matches for THIS player AND only those already played
@@ -679,9 +684,7 @@ export const useRankedin = () => {
     const getTournamentParticipants = useCallback(async (tournamentId, classId) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersForClassAsync?tournamentId=${tournamentId}&tournamentClassId=${classId}&language=en`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            const data = await response.json();
+            const data = await fetchWithCache(url);
             
             if (data.Teams && data.Teams.length > 0) {
                 return data.Teams.map(team => ({ Participant: team }));
@@ -696,9 +699,7 @@ export const useRankedin = () => {
     const getTournamentPlayerTabs = useCallback(async (tournamentId) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersTabAsync?id=${tournamentId}&language=en`;
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Rankedin API Error: ${response.status}`);
-            const data = await response.json();
+            const data = await fetchWithCache(url);
             return data || [];
         } catch (err) {
             console.error('Error fetching tournament player tabs:', err);
@@ -716,26 +717,21 @@ export const useRankedin = () => {
         setError(null);
         try {
             // First get the actual tournament ID from the challenge ID
-            const tourRes = await fetch(`${API_BASE}/tournament/GetTournamentForChallengeAsync?challengeId=${challengeId}`);
-            if (!tourRes.ok) throw new Error(`Rankedin API Error: ${tourRes.status}`);
-            const tourData = await tourRes.json();
+            const tourData = await fetchWithCache(`${API_BASE}/tournament/GetTournamentForChallengeAsync?challengeId=${challengeId}`);
             const tournamentId = tourData.TournamentId;
 
             if (!tournamentId) throw new Error("Could not find tournament for challenge");
 
             // Fetch Matches
             const matchUrl = `${API_BASE}/tournament/GetTournamentTeamsMatchesAsync?tournamentId=${tournamentId}&challengeId=${challengeId}&language=en`;
-            const matchRes = await fetch(matchUrl);
-            if (!matchRes.ok) throw new Error(`Rankedin API Error: ${matchRes.status}`);
-            const matchData = await matchRes.json();
+            const matchData = await fetchWithCache(matchUrl);
 
             // Fetch Standings
             const standingsUrl = `${API_BASE}/tournament/GeTournamentTeamMatchStandingsAsync?tournamentId=${tournamentId}&challengeId=${challengeId}&language=en`;
-            const standingsRes = await fetch(standingsUrl);
             let team1 = null;
             let team2 = null;
-            if (standingsRes.ok) {
-                const standingsData = await standingsRes.json();
+            try {
+                const standingsData = await fetchWithCache(standingsUrl);
                 if (standingsData && standingsData.ScoresViewModels && standingsData.ScoresViewModels.length >= 2) {
                     team1 = standingsData.ScoresViewModels[0];
                     team2 = standingsData.ScoresViewModels[1];
@@ -747,6 +743,8 @@ export const useRankedin = () => {
                         team2 = temp;
                     }
                 }
+            } catch (e) {
+                console.warn("Standings fetch failed during team tournament query:", e);
             }
 
             const rawMatches = (matchData[0] && matchData[0].Matches && matchData[0].Matches.Matches) ? matchData[0].Matches.Matches : [];

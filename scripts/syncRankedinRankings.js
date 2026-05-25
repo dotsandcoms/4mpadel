@@ -27,11 +27,9 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     },
 });
 
-const RANKING_ID = 15809; // SAPA Main Ranking
-
-async function syncCategory(type, ageGroup, categoryName) {
-    console.log(`\n--- Syncing ${categoryName} ---`);
-    const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${RANKING_ID}&rankingType=${type}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=1000`;
+async function syncCategory(rankingId, type, ageGroup, categoryName) {
+    console.log(`\n--- Syncing ${categoryName} (Ranking ID: ${rankingId}) ---`);
+    const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${type}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=1000`;
 
     try {
         const res = await fetch(url);
@@ -40,6 +38,21 @@ async function syncCategory(type, ageGroup, categoryName) {
         const players = data.Payload || [];
 
         console.log(`Found ${players.length} players in ${categoryName} on Rankedin.`);
+
+        // --- SAVE TO RANKEDIN_CACHE TABLE ---
+        const { error: cacheError } = await supabase
+            .from('rankedin_cache')
+            .upsert({
+                url: url,
+                payload: data,
+                updated_at: new Date().toISOString()
+            }, { onConflict: 'url' });
+
+        if (cacheError) {
+            console.error(`Failed to cache rankings in DB:`, cacheError.message);
+        } else {
+            console.log(`✓ Cached raw rankings in Supabase: ${url}`);
+        }
 
         let updateCount = 0;
         let skipCount = 0;
@@ -57,7 +70,7 @@ async function syncCategory(type, ageGroup, categoryName) {
             if (rankedinId) {
                 const { data: idMatch } = await supabase
                     .from('players')
-                    .select('id, name, preferred_ranking')
+                    .select('id, name, preferred_ranking, rankedin_id')
                     .eq('rankedin_id', rankedinId.toString())
                     .eq('approved', true)
                     .maybeSingle();
@@ -71,28 +84,42 @@ async function syncCategory(type, ageGroup, categoryName) {
             if (!playerToUpdate) {
                 const { data: nameMatches } = await supabase
                     .from('players')
-                    .select('id, name, preferred_ranking')
+                    .select('id, name, preferred_ranking, rankedin_id')
                     .ilike('name', `%${name}%`)
                     .eq('approved', true);
 
                 if (nameMatches && nameMatches.length > 0) {
-                    // Critical: Must match exactly if we have multiple, or just pick the best one
                     playerToUpdate = nameMatches.find(ep => ep.name.toLowerCase() === name.toLowerCase()) || nameMatches[0];
                 }
             }
 
             if (playerToUpdate) {
-                // If the player has a preferred ranking set that is NOT this one, skip updating the label/points
-                // (Since this script only syncs SAPA Main Ranking ID 15809)
-                if (playerToUpdate.preferred_ranking && !playerToUpdate.preferred_ranking.includes('SAPA')) {
-                    console.log(`Skipping label/points update for ${name} (Has preferred ranking: ${playerToUpdate.preferred_ranking})`);
-                    // We still update the rankedin_id if missing
+                // Determine if we should update this player's main label and points
+                let shouldUpdateLabelAndPoints = false;
+                
+                if (!playerToUpdate.preferred_ranking) {
+                    // If no preferred ranking is set, we only update using the main SAPA Ranking (15809)
+                    shouldUpdateLabelAndPoints = (rankingId === 15809);
+                } else {
+                    const preferred = playerToUpdate.preferred_ranking.toLowerCase();
+                    if (rankingId === 15809 && preferred.includes('sapa')) {
+                        shouldUpdateLabelAndPoints = true;
+                    } else if (rankingId === 16317 && preferred.includes('broll')) {
+                        shouldUpdateLabelAndPoints = true;
+                    } else if (rankingId === 16482 && (preferred.includes('grand tour') || preferred.includes('sa grand'))) {
+                        shouldUpdateLabelAndPoints = true;
+                    }
+                }
+
+                if (!shouldUpdateLabelAndPoints) {
+                    // Update rankedin_id if missing, but skip rank/points since it isn't preferred
                     if (!playerToUpdate.rankedin_id && rankedinId) {
                          await supabase.from('players').update({ rankedin_id: rankedinId.toString() }).eq('id', playerToUpdate.id);
                     }
                     skipCount++;
                     continue;
                 }
+
                 const updateData = {
                     points: points,
                     rank_label: rank.toString(),
@@ -111,23 +138,31 @@ async function syncCategory(type, ageGroup, categoryName) {
                     console.error(`Failed to update ${name}:`, updateError.message);
                 } else {
                     updateCount++;
-                    // console.log(`✓ Updated ${name} (Rank: ${rank}, Points: ${points})`);
                 }
             } else {
                 skipCount++;
-                // console.log(`× Player ${name} not found in our database.`);
             }
         }
-        console.log(`Results for ${categoryName}: ${updateCount} updated, ${skipCount} not found in DB.`);
+        console.log(`Results for ${categoryName} (ID: ${rankingId}): ${updateCount} updated, ${skipCount} skipped/not preferred.`);
     } catch (err) {
         console.error(`Error syncing ${categoryName}:`, err.message);
     }
 }
 
 async function run() {
-    console.log("Starting Rankedin Sync...");
-    await syncCategory(3, 82, "Men's Open");
-    await syncCategory(4, 83, "Women's Open");
+    console.log("Starting Rankedin Sync for all featured rankings...");
+    // 15809: SAPA
+    await syncCategory(15809, 3, 82, "SAPA Men's Open");
+    await syncCategory(15809, 4, 83, "SAPA Women's Open");
+
+    // 16317: Broll Pro Tour
+    await syncCategory(16317, 3, 82, "Broll Men's Open");
+    await syncCategory(16317, 4, 83, "Broll Women's Open");
+
+    // 16482: SA Grand Tour
+    await syncCategory(16482, 3, 82, "SA Grand Tour Men's Open");
+    await syncCategory(16482, 4, 83, "SA Grand Tour Women's Open");
+
     console.log("\nAll sync tasks finished.");
 }
 

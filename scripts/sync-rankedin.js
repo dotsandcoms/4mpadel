@@ -67,9 +67,12 @@ async function syncRankedin() {
 
         // 2. Fetch from Rankedin (Both finished and upcoming)
         console.log('Fetching from RankedIn API...');
+        const finishedUrl = `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=100`;
+        const upcomingUrl = `${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`;
+
         const [finishedRes, upcomingRes] = await Promise.all([
-            fetch(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=true&Language=en&skip=0&take=100`),
-            fetch(`${API_BASE}/Organization/GetOrganisationEventsAsync?organisationId=${SAPA_ORG_ID}&IsFinished=false&Language=en&skip=0&take=100`)
+            fetch(finishedUrl),
+            fetch(upcomingUrl)
         ]);
 
         if (!finishedRes.ok || !upcomingRes.ok) {
@@ -78,6 +81,18 @@ async function syncRankedin() {
 
         const finishedData = await finishedRes.json();
         const upcomingData = await upcomingRes.json();
+
+        // --- CACHE MAIN PAYLOADS IN SUPABASE ---
+        const { error: mainCacheError } = await supabase.from('rankedin_cache').upsert([
+            { url: finishedUrl, payload: finishedData, updated_at: new Date().toISOString() },
+            { url: upcomingUrl, payload: upcomingData, updated_at: new Date().toISOString() }
+        ], { onConflict: 'url' });
+
+        if (mainCacheError) {
+            console.error('Failed to cache main events payloads in DB:', mainCacheError.message);
+        } else {
+            console.log('✓ Cached raw main events payloads in Supabase.');
+        }
 
         const allRankedinEvents = [
             ...(finishedData.payload || []),
@@ -141,6 +156,18 @@ async function syncRankedin() {
 
                 if (infoRes.ok) {
                     const infoData = await infoRes.json();
+
+                    // Upsert into rankedin_cache
+                    try {
+                        await supabase.from('rankedin_cache').upsert({
+                            url: infoUrl,
+                            payload: infoData,
+                            updated_at: new Date().toISOString()
+                        }, { onConflict: 'url' });
+                    } catch (cacheErr) {
+                        console.error(`Cache error for infoUrl ${infoUrl}:`, cacheErr.message);
+                    }
+
                     try {
                         let regText = regRes.ok ? await regRes.text() : '';
                         if (regText.startsWith('"')) regText = JSON.parse(regText);
