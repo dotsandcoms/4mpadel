@@ -53,7 +53,7 @@ const FinancialSummaryReport = ({ allowedEvents = [] }) => {
         };
 
         fetchReportData();
-    }, []);
+    }, [allowedEvents, isRestricted]);
 
     const eventReportData = useMemo(() => {
         return registrations.map(reg => {

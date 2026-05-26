@@ -67,7 +67,7 @@ const UserPayments = ({ allowedEvents = [] }) => {
             }
         };
         fetchPlayerData();
-    }, []);
+    }, [allowedEvents, isRestricted]);
 
     const handleSort = (key) => {
         setSortConfig(prev => ({

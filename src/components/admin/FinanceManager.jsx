@@ -44,6 +44,7 @@ const FinanceManager = () => {
     }, []);
 
     const financePerms = permissions?.module_permissions?.finance;
+    const eventMgmtPerms = permissions?.module_permissions?.['event-mgmt'];
     
     // SAFE FALLBACK: If granular perms exist but we haven't specified tabs, 
     // default to showing everything BUT the Dashboard and Settings (protects totals).
@@ -54,7 +55,23 @@ const FinanceManager = () => {
         ? (financePerms.allowedTabs || ['transactions']) 
         : defaultFullTabs;
         
-    const allowedEvents = financePerms?.allowedEvents || [];
+    const financeAllowedEvents = financePerms?.allowedEvents || [];
+    const eventMgmtAllowedEvents = eventMgmtPerms?.allowedEvents || [];
+    
+    // If specific perms are defined, use them.
+    // If they are empty (like for a Super Admin), we will default to events marked as finance_managed = true
+    const baseAllowedEvents = financeAllowedEvents.length > 0 ? financeAllowedEvents : eventMgmtAllowedEvents;
+
+    const [managedEventIds, setManagedEventIds] = useState([]);
+    useEffect(() => {
+        const fetchManagedEvents = async () => {
+            const { data } = await supabase.from('calendar').select('id').eq('finance_managed', true);
+            if (data) setManagedEventIds(data.map(e => e.id));
+        };
+        fetchManagedEvents();
+    }, []);
+
+    const activeAllowedEvents = baseAllowedEvents.length > 0 ? baseAllowedEvents : managedEventIds;
 
     // Safety redirect if current tab is not allowed
     useEffect(() => {
@@ -655,13 +672,13 @@ const FinanceManager = () => {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                 >
-                    {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={allowedEvents} />}
+                    {activeTab === 'dashboard' && allowedTabs.includes('dashboard') && <FinancialDashboard allowedEvents={activeAllowedEvents} />}
                     
-                    {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={allowedEvents} />}
+                    {activeTab === 'summary' && allowedTabs.includes('summary') && <FinancialSummaryReport allowedEvents={activeAllowedEvents} />}
 
-                    {activeTab === 'events' && (allowedTabs.includes('events') || allowedEvents.length > 0) && <EventFinance allowedEvents={allowedEvents} />}
+                    {activeTab === 'events' && (allowedTabs.includes('events') || activeAllowedEvents.length > 0) && <EventFinance allowedEvents={activeAllowedEvents} />}
 
-                    {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={allowedEvents} />}
+                    {activeTab === 'users' && allowedTabs.includes('users') && <UserPayments allowedEvents={activeAllowedEvents} />}
                     
                     {activeTab === 'transactions' && (
                         <div className="space-y-6">

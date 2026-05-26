@@ -69,30 +69,36 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                 if (eError) throw eError;
 
                 if (payments) {
-                    const totalRevenue = payments.reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    let filteredPayments = payments || [];
+                    if (isRestricted) {
+                        const allowedIds = allowedEvents.map(Number);
+                        filteredPayments = payments.filter(p => p.event_id && allowedIds.includes(Number(p.event_id)));
+                    }
+
+                    const totalRevenue = filteredPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
                     
                     // Yearly Breakdown (Focus on 2026)
-                    const rev2026 = payments.filter(p => new Date(p.created_at).getFullYear() === 2026)
+                    const rev2026 = filteredPayments.filter(p => new Date(p.created_at).getFullYear() === 2026)
                         .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     // License Breakdown
-                    const fullLicRev = payments.filter(p => 
+                    const fullLicRev = filteredPayments.filter(p => 
                         ['full_license', 'membership'].includes(p.payment_type) || 
                         (p.payment_type !== 'event_entry_fee' && Number(p.amount) >= 400)
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-                    const tempLicRev = payments.filter(p => 
+                    const tempLicRev = filteredPayments.filter(p => 
                         ['temporary_license', 'temp_license'].includes(p.payment_type) || 
                         (p.payment_type !== 'event_entry_fee' && Number(p.amount) < 400 && Number(p.amount) > 0)
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     // Event Entry Breakdown
-                    const eventEntryRev = payments.filter(p => p.payment_type === 'event_entry_fee')
+                    const eventEntryRev = filteredPayments.filter(p => p.payment_type === 'event_entry_fee')
                         .reduce((acc, curr) => acc + Number(curr.amount), 0);
 
                     // Revenue by Event
                     const eventMap = {};
-                    payments.filter(p => p.payment_type === 'event_entry_fee').forEach(p => {
+                    filteredPayments.filter(p => p.payment_type === 'event_entry_fee').forEach(p => {
                         const eventName = p.calendar?.event_name || p.metadata?.event_name || 'Unknown Event';
                         const eventId = p.event_id || 'manual';
                         if (!eventMap[eventId]) {
@@ -109,8 +115,8 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                         tempLicRev,
                         allLicRev: fullLicRev + tempLicRev,
                         eventEntryRev,
-                        totalTransactions: payments.length,
-                        activePlayers: new Set(payments.map(p => p.player_id)).size,
+                        totalTransactions: filteredPayments.length,
+                        activePlayers: new Set(filteredPayments.map(p => p.player_id)).size,
                         eventRevenueList
                     });
 
@@ -125,17 +131,17 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     const currentYear = new Date().getFullYear();
                     const monthlyData = months.map((m, i) => {
-                        const monthRev = payments.filter(p => {
+                        const monthRev = filteredPayments.filter(p => {
                             const d = new Date(p.created_at);
                             return d.getMonth() === i && d.getFullYear() === currentYear;
                         }).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-                        const licenseRev = payments.filter(p => {
+                        const licenseRev = filteredPayments.filter(p => {
                             const d = new Date(p.created_at);
                             return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type !== 'event_entry_fee';
                         }).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-                        const entryRev = payments.filter(p => {
+                        const entryRev = filteredPayments.filter(p => {
                             const d = new Date(p.created_at);
                             return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type === 'event_entry_fee';
                         }).reduce((acc, curr) => acc + Number(curr.amount), 0);
