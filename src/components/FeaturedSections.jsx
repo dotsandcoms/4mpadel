@@ -527,10 +527,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
                 ref={scrollRef}
-                className={`flex overflow-x-auto gap-4 pb-5 snap-x snap-mandatory scrollbar-hide -mx-6 px-6 w-full ${
+                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide -mx-6 px-6 w-full ${
                     isSlider
-                        ? 'md:flex md:overflow-x-auto md:pb-8 md:-mx-0 md:px-0'
-                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:pb-0 md:-mx-0 md:px-0'
+                        ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8 md:-mx-0 md:px-0'
+                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0 md:-mx-0 md:px-0'
                 }`}
             >
                 {items?.map((t, i) => (
