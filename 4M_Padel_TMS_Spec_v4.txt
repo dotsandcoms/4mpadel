@@ -1,0 +1,776 @@
+4M PADEL
+Tournament Management System
+High-Level Prototype Specification  |  v4.0
+
+
+1.  System Overview
+The 4M Padel TMS is fully integrated into the 4M Padel website. The federation (SAPA / 4M Padel) sits at the centre — sanctioning events, managing player registrations, and controlling rankings. All data synchronises in real time.
+
+System Entity Overview
+
+FEDERATION
+4M Padel / SAPA
+
+          ▼ sanctions & approves          ▼ manages rankings
+ORGANISATIONS
+Event companies / clubs
+organise →
+TOURNAMENTS
+Sanctioned events
+← played by
+PLAYERS
+4M Padel accounts
+earn →
+RANKING POINTS
+          ▼ held at                                                  ▼ registered with
+CLUBS / VENUES
+e.g. KCC, 360 Padel
+
+EVENT RESULTS
+Draws, scores, history
+
+FEDERATION
+SAPA — approves & publishes
+The federation (SAPA / 4M Padel) is at the centre — it creates the platform, sanctions events, manages player registrations, and controls rankings. Organisations create and run tournaments. Players register with the federation and earn ranking points through sanctioned events.
+
+2.  User Roles
+Role
+Key Responsibilities
+Registered Player
+Enter tournaments, confirm partnership, view draw & live results, manage profile & favourites
+Tournament Organiser
+Create tournaments, manage draws, run AI scheduler, enter scores, upload media
+Event Admin (co-admin)
+Assigned per event — same access as organiser for that event only
+Federation Admin
+Approve tournaments & results, manage Ranking Points Manager, curate feed, oversee all events
+
+★  Premium Features (Future Phase):  Certain features — such as advanced analytics, extended media storage, priority scheduling, and enhanced feed visibility — will be reserved for Premium members in a future phase. The system architecture should be built with this in mind from the start, using feature flags so premium tiers can be activated without a rebuild.
+
+3.  Tournament Lifecycle
+Tournament Lifecycle
+1.  DRAFT   — Organiser builds tournament
+     ▼
+2.  SUBMITTED   — Sent to federation admin
+     ▼
+3.  APPROVED   — Live on website — entries open
+     ▼
+4.  IN PROGRESS 🔴 LIVE   — Draw published — live results on website
+     ▼
+5.  RESULTS SUBMITTED   — Organiser sends to admin for approval
+     ▼
+6.  COMPLETED ✓   — Points allocated & published
+     ↕  at any stage:
+✕  REJECTED   — Admin returns with notes. Organiser edits and resubmits.
+
+4.  Tournament Creation
+The organiser completes a structured setup form. Submitted to federation admin for approval before going live.
+
+4.1  Tournament Details Form
+Field
+Notes
+Tournament name
+
+Tier
+Bronze / Silver / Gold / Super Gold / Major
+Category / Division
+1 / 2 / 3 / 4
+Format
+Elimination + Plates  OR  Group Stage → Upper / Lower Bracket
+Match format per division
+See Section 7 — configured per category within the event
+Tournament Director name
+
+Tournament Director contact
+Phone and email — displayed on tournament page
+Venue name & full address
+
+Indoor / Outdoor
+Toggle per court
+Number of courts & court labels
+Courts ranked best → worst for AI scheduling priority
+Event start & end date
+
+Daily play times
+Start and end time per day
+Entry / registration closing date & time
+
+Entry fee per player
+Amount (ZAR or configured currency)
+Prize money & breakdown
+e.g. Winner R5 000, Runner-up R2 500, SF R1 000
+Sponsors
+Names and logo uploads
+Balls to be used
+Brand and model
+Licences required
+Toggle yes/no. If yes, specify licence type(s)
+Max ranking points per team to qualify
+Per category — teams above threshold cannot enter that division
+Event poster
+Image upload — shown on tournament page
+Sponsor logos
+Multiple image uploads
+Back draw / Plate options
+See Section 6
+Multiple event admins
+Organiser adds co-admins by searching registered users
+Additional notes
+Visible to players on the entry page
+
+5.  Player Entry, Payments & Cancellations
+Player Entry Flow
+Player finds approved tournament on 4M Padel website
+▼
+System checks: valid 4M Padel account? ✓
+▼
+System checks: licence valid (if required)? ✓
+▼
+System checks: team ranking points ≤ category maximum? ✓
+▼
+Player nominates partner → partner gets WhatsApp notification
+▼
+Entry fee paid in full by submitting player
+▼
+Partner confirms → ENTRY CONFIRMED ✓
+If max entries reached → waitlist. If checks fail → player shown reason and guidance.
+
+
+5.1  Licence Validation
+	•	If a licence is required, the system checks each player's licence status on their profile
+	•	Players without a valid licence are blocked and shown guidance on how to obtain one
+	•	Licence fee must be paid and recorded on the player profile before entry is permitted
+
+
+5.2  Cancellations, Withdrawals & Substitutions
+Action
+Condition
+Outcome
+Full cancellation
+Before registration closing date
+Full refund minus admin cancellation fee
+Withdrawal after closing
+After registration closing date
+No refund. Admin fee charged.
+Partner substitution (before draw)
+Before draw is published
+Admin substitution fee charged. New partner must confirm.
+Partner substitution (after draw)
+After draw is published
+At organiser / admin discretion. Fee charged.
+Walkover (no-show)
+During event
+Recorded as walkover. No refund.
+
+	•	All fees configurable by the federation admin
+	•	System generates a financial summary per tournament for the organiser
+
+6.  Tournament Formats & Back Draw Options
+Format A — Single Elimination with Plates
+
+MAIN DRAW
+Knockout bracket — seeded
+
+PLATE / BACK DRAW
+Round 1 losers — second chance
+
+Organiser configuration options for Back Draw
+
+	•	Toggle Plate / Back Draw on or off
+	•	Set which rounds feed the Plate (default: Round 1 losers; option to include later rounds)
+	•	Configure Plate draw size (auto or manual)
+	•	Set whether Plate has a 3rd place playoff
+	•	Set separate points for Plate positions in the points table
+	•	Consolation draw option (for Plate losers) if desired
+	•	R16 / R32 playoff bracket options (e.g. 9th place, 10th place, 11th/12th — as per points table columns)
+
+
+Format B — Group Stage → Upper & Lower Bracket
+
+PHASE 1: Round-Robin Groups — all pairs play each other within their group
+▼  Top pairs advance  ▼
+UPPER BRACKET
+Win = stay  |  Lose = drop to Lower
+
+LOWER BRACKET
+Second chance  |  Lose = eliminated
+▼  Grand Final  ▼
+GRAND FINAL: Upper Bracket winner vs Lower Bracket winner
+
+Organiser configuration options
+
+	•	Number of groups and pairs per group
+	•	How many pairs advance per group (e.g. top 2)
+	•	Group standings tiebreak: wins → sets → games
+	•	Grand Final: single match or best of two
+	•	3rd place playoff: on/off
+	•	Playoff bracket options matching the points table (9th place, 10th place, 11th/12th, 13th–16th, etc.)
+
+7.  Match Format Configuration
+The organiser configures the match format for each category within the tournament. This is set during tournament creation and applies to all matches in that category.
+
+7.1  Sets & Games
+Option
+Description
+Best of 3 sets (full)
+Each set played to 6 games. Third set if required. Standard tournament format.
+Best of 3 sets with match tiebreak
+First two sets to 6. Third set replaced by a match tiebreak to 10 points (win by 2).
+2 sets + super tiebreak
+Two full sets. If one set each, a super tiebreak to 10 decides. Most common club format.
+Single set
+One set to 6 games. Used for group stages or time-limited formats.
+Pro set
+First to 8 games (or configurable number). No second set.
+
+7.2  Scoring Options
+Option
+Description
+Standard scoring
+Normal game scoring: 15, 30, 40, deuce, advantage.
+No-ad scoring (Golden Point)
+At deuce (40-40), one decisive golden point is played. Receiver chooses side. Speeds up matches.
+Short sets
+Sets played to 4 games (win by 2) rather than 6. Used for Americano or time-restricted events — not in Phase 1.
+
+7.3  Configuring Format per Category
+The organiser sets the match format independently for each category within the event. Example:
+
+Category
+Sets format
+Scoring
+Cat 1
+Best of 3 sets with match tiebreak
+Standard scoring
+Cat 2
+2 sets + super tiebreak
+No-ad (golden point)
+Cat 3
+2 sets + super tiebreak
+No-ad (golden point)
+Cat 4
+Single set
+No-ad (golden point)
+
+	•	The score entry interface adapts automatically to the configured format
+	•	Scorecards on the public draw display the format used for each category
+	•	The federation admin can set default formats per category as a template for organisers
+
+8.  Draw Creation & AI-Assisted Scheduling
+Draw Creation & AI Schedule Flow
+Entry deadline passes — list locked
+▼
+Organiser sets seedings (system pre-fills from ranking points)
+▼
+System generates draw (bracket or groups)
+▼
+Organiser triggers AI Schedule Generator →
+ answers questions about courts, rest times, match limits, priorities
+▼
+AI builds conflict-free schedule with court priority applied
+▼
+Organiser reviews, adjusts, then PUBLISHES
+▼
+Draw & schedule go live → tournament IN PROGRESS 🔴
+
+
+8.1  AI Scheduler — Questions Asked
+Question
+Example answer
+Event start/end times per day?
+Day 1: 08:00–20:00, Day 2: 08:00–18:00
+Max matches per player per day?
+3 matches
+Minimum rest between matches?
+90 minutes
+Courts available each day and times?
+Courts 1–4 all day; Court 5 from 12:00 only
+Court quality ranking (best to worst)?
+Centre Court > Court 1 > Court 2 > Court 3…
+Which matches get priority courts?
+Finals, Semis, then Cat 1 priority over lower categories
+Estimated match duration per category?
+Cat 1: 90 min, Cat 2: 75 min, Cat 3–4: 60 min
+Fixed time slots (e.g. Grand Final time)?
+e.g. Grand Final: Sunday 15:00 Centre Court
+Buffer time between matches on same court?
+15 minutes
+Any player or pair unavailability?
+e.g. Pair X unavailable Saturday morning
+
+	•	AI generates a conflict-free schedule respecting all constraints
+	•	Organiser reviews and can manually adjust before publishing
+	•	Any constraint conflicts flagged clearly for organiser to resolve
+
+9.  Score Entry & Live Results
+Results, Approval & Points Flow
+Organiser enters match scores → draw updates live on website
+▼
+All matches complete → Organiser submits final results
+▼
+Federation Admin reviews results, standings & points to be awarded
+▼
+Admin APPROVES results
+▼
+System allocates ranking points to all players automatically
+▼
+Players receive WhatsApp: points earned + new ranking position
+▼
+Rankings updated on website → Feed auto-generates highlights post
+
+
+	•	Live badge shown on tournament card on 4M Padel website during In Progress
+	•	Draw, group tables, and match scores refresh automatically as results are entered
+	•	Any visitor can follow live results without logging in
+	•	Walkover and retirement options with notes
+	•	Score corrections possible during event; post-submission corrections require admin to reset
+
+10.  Ranking Points Manager
+Owned entirely by the federation admin. Points tables below reflect the current 4M Padel system and are fully editable in the Ranking Manager.
+
+● MAJOR
+Cat
+Winner
+Finalist
+Semi-Final
+QF (5-8)
+R16 – 9th
+R16 – 10th
+R16 – 11/12
+R16 – 13-16
+R32 – 17th+
+CAT 1
+2600
+1560
+936
+468
+410
+351
+293
+234
+211
+CAT 2
+780
+468
+234
+117
+103
+88
+74
+59
+53
+CAT 3
+312
+188
+94
+47
+41
+36
+30
+24
+22
+CAT 4
+125
+113
+47
+24
+21
+18
+15
+12
+11
+
+● SUPER GOLD
+Cat
+Winner
+Finalist
+Semi-Final
+QF (5-8)
+R16 – 9th
+R16 – 10th
+R16 – 11/12
+R16 – 13-16
+R32 – 17th+
+CAT 1
+1500
+900
+540
+270
+237
+203
+169
+135
+122
+CAT 2
+450
+270
+162
+98
+88
+78
+69
+59
+54
+CAT 3
+180
+108
+65
+39
+35
+32
+28
+24
+22
+CAT 4
+72
+44
+26
+16
+14
+13
+11
+10
+9
+
+● GOLD
+Cat
+Winner
+Finalist
+Semi-Final
+QF (5-8)
+R16 – 9th
+R16 – 10th
+R16 – 11/12
+R16 – 13-16
+R32 – 17th+
+CAT 1
+1000
+600
+360
+180
+158
+135
+113
+90
+81
+CAT 2
+300
+180
+108
+54
+48
+41
+34
+27
+25
+CAT 3
+120
+72
+44
+22
+19
+17
+14
+11
+10
+CAT 4
+48
+29
+18
+9
+8
+7
+6
+5
+4
+
+● SILVER
+Cat
+Winner
+Finalist
+Semi-Final
+QF (5-8)
+R16 – 9th
+R16 – 10th
+R16 – 11/12
+R16 – 13-16
+R32 – 17th+
+CAT 1
+600
+360
+180
+90
+79
+68
+57
+45
+41
+CAT 2
+180
+108
+65
+33
+29
+25
+21
+17
+15
+CAT 3
+72
+44
+26
+13
+12
+10
+9
+7
+6
+CAT 4
+29
+18
+11
+6
+5
+4
+4
+3
+3
+
+● BRONZE
+Cat
+Winner
+Finalist
+Semi-Final
+QF (5-8)
+R16 – 9th
+R16 – 10th
+R16 – 11/12
+R16 – 13-16
+R32 – 17th+
+CAT 1
+300
+180
+90
+45
+40
+35
+30
+25
+23
+CAT 2
+120
+72
+44
+22
+19
+17
+14
+11
+10
+CAT 3
+48
+29
+18
+9
+8
+7
+6
+5
+4
+CAT 4
+20
+12
+7
+4
+4
+3
+3
+2
+2
+
+Ranking Manager Configuration Options
+Setting
+Options
+Tournaments counted towards ranking
+e.g. Best 8 from last 12 months, or all tournaments
+Ranking period
+Rolling 12-month window  OR  annual reset (configurable reset date)
+Points expiry
+Points from tournaments older than X months excluded or weighted
+Ranking recalculation
+After each approved tournament, or on a fixed schedule
+Minimum events to appear on ranking
+e.g. minimum 3 counted events
+Rankings per category
+Separate rankings per Cat 1–4 and overall
+Bonus points
+Admin can award bonus points for special events
+Manual points adjustment
+Admin adjusts any player's points with a reason note (audited log)
+
+11.  Website Feed & Social Features
+11.1  The Feed
+Content Type
+How it appears
+Live tournament results
+Auto-posted as scores are entered in a starred live tournament
+Tournament winners
+Auto-generated post when tournament completes: winner, finalist, scores
+Ranking jumps
+Auto-post when a player moves significantly up the rankings
+Favourite player results
+Appears in the Favourites tab for users who follow that player
+Event media
+Photo album and YouTube playlist linked to the tournament entry
+
+	•	Feed has two tabs: All Activity and Favourites (Favourites visible to logged-in users only)
+	•	Admin stars tournaments to feature their live results and post-event summary in the main feed
+	•	Players can favourite other players from their profile page
+
+11.2  Auto-Generated Post Examples
+Trigger
+Post
+Tournament completed
+🏆 [Name] & [Name] win the [Tournament]! Defeated [Finalist] [score] in the final.
+Ranking jump
+📈 [Player] moves from #34 to #18 after a semifinal at [Tournament]!
+Rankings updated
+🎾 Rankings updated after [Tournament]. [Player] is the new Cat 1 leader.
+Live match result
+⚡ LIVE — [Pair] defeat [Pair] [score] in the QF at [Tournament].
+
+12.  WhatsApp Notifications
+Integrated via WhatsApp Business API (Twilio / 360dialog). Players opt in at registration.
+
+Trigger
+Recipient
+Message summary
+Partner entry invite
+Nominated partner
+You've been nominated for [Tournament]. Confirm: [link]
+Entry confirmed
+Both players
+Entry confirmed for [Tournament]. Fee received.
+Waitlist spot opened
+Waitlisted pair
+A spot opened in [Tournament]. Confirm by [deadline]: [link]
+Draw published
+All entrants
+Draw for [Tournament] is live. View matches: [link]
+Match reminder
+Both players
+Next match: vs [Opponent] on [Court] at [Time]
+Score entered
+Both pairs
+Result: [Pair] vs [Pair] — [Score]. View draw: [link]
+Ranking points allocated
+Each player
+You earned [X] pts from [Tournament]. New total: [Y]. Ranking: #[Z]
+Results rejected
+Organiser
+Results returned for [Tournament]. Notes: [reason]. Please resubmit.
+Broadcast
+All entrants
+Custom message from admin to all tournament entrants
+
+13.  Player Profiles & History
+Data
+Notes
+Personal details
+Name, photo, club, contact, location
+Licence(s)
+Type, number, expiry — verified by admin
+Current ranking
+Per category — updated after each approved tournament
+Total ranking points
+Running total and per-tournament breakdown
+Tournament history
+All events entered — category, result, points earned
+Full match history
+Every match: opponent pair, score, round, tournament, date
+Partner history
+All partners played with and combined results
+Favourite players
+Players the user follows in the feed
+WhatsApp preferences
+Notification opt-in settings
+Payment history
+Entry fees, cancellation fees, substitution fees
+
+	•	All match scores permanently stored and linked to both players' profiles
+	•	Historical data never deleted — completed tournaments archived
+	•	Head-to-head record between any two players calculable from match history
+	•	Player profiles publicly visible on the 4M Padel website
+
+14.  Event Media
+	•	Organiser and event admins can upload a photo album to any tournament
+	•	Photo album displayed on the tournament's page on the 4M Padel website
+	•	Organiser links a YouTube playlist to the tournament (highlights / full matches)
+	•	YouTube playlist embedded on the tournament page
+	•	Media syncs with the tournament calendar entry automatically
+	•	Admin can feature media in the main feed
+
+
+15.  Key Pages Summary
+Page
+Who
+Content
+Tournament Calendar
+Public
+All tournaments — upcoming, live 🔴, completed
+Tournament Detail
+Public
+Info, draw, live results, schedule, prizes, sponsors, media
+Live Draw / Results
+Public
+Auto-refreshing bracket / group table
+Rankings Leaderboard
+Public
+Overall and per-category. Updated after each event.
+Player Profile
+Public
+Stats, ranking, full match & tournament history
+Website Feed
+Public / Player
+All Activity tab + Favourites tab (logged in)
+Organiser Dashboard
+Organiser
+Create, manage, enter scores for all their events
+AI Schedule Builder
+Organiser
+Q&A then generated schedule with manual override
+Admin Dashboard
+Admin
+All tournaments, approvals, users, feed curation
+Ranking Points Manager
+Admin only
+All points tables + ranking configuration
+
+
+16.  Open Questions
+#
+Question
+1
+Which WhatsApp API provider — Twilio, 360dialog, or other?
+2
+Which payment gateway — PayFast, Peach Payments, Stripe, or other?
+3
+Are rankings per individual player, per pair, or both?
+4
+Should the Plate draw be on by default or opt-in per tournament?
+5
+What is the admin cancellation fee structure — fixed amount or percentage?
+6
+Single federation admin account or multiple admin users?
+7
+What is the existing 4M Padel website stack the TMS must integrate with?
+8
+Should licence validation be automated (API) or manual (admin confirms)?
+9
+Are there age or gender categories within each division?
+10
+Should the federation admin set default match formats per category as a template?
+
+
+4M Padel  —  Tournament Management System
+High-Level Prototype Spec  |  v4.0  |  For Developer Use

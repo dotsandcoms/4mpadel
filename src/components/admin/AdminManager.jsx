@@ -293,6 +293,8 @@ const AdminManager = () => {
                                         <td className="px-6 py-4">
                                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${admin.role === 'super_admin'
                                                     ? 'bg-padel-green/20 text-padel-green border border-padel-green/30'
+                                                    : admin.role === 'organiser'
+                                                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                                     : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
                                                 }`}>
                                                 {admin.role.replace('_', ' ')}
@@ -443,15 +445,24 @@ const AdminManager = () => {
                                         <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Role</label>
                                         <select
                                             value={formData.role}
-                                            onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-padel-green"
+                                            onChange={(e) => {
+                                                const val = e.target.value;
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    role: val,
+                                                    allowed_tabs: val === 'organiser' ? ['event-mgmt'] : prev.allowed_tabs,
+                                                    module_permissions: val === 'organiser' ? { 'event-mgmt': { allowedEvents: [] } } : prev.module_permissions
+                                                }));
+                                            }}
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-padel-green text-sm"
                                         >
                                             <option value="custom">Custom Permissions</option>
+                                            <option value="organiser">Tournament Organiser</option>
                                             <option value="super_admin">Super Admin (All Access)</option>
                                         </select>
                                     </div>
 
-                                    {formData.role === 'custom' && (
+                                    {(formData.role === 'custom' || formData.role === 'organiser') && (
                                         <div className="space-y-6">
                                             <div>
                                                 <label className="block text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">Allowed Modules</label>
