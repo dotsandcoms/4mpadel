@@ -379,7 +379,6 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const scrollRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
-    const [mobilePage, setMobilePage] = useState(0);
 
     // Image/Card content for the right/bottom side of the hero section
     const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
@@ -394,16 +393,6 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     };
 
     const scroll = (direction) => {
-        if (window.innerWidth < 768) {
-            const totalPages = Math.ceil((items?.length || 0) / 3);
-            if (direction === 'right') {
-                setMobilePage((prev) => (prev + 1) % totalPages);
-            } else {
-                setMobilePage((prev) => (prev - 1 + totalPages) % totalPages);
-            }
-            return;
-        }
-
         if (scrollRef.current) {
             const { scrollLeft, clientWidth } = scrollRef.current;
             const scrollAmount = clientWidth * 0.8;
@@ -449,9 +438,6 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         }
     }, [featuredTournaments, liveTournaments, liveFeaturedTournaments]);
 
-    const mobileItems = items?.slice(mobilePage * 3, (mobilePage + 1) * 3) || [];
-    const totalMobilePages = Math.ceil((items?.length || 0) / 3);
-    const showMobileArrows = isSlider && totalMobilePages > 1;
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
 
@@ -537,49 +523,23 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 
     const imageContent = isGridSection ? (
-        <div className="relative z-10 w-full mt-4 lg:mt-0">
-            <div className="md:hidden">
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={mobilePage}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        transition={{ duration: 0.3 }}
-                        className="flex flex-col gap-5"
-                    >
-                        {mobileItems.map((t, i) => (
-                            <TournamentCard
-                                key={t.id || t.eventId}
-                                index={i}
-                                title={t.event_name || t.eventName}
-                                label={t.sapa_status || t.sapaStatus || 'Tournament'}
-                                date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
-                                image={t.image_url || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
-                                linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
-                                drawPath={t.event_name ? ((t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null) : null}
-                                buttonLabel={t.event_name ? "VIEW DETAILS" : "VIEW RESULTS"}
-                                status={t.sapa_status || t.sapaStatus || 'Gold'}
-                                registeredPlayers={t.registered_players || t.registeredPlayers}
-                                rankedinId={t.rankedin_id || t.eventId}
-                                venue={t.venue || t.clubName}
-                                organizerName={t.organizer_name || t.organizerName}
-                                city={t.city}
-                            />
-                        ))}
-                    </motion.div>
-                </AnimatePresence>
-            </div>
-
+        <div className="relative z-10 w-full mt-4 lg:mt-0 min-w-0">
+            {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
                 ref={scrollRef}
-                className={`hidden md:flex ${isSlider
-                    ? 'overflow-x-auto gap-6 pb-8 snap-x snap-mandatory scrollbar-hide'
-                    : 'grid grid-cols-3 gap-6'
-                    }`}
+                className={`flex overflow-x-auto gap-4 pb-5 snap-x snap-mandatory scrollbar-hide -mx-6 px-6 w-full ${
+                    isSlider
+                        ? 'md:flex md:overflow-x-auto md:pb-8 md:-mx-0 md:px-0'
+                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:pb-0 md:-mx-0 md:px-0'
+                }`}
             >
                 {items?.map((t, i) => (
-                    <div key={t.id || t.eventId} className={isSlider ? "flex-none w-[calc(33.333%-16px)] snap-start" : ""}>
+                    <div
+                        key={t.id || t.eventId}
+                        className={`flex-none w-[290px] snap-start ${
+                            isSlider ? 'md:w-[calc(33.333%-16px)]' : 'md:w-full'
+                        }`}
+                    >
                         <TournamentCard
                             index={i}
                             title={t.event_name || t.eventName}
@@ -600,10 +560,11 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ))}
             </div>
 
-            {((isSlider && window.innerWidth >= 768) || (showMobileArrows && window.innerWidth < 768)) && (
-                <div className="flex gap-4 z-20 mt-8 justify-center min-h-[44px]">
+            {/* Pagination / Scroll buttons - visible on mobile when > 1 item, on desktop when isSlider */}
+            {(isSlider || (items && items.length > 1)) && (
+                <div className={`flex gap-4 z-20 mt-8 justify-center min-h-[44px] ${isSlider ? '' : 'md:hidden'}`}>
                     <AnimatePresence>
-                        {(canScrollLeft || (window.innerWidth < 768 && mobilePage > 0)) && (
+                        {canScrollLeft && (
                             <motion.button
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -617,7 +578,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                                 <ChevronLeft className="w-5 h-5" />
                             </motion.button>
                         )}
-                        {(canScrollRight || (window.innerWidth < 768 && mobilePage < totalMobilePages - 1)) && (
+                        {canScrollRight && (
                             <motion.button
                                 initial={{ opacity: 0, scale: 0.8 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -759,7 +720,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             {textContent}
                         </div>
                         {/* Cards take 3 columns on the right */}
-                        <div className="lg:col-span-3 w-full">
+                        <div className="lg:col-span-3 w-full min-w-0">
                             {imageContent}
                         </div>
                     </>
