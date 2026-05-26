@@ -234,12 +234,14 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
 
     const colors = getStatusColors(status);
 
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
     return (
         <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: index * 0.15 }}
+            transition={{ duration: 0.6, delay: isMobile ? 0 : index * 0.15 }}
             className={`relative flex flex-col w-full min-h-[225px] md:h-[260px] h-auto rounded-[24px] overflow-hidden group cursor-pointer border-2 ${colors.border} ${colors.hover} transition-all duration-500 bg-[#060913] shadow-2xl`}
             onClick={() => navigate(linkPath)}
         >
@@ -527,10 +529,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
                 ref={scrollRef}
-                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide -mx-6 px-6 w-full ${
+                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide w-full ${
                     isSlider
-                        ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8 md:-mx-0 md:px-0'
-                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0 md:-mx-0 md:px-0'
+                        ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8'
+                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0'
                 }`}
             >
                 {items?.map((t, i) => (
@@ -712,7 +714,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     return (
         <section className={`relative py-16 lg:py-24 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
-            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-6 xl:gap-12 items-center' : 'grid lg:grid-cols-2 gap-8 lg:gap-16 items-center'}`}>
+            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-6 xl:gap-12 items-start' : 'grid lg:grid-cols-2 gap-8 lg:gap-16 items-start'}`}>
                 {isGridSection ? (
                     <>
                         {/* Text takes 1 column on the left */}
