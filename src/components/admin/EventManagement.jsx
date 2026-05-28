@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, DollarSign, Users, Calendar } from 'lucide-react';
+import { Trophy, DollarSign, GitBranch } from 'lucide-react';
 import EventFinance from './EventFinance';
+import EventDraws from './EventDraws';
 
 const EventManagement = ({ allowedEvents }) => {
     const [activeTab, setActiveTab] = useState('finance');
 
     const tabs = [
         { id: 'finance', label: 'Event Finance', icon: DollarSign },
-        // Future tabs could go here (e.g. Participants, Draws, Settings)
+        { id: 'draws', label: 'Draws & Bracket Setup', icon: GitBranch },
     ];
 
     return (
@@ -55,10 +56,12 @@ const EventManagement = ({ allowedEvents }) => {
                     transition={{ duration: 0.2 }}
                 >
                     {activeTab === 'finance' && <EventFinance allowedEvents={allowedEvents} isEventManagementModule={true} />}
+                    {activeTab === 'draws' && <EventDraws allowedEvents={allowedEvents} isEventManagementModule={true} />}
                 </motion.div>
             </AnimatePresence>
         </div>
     );
 };
+
 
 export default EventManagement;

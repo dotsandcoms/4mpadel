@@ -7,6 +7,8 @@ import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import KnockoutBracket from '../components/KnockoutBracket';
+import { adaptLocalDrawToKnockoutBracket, parseScoreString } from '../utils/tmsAdapter';
+import { calculateGroupStandings } from '../utils/tmsDrawEngine';
 
 const TournamentDraw = () => {
     const { id: idOrSlug } = useParams();
@@ -21,6 +23,8 @@ const TournamentDraw = () => {
     const [selectedDrawId, setSelectedDrawId] = useState('');
     const [drawData, setDrawData] = useState(null);
     const [tournamentDetails, setTournamentDetails] = useState(null);
+    const [isLocal, setIsLocal] = useState(false);
+    const [localEventData, setLocalEventData] = useState(null);
 
     // New State for Results & Matches
     const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
@@ -30,59 +34,73 @@ const TournamentDraw = () => {
     const [matches, setMatches] = useState([]);
     const [divisionFilter, setDivisionFilter] = useState('All');
 
-    // Resolve slug to RankedIn ID if necessary
+    // Resolve slug to RankedIn ID or Local Calendar ID
     useEffect(() => {
-        const resolveId = async () => {
-            if (/^\d+$/.test(idOrSlug)) {
-                setResolvedId(idOrSlug);
-                setLookupLoading(false);
-                return;
-            }
-
+        const resolveSlugOrId = async () => {
+            setLookupLoading(true);
             try {
-                const { data, error: sbError } = await supabase
-                    .from('calendar')
-                    .select('rankedin_url')
-                    .eq('slug', idOrSlug)
-                    .single();
+                const isNumericId = /^\d+$/.test(idOrSlug);
+                let query = supabase.from('calendar').select('*');
+                
+                if (isNumericId) {
+                    query = query.eq('id', parseInt(idOrSlug, 10));
+                } else {
+                    query = query.eq('slug', idOrSlug);
+                }
+
+                const { data: eventData, error: sbError } = await query.maybeSingle();
 
                 if (sbError) throw sbError;
 
+                if (!eventData) {
+                    console.error('Could not find tournament for slug/id:', idOrSlug);
+                    setLookupLoading(false);
+                    return;
+                }
+
+                setLocalEventData(eventData);
+
                 let rId = null;
-                if (data.rankedin_url) {
-                    const match = data.rankedin_url.match(/tournament\/(\d+)/i);
+                if (eventData.rankedin_url) {
+                    const match = eventData.rankedin_url.match(/tournament\/(\d+)/i);
                     if (match) rId = match[1];
                 }
 
                 if (rId) {
+                    setIsLocal(false);
                     setResolvedId(rId);
                 } else {
-                    console.error('Could not find RankedIn ID for slug:', idOrSlug);
+                    setIsLocal(true);
+                    setResolvedId(eventData.id);
+                    setTournamentDetails({
+                        eventName: eventData.event_name,
+                        ...eventData
+                    });
                 }
             } catch (err) {
-                console.error('Error resolving slug:', err);
+                console.error('Error resolving slug/id:', err);
             } finally {
                 setLookupLoading(false);
             }
         };
-        resolveId();
+        resolveSlugOrId();
     }, [idOrSlug]);
 
     const loading = lookupLoading || apiLoading;
 
-    // Initial fetch for tournament details
+    // Initial fetch for tournament details (RankedIn)
     useEffect(() => {
-        if (!resolvedId) return;
+        if (isLocal || !resolvedId) return;
         const fetchTournamentDetails = async () => {
             const details = await getTournamentDetails(resolvedId);
             if (details) setTournamentDetails(details);
         };
         fetchTournamentDetails();
-    }, [resolvedId, getTournamentDetails]);
+    }, [isLocal, resolvedId, getTournamentDetails]);
 
-    // Initial fetch for the classes mapping to this tournament ID
+    // Initial fetch for the classes mapping to this tournament ID (RankedIn)
     useEffect(() => {
-        if (!resolvedId) return;
+        if (isLocal || !resolvedId) return;
         const fetchClasses = async () => {
             const data = await getTournamentClasses(resolvedId);
             setClasses(data);
@@ -91,7 +109,51 @@ const TournamentDraw = () => {
             }
         };
         fetchClasses();
-    }, [resolvedId, getTournamentClasses]);
+    }, [isLocal, resolvedId, getTournamentClasses]);
+
+    // Fetch local classes/divisions (Local TMS)
+    useEffect(() => {
+        if (!isLocal || !resolvedId) return;
+        const fetchLocalDivisions = async () => {
+            try {
+                const { data: dbDivs, error: sbErr } = await supabase
+                    .from('tournament_divisions')
+                    .select('id, name')
+                    .eq('event_id', resolvedId);
+
+                if (sbErr) throw sbErr;
+
+                if (dbDivs && dbDivs.length > 0) {
+                    const enrichedDivs = await Promise.all(dbDivs.map(async (div) => {
+                        const { data: dbDraws } = await supabase
+                            .from('tournament_draws')
+                            .select('id, name, type')
+                            .eq('division_id', div.id);
+
+                        return {
+                            Id: div.id,
+                            Name: div.name,
+                            TournamentDraws: (dbDraws || []).map(draw => ({
+                                Id: draw.id,
+                                Name: draw.name,
+                                Stage: 0,
+                                Strength: 0,
+                                type: draw.type
+                            }))
+                        };
+                    }));
+
+                    setClasses(enrichedDivs);
+                    setSelectedClassId(enrichedDivs[0].Id);
+                } else {
+                    setClasses([]);
+                }
+            } catch (err) {
+                console.error("Local division fetch error:", err);
+            }
+        };
+        fetchLocalDivisions();
+    }, [isLocal, resolvedId]);
 
     // When class changes, default to the last draw (Knockout if available)
     useEffect(() => {
@@ -105,20 +167,68 @@ const TournamentDraw = () => {
         }
     }, [selectedClassId, classes]);
 
-    // Fetch all matches for tournament-wide results (Matches tab)
-    // Fetch all matches for tournament-wide results (Matches tab)
+    // Fetch all matches for tournament-wide results (Matches tab - RankedIn)
     useEffect(() => {
-        if (!resolvedId) return;
+        if (isLocal || !resolvedId) return;
         const fetchMatches = async () => {
             const data = await getTournamentMatches({ tournamentId: resolvedId });
             setMatches(data || []);
         };
         fetchMatches();
-    }, [resolvedId, getTournamentMatches]);
+    }, [isLocal, resolvedId, getTournamentMatches]);
 
-    // Fetch draw data when class or draw changes
+    // Fetch local matches for event-wide results (Matches tab - Local TMS)
     useEffect(() => {
-        if (!selectedClassId || !selectedDrawId || classes.length === 0) return;
+        if (!isLocal || !resolvedId || classes.length === 0) return;
+        const fetchLocalEventMatches = async () => {
+            try {
+                const divIds = classes.map(c => c.Id);
+                const { data: dbMatches, error: sbErr } = await supabase
+                    .from('tournament_matches')
+                    .select(`
+                        *,
+                        division:division_id(name),
+                        draw:draw_id(name),
+                        team_1:team_1_reg_id(id, full_name, partner_name),
+                        team_2:team_2_reg_id(id, full_name, partner_name)
+                    `)
+                    .in('division_id', divIds)
+                    .order('scheduled_time', { ascending: true });
+
+                if (sbErr) throw sbErr;
+
+                const mapped = (dbMatches || []).map(m => {
+                    const isFirstWinner = m.winner_reg_id && m.team_1 && m.winner_reg_id === m.team_1.id;
+                    const isPlayed = m.status === 'completed' || m.status === 'walkover' || m.status === 'retired';
+                    const scoreObj = parseScoreString(m.score, isFirstWinner);
+
+                    return {
+                        Id: m.id,
+                        TournamentClassName: m.division?.name,
+                        TournamentDrawName: m.draw?.name,
+                        Challenger: m.team_1 ? { Name: m.team_1.full_name, Player2Name: m.team_1.partner_name } : null,
+                        Challenged: m.team_2 ? { Name: m.team_2.full_name, Player2Name: m.team_2.partner_name } : null,
+                        Court: m.court_name,
+                        Date: m.scheduled_time || m.created_at,
+                        MatchResult: {
+                            IsPlayed: isPlayed,
+                            WinnerParticipantId: m.winner_reg_id,
+                            Score: scoreObj
+                        }
+                    };
+                });
+
+                setMatches(mapped);
+            } catch (err) {
+                console.error("Local matches fetch error:", err);
+            }
+        };
+        fetchLocalEventMatches();
+    }, [isLocal, resolvedId, classes]);
+
+    // Fetch draw data when class or draw changes (RankedIn)
+    useEffect(() => {
+        if (isLocal || !selectedClassId || !selectedDrawId || classes.length === 0) return;
         const activeClass = classes.find(c => c.Id.toString() === selectedClassId.toString());
         if (!activeClass) return;
         const activeDraw = activeClass.TournamentDraws?.find(d => d.Id.toString() === selectedDrawId.toString());
@@ -131,7 +241,78 @@ const TournamentDraw = () => {
             setDrawData(data);
         };
         fetchDraw();
-    }, [selectedClassId, selectedDrawId, classes, getDrawsForClass]);
+    }, [isLocal, selectedClassId, selectedDrawId, classes, getDrawsForClass]);
+
+    // Fetch draw data when class or draw changes (Local TMS)
+    useEffect(() => {
+        if (!isLocal || !selectedClassId || !selectedDrawId || classes.length === 0) return;
+        const activeClass = classes.find(c => c.Id.toString() === selectedClassId.toString());
+        if (!activeClass) return;
+        const activeDraw = activeClass.TournamentDraws?.find(d => d.Id.toString() === selectedDrawId.toString());
+        if (!activeDraw) return;
+
+        const fetchLocalDrawMatches = async () => {
+            try {
+                const { data: dbMatches, error: sbErr } = await supabase
+                    .from('tournament_matches')
+                    .select(`
+                        *,
+                        team_1:team_1_reg_id(id, full_name, partner_name),
+                        team_2:team_2_reg_id(id, full_name, partner_name)
+                    `)
+                    .eq('draw_id', selectedDrawId)
+                    .order('match_index');
+
+                if (sbErr) throw sbErr;
+
+                if (activeDraw.type === 'group') {
+                    // Standings tabulator
+                    const teamMap = {};
+                    (dbMatches || []).forEach(m => {
+                        if (m.team_1) teamMap[m.team_1.id] = m.team_1;
+                        if (m.team_2) teamMap[m.team_2.id] = m.team_2;
+                    });
+                    const groupTeams = Object.values(teamMap);
+
+                    const standings = calculateGroupStandings(dbMatches || [], groupTeams);
+
+                    const adapted = [{
+                        BaseType: 'RoundRobin',
+                        RoundRobin: {
+                            Name: activeDraw.Name,
+                            Standings: standings.map((s, idx) => ({
+                                Standing: idx + 1,
+                                Played: s.played,
+                                Wins: s.wins,
+                                Losses: s.losses,
+                                MatchPoints: s.points,
+                                ParticipantName: s.name,
+                                DoublesPlayer1Model: { Name: s.name },
+                                DoublesPlayer2Model: s.partnerName ? { Name: s.partnerName } : null
+                            }))
+                        }
+                    }];
+                    setDrawData(adapted);
+                } else {
+                    // Knockout Bracket adapter
+                    const bracketSize = Math.max(2, Math.pow(2, Math.ceil(Math.log2(dbMatches.length + 1))));
+                    const totalRounds = Math.log2(bracketSize);
+
+                    const adapted = adaptLocalDrawToKnockoutBracket(
+                        dbMatches || [],
+                        activeDraw.Name,
+                        'single_elimination',
+                        totalRounds
+                    );
+                    setDrawData(adapted);
+                }
+            } catch (err) {
+                console.error("Local draw fetch error:", err);
+            }
+        };
+        fetchLocalDrawMatches();
+    }, [isLocal, selectedClassId, selectedDrawId, classes]);
+
 
     // Derived State for filtering (Matches tab)
     const uniqueDivisions = useMemo(() => {
