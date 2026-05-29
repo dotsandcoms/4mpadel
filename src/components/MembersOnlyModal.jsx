@@ -41,7 +41,7 @@ const MembersOnlyModal = ({ isOpen }) => {
                                     Members <span className="text-padel-green">Only</span>
                                 </h2>
                                 <p className="text-gray-400 text-lg md:text-xl font-medium max-w-xl mx-auto mb-12 leading-relaxed">
-                                    Access to site features, rankings, and exclusive community content is reserved for our registered members.
+                                    Access to site features, rankings, and exclusive community content is reserved for our registered members. <span className="text-green-300">Registration is Free.</span>
                                 </p>
                                 <div className="flex flex-col sm:flex-row items-center gap-4">
                                     <button
@@ -60,8 +60,8 @@ const MembersOnlyModal = ({ isOpen }) => {
                                 </div>
 
                                 <div className="mt-8">
-                                    <Link 
-                                        to="/" 
+                                    <Link
+                                        to="/"
                                         className="text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors"
                                     >
                                         Back to Home
