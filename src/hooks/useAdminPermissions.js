@@ -22,6 +22,33 @@ export const useAdminPermissions = (userEmail) => {
                     return;
                 }
 
+                // Check if user is an approved Organisation Owner
+                const { data: playerData } = await supabase
+                    .from('players')
+                    .select('id')
+                    .ilike('email', userEmail)
+                    .maybeSingle();
+
+                if (playerData) {
+                    const { data: orgData } = await supabase
+                        .from('organizations')
+                        .select('*')
+                        .eq('created_by', playerData.id)
+                        .eq('status', 'approved')
+                        .maybeSingle();
+
+                    if (orgData) {
+                        setPermissions({
+                            role: 'org_owner',
+                            org: orgData,
+                            allowed_tabs: ['dashboard'],
+                            module_permissions: {}
+                        });
+                        setLoading(false);
+                        return;
+                    }
+                }
+
                 const { data, error } = await supabase
                     .from('admin_sidebar_permissions')
                     .select('*')

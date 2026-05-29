@@ -15,6 +15,8 @@ import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Menu, ShieldAlert, ExternalLink, Home } from 'lucide-react';
+import OrganisationManager from '../components/admin/OrganisationManager';
+import AdminNotificationsBell from '../components/admin/AdminNotificationsBell';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -27,6 +29,50 @@ const Admin = () => {
 
     const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
     const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(targetEmail);
+
+    const [badgeCounts, setBadgeCounts] = useState({
+        organizations: 0,
+        coaches: 0
+    });
+
+    useEffect(() => {
+        if (!permissions || permissions.role !== 'super_admin') return;
+
+        const fetchBadgeCounts = async () => {
+            try {
+                // 1. Pending Organisations
+                const { count: pendingOrgs } = await supabase
+                    .from('organizations')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+
+                // 2. Pending Tournament Sanctions
+                const { count: pendingEvents } = await supabase
+                    .from('calendar')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('sanction_status', 'pending');
+
+                // 3. Pending Coaches
+                const { count: pendingCoaches } = await supabase
+                    .from('coach_applications')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('status', 'pending');
+
+                setBadgeCounts({
+                    organizations: (pendingOrgs || 0) + (pendingEvents || 0),
+                    coaches: pendingCoaches || 0
+                });
+            } catch (err) {
+                console.error("Failed to fetch pending counts:", err);
+            }
+        };
+
+        fetchBadgeCounts();
+        
+        // Poll for badge updates every 30 seconds
+        const interval = setInterval(fetchBadgeCounts, 30000);
+        return () => clearInterval(interval);
+    }, [permissions]);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -144,6 +190,7 @@ const Admin = () => {
                     <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">4M Admin</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    <AdminNotificationsBell permissions={permissions} onNavigate={setActiveTab} />
                     <a
                         href="/"
                         target="_blank"
@@ -169,12 +216,14 @@ const Admin = () => {
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 permissions={permissions}
+                badgeCounts={badgeCounts}
             />
 
             <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
                 <div className="max-w-7xl mx-auto">
                     {/* Desktop Header Actions */}
-                    <div className="hidden lg:flex justify-end mb-8">
+                    <div className="hidden lg:flex justify-end items-center gap-4 mb-8">
+                        <AdminNotificationsBell permissions={permissions} onNavigate={setActiveTab} />
                         <a
                             href="/"
                             target="_blank"
@@ -202,7 +251,13 @@ const Admin = () => {
                                 </div>
                             ) : (
                                 <>
-                                    {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
+                                    {activeTab === 'dashboard' && (
+                                        permissions?.role === 'org_owner' ? (
+                                            <OrganisationManager permissions={permissions} />
+                                        ) : (
+                                            <DashboardHome onTabChange={setActiveTab} />
+                                        )
+                                    )}
                                     {activeTab === 'players' && <PlayerManager />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
@@ -218,6 +273,9 @@ const Admin = () => {
                                     )}
                                     {activeTab === 'admin-mgmt' && (
                                         <AdminManager />
+                                    )}
+                                    {activeTab === 'organizations' && (
+                                        <OrganisationManager permissions={permissions} />
                                     )}
                                     {activeTab === 'settings' && <SettingsManager />}
                                 </>

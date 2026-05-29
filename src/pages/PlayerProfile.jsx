@@ -5,10 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
+import ApplyOrganisationModal from '../components/ApplyOrganisationModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, Building } from 'lucide-react';
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -37,6 +38,9 @@ const PlayerProfile = () => {
     const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
     const [selectedRankingForBreakdown, setSelectedRankingForBreakdown] = useState(null);
     const [tempLicenseDetails, setTempLicenseDetails] = useState(null);
+    const [userOrg, setUserOrg] = useState(null);
+    const [loadingOrg, setLoadingOrg] = useState(true);
+    const [isOrgModalOpen, setIsOrgModalOpen] = useState(false);
 
 
 
@@ -170,6 +174,25 @@ const PlayerProfile = () => {
                 const isInvite = window.location.search.includes('new_invite=true') || window.location.hash.includes('type=recovery') || window.location.hash.includes('type=invite') || window.location.hash.includes('type=magiclink');
                 if (isInvite) {
                     setIsActivationRequired(true);
+                }
+
+                // Fetch player's organisation status
+                try {
+                    const { data: orgData } = await supabase
+                        .from('organizations')
+                        .select('*')
+                        .eq('created_by', playerData.id)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                    if (orgData) {
+                        setUserOrg(orgData);
+                    }
+                } catch (orgErr) {
+                    console.error('Error loading organization details:', orgErr);
+                } finally {
+                    setLoadingOrg(false);
                 }
 
                 // Update last_login timestamp
@@ -448,7 +471,28 @@ const PlayerProfile = () => {
 
         if (!emailToFetch) return;
         const { data } = await supabase.from('players').select('*').ilike('email', emailToFetch).maybeSingle();
-        if (data) setPlayer(data);
+        if (data) {
+            setPlayer(data);
+
+            // Refetch organisation status
+            try {
+                const { data: orgData } = await supabase
+                    .from('organizations')
+                    .select('*')
+                    .eq('created_by', data.id)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle();
+
+                if (orgData) {
+                    setUserOrg(orgData);
+                } else {
+                    setUserOrg(null);
+                }
+            } catch (orgErr) {
+                console.error('Error refetching organization status:', orgErr);
+            }
+        }
     };
 
     const handleSave = async (e) => {
@@ -1003,6 +1047,104 @@ const PlayerProfile = () => {
                         </motion.div>
                     )}
 
+                    {/* Organisation Host Application / Portal Banner */}
+                    {player && !loadingOrg && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className={`mb-6 bg-neutral-950/30 backdrop-blur-xl border-y border-r border-white/5 p-5 rounded-2xl shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 relative overflow-hidden group ${!userOrg
+                                    ? 'border-l-2 border-l-padel-green/50'
+                                    : userOrg.status === 'pending'
+                                        ? 'border-l-2 border-l-amber-500/50'
+                                        : userOrg.status === 'approved'
+                                            ? 'border-l-2 border-l-padel-green'
+                                            : 'border-l-2 border-l-red-500/50'
+                                }`}
+                        >
+                            {/* Subtle background ambient light */}
+                            <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-[40px] pointer-events-none ${!userOrg
+                                    ? 'bg-padel-green/5'
+                                    : userOrg.status === 'pending'
+                                        ? 'bg-amber-500/5'
+                                        : userOrg.status === 'approved'
+                                            ? 'bg-padel-green/10'
+                                            : 'bg-red-500/5'
+                                }`} />
+
+                            <div className="flex flex-col md:flex-row md:items-center gap-4 relative z-10">
+                                <div className="flex items-center gap-3 shrink-0">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${!userOrg
+                                            ? 'bg-padel-green/10 text-padel-green'
+                                            : userOrg.status === 'pending'
+                                                ? 'bg-amber-500/10 text-amber-500'
+                                                : userOrg.status === 'approved'
+                                                    ? 'bg-padel-green/20 text-padel-green shadow-[0_0_15px_rgba(154,233,0,0.1)]'
+                                                    : 'bg-red-500/10 text-red-500'
+                                        }`}>
+                                        <Building size={20} />
+                                    </div>
+                                    <div>
+                                        {!userOrg && (
+                                            <>
+                                                <h4 className="font-bold text-sm text-white">Host Your Own Tournaments</h4>
+                                                <p className="text-gray-400 text-xs mt-0.5">Apply as an official Organisation to create events, draws, and schedules.</p>
+                                            </>
+                                        )}
+                                        {userOrg && userOrg.status === 'pending' && (
+                                            <>
+                                                <h4 className="font-bold text-sm text-white">Application Under Review</h4>
+                                                <p className="text-gray-400 text-xs mt-0.5">4M Padel administrators are currently reviewing **{userOrg.name}**.</p>
+                                            </>
+                                        )}
+                                        {userOrg && userOrg.status === 'approved' && (
+                                            <>
+                                                <h4 className="font-bold text-sm text-white">Organisation Dashboard Active</h4>
+                                                <p className="text-gray-400 text-xs mt-0.5">Create and manage sanctioned padel events for **{userOrg.name}**.</p>
+                                            </>
+                                        )}
+                                        {userOrg && userOrg.status === 'rejected' && (
+                                            <>
+                                                <h4 className="font-bold text-sm text-red-400">Application Requires Action</h4>
+                                                <p className="text-gray-400 text-xs mt-0.5">Declined: {userOrg.rejection_notes || 'Please resolve review feedback.'}</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="shrink-0 flex items-center justify-end relative z-10 w-full md:w-auto border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
+                                {!userOrg && (
+                                    <button
+                                        onClick={() => setIsOrgModalOpen(true)}
+                                        className="text-[11px] font-black uppercase tracking-widest px-5 py-3 bg-padel-green text-black hover:bg-white rounded-xl transition-all cursor-pointer shadow-lg hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
+                                    >
+                                        Apply to Host
+                                    </button>
+                                )}
+                                {userOrg && userOrg.status === 'pending' && (
+                                    <div className="text-[10px] font-black text-amber-500 uppercase tracking-widest border border-amber-500/20 bg-amber-500/5 px-4 py-2 rounded-xl flex items-center gap-1.5 animate-pulse">
+                                        Pending Approval
+                                    </div>
+                                )}
+                                {userOrg && userOrg.status === 'approved' && (
+                                    <button
+                                        onClick={() => navigate('/admin')}
+                                        className="text-[11px] font-black uppercase tracking-widest px-5 py-3 bg-[#CCFF00] text-black hover:bg-white rounded-xl transition-all cursor-pointer shadow-lg hover:scale-[1.02] active:scale-95 flex items-center gap-1.5"
+                                    >
+                                        Organisation Dashboard <ExternalLink size={12} />
+                                    </button>
+                                )}
+                                {userOrg && userOrg.status === 'rejected' && (
+                                    <button
+                                        onClick={() => setIsOrgModalOpen(true)}
+                                        className="text-[11px] font-black uppercase tracking-widest px-5 py-3 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500 hover:text-black rounded-xl transition-all cursor-pointer"
+                                    >
+                                        Modify & Re-apply
+                                    </button>
+                                )}
+                            </div>
+                        </motion.div>
+                    )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
 
@@ -2685,6 +2827,13 @@ const PlayerProfile = () => {
                     userEmail={player?.email}
                     userName={player?.name}
                     onPaymentSuccess={refetchPlayer}
+                />
+
+                <ApplyOrganisationModal
+                    isOpen={isOrgModalOpen}
+                    onClose={() => setIsOrgModalOpen(false)}
+                    playerProfile={player}
+                    onSuccess={refetchPlayer}
                 />
 
                 {showCoachModal && coachApplication && (

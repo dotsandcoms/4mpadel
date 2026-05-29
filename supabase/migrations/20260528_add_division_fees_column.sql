@@ -1,0 +1,2 @@
+-- No-op Migration: The calendar table already has a category_fees column.
+-- We are mapping setup wizard pricing fields directly to category_fees.
