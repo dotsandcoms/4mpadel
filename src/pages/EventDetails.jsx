@@ -9,6 +9,7 @@ import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
+import { sendEmail } from '../utils/emails';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -281,7 +282,152 @@ const EventDetails = () => {
     const [emailCheckStatus, setEmailCheckStatus] = useState('idle'); // 'idle', 'checking', 'found', 'not_found'
     const [playerProfileData, setPlayerProfileData] = useState(null);
     const [licenseChoice, setLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
-    const [partnerLicenseChoice, setPartnerLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
+
+    // Division-specific partner configurations state
+    const [divisionPartners, setDivisionPartners] = useState({});
+
+    // Dynamic state helper handlers for division-scoped partners
+    const toggleHasPartnerForDivision = (division) => {
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            const newState = !current.hasPartner;
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    hasPartner: newState,
+                    partnerName: newState ? (current.partnerName || '') : '',
+                    partnerProfile: newState ? current.partnerProfile : null,
+                    payForPartner: newState ? current.payForPartner : false,
+                    partnerSearchResults: [],
+                    partnerLookupError: null
+                }
+            };
+        });
+    };
+
+    const handlePartnerSearchForDivision = (division, name) => {
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        // Immediate update for search input value and cleanup of old search results/profiles
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    partnerName: name,
+                    partnerProfile: null,
+                    partnerLookupError: null,
+                    payForPartner: false,
+                    partnerSearchResults: []
+                }
+            };
+        });
+
+        if (!name || name.length < 2) return;
+
+        const timeout = setTimeout(async () => {
+            setDivisionPartners(prev => {
+                const current = prev[division] || {};
+                return {
+                    ...prev,
+                    [division]: {
+                        ...current,
+                        isLookingUpPartner: true
+                    }
+                };
+            });
+
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('id, name, email, paid_registration, license_type, category')
+                    .ilike('name', `%${name.trim()}%`)
+                    .limit(8);
+
+                setDivisionPartners(prev => {
+                    const current = prev[division] || {};
+                    if (data && data.length > 0) {
+                        return {
+                            ...prev,
+                            [division]: {
+                                ...current,
+                                isLookingUpPartner: false,
+                                partnerSearchResults: data,
+                                partnerLookupError: null
+                            }
+                        };
+                    } else {
+                        return {
+                            ...prev,
+                            [division]: {
+                                ...current,
+                                isLookingUpPartner: false,
+                                partnerSearchResults: [],
+                                partnerLookupError: "Profile not found. Partner must register to be paid for."
+                            }
+                        };
+                    }
+                });
+            } catch (err) {
+                console.error("Partner lookup error for division:", err);
+                setDivisionPartners(prev => {
+                    const current = prev[division] || {};
+                    return {
+                        ...prev,
+                        [division]: {
+                            ...current,
+                            isLookingUpPartner: false
+                        }
+                    };
+                });
+            }
+        }, 500);
+        setSearchTimeout(timeout);
+    };
+
+    const handleSelectPartnerForDivision = (division, player) => {
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    partnerName: player.name,
+                    partnerProfile: player,
+                    partnerSearchResults: [],
+                    partnerLookupError: null
+                }
+            };
+        });
+    };
+
+    const togglePayForPartnerForDivision = (division) => {
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    payForPartner: !current.payForPartner
+                }
+            };
+        });
+    };
+
+    const setPartnerLicenseChoiceForDivision = (division, choice) => {
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    partnerLicenseChoice: choice
+                }
+            };
+        });
+    };
 
     // Prefill form from logged-in player profile when modal opens
     useEffect(() => {
@@ -848,13 +994,24 @@ const EventDetails = () => {
             total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
         }
 
-        // Add Partner costs if paying for them and partner registration is enabled
-        if (hasPartner && payForPartner && partnerProfile) {
-            total += entryFeesTotal; // Same divisions assumed for partners usually
-            if (!partnerProfile.paid_registration) {
-                total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+        // Add partner entry fees and unique partner license fees across divisions
+        const seenPartnerIds = new Set();
+        selectedDivisions.forEach(div => {
+            const part = divisionPartners[div];
+            if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
+                // Add partner entry fee for this division
+                total += getEntryFeeForCategory(div);
+
+                // Add partner license fee exactly once per unique partner
+                if (!part.partnerProfile.paid_registration) {
+                    if (!seenPartnerIds.has(part.partnerProfile.id)) {
+                        seenPartnerIds.add(part.partnerProfile.id);
+                        const choice = part.partnerLicenseChoice || 'temporary';
+                        total += choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                    }
+                }
             }
-        }
+        });
 
         return total;
     };
@@ -874,15 +1031,23 @@ const EventDetails = () => {
             event_id: event?.id,
             event_name: event?.event_name,
             full_name: formData.full_name,
-            partner_name: formData.partner_name,
-            partner_id: partnerProfile?.id,
             division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
             is_test: isTestMode,
             includes_license: playerProfileData && !playerProfileData.paid_registration,
             license_type: licenseChoice,
-            paying_for_partner: hasPartner && payForPartner,
-            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
-            partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
+            division_partners: JSON.stringify(
+                selectedDivisions.map(div => {
+                    const part = divisionPartners[div] || {};
+                    return {
+                        division: div,
+                        has_partner: !!part.hasPartner,
+                        partner_name: part.partnerProfile ? part.partnerProfile.name : part.partnerName || '',
+                        partner_id: part.partnerProfile?.id || null,
+                        pay_for_partner: !!part.payForPartner,
+                        partner_license: part.partnerProfile && !part.partnerProfile.paid_registration ? (part.partnerLicenseChoice || 'temporary') : null
+                    };
+                })
+            )
         }
     };
 
@@ -1103,22 +1268,26 @@ const EventDetails = () => {
             const registrationsToUpsert = [];
             
             selectedDivisions.forEach(division => {
+                const part = divisionPartners[division] || {};
+                
+                // Add Main Player Registration
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
                     email: formData.email,
                     phone: formData.phone,
-                    partner_name: formData.partner_name,
+                    partner_name: part.partnerProfile ? part.partnerProfile.name : part.partnerName || '',
                     division: division,
                     payment_status: 'paid',
                     is_test: isTestMode
                 });
 
-                if (payForPartner && partnerProfile) {
+                // Add Partner Registration if paying for them
+                if (part.hasPartner && part.payForPartner && part.partnerProfile) {
                     registrationsToUpsert.push({
                         event_id: event.id,
-                        full_name: partnerProfile.name,
-                        email: partnerProfile.email,
+                        full_name: part.partnerProfile.name,
+                        email: part.partnerProfile.email,
                         partner_name: formData.full_name,
                         division: division,
                         payment_status: 'paid',
@@ -1148,7 +1317,8 @@ const EventDetails = () => {
             // Entry Fees for each division
             selectedDivisions.forEach(division => {
                 const fee = getEntryFeeForCategory(division);
-                const partnerEntryFee = (payForPartner && partnerProfile) ? fee : 0;
+                const part = divisionPartners[division] || {};
+                const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? fee : 0;
                 
                 // Main Player (gets the combined fee for the pair)
                 paymentsToInsert.push({
@@ -1165,15 +1335,15 @@ const EventDetails = () => {
                         division: division,
                         line_items: [
                             { type: 'entry_fee', amount: fee, player: formData.full_name },
-                            ...(payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerProfile.name }] : [])
+                            ...(part.hasPartner && part.payForPartner && part.partnerProfile ? [{ type: 'entry_fee', amount: fee, player: part.partnerProfile.name }] : [])
                         ]
                     }
                 });
 
                 // Partner (gets R0 record with attribution)
-                if (payForPartner && partnerProfile) {
+                if (part.hasPartner && part.payForPartner && part.partnerProfile) {
                     paymentsToInsert.push({
-                        player_id: partnerProfile.id,
+                        player_id: part.partnerProfile.id,
                         event_id: event.id,
                         amount: 0,
                         status: 'success',
@@ -1187,7 +1357,7 @@ const EventDetails = () => {
                             paid_by_name: formData.full_name,
                             paid_by_id: playerId,
                             line_items: [
-                                { type: 'entry_fee', amount: 0, player: partnerProfile.name, paid_by: formData.full_name }
+                                { type: 'entry_fee', amount: 0, player: part.partnerProfile.name, paid_by: formData.full_name }
                             ]
                         }
                     });
@@ -1212,7 +1382,6 @@ const EventDetails = () => {
                 });
 
                 if (!isFull) {
-                    // Add to temporary_licenses table
                     await supabase.from('temporary_licenses').insert({
                         player_id: playerId,
                         event_id: event.id,
@@ -1224,70 +1393,64 @@ const EventDetails = () => {
                 await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isFull ? 'full' : 'temporary' }).eq('id', playerId);
             }
 
-            // Partner side
-            if (payForPartner && partnerProfile) {
-                // Partner: Entry Fee (handled in selectedDivisions loop above)
-                
-                // Partner License
-                if (!partnerProfile.paid_registration) {
-                    const isPartnerFull = partnerLicenseChoice === 'full';
-                    const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+            // Partner Licenses (if applicable - exactly once per unique partner being paid for)
+            const seenPartnerLicenseIds = new Set();
+            for (const division of selectedDivisions) {
+                const part = divisionPartners[division];
+                if (part?.hasPartner && part?.payForPartner && part?.partnerProfile && !part.partnerProfile.paid_registration) {
+                    const partnerId = part.partnerProfile.id;
+                    if (!seenPartnerLicenseIds.has(partnerId)) {
+                        seenPartnerLicenseIds.add(partnerId);
+                        
+                        const isPartnerFull = part.partnerLicenseChoice === 'full';
+                        const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
 
-                    // Main player pays for the partner's license
-                    paymentsToInsert.push({
-                        player_id: playerId,
-                        event_id: event.id,
-                        amount: partnerLicenseAmount,
-                        status: 'success',
-                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                        payment_method: 'paystack',
-                        reference: `LIC-FOR-PARTNER-${paystackRef}`,
-                        is_test: isTestMode,
-                        metadata: { paystack_ref: paystackRef, paid_for_name: partnerProfile.name }
-                    });
-
-                    // Partner gets R0 license record
-                    paymentsToInsert.push({
-                        player_id: partnerProfile.id,
-                        event_id: event.id,
-                        amount: 0,
-                        status: 'success',
-                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                        payment_method: 'paystack',
-                        reference: `LIC-PARTNER-${paystackRef}`,
-                        is_test: isTestMode,
-                        metadata: { 
-                            paystack_ref: paystackRef,
-                            paid_by_name: formData.full_name,
-                            paid_by_id: playerId
-                        }
-                    });
-
-                    if (!isPartnerFull) {
-                        // Add to temporary_licenses table
-                        await supabase.from('temporary_licenses').insert({
-                            player_id: partnerProfile.id,
+                        // Main player pays for the partner's license
+                        paymentsToInsert.push({
+                            player_id: playerId,
                             event_id: event.id,
-                            event_name: event.event_name,
-                            event_date: event.start_date
+                            amount: partnerLicenseAmount,
+                            status: 'success',
+                            payment_type: isPartnerFull ? 'full_license' : 'temp_license',
+                            payment_method: 'paystack',
+                            reference: `LIC-FOR-PARTNER-${paystackRef}`,
+                            is_test: isTestMode,
+                            metadata: { paystack_ref: paystackRef, paid_for_name: part.partnerProfile.name }
                         });
-                    }
 
-                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerProfile.id);
+                        // Partner gets R0 license record
+                        paymentsToInsert.push({
+                            player_id: partnerId,
+                            event_id: event.id,
+                            amount: 0,
+                            status: 'success',
+                            payment_type: isPartnerFull ? 'full_license' : 'temp_license',
+                            payment_method: 'paystack',
+                            reference: `LIC-PARTNER-${paystackRef}`,
+                            is_test: isTestMode,
+                            metadata: { 
+                                paystack_ref: paystackRef,
+                                paid_by_name: formData.full_name,
+                                paid_by_id: playerId
+                            }
+                        });
+
+                        if (!isPartnerFull) {
+                            await supabase.from('temporary_licenses').insert({
+                                player_id: partnerId,
+                                event_id: event.id,
+                                event_name: event.event_name,
+                                event_date: event.start_date
+                            });
+                        }
+
+                        await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerId);
+                    }
                 }
             }
 
             console.log("Saving payments...");
             await supabase.from('payments').insert(paymentsToInsert);
-
-            // 3. Mark in participants list
-            console.log("Updating participants...");
-
-            // Sync Main Player
-            const mainPlayerFilters = [];
-            if (playerId) mainPlayerFilters.push(`profile_id.eq.${playerId}`);
-            if (formData.email) mainPlayerFilters.push(`email.ilike.${formData.email}`);
-            if (formData.full_name) mainPlayerFilters.push(`full_name.ilike.%${formData.full_name}%`);
 
             // 3. Mark in participants list (Improved Sync)
             console.log("Updating participants for Event ID:", event.id);
@@ -1384,10 +1547,49 @@ const EventDetails = () => {
                 await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
             }
 
-            // Sync Partner
-            if (payForPartner && partnerProfile) {
-                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name, divisions: selectedDivisions });
-                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner", selectedDivisions);
+            // Sync Partners per Division
+            for (const division of selectedDivisions) {
+                const part = divisionPartners[division];
+                if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
+                    console.info(`Starting sync for division partner:`, { id: part.partnerProfile.id, name: part.partnerProfile.name, division: division });
+                    await syncParticipant(part.partnerProfile.id, part.partnerProfile.email, part.partnerProfile.name, `Partner - ${division}`, [division]);
+                }
+            }
+
+            // Send Confirmation Emails via sendEmail utility
+            for (const division of selectedDivisions) {
+                const part = divisionPartners[division] || {};
+                const partnerName = part.partnerProfile ? part.partnerProfile.name : part.partnerName || 'TBD';
+                const entryFee = getEntryFeeForCategory(division);
+                const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? entryFee : 0;
+                
+                // 1. Send to Main Player
+                try {
+                    sendEmail(formData.email.trim(), 'event_entry', {
+                        playerName: formData.full_name,
+                        eventName: event.event_name,
+                        division: division,
+                        partnerName: partnerName,
+                        amount: `R ${(entryFee + partnerEntryFee).toFixed(2)}`
+                    });
+                } catch (emailErr) {
+                    console.error("Failed to send registrant email:", emailErr);
+                }
+
+                // 2. Send to Partner if profile is active and has email
+                if (part.hasPartner && part.payForPartner && part.partnerProfile?.email) {
+                    try {
+                        sendEmail(part.partnerProfile.email.trim(), 'event_entry', {
+                            playerName: part.partnerProfile.name,
+                            eventName: event.event_name,
+                            division: division,
+                            partnerName: formData.full_name,
+                            amount: 'R 0.00 (Paid by Partner)'
+                        });
+                    } catch (emailErr) {
+                        console.error("Failed to send partner email:", emailErr);
+                    }
+                }
             }
 
             console.log("Registration Save Complete!");
@@ -2552,218 +2754,275 @@ const EventDetails = () => {
                                                         )}
                                                     </div>
 
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 bg-padel-green/10 rounded-xl flex items-center justify-center text-padel-green group-hover:bg-padel-green group-hover:text-black transition-all duration-500">
-                                                                <Users size={20} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
-                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
-                                                            </div>
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                const newState = !hasPartner;
-                                                                setHasPartner(newState);
-                                                                if (!newState) {
-                                                                    setPartnerProfile(null);
-                                                                    setPartnerSearchResults([]);
-                                                                    setPayForPartner(false);
-                                                                    setFormData(prev => ({ ...prev, partner_name: '' }));
-                                                                }
-                                                            }}
-                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-white/10'}`}
-                                                        >
-                                                            <span
-                                                                aria-hidden="true"
-                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
-                                                            />
-                                                        </button>
-                                                    </div>
+                                                 <div className="space-y-4">
+                                                     <div className="flex items-center gap-3 ml-3 mb-1">
+                                                         <Users className="text-padel-green" size={20} />
+                                                         <div>
+                                                             <p className="text-xs font-black text-white uppercase tracking-tight">Team Setup & Partners</p>
+                                                             <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Configure partners and licenses per division</p>
+                                                         </div>
+                                                     </div>
 
-                                                    <AnimatePresence>
-                                                        {hasPartner && (
-                                                            <motion.div
-                                                                initial={{ opacity: 0, height: 0 }}
-                                                                animate={{ opacity: 1, height: 'auto' }}
-                                                                exit={{ opacity: 0, height: 0 }}
-                                                                className="space-y-3"
-                                                            >
-                                                                <div className="space-y-1.5">
-                                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
-                                                                    <div className="relative group">
-                                                                        <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
-                                                                        <input
-                                                                            type="text"
-                                                                            name="partner_name"
-                                                                            value={formData.partner_name}
-                                                                            onChange={handleInputChange}
-                                                                            autoComplete="off"
-                                                                            className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
-                                                                            placeholder="Type 2+ characters to search..."
-                                                                        />
-                                                                        {isLookingUpPartner && (
-                                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                                                <Loader className="w-4 h-4 animate-spin text-padel-green" />
-                                                                            </div>
-                                                                        )}
-                                                                        {partnerProfile && !isLookingUpPartner && (
-                                                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
-                                                                                <CheckCircle className="w-3 h-3 fill-current" />
-                                                                                Found
-                                                                            </div>
-                                                                        )}
+                                                     {selectedDivisions.length === 0 ? (
+                                                         <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 text-center">
+                                                             <Users className="w-8 h-8 text-white/10 mx-auto mb-3" />
+                                                             <p className="text-xs text-slate-400 font-black uppercase tracking-[0.2em] mb-1">No Divisions Selected</p>
+                                                             <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest leading-relaxed">
+                                                                 Select one or more divisions above to configure your partners.
+                                                             </p>
+                                                         </div>
+                                                     ) : (
+                                                         <div className="space-y-3">
+                                                             {selectedDivisions.map(division => {
+                                                                 const part = divisionPartners[division] || {};
+                                                                 const hasPart = !!part.hasPartner;
+                                                                 const partnerProfile = part.partnerProfile;
+                                                                 const payForPartner = !!part.payForPartner;
+                                                                 const partnerLicenseChoice = part.partnerLicenseChoice || 'temporary';
+                                                                 const partnerSearchResults = part.partnerSearchResults || [];
+                                                                 const partnerLookupError = part.partnerLookupError;
+                                                                 const isLookingUpPartner = !!part.isLookingUpPartner;
 
-                                                                        {/* Search Results Dropdown */}
-                                                                        <AnimatePresence>
-                                                                            {partnerSearchResults.length > 0 && (
-                                                                                <motion.div
-                                                                                    initial={{ opacity: 0, y: -5 }}
-                                                                                    animate={{ opacity: 1, y: 0 }}
-                                                                                    exit={{ opacity: 0, y: -5 }}
-                                                                                    className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
-                                                                                >
-                                                                                    {partnerSearchResults.map((player) => (
-                                                                                        <button
-                                                                                            key={player.id}
-                                                                                            type="button"
-                                                                                            onClick={() => handleSelectPartner(player)}
-                                                                                            className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
-                                                                                        >
-                                                                                            <div className="flex items-center gap-2">
-                                                                                                <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
-                                                                                                    <User size={12} />
-                                                                                                </div>
-                                                                                                <div>
-                                                                                                    <p className="text-xs font-bold text-slate-900">{player.name}</p>
-                                                                                                    <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                                                                        </button>
-                                                                                    ))}
-                                                                                </motion.div>
-                                                                            )}
-                                                                        </AnimatePresence>
-                                                                    </div>
-                                                                    {partnerLookupError && !partnerSearchResults.length && (
-                                                                        <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
-                                                                            {partnerLookupError}
-                                                                        </p>
-                                                                    )}
-                                                                </div>
+                                                                 return (
+                                                                     <div
+                                                                         key={`config-${division}`}
+                                                                         className="bg-slate-900/60 backdrop-blur border border-white/5 p-4 rounded-2xl space-y-3 relative overflow-hidden group hover:border-padel-green/20 transition-all duration-300"
+                                                                     >
+                                                                         {/* Division Header Indicator */}
+                                                                         <div className="flex items-center justify-between">
+                                                                             <span className="text-[10px] font-black text-padel-green uppercase tracking-wider bg-padel-green/10 border border-padel-green/20 px-3 py-1 rounded-full">
+                                                                                 {division}
+                                                                             </span>
+                                                                         </div>
 
-                                                                {partnerProfile && (
-                                                                    <>
-                                                                        <motion.div
-                                                                            initial={{ opacity: 0, y: 5 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
-                                                                        >
-                                                                            <div className="flex items-center gap-3">
-                                                                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
-                                                                                    <CreditCard className="w-5 h-5" />
-                                                                                </div>
-                                                                                <div>
-                                                                                    <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
-                                                                                    <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
-                                                                                        Multi-Division Fee Auto-Calculated
-                                                                                    </p>
-                                                                                </div>
-                                                                            </div>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => setPayForPartner(!payForPartner)}
-                                                                                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
-                                                                            >
-                                                                                <span
-                                                                                    aria-hidden="true"
-                                                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
-                                                                                />
-                                                                            </button>
-                                                                        </motion.div>
+                                                                         {/* Toggle Area */}
+                                                                         <div className="flex items-center justify-between pt-1">
+                                                                             <div>
+                                                                                 <p className="text-xs font-bold text-white uppercase tracking-tight">Register with partner?</p>
+                                                                                 <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Toggle partner entry for this division</p>
+                                                                             </div>
+                                                                             <button
+                                                                                 type="button"
+                                                                                 onClick={() => toggleHasPartnerForDivision(division)}
+                                                                                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${
+                                                                                     hasPart ? 'bg-padel-green' : 'bg-white/10'
+                                                                                 }`}
+                                                                             >
+                                                                                 <span
+                                                                                     aria-hidden="true"
+                                                                                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${
+                                                                                         hasPart ? 'translate-x-5' : 'translate-x-0'
+                                                                                     }`}
+                                                                                 />
+                                                                             </button>
+                                                                         </div>
 
-                                                                        <AnimatePresence>
-                                                                            {payForPartner && !partnerProfile.paid_registration && (
-                                                                                <motion.div
-                                                                                    initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                    animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                                                                                    exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                    className="overflow-hidden"
-                                                                                >
-                                                                                    <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
-                                                                                                <CreditCard size={16} />
-                                                                                            </div>
-                                                                                            <div>
-                                                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
-                                                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                onClick={() => setPartnerLicenseChoice('temporary')}
-                                                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                                            >
-                                                                                                Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                                                            </button>
-                                                                                            <button
-                                                                                                type="button"
-                                                                                                onClick={() => setPartnerLicenseChoice('full')}
-                                                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                                            >
-                                                                                                Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                                                            </button>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                </motion.div>
-                                                                            )}
-                                                                        </AnimatePresence>
-                                                                    </>
-                                                                )}
-                                                            </motion.div>
-                                                        )}
-                                                    </AnimatePresence>
+                                                                         <AnimatePresence>
+                                                                             {hasPart && (
+                                                                                 <motion.div
+                                                                                     initial={{ opacity: 0, height: 0 }}
+                                                                                     animate={{ opacity: 1, height: 'auto' }}
+                                                                                     exit={{ opacity: 0, height: 0 }}
+                                                                                     className="space-y-3 pt-2 border-t border-white/5"
+                                                                                 >
+                                                                                     {/* Partner Search Input */}
+                                                                                     <div className="space-y-1.5">
+                                                                                         <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">
+                                                                                             Partner Name
+                                                                                         </label>
+                                                                                         <div className="relative group">
+                                                                                             <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                                                             <input
+                                                                                                 type="text"
+                                                                                                 value={part.partnerName || ''}
+                                                                                                 onChange={(e) => handlePartnerSearchForDivision(division, e.target.value)}
+                                                                                                 autoComplete="off"
+                                                                                                 className={`w-full bg-white/5 border ${
+                                                                                                     partnerLookupError ? 'border-red-500/50' : 'border-white/10'
+                                                                                                 } rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                                                 placeholder="Type 2+ characters to search..."
+                                                                                             />
+                                                                                             {isLookingUpPartner && (
+                                                                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                                                                     <Loader className="w-4 h-4 animate-spin text-padel-green" />
+                                                                                                 </div>
+                                                                                             )}
+                                                                                             {partnerProfile && !isLookingUpPartner && (
+                                                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                                                     <CheckCircle className="w-3 h-3 fill-current" />
+                                                                                                     Found
+                                                                                                 </div>
+                                                                                             )}
 
-                                                    {playerProfileData && !playerProfileData.paid_registration && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, y: 5 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
-                                                        >
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
-                                                                    <CreditCard size={16} />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
-                                                                    <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setLicenseChoice('temporary')}
-                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                >
-                                                                    Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                                </button>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => setLicenseChoice('full')}
-                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                >
-                                                                    Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                                </button>
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
-                                                </div>
+                                                                                             {/* Dropdown Results */}
+                                                                                             <AnimatePresence>
+                                                                                                 {partnerSearchResults.length > 0 && (
+                                                                                                     <motion.div
+                                                                                                         initial={{ opacity: 0, y: -5 }}
+                                                                                                         animate={{ opacity: 1, y: 0 }}
+                                                                                                         exit={{ opacity: 0, y: -5 }}
+                                                                                                         className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                                                     >
+                                                                                                         {partnerSearchResults.map((player) => (
+                                                                                                             <button
+                                                                                                                 key={player.id}
+                                                                                                                 type="button"
+                                                                                                                 onClick={() => handleSelectPartnerForDivision(division, player)}
+                                                                                                                 className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
+                                                                                                             >
+                                                                                                                 <div className="flex items-center gap-2">
+                                                                                                                     <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
+                                                                                                                         <User size={12} />
+                                                                                                                     </div>
+                                                                                                                     <div>
+                                                                                                                         <p className="text-xs font-bold text-slate-900">{player.name}</p>
+                                                                                                                         <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">
+                                                                                                                             {player.category || 'No Category'}
+                                                                                                                         </p>
+                                                                                                                     </div>
+                                                                                                                 </div>
+                                                                                                                 <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                                                                             </button>
+                                                                                                         ))}
+                                                                                                     </motion.div>
+                                                                                                 )}
+                                                                                             </AnimatePresence>
+                                                                                         </div>
+                                                                                         {partnerLookupError && !partnerSearchResults.length && (
+                                                                                             <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
+                                                                                                 {partnerLookupError}
+                                                                                             </p>
+                                                                                         )}
+                                                                                     </div>
+
+                                                                                     {/* Pay for partner & license choice inside card */}
+                                                                                     {partnerProfile && (
+                                                                                         <>
+                                                                                             <motion.div
+                                                                                                 initial={{ opacity: 0, y: 5 }}
+                                                                                                 animate={{ opacity: 1, y: 0 }}
+                                                                                                 className="bg-padel-green/5 border border-padel-green/10 p-3 rounded-xl flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
+                                                                                             >
+                                                                                                 <div className="flex items-center gap-3">
+                                                                                                     <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-padel-green shadow-sm">
+                                                                                                         <CreditCard className="w-4 h-4" />
+                                                                                                     </div>
+                                                                                                     <div>
+                                                                                                         <h5 className="font-black text-white text-[10px] uppercase tracking-tight">
+                                                                                                             Pay for {partnerProfile.name}?
+                                                                                                         </h5>
+                                                                                                         <p className="text-[7px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
+                                                                                                             Entry fee and license (if needed)
+                                                                                                         </p>
+                                                                                                     </div>
+                                                                                                 </div>
+                                                                                                 <button
+                                                                                                     type="button"
+                                                                                                     onClick={() => togglePayForPartnerForDivision(division)}
+                                                                                                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                                                                                                         payForPartner ? 'bg-padel-green' : 'bg-slate-200'
+                                                                                                     }`}
+                                                                                                 >
+                                                                                                     <span
+                                                                                                         aria-hidden="true"
+                                                                                                         className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                                                                                             payForPartner ? 'translate-x-5' : 'translate-x-0'
+                                                                                                         }`}
+                                                                                                     />
+                                                                                                 </button>
+                                                                                             </motion.div>
+
+                                                                                             <AnimatePresence>
+                                                                                                 {payForPartner && !partnerProfile.paid_registration && (
+                                                                                                     <motion.div
+                                                                                                         initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                                         animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
+                                                                                                         exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                                         className="overflow-hidden"
+                                                                                                     >
+                                                                                                         <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10 shadow-inner group">
+                                                                                                             <div className="flex items-center gap-2">
+                                                                                                                 <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                                                                     <CreditCard size={14} />
+                                                                                                                 </div>
+                                                                                                                 <div>
+                                                                                                                     <p className="text-[10px] font-bold text-white uppercase tracking-tight">Partner License</p>
+                                                                                                                     <p className="text-[8px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                                                 </div>
+                                                                                                             </div>
+                                                                                                             <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
+                                                                                                                 <button
+                                                                                                                     type="button"
+                                                                                                                     onClick={() => setPartnerLicenseChoiceForDivision(division, 'temporary')}
+                                                                                                                     className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full transition-all flex items-center gap-1 ${
+                                                                                                                         partnerLicenseChoice === 'temporary'
+                                                                                                                             ? 'bg-padel-green text-black shadow-md'
+                                                                                                                             : 'text-gray-400 hover:text-white'
+                                                                                                                     }`}
+                                                                                                                 >
+                                                                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                                                                 </button>
+                                                                                                                 <button
+                                                                                                                     type="button"
+                                                                                                                     onClick={() => setPartnerLicenseChoiceForDivision(division, 'full')}
+                                                                                                                     className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full transition-all flex items-center gap-1 ${
+                                                                                                                         partnerLicenseChoice === 'full'
+                                                                                                                             ? 'bg-white text-black shadow-md'
+                                                                                                                             : 'text-gray-400 hover:text-white'
+                                                                                                                     }`}
+                                                                                                                 >
+                                                                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                                                                 </button>
+                                                                                                             </div>
+                                                                                                         </div>
+                                                                                                     </motion.div>
+                                                                                                 )}
+                                                                                             </AnimatePresence>
+                                                                                         </>
+                                                                                     )}
+                                                                                 </motion.div>
+                                                                             )}
+                                                                         </AnimatePresence>
+                                                                     </div>
+                                                                 );
+                                                             })}
+                                                         </div>
+                                                     )}
+
+                                                     {playerProfileData && !playerProfileData.paid_registration && (
+                                                         <motion.div
+                                                             initial={{ opacity: 0, y: 5 }}
+                                                             animate={{ opacity: 1, y: 0 }}
+                                                             className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
+                                                         >
+                                                             <div className="flex items-center gap-2">
+                                                                 <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                     <CreditCard size={16} />
+                                                                 </div>
+                                                                 <div>
+                                                                     <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
+                                                                     <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                 </div>
+                                                             </div>
+                                                             <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                                 <button
+                                                                     type="button"
+                                                                     onClick={() => setLicenseChoice('temporary')}
+                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                 >
+                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                 </button>
+                                                                 <button
+                                                                     type="button"
+                                                                     onClick={() => setLicenseChoice('full')}
+                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                 >
+                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                 </button>
+                                                             </div>
+                                                         </motion.div>
+                                                     )}
+                                                 </div>
 
                                                 <div className="pt-3 border-t border-white/10">
                                                     <div className="bg-slate-900/50 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/5 shadow-2xl">
@@ -2804,27 +3063,60 @@ const EventDetails = () => {
                                                                         </div>
                                                                     )}
 
-                                                                    {/* Partner Section - Conditional */}
-                                                                    {hasPartner && partnerProfile && (
-                                                                        <div className="space-y-2 pt-1">
-                                                                            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
-                                                                            {selectedDivisions.map(div => (
-                                                                                <div key={`par-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
-                                                                                    <div className="space-y-0.5">
-                                                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
-                                                                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
+                                                                    {/* Partner Section - Conditional per Division */}
+                                                                    {(() => {
+                                                                        const hasAnyPartnerEntry = selectedDivisions.some(div => {
+                                                                            const part = divisionPartners[div];
+                                                                            return part?.hasPartner && part?.partnerProfile && part?.payForPartner;
+                                                                        });
+
+                                                                        const uniquePaidPartnerLicenses = [];
+                                                                        const seenPartnerIds = new Set();
+                                                                        selectedDivisions.forEach(div => {
+                                                                            const part = divisionPartners[div];
+                                                                            if (part?.hasPartner && part?.partnerProfile && part?.payForPartner && !part.partnerProfile.paid_registration) {
+                                                                                if (!seenPartnerIds.has(part.partnerProfile.id)) {
+                                                                                    seenPartnerIds.add(part.partnerProfile.id);
+                                                                                    uniquePaidPartnerLicenses.push({
+                                                                                        name: part.partnerProfile.name,
+                                                                                        choice: part.partnerLicenseChoice || 'temporary'
+                                                                                    });
+                                                                                }
+                                                                            }
+                                                                        });
+
+                                                                        if (!hasAnyPartnerEntry && uniquePaidPartnerLicenses.length === 0) return null;
+
+                                                                        return (
+                                                                            <div className="space-y-2 pt-1">
+                                                                                {hasAnyPartnerEntry && (
+                                                                                    <>
+                                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
+                                                                                        {selectedDivisions.map(div => {
+                                                                                            const part = divisionPartners[div];
+                                                                                            if (!part?.hasPartner || !part?.partnerProfile || !part?.payForPartner) return null;
+                                                                                            return (
+                                                                                                <div key={`par-fee-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                                                    <div className="space-y-0.5">
+                                                                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{part.partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
+                                                                                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
+                                                                                                    </div>
+                                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
+                                                                                                </div>
+                                                                                            );
+                                                                                        })}
+                                                                                    </>
+                                                                                )}
+
+                                                                                {uniquePaidPartnerLicenses.map((lic, idx) => (
+                                                                                    <div key={`par-lic-${idx}`} className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
+                                                                                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">{lic.name} {lic.choice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                        <span className="text-[10px] font-black text-blue-400">R{lic.choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                                     </div>
-                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
-                                                                                </div>
-                                                                            ))}
-                                                                            {payForPartner && !partnerProfile.paid_registration && (
-                                                                                <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
-                                                                                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                    <span className="text-[10px] font-black text-blue-400">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    )}
+                                                                                ))}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
                                                                 </div>
                                                                 </div>
                                                             </div>

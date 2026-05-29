@@ -44,6 +44,15 @@ const OrganisationManager = ({ permissions }) => {
     const [approvedEvents, setApprovedEvents] = useState([]);
     const [approvedEventsSearch, setApprovedEventsSearch] = useState('');
 
+    // Telemetry State Hooks for Tournament Entries & Breakdown Modal
+    const [selectedEventEntries, setSelectedEventEntries] = useState(null);
+    const [eventEntriesList, setEventEntriesList] = useState([]);
+    const [isLoadingEntries, setIsLoadingEntries] = useState(false);
+    const [entriesSearchQuery, setEntriesSearchQuery] = useState('');
+    const [entriesDivisionFilter, setEntriesDivisionFilter] = useState('all');
+    // Live participant counts per event (keyed by event id)
+    const [participantCounts, setParticipantCounts] = useState({});
+
     // Create event state
     const SYSTEM_DIVISIONS = [
         "Men's Open (Pro/Elite)",
@@ -378,7 +387,23 @@ const OrganisationManager = ({ permissions }) => {
                 .order('start_date', { ascending: false });
 
             if (error) throw error;
-            setOrgEvents(events || []);
+            const evList = events || [];
+            setOrgEvents(evList);
+
+            // Fetch live participant counts from tournament_participants for each event
+            if (evList.length > 0) {
+                const eventIds = evList.map(e => e.id);
+                const { data: countRows } = await supabase
+                    .from('tournament_participants')
+                    .select('event_id')
+                    .in('event_id', eventIds);
+
+                const counts = {};
+                (countRows || []).forEach(r => {
+                    counts[r.event_id] = (counts[r.event_id] || 0) + 1;
+                });
+                setParticipantCounts(prev => ({ ...prev, ...counts }));
+            }
         } catch (err) {
             console.error('Failed to fetch host events:', err);
             toast.error('Error loading tournament lists.');
@@ -419,6 +444,25 @@ const OrganisationManager = ({ permissions }) => {
             if (approvedEvsError) throw approvedEvsError;
             setApprovedEvents(approvedEvs || []);
 
+            // Fetch live participant counts for all calendar events
+            const allEventIds = [
+                ...(events || []).map(e => e.id),
+                ...(approvedEvs || []).map(e => e.id)
+            ].filter(Boolean);
+
+            if (allEventIds.length > 0) {
+                const { data: countRows } = await supabase
+                    .from('tournament_participants')
+                    .select('event_id')
+                    .in('event_id', allEventIds);
+
+                const counts = {};
+                (countRows || []).forEach(r => {
+                    counts[r.event_id] = (counts[r.event_id] || 0) + 1;
+                });
+                setParticipantCounts(counts);
+            }
+
             // 3. Aggregate Stats
             const { data: allCalendarEvents } = await supabase
                 .from('calendar')
@@ -453,6 +497,144 @@ const OrganisationManager = ({ permissions }) => {
             fetchHostData();
         }
     }, [permissions]);
+
+    // Fetch Tournament Entries Telemetry when selectedEventEntries becomes active
+    useEffect(() => {
+        const fetchEntries = async () => {
+            if (!selectedEventEntries) {
+                setEventEntriesList([]);
+                return;
+            }
+
+            setIsLoadingEntries(true);
+            try {
+                // Step 1: Fetch participant records directly (no FK join to avoid RLS issues)
+                const { data: participants, error } = await supabase
+                    .from('tournament_participants')
+                    .select('id, profile_id, full_name, email, class_name, is_paid, metadata, rankedin_participant_id')
+                    .eq('event_id', selectedEventEntries.id)
+                    .order('full_name', { ascending: true });
+
+                if (error) {
+                    console.error('tournament_participants query error:', JSON.stringify(error));
+                    throw error;
+                }
+
+                // Step 2: Enrich with player profile data where profile_id exists
+                const profileIds = [...new Set((participants || []).map(p => p.profile_id).filter(Boolean))];
+                let playerMap = {};
+
+                if (profileIds.length > 0) {
+                    const { data: playerProfiles, error: profileError } = await supabase
+                        .from('players')
+                        .select('id, contact_number, profile_image')
+                        .in('id', profileIds);
+
+                    if (profileError) {
+                        console.warn('Could not enrich with player profiles:', profileError.message);
+                    } else {
+                        (playerProfiles || []).forEach(p => { playerMap[p.id] = p; });
+                    }
+                }
+
+                // Step 3: Merge participant + profile data
+                const enriched = (participants || []).map(p => ({
+                    ...p,
+                    players: playerMap[p.profile_id] || null
+                }));
+
+                setEventEntriesList(enriched);
+            } catch (err) {
+                console.error('Error loading event entries — full error object:', err);
+                console.error('Error code:', err?.code, '| Message:', err?.message, '| Details:', err?.details, '| Hint:', err?.hint);
+                toast.error(`Failed to load entries: ${err?.message || 'Unknown error'}`);
+            } finally {
+                setIsLoadingEntries(false);
+            }
+        };
+
+        fetchEntries();
+    }, [selectedEventEntries]);
+
+    // Computed unique entries count, team counts and paid revenue breakdown metrics
+    const entriesMetrics = useMemo(() => {
+        if (!selectedEventEntries || eventEntriesList.length === 0) {
+            return {
+                totalPlayers: 0,
+                uniqueTeams: 0,
+                estimatedRevenue: 0,
+                divisionBreakdown: {}
+            };
+        }
+
+        const totalPlayers = eventEntriesList.length;
+        let uniqueTeams = 0;
+        let estimatedRevenue = 0;
+
+        const divisionBreakdown = {};
+
+        // Use per-division seen-team sets so the same pair in two different
+        // divisions each count as 1 team per division (not 0 after first div)
+        const divisionSeenTeams = {};
+
+        eventEntriesList.forEach(entry => {
+            const className = entry.class_name || 'Unassigned';
+            if (!divisionBreakdown[className]) {
+                divisionBreakdown[className] = { players: 0, teams: 0, revenue: 0 };
+            }
+            if (!divisionSeenTeams[className]) {
+                divisionSeenTeams[className] = new Set();
+            }
+
+            // Increment division player count
+            divisionBreakdown[className].players += 1;
+
+            // Build a sorted pair key scoped to this division
+            const p1 = entry.full_name;
+            const p2 = entry.metadata?.partner_name || '';
+            const sortedPair = [p1, p2].filter(Boolean).map(n => n.toLowerCase().trim()).sort().join('_with_');
+            const divisionTeamKey = `${className}::${sortedPair}`;
+
+            if (!divisionSeenTeams[className].has(sortedPair)) {
+                divisionSeenTeams[className].add(sortedPair);
+                divisionBreakdown[className].teams += 1;
+                uniqueTeams += 1;
+            }
+
+            // Estimate entry fee for this player/division
+            if (entry.is_paid) {
+                const fee = parseFloat(selectedEventEntries.category_fees?.[className]) || parseFloat(selectedEventEntries.entry_fee) || 0;
+                estimatedRevenue += fee;
+                divisionBreakdown[className].revenue += fee;
+            }
+        });
+
+        return {
+            totalPlayers,
+            uniqueTeams,
+            estimatedRevenue,
+            divisionBreakdown
+        };
+    }, [selectedEventEntries, eventEntriesList]);
+
+    // Search-filtered + division-filtered entries datagrid results
+    const filteredEntries = useMemo(() => {
+        let list = eventEntriesList;
+        // Division filter
+        if (entriesDivisionFilter !== 'all') {
+            list = list.filter(e => e.class_name === entriesDivisionFilter);
+        }
+        // Text search
+        if (!entriesSearchQuery.trim()) return list;
+        const q = entriesSearchQuery.toLowerCase().trim();
+        return list.filter(entry => {
+            const nameMatch = entry.full_name?.toLowerCase().includes(q);
+            const emailMatch = entry.email?.toLowerCase().includes(q);
+            const classMatch = entry.class_name?.toLowerCase().includes(q);
+            const partnerMatch = entry.metadata?.partner_name?.toLowerCase().includes(q);
+            return nameMatch || emailMatch || classMatch || partnerMatch;
+        });
+    }, [eventEntriesList, entriesSearchQuery, entriesDivisionFilter]);
 
     // Host - Submit Tourney for Sanctioning
     const handleCreateEventSubmit = async (e) => {
@@ -849,15 +1031,19 @@ const OrganisationManager = ({ permissions }) => {
         }
     };
 
-    // Statistics aggregates for host
+    // Statistics aggregates for host — uses live participant counts from tournament_participants
     const hostStats = useMemo(() => {
         const approved = orgEvents.filter(e => e.sanction_status === 'approved');
         const pendingCount = orgEvents.filter(e => e.sanction_status === 'pending').length;
 
-        const totalRegistrations = approved.reduce((sum, e) => sum + (parseInt(e.registered_players) || 0), 0);
+        const totalRegistrations = approved.reduce((sum, e) => {
+            // Prefer live count from tournament_participants, fall back to calendar column
+            return sum + (participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0);
+        }, 0);
+
         const totalEarned = approved.reduce((sum, e) => {
             const fee = parseFloat(e.entry_fee) || 0;
-            const players = parseInt(e.registered_players) || 0;
+            const players = participantCounts[e.id] ?? parseInt(e.registered_players) ?? 0;
             return sum + (fee * players);
         }, 0);
 
@@ -868,7 +1054,7 @@ const OrganisationManager = ({ permissions }) => {
             totalRegistrations,
             totalEarned
         };
-    }, [orgEvents]);
+    }, [orgEvents, participantCounts]);
 
     const filteredApprovedEvents = useMemo(() => {
         if (!approvedEventsSearch.trim()) return approvedEvents;
@@ -1187,6 +1373,12 @@ const OrganisationManager = ({ permissions }) => {
                                                 </td>
                                                 <td className="py-4 px-4 align-middle text-right">
                                                     <div className="flex justify-end gap-2">
+                                                        <button
+                                                            onClick={() => setSelectedEventEntries(ev)}
+                                                            className="bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500 hover:text-white text-purple-400 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                                        >
+                                                            <Users size={12} /> Entries ({participantCounts[ev.id] ?? ev.registered_players ?? 0})
+                                                        </button>
                                                         <button
                                                             onClick={() => setSelectedEventDetails(ev)}
                                                             className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
@@ -1610,9 +1802,12 @@ const OrganisationManager = ({ permissions }) => {
 
                                             <div className="flex gap-2 mt-5 pt-3.5 border-t border-white/5 justify-between items-center">
                                                 {ev.sanction_status === 'approved' ? (
-                                                    <span className="text-[10px] text-purple-400 font-bold flex items-center gap-1.5 bg-purple-500/10 border border-purple-500/20 px-2.5 py-1 rounded-md">
-                                                        <Users size={12} /> {ev.registered_players || 0} Registrations
-                                                    </span>
+                                                    <button 
+                                                        onClick={() => setSelectedEventEntries(ev)}
+                                                        className="text-[10px] text-purple-400 font-black hover:text-white flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
+                                                    >
+                                                        <Users size={12} /> {participantCounts[ev.id] ?? ev.registered_players ?? 0} Entries & Breakdown
+                                                    </button>
                                                 ) : (
                                                     <span className="text-[10px] text-gray-500 font-bold">
                                                         ID: {ev.id}
@@ -2724,6 +2919,31 @@ const OrganisationManager = ({ permissions }) => {
                                         </div>
                                     </div>
 
+                                    {/* Live Entries Live Badge Inspector (Federation / Super Admin oversight) */}
+                                    <div className="bg-gradient-to-r from-purple-500/10 to-indigo-500/5 border border-purple-500/20 p-5 rounded-3xl relative overflow-hidden shadow-md">
+                                        <div className="absolute top-0 right-0 w-16 h-16 bg-purple-500/5 blur-[25px] rounded-full pointer-events-none" />
+                                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                                            <div className="flex-1 min-w-0">
+                                                <span className="block text-purple-400 text-[10px] font-black uppercase tracking-widest mb-1">Live Registration Feed</span>
+                                                <h4 className="font-extrabold text-white text-base flex items-center gap-1.5 leading-snug">
+                                                    <Users size={16} className="text-purple-400 shrink-0" />
+                                                    {participantCounts[selectedEventDetails.id] ?? selectedEventDetails.registered_players ?? 0} Registered Entries
+                                                </h4>
+                                                <p className="text-[11px] text-gray-400 mt-1 leading-normal">
+                                                    Inspect individual entries, contact credentials, partner pairs and division fees.
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedEventEntries(selectedEventDetails);
+                                                }}
+                                                className="mt-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all shrink-0 cursor-pointer"
+                                            >
+                                                👁️ View Entries
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     {/* Sponsor Logos Badges */}
                                     {selectedEventDetails.sponsor_logos && selectedEventDetails.sponsor_logos.length > 0 && (
                                         <div>
@@ -3087,6 +3307,257 @@ const OrganisationManager = ({ permissions }) => {
                                     </button>
                                 </div>
                             </form>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* ========================================================
+                TOURNAMENT ENTRIES & BREAKDOWN INSPECTOR MODAL
+               ======================================================== */}
+            <AnimatePresence>
+                {selectedEventEntries && (
+                    <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[210] flex items-center justify-center p-4 overflow-y-auto">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="max-w-4xl w-full bg-[#0B0F19]/95 border border-white/10 rounded-3xl p-6 md:p-8 relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto custom-scrollbar text-left flex flex-col gap-6"
+                        >
+                            {/* Ambient Glows */}
+                            <div className="absolute -top-12 -right-12 w-48 h-48 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none" />
+                            <div className="absolute -bottom-12 -left-12 w-48 h-48 bg-padel-green/5 blur-[80px] rounded-full pointer-events-none" />
+
+                            {/* Close Button */}
+                            <button
+                                onClick={() => {
+                                    setSelectedEventEntries(null);
+                                    setEntriesSearchQuery('');
+                                }}
+                                className="absolute top-5 right-5 p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <X size={18} />
+                            </button>
+
+                            {/* Header details */}
+                            <div className="flex flex-col gap-1 pr-8">
+                                <span className="text-[10px] text-padel-green font-black uppercase tracking-widest">Tournament Administration</span>
+                                <h3 className="text-xl md:text-2xl font-black text-white leading-tight">
+                                    {selectedEventEntries.event_name}
+                                </h3>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Entries Breakdown, Categories Analysis and Registered Players for the tournament
+                                </p>
+                            </div>
+
+                            {/* Core Performance / Admin Metrics Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-inner relative overflow-hidden">
+                                    <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                                        <Users size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 text-[10px] font-black uppercase tracking-wider block">Total Registrations</span>
+                                        <span className="text-2xl font-black text-white mt-1 block">
+                                            {entriesMetrics.totalPlayers} <span className="text-xs text-gray-500 font-bold">players</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-inner relative overflow-hidden">
+                                    <div className="w-12 h-12 rounded-xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center text-padel-green">
+                                        <Trophy size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 text-[10px] font-black uppercase tracking-wider block">Unique Teams</span>
+                                        <span className="text-2xl font-black text-white mt-1 block">
+                                            {entriesMetrics.uniqueTeams} <span className="text-xs text-gray-500 font-bold">pairs</span>
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-inner relative overflow-hidden">
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                                        <DollarSign size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="text-gray-500 text-[10px] font-black uppercase tracking-wider block">Est. Revenue (Paid)</span>
+                                        <span className="text-2xl font-black text-emerald-400 mt-1 block">
+                                            R {entriesMetrics.estimatedRevenue.toLocaleString('en-ZA')}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Category Breakdown badging list */}
+                            <div className="space-y-2.5">
+                                <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider">Division Entry Analysis</span>
+                                {Object.keys(entriesMetrics.divisionBreakdown).length === 0 ? (
+                                    <div className="text-xs text-gray-500 font-medium py-2">
+                                        No player registrations recorded under any categories yet.
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                                        {Object.entries(entriesMetrics.divisionBreakdown).map(([divName, data]) => (
+                                            <div 
+                                                key={divName} 
+                                                className="bg-black/35 border border-white/5 p-3 rounded-xl flex flex-col justify-between gap-1 shadow"
+                                            >
+                                                <span className="text-xs font-extrabold text-white truncate block">{divName}</span>
+                                                <div className="flex justify-between items-center text-[10px] text-gray-400 mt-1.5 pt-1.5 border-t border-white/5">
+                                                    <span>{data.players} Players ({data.teams} Teams)</span>
+                                                    <span className="text-emerald-400 font-black">R {data.revenue}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Registered Players searchable datagrid */}
+                            <div className="space-y-4 pt-2">
+                                {/* Top bar: label + search */}
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <span className="text-gray-500 text-[10px] font-black uppercase tracking-wider shrink-0">
+                                        Live Registered Entries ({filteredEntries.length})
+                                    </span>
+                                    {/* Search input */}
+                                    <div className="relative w-full sm:max-w-xs shrink-0">
+                                        <input
+                                            type="text"
+                                            value={entriesSearchQuery}
+                                            onChange={(e) => setEntriesSearchQuery(e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4 pr-10 py-2 focus:outline-none focus:border-padel-green text-xs transition-colors placeholder:text-gray-600 font-semibold"
+                                            placeholder="Search name, email..."
+                                        />
+                                        {entriesSearchQuery && (
+                                            <button
+                                                onClick={() => setEntriesSearchQuery('')}
+                                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white text-xs cursor-pointer"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Division filter pills */}
+                                {Object.keys(entriesMetrics.divisionBreakdown).length > 1 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => setEntriesDivisionFilter('all')}
+                                            className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                                entriesDivisionFilter === 'all'
+                                                    ? 'bg-padel-green text-black border-padel-green'
+                                                    : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/25'
+                                            }`}
+                                        >
+                                            All Divisions
+                                        </button>
+                                        {Object.keys(entriesMetrics.divisionBreakdown).map(div => (
+                                            <button
+                                                key={div}
+                                                onClick={() => setEntriesDivisionFilter(div === entriesDivisionFilter ? 'all' : div)}
+                                                className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border transition-all cursor-pointer ${
+                                                    entriesDivisionFilter === div
+                                                        ? 'bg-purple-500 text-white border-purple-500'
+                                                        : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/25'
+                                                }`}
+                                            >
+                                                {div}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Entry cards — no table, fully responsive */}
+                                <div className="space-y-2">
+                                    {isLoadingEntries ? (
+                                        <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500 text-xs">
+                                            <RefreshCw size={24} className="animate-spin text-padel-green" />
+                                            <span>Loading entry breakdown datasets...</span>
+                                        </div>
+                                    ) : filteredEntries.length === 0 ? (
+                                        <div className="text-center py-10 text-gray-500 text-xs font-semibold border border-white/5 rounded-2xl">
+                                            {entriesSearchQuery || entriesDivisionFilter !== 'all'
+                                                ? 'No registrations match your filters.'
+                                                : 'No entries found for this tournament yet.'}
+                                        </div>
+                                    ) : (
+                                        filteredEntries.map((entry) => {
+                                            const initials = entry.full_name
+                                                ? entry.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                                                : 'P';
+                                            return (
+                                                <div
+                                                    key={entry.id}
+                                                    className="bg-black/30 border border-white/5 rounded-2xl p-4 hover:border-white/10 transition-all"
+                                                >
+                                                    {/* Row 1: Avatar + Name + Payment badge */}
+                                                    <div className="flex items-center gap-3 mb-3">
+                                                        {entry.players?.profile_image ? (
+                                                            <img
+                                                                src={entry.players.profile_image}
+                                                                alt={entry.full_name}
+                                                                className="w-10 h-10 rounded-xl object-cover border border-white/10 shrink-0"
+                                                            />
+                                                        ) : (
+                                                            <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 font-extrabold text-[11px] shrink-0">
+                                                                {initials}
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-extrabold text-white text-sm block truncate leading-tight">{entry.full_name}</span>
+                                                            <span className="text-[10px] text-gray-500 block truncate leading-tight mt-0.5">{entry.email}</span>
+                                                        </div>
+                                                        <span className={`shrink-0 inline-flex px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+                                                            entry.is_paid
+                                                                ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        }`}>
+                                                            {entry.is_paid ? 'Paid ✓' : 'Unpaid'}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Row 2: Division + Contact + Partner */}
+                                                    <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                                                        {/* Division pill */}
+                                                        <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 font-bold text-gray-300 whitespace-nowrap">
+                                                            {entry.class_name}
+                                                        </span>
+                                                        {/* Contact */}
+                                                        {entry.players?.contact_number && (
+                                                            <span className="text-gray-500 font-semibold whitespace-nowrap">
+                                                                📞 {entry.players.contact_number}
+                                                            </span>
+                                                        )}
+                                                        {/* Partner */}
+                                                        {entry.metadata?.partner_name && (
+                                                            <span className="text-gray-400 font-bold whitespace-nowrap">
+                                                                🤝 {entry.metadata.partner_name}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Footer block */}
+                            <div className="border-t border-white/5 pt-4 flex justify-end">
+                                <button
+                                    onClick={() => {
+                                        setSelectedEventEntries(null);
+                                        setEntriesSearchQuery('');
+                                        setEntriesDivisionFilter('all');
+                                    }}
+                                    className="px-6 py-2.5 bg-white/5 hover:bg-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer"
+                                >
+                                    Close Entries Panel
+                                </button>
+                            </div>
                         </motion.div>
                     </div>
                 )}
