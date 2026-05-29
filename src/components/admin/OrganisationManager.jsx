@@ -78,7 +78,21 @@ const OrganisationManager = ({ permissions }) => {
         category_fees: {},
         court_map_link: '',
         image_url: '',
-        sponsor_logos: []
+        sponsor_logos: [],
+        tournament_director_name: '',
+        tournament_director_phone: '',
+        tournament_director_email: '',
+        indoor_outdoor: 'Outdoor',
+        court_labels: '',
+        prize_money_breakdown: '',
+        sponsors_names: '',
+        balls_to_be_used: 'Head Tour',
+        licences_required: false,
+        licence_types: '',
+        max_ranking_points: '',
+        back_draw_options: 'Plate Included',
+        event_co_admins: '',
+        additional_notes: ''
     });
     const [isCreatingEvent, setIsCreatingEvent] = useState(false);
 
@@ -499,7 +513,21 @@ const OrganisationManager = ({ permissions }) => {
                 courts_count: parseInt(newEventData.courts_count) || 4,
                 allowed_divisions: newEventData.allowed_divisions,
                 max_teams_capacity: parseInt(newEventData.max_teams_capacity) || 16,
-                partner_requirement: newEventData.partner_requirement
+                partner_requirement: newEventData.partner_requirement,
+                tournament_director_name: (newEventData.tournament_director_name || '').trim(),
+                tournament_director_phone: (newEventData.tournament_director_phone || '').trim(),
+                tournament_director_email: (newEventData.tournament_director_email || '').trim(),
+                indoor_outdoor: newEventData.indoor_outdoor || 'Outdoor',
+                court_labels: newEventData.court_labels ? newEventData.court_labels.split(',').map(s => s.trim()).filter(Boolean) : [],
+                prize_money_breakdown: (newEventData.prize_money_breakdown || '').trim(),
+                sponsors_names: newEventData.sponsors_names ? newEventData.sponsors_names.split(',').map(s => s.trim()).filter(Boolean) : [],
+                balls_to_be_used: (newEventData.balls_to_be_used || 'Head Tour').trim(),
+                licences_required: !!newEventData.licences_required,
+                licence_types: newEventData.licence_types ? newEventData.licence_types.split(',').map(s => s.trim()).filter(Boolean) : [],
+                max_ranking_points: newEventData.max_ranking_points ? parseInt(newEventData.max_ranking_points) : null,
+                back_draw_options: (newEventData.back_draw_options || 'Plate Included').trim(),
+                event_co_admins: newEventData.event_co_admins ? newEventData.event_co_admins.split(',').map(s => s.trim()).filter(Boolean) : [],
+                additional_notes: (newEventData.additional_notes || '').trim()
             };
 
             if (editingEventId) {
@@ -567,7 +595,21 @@ const OrganisationManager = ({ permissions }) => {
                 category_fees: {},
                 court_map_link: '',
                 image_url: '',
-                sponsor_logos: []
+                sponsor_logos: [],
+                tournament_director_name: '',
+                tournament_director_phone: '',
+                tournament_director_email: '',
+                indoor_outdoor: 'Outdoor',
+                court_labels: '',
+                prize_money_breakdown: '',
+                sponsors_names: '',
+                balls_to_be_used: 'Head Tour',
+                licences_required: false,
+                licence_types: '',
+                max_ranking_points: '',
+                back_draw_options: 'Plate Included',
+                event_co_admins: '',
+                additional_notes: ''
             });
             setEditingEventId(null);
             setEventWizardStep(1);
@@ -668,14 +710,28 @@ const OrganisationManager = ({ permissions }) => {
             image_url: ev.image_url || '',
             sponsor_logos: ev.sponsor_logos || [],
             is_league: ev.is_league || false,
-            tournament_type: ev.tournament_type || 'knockout',
+            tournament_type: ev.tournament_type || 'Single Elimination',
             registration_deadline: ev.registration_deadline || '',
-            golden_point: ev.golden_point || false,
+            golden_point: ev.golden_point !== undefined ? ev.golden_point : true,
             courts_count: ev.courts_count || 4,
             allowed_divisions: ev.allowed_divisions || [],
             max_teams_capacity: ev.max_teams_capacity || 16,
-            partner_requirement: ev.partner_requirement || 'any',
-            court_map_link: ev.court_map_link || ''
+            partner_requirement: ev.partner_requirement || 'Required',
+            court_map_link: ev.court_map_link || '',
+            tournament_director_name: ev.tournament_director_name || '',
+            tournament_director_phone: ev.tournament_director_phone || '',
+            tournament_director_email: ev.tournament_director_email || '',
+            indoor_outdoor: ev.indoor_outdoor || 'Outdoor',
+            court_labels: Array.isArray(ev.court_labels) ? ev.court_labels.join(', ') : '',
+            prize_money_breakdown: ev.prize_money_breakdown || '',
+            sponsors_names: Array.isArray(ev.sponsors_names) ? ev.sponsors_names.join(', ') : '',
+            balls_to_be_used: ev.balls_to_be_used || 'Head Tour',
+            licences_required: ev.licences_required || false,
+            licence_types: Array.isArray(ev.licence_types) ? ev.licence_types.join(', ') : '',
+            max_ranking_points: ev.max_ranking_points !== null && ev.max_ranking_points !== undefined ? String(ev.max_ranking_points) : '',
+            back_draw_options: ev.back_draw_options || 'Plate Included',
+            event_co_admins: Array.isArray(ev.event_co_admins) ? ev.event_co_admins.join(', ') : '',
+            additional_notes: ev.additional_notes || ''
         });
         setEventWizardStep(1);
         setActiveSection('create-event');
@@ -706,7 +762,21 @@ const OrganisationManager = ({ permissions }) => {
             category_fees: {},
             court_map_link: '',
             image_url: '',
-            sponsor_logos: []
+            sponsor_logos: [],
+            tournament_director_name: '',
+            tournament_director_phone: '',
+            tournament_director_email: '',
+            indoor_outdoor: 'Outdoor',
+            court_labels: '',
+            prize_money_breakdown: '',
+            sponsors_names: '',
+            balls_to_be_used: 'Head Tour',
+            licences_required: false,
+            licence_types: '',
+            max_ranking_points: '',
+            back_draw_options: 'Plate Included',
+            event_co_admins: '',
+            additional_notes: ''
         });
         setEventWizardStep(1);
         setActiveSection('my-events');
@@ -1640,10 +1710,11 @@ const OrganisationManager = ({ permissions }) => {
                                                             onChange={(e) => setNewEventData(prev => ({ ...prev, sapa_status: e.target.value }))}
                                                             className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 pr-10 focus:outline-none focus:border-padel-green text-sm transition-colors cursor-pointer appearance-none"
                                                         >
-                                                            <option value="Bronze">Bronze Tier (Local/Friendly)</option>
-                                                            <option value="Silver">Silver Tier (Standard Sanction)</option>
-                                                            <option value="Gold">Gold Tier (High Point Bracket)</option>
-                                                            <option value="Super Gold">Super Gold (Prestige Open)</option>
+                                                            <option value="Bronze">Bronze Tier</option>
+                                                            <option value="Silver">Silver Tier</option>
+                                                            <option value="Gold">Gold Tier</option>
+                                                            <option value="Super Gold">Super Gold</option>
+                                                            <option value="Major">Major</option>
                                                         </select>
                                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
                                                             <ChevronDown size={16} />
@@ -1659,8 +1730,9 @@ const OrganisationManager = ({ permissions }) => {
                                                             className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 pr-10 focus:outline-none focus:border-padel-green text-sm transition-colors cursor-pointer appearance-none"
                                                         >
                                                             <option value="Single Elimination">Single Elimination (Knockout)</option>
+                                                            <option value="Single Elimination + Plate">Elimination + Plates</option>
+                                                            <option value="Group Stage -> Upper / Lower Bracket">Group Stage &rarr; Upper / Lower Bracket</option>
                                                             <option value="Double Elimination">Double Elimination</option>
-                                                            <option value="Round Robin">Round Robin (Group Stage)</option>
                                                             <option value="Compass Draw">Compass Draw (Guaranteed Matches)</option>
                                                         </select>
                                                         <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
@@ -1681,6 +1753,40 @@ const OrganisationManager = ({ permissions }) => {
                                                 </div>
                                             </div>
 
+                                            {/* Tournament Director Info */}
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Tournament Director Name</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.tournament_director_name}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, tournament_director_name: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. John Doe"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Director Contact Number</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.tournament_director_phone}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, tournament_director_phone: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. +27 82 123 4567"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Director Email Address</label>
+                                                    <input
+                                                        type="email"
+                                                        value={newEventData.tournament_director_email}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, tournament_director_email: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. john@4mpadel.co.za"
+                                                    />
+                                                </div>
+                                            </div>
+
                                             {/* Tournament Description */}
                                             <div>
                                                 <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Details & Regulations</label>
@@ -1689,6 +1795,30 @@ const OrganisationManager = ({ permissions }) => {
                                                     onChange={(html) => setNewEventData(prev => ({ ...prev, description: html }))}
                                                     placeholder="Rules, match rules, seeding information..."
                                                 />
+                                            </div>
+
+                                            {/* Balls & Sponsors Names */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Balls to be Used (Brand & Model)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.balls_to_be_used}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, balls_to_be_used: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. Head Tour"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Sponsors Names (Comma-separated)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.sponsors_names}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, sponsors_names: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. Bullpadel, Adidas, Wilson"
+                                                    />
+                                                </div>
                                             </div>
 
                                             {/* Media & Sponsors */}
@@ -2031,6 +2161,40 @@ const OrganisationManager = ({ permissions }) => {
                                                 </div>
                                             </div>
 
+                                            {/* Indoor/Outdoor & Court Labels */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Indoor / Outdoor</label>
+                                                    <div className="relative">
+                                                        <select
+                                                            value={newEventData.indoor_outdoor}
+                                                            onChange={(e) => setNewEventData(prev => ({ ...prev, indoor_outdoor: e.target.value }))}
+                                                            className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 pr-10 focus:outline-none focus:border-padel-green text-sm transition-colors cursor-pointer appearance-none"
+                                                        >
+                                                            <option value="Outdoor">Outdoor Courts</option>
+                                                            <option value="Indoor">Indoor Courts</option>
+                                                            <option value="Both">Both (Indoor & Outdoor)</option>
+                                                        </select>
+                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                            <ChevronDown size={16} />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2 flex items-center justify-between">
+                                                        <span>Court Labels (Best to worst)</span>
+                                                        <span className="text-[9px] text-gray-500 font-normal">Ranked for AI scheduling</span>
+                                                    </label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.court_labels}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, court_labels: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. Court 1 (Center), Court 2, Court 3"
+                                                    />
+                                                </div>
+                                            </div>
+
                                             <div className="pt-4 flex justify-between gap-4">
                                                 <button
                                                     type="button"
@@ -2222,6 +2386,118 @@ const OrganisationManager = ({ permissions }) => {
                                                             </div>
                                                         );
                                                     })}
+                                                </div>
+                                            </div>
+
+                                            {/* Section 4.1 Tournament Details Forms Additions */}
+                                            <div className="border-t border-white/5 pt-4 space-y-4">
+                                                {/* Prize Money & Breakdown */}
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Prize Money & Breakdown</label>
+                                                    <textarea
+                                                        value={newEventData.prize_money_breakdown}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, prize_money_breakdown: e.target.value }))}
+                                                        rows={2}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green text-sm transition-colors custom-scrollbar resize-none"
+                                                        placeholder="e.g. Winner: R5,000, Runner-up: R2,500, Semifinalists: R1,000"
+                                                    />
+                                                </div>
+
+                                                {/* Max Ranking Points & Back Draw / Plate Options */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Max Ranking Points per Team to Qualify</label>
+                                                        <input
+                                                            type="number"
+                                                            value={newEventData.max_ranking_points}
+                                                            onChange={(e) => setNewEventData(prev => ({ ...prev, max_ranking_points: e.target.value }))}
+                                                            className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                            placeholder="e.g. 1500 (leave blank for no limit)"
+                                                        />
+                                                        <p className="text-[9px] text-gray-500 mt-1">Teams above this threshold cannot enter.</p>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Back Draw / Plate Options</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={newEventData.back_draw_options}
+                                                                onChange={(e) => setNewEventData(prev => ({ ...prev, back_draw_options: e.target.value }))}
+                                                                className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 pr-10 focus:outline-none focus:border-padel-green text-sm transition-colors cursor-pointer appearance-none"
+                                                            >
+                                                                <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
+                                                                <option value="No Plate">No Plate (Direct Elimination Only)</option>
+                                                                <option value="Consolation Draw">Consolation Draw</option>
+                                                                <option value="Compass Format">Compass Draw format</option>
+                                                            </select>
+                                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                                                <ChevronDown size={16} />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Licences required toggle & Licence Types */}
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    <div className="flex flex-col justify-center">
+                                                        <label className="flex items-center justify-between cursor-pointer p-3.5 bg-black/20 border border-white/5 rounded-xl select-none group hover:border-white/10 transition-all">
+                                                            <div className="flex flex-col text-left">
+                                                                <span className="text-xs font-bold text-white group-hover:text-padel-green transition-colors">Licence Required</span>
+                                                                <span className="text-[9px] text-gray-500 mt-0.5">Require specific organization licence</span>
+                                                            </div>
+                                                            <div className="relative">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={newEventData.licences_required}
+                                                                    onChange={(e) => setNewEventData(prev => ({ ...prev, licences_required: e.target.checked }))}
+                                                                    className="sr-only"
+                                                                />
+                                                                <div className={`w-11 h-6 bg-white/10 border border-white/10 rounded-full transition-all duration-300 ${newEventData.licences_required ? 'bg-padel-green/30 border-padel-green/50' : ''}`} />
+                                                                <div className={`absolute left-1 top-1 w-4 h-4 bg-gray-400 rounded-full transition-all duration-300 ${newEventData.licences_required ? 'translate-x-5 bg-padel-green' : ''}`} />
+                                                            </div>
+                                                        </label>
+                                                    </div>
+                                                    {newEventData.licences_required && (
+                                                        <motion.div
+                                                            initial={{ opacity: 0, x: -10 }}
+                                                            animate={{ opacity: 1, x: 0 }}
+                                                            className="flex flex-col justify-center"
+                                                        >
+                                                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Required Licence Types (Comma-separated)</label>
+                                                            <input
+                                                                type="text"
+                                                                value={newEventData.licence_types}
+                                                                onChange={(e) => setNewEventData(prev => ({ ...prev, licence_types: e.target.value }))}
+                                                                className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                                placeholder="e.g. SAPA Player, SAPA Pro"
+                                                            />
+                                                        </motion.div>
+                                                    )}
+                                                </div>
+
+                                                {/* Event Co-Admins */}
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Event Co-Admins (Comma-separated emails)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={newEventData.event_co_admins}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, event_co_admins: e.target.value }))}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
+                                                        placeholder="e.g. coadmin1@4mpadel.co.za, coadmin2@4mpadel.co.za"
+                                                    />
+                                                    <p className="text-[9px] text-gray-500 mt-1">Specify co-admins by entering their registered email addresses.</p>
+                                                </div>
+
+                                                {/* Additional Notes */}
+                                                <div>
+                                                    <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Additional Notes</label>
+                                                    <textarea
+                                                        value={newEventData.additional_notes}
+                                                        onChange={(e) => setNewEventData(prev => ({ ...prev, additional_notes: e.target.value }))}
+                                                        rows={2}
+                                                        className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-padel-green text-sm transition-colors custom-scrollbar resize-none"
+                                                        placeholder="e.g. Please bring dry clothing. Catering available on-site..."
+                                                    />
+                                                    <p className="text-[9px] text-gray-500 mt-1">Visible to players on the entry/registration page.</p>
                                                 </div>
                                             </div>
 
@@ -2468,6 +2744,108 @@ const OrganisationManager = ({ permissions }) => {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Section 4.1 Additional Details Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 border-t border-white/5 pt-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Director & Balls Info</span>
+                                        <div className="bg-black/30 border border-white/5 p-4 rounded-2xl space-y-2">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Director Name:</span>
+                                                <span className="text-white font-bold">{selectedEventDetails.tournament_director_name || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Director Phone:</span>
+                                                <span className="text-gray-300 font-semibold">{selectedEventDetails.tournament_director_phone || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Director Email:</span>
+                                                <span className="text-gray-300 font-semibold">{selectedEventDetails.tournament_director_email || 'N/A'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Balls to be Used:</span>
+                                                <span className="text-white font-bold">{selectedEventDetails.balls_to_be_used || 'Head Tour'}</span>
+                                            </div>
+                                            {selectedEventDetails.event_co_admins && selectedEventDetails.event_co_admins.length > 0 && (
+                                                <div className="text-xs border-t border-white/5 pt-2 mt-1">
+                                                    <span className="text-gray-500 block mb-1">Event Co-Admins:</span>
+                                                    <span className="text-gray-300 font-semibold">{Array.isArray(selectedEventDetails.event_co_admins) ? selectedEventDetails.event_co_admins.join(', ') : selectedEventDetails.event_co_admins}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Court Priority & Setup</span>
+                                        <div className="bg-black/30 border border-white/5 p-4 rounded-2xl space-y-2">
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Indoor / Outdoor:</span>
+                                                <span className="text-white font-bold">{selectedEventDetails.indoor_outdoor || 'Outdoor'}</span>
+                                            </div>
+                                            {selectedEventDetails.court_labels && selectedEventDetails.court_labels.length > 0 && (
+                                                <div className="text-xs">
+                                                    <span className="text-gray-500 block mb-1">Court Priority Labels (Best &rarr; Worst):</span>
+                                                    <span className="text-gray-400 font-semibold block leading-relaxed">{Array.isArray(selectedEventDetails.court_labels) ? selectedEventDetails.court_labels.join(', ') : selectedEventDetails.court_labels}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Prizes & Licensing</span>
+                                        <div className="bg-black/30 border border-white/5 p-4 rounded-2xl space-y-2">
+                                            {selectedEventDetails.max_ranking_points && (
+                                                <div className="flex justify-between text-xs">
+                                                    <span className="text-gray-500">Max Points Limit:</span>
+                                                    <span className="text-white font-extrabold">{selectedEventDetails.max_ranking_points} pts</span>
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Back Draw / Plate:</span>
+                                                <span className="text-gray-300 font-bold">{selectedEventDetails.back_draw_options || 'Plate Included'}</span>
+                                            </div>
+                                            <div className="flex justify-between text-xs">
+                                                <span className="text-gray-500">Licence Required:</span>
+                                                <span className="text-white font-bold">{selectedEventDetails.licences_required ? 'Yes' : 'No'}</span>
+                                            </div>
+                                            {selectedEventDetails.licences_required && selectedEventDetails.licence_types && selectedEventDetails.licence_types.length > 0 && (
+                                                <div className="text-xs border-t border-white/5 pt-2 mt-1">
+                                                    <span className="text-gray-500 block mb-1">Required Licences:</span>
+                                                    <span className="text-gray-300 font-semibold">{Array.isArray(selectedEventDetails.licence_types) ? selectedEventDetails.licence_types.join(', ') : selectedEventDetails.licence_types}</span>
+                                                </div>
+                                            )}
+                                            {selectedEventDetails.prize_money_breakdown && (
+                                                <div className="text-xs border-t border-white/5 pt-2 mt-1">
+                                                    <span className="text-gray-500 block mb-1">Prize Breakdown:</span>
+                                                    <span className="text-gray-400 font-medium block leading-relaxed">{selectedEventDetails.prize_money_breakdown}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {selectedEventDetails.sponsors_names && selectedEventDetails.sponsors_names.length > 0 && (
+                                        <div>
+                                            <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Sponsor Brands</span>
+                                            <div className="bg-black/30 border border-white/5 p-4 rounded-2xl">
+                                                <span className="text-xs text-white font-bold">{Array.isArray(selectedEventDetails.sponsors_names) ? selectedEventDetails.sponsors_names.join(', ') : selectedEventDetails.sponsors_names}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Additional Notes Render */}
+                            {selectedEventDetails.additional_notes && (
+                                <div className="mt-6 text-left">
+                                    <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Additional Notes (For Players)</span>
+                                    <div className="bg-black/40 border border-white/5 p-5 rounded-2xl text-xs text-gray-300 leading-relaxed font-semibold">
+                                        {selectedEventDetails.additional_notes}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Details & Regulations Rich Text Render */}
                             {selectedEventDetails.description && (
