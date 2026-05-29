@@ -89,7 +89,11 @@ function AppContent() {
   const isHomePage = location.pathname === '/';
 
   // Routes that should always be accessible even if not logged in
-  const isPublicRoute = isHomePage || location.pathname === '/reset-password' || location.pathname === '/contact';
+  const isPublicRoute = 
+    isHomePage || 
+    location.pathname === '/reset-password' || 
+    location.pathname === '/contact' ||
+    location.pathname === '/rankings';
 
   const showMembersOnly = !loading && !session && !isPublicRoute;
   
