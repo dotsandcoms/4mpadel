@@ -1,8 +1,9 @@
-const CACHE_NAME = '4m-padel-v1';
+const CACHE_NAME = '4m-padel-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/favicon.png',
+  '/og-default.png',
   '/manifest.json'
 ];
 

@@ -39,6 +39,7 @@ import SearchPalette from './components/SearchPalette';
 
 import MembersOnlyModal from './components/MembersOnlyModal';
 import MobileBottomNav from './components/MobileBottomNav';
+import PwaInstallPrompt from './components/PwaInstallPrompt';
 
 function AppContent() {
   const location = useLocation();
@@ -149,6 +150,7 @@ function AppContent() {
       />
       <MembersOnlyModal isOpen={showMembersOnly} />
       <MobileBottomNav />
+      <PwaInstallPrompt />
     </div>
   );
 }
