@@ -387,7 +387,7 @@ const PlayerProfile = () => {
     }, [player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 
     useEffect(() => {
-        if (player?.rankedin_id && activeTab === 'matches' && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
+        if (player?.rankedin_id && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
             const fetchMatches = async () => {
                 setLoadingMatches(true);
                 try {
@@ -434,7 +434,7 @@ const PlayerProfile = () => {
             };
             fetchMatches();
         }
-    }, [player?.rankedin_id, activeTab, getPlayerMatches, matchHistory.upcoming.length, matchHistory.history.length]);
+    }, [player?.rankedin_id, getPlayerMatches, matchHistory.upcoming.length, matchHistory.history.length]);
 
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;
@@ -943,7 +943,11 @@ const PlayerProfile = () => {
                                     </div>
                                     <div className="border-l border-white/10 h-6 shrink-0" />
                                     <div className="flex flex-col">
-                                        <span className="text-white font-extrabold">{matchHistory.history.length + matchHistory.upcoming.length || 156}</span>
+                                        <span className="text-white font-extrabold">
+                                            {loadingMatches && totalPlayedMatches === 0 && matchHistory.upcoming.length === 0
+                                                ? '—'
+                                                : matchHistory.history.length + matchHistory.upcoming.length}
+                                        </span>
                                         <span className="text-[7.5px] uppercase tracking-widest text-gray-500 font-black">Matches</span>
                                     </div>
                                 </div>

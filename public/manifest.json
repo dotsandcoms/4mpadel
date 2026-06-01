@@ -1,7 +1,9 @@
 {
   "name": "4M Padel",
   "short_name": "4M Padel",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#ccff00",
@@ -9,16 +11,22 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/favicon.png",
+      "src": "/og-default.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/favicon.png",
+      "src": "/og-default.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/og-default.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
