@@ -1086,11 +1086,11 @@ const PlayerProfile = () => {
                         {/* Mobile Horizontally Scrollable Tabs */}
                         <div className="flex gap-1.5 bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 p-1 rounded-2xl overflow-x-auto no-scrollbar scrollbar-none">
                             {[
-                                { id: 'events', label: 'Tournaments' },
-                                { id: 'matches', label: 'Matches' },
+                                { id: 'events', label: 'My Events' },
+                                { id: 'matches', label: 'My Matches' },
                                 { id: 'rankings', label: 'My Rankings' },
                                 { id: 'payments', label: 'Payments' },
-                                { id: 'profile', label: 'Profile' },
+                                { id: 'profile', label: 'My Profile' },
                             ].map((tab) => {
                                 const isSelected = activeTab === tab.id;
                                 let activeStyles = '';
