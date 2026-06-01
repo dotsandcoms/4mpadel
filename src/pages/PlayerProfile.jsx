@@ -13,6 +13,7 @@ import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as Pho
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
+    const [hasSession, setHasSession] = useState(null);
     const [isMobileAccordionOpen, setIsMobileAccordionOpen] = useState(false);
     const [isCareerAccordionOpen, setIsCareerAccordionOpen] = useState(false);
     const [isSecurityAccordionOpen, setIsSecurityAccordionOpen] = useState(false);
@@ -106,9 +107,12 @@ const PlayerProfile = () => {
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session) {
-                navigate('/');
+                setHasSession(false);
+                setLoading(false);
                 return;
             }
+
+            setHasSession(true);
 
             // Check if Admin is impersonating a user
             const testEmail = sessionStorage.getItem('admin_test_login_email');
@@ -738,6 +742,10 @@ const PlayerProfile = () => {
                 <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-padel-green"></div>
             </div>
         );
+    }
+
+    if (hasSession === false) {
+        return null;
     }
 
     // Dynamic Performance Statistics Calculations from RankedIn matches history

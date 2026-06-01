@@ -4,10 +4,14 @@ import { Lock, UserPlus } from 'lucide-react';
 import AuthModal from './AuthModal';
 import { Link } from 'react-router-dom';
 
-const MembersOnlyModal = ({ isOpen }) => {
+const MembersOnlyModal = ({ isOpen, onClose }) => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     if (!isOpen) return null;
+
+    const handleDismiss = () => {
+        onClose?.();
+    };
 
     return (
         <>
@@ -62,6 +66,7 @@ const MembersOnlyModal = ({ isOpen }) => {
                                 <div className="mt-8">
                                     <Link
                                         to="/"
+                                        onClick={handleDismiss}
                                         className="text-gray-500 hover:text-white text-[10px] font-black uppercase tracking-[0.2em] transition-colors"
                                     >
                                         Back to Home

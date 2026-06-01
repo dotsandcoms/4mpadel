@@ -3,10 +3,20 @@ import { useLocation, useNavigate } from 'react-router-dom';
 // eslint-disable-next-line no-unused-vars
 import { motion } from 'framer-motion';
 import { Home, Calendar, Trophy, Image, User } from 'lucide-react';
+import { requiresAuth } from '../utils/routeAccess';
 
-const MobileBottomNav = () => {
+const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const handleNavClick = (path) => {
+    if (requiresAuth(path) && authLoading) return;
+    if (!session && requiresAuth(path)) {
+      onRestrictedNav?.();
+      return;
+    }
+    navigate(path);
+  };
 
   // Define our 5 core navigation items
   const navItems = [
@@ -45,7 +55,7 @@ const MobileBottomNav = () => {
           return (
             <button
               key={item.name}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleNavClick(item.path)}
               className="relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl flex-1 cursor-pointer select-none active:scale-95 transition-transform outline-none group"
             >
               {/* Liquid Active Bubble Background */}

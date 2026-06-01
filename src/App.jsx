@@ -40,12 +40,14 @@ import SearchPalette from './components/SearchPalette';
 import MembersOnlyModal from './components/MembersOnlyModal';
 import MobileBottomNav from './components/MobileBottomNav';
 import PwaInstallPrompt from './components/PwaInstallPrompt';
+import { requiresAuth } from './utils/routeAccess';
 
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const [session, setSession] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [membersOnlyPrompt, setMembersOnlyPrompt] = React.useState(false);
 
   useEffect(() => {
     // Initial session check
@@ -88,16 +90,20 @@ function AppContent() {
 
   const isHeroRoute = location.pathname === '/' || location.pathname.startsWith('/calendar/');
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
-  const isHomePage = location.pathname === '/';
+  const routeRequiresAuth = requiresAuth(location.pathname);
+  const showMembersOnly =
+    (!loading && !session && routeRequiresAuth) || membersOnlyPrompt;
 
-  // Routes that should always be accessible even if not logged in
-  const isPublicRoute = 
-    isHomePage || 
-    location.pathname === '/reset-password' || 
-    location.pathname === '/contact' ||
-    location.pathname === '/rankings';
+  useEffect(() => {
+    if (session) {
+      setMembersOnlyPrompt(false);
+    }
+  }, [session]);
 
-  const showMembersOnly = !loading && !session && !isPublicRoute;
+  const handleRestrictedNav = () => {
+    if (session) return;
+    setMembersOnlyPrompt(true);
+  };
   
   // Scroll to top on route change
   useEffect(() => {
@@ -148,8 +154,15 @@ function AppContent() {
           style: { background: '#CCFF00', color: 'black', border: 'none', fontWeight: 'bold' }
         }}
       />
-      <MembersOnlyModal isOpen={showMembersOnly} />
-      <MobileBottomNav />
+      <MembersOnlyModal
+        isOpen={showMembersOnly}
+        onClose={() => setMembersOnlyPrompt(false)}
+      />
+      <MobileBottomNav
+        session={session}
+        authLoading={loading}
+        onRestrictedNav={handleRestrictedNav}
+      />
       <PwaInstallPrompt />
     </div>
   );
