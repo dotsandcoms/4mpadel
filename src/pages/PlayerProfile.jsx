@@ -1274,38 +1274,65 @@ const PlayerProfile = () => {
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-lg backdrop-blur-xl group">
-                                                        {/* Header Details (Amber / Gold text) */}
-                                                        <div className="flex justify-between items-center text-[7.5px] font-black uppercase tracking-widest text-amber-500 border-b border-white/5 pb-2.5">
-                                                            <span className="truncate max-w-[200px]">{info.EventName || 'Tour Match'}</span>
-                                                            <span className="text-gray-500 shrink-0 font-bold">{date?.split(' ')[0] || 'TBD'}</span>
+                                                        {/* Header Details */}
+                                                        <div className="flex flex-wrap items-center gap-2 text-[7.5px] font-black uppercase tracking-widest border-b border-white/5 pb-2.5">
+                                                            {date && (
+                                                                <>
+                                                                    <span className="text-gray-500 shrink-0 font-bold">{date}</span>
+                                                                    <span className="text-white/30">•</span>
+                                                                </>
+                                                            )}
+                                                            <span className="text-amber-500 min-w-0 break-words">{info.EventName || 'Tour Match'}</span>
                                                         </div>
 
                                                         {/* Teams Grid */}
                                                         <div className="flex justify-between items-center gap-4">
-                                                            <div className="flex-1 space-y-2">
-                                                                {/* Challenger Box */}
-                                                                <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${hasResult && isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
+                                                            <div className="flex-1 min-w-0 space-y-2">
+                                                                {/* Team 1 */}
+                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
                                                                     }`}>
-                                                                    <p className="text-xs font-bold text-white truncate max-w-[150px]">
-                                                                        {info.Challenger?.Name?.split(' ')[0] || 'TBD'}
-                                                                        {info.Challenger1?.Name && ` & ${info.Challenger1.Name.split(' ')[0]}`}
-                                                                    </p>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="text-[7px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
+                                                                        <p className="text-xs font-bold text-white break-words leading-snug">
+                                                                            {info.Challenger?.Name || 'TBD'}
+                                                                            {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
+                                                                        </p>
+                                                                    </div>
                                                                     {hasResult && isWinner && (
-                                                                        <Trophy size={11} className="text-padel-green shrink-0 animate-pulse" />
+                                                                        <Trophy size={11} className="text-padel-green shrink-0 animate-pulse mt-3" />
                                                                     )}
                                                                 </div>
 
-                                                                {/* Challenged Box */}
-                                                                <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${hasResult && !isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
+                                                                {/* Team 2 */}
+                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && !isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
                                                                     }`}>
-                                                                    <p className="text-xs font-bold text-gray-400 truncate max-w-[150px]">
-                                                                        {info.Challenged?.Name?.split(' ')[0] || 'TBD'}
-                                                                        {info.Challenged1?.Name && ` & ${info.Challenged1.Name.split(' ')[0]}`}
-                                                                    </p>
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="text-[7px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
+                                                                        <p className="text-xs font-bold text-gray-300 break-words leading-snug">
+                                                                            {info.Challenged?.Name || 'TBD'}
+                                                                            {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
+                                                                        </p>
+                                                                    </div>
                                                                     {hasResult && !isWinner && (
-                                                                        <Trophy size={11} className="text-padel-green shrink-0 animate-pulse" />
+                                                                        <Trophy size={11} className="text-padel-green shrink-0 animate-pulse mt-3" />
                                                                     )}
                                                                 </div>
+
+                                                                {(info.Court || info.Location || info.Venue) && (
+                                                                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[9px] font-bold text-gray-400 pt-0.5">
+                                                                        {(info.Location || info.Venue) && (
+                                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                                <MapPin size={10} className="text-padel-green shrink-0" />
+                                                                                <span className="break-words uppercase tracking-wider">{info.Location || info.Venue || 'Location TBD'}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {info.Court && (
+                                                                            <span className="text-[8px] font-black uppercase tracking-widest text-orange-500 bg-orange-500/10 border border-orange-500/25 px-2 py-0.5 rounded-lg shrink-0">
+                                                                                {info.Court}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
 
                                                             {/* Right Side Column: Scores & Badge */}
