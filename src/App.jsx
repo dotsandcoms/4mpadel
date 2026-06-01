@@ -38,6 +38,7 @@ import { SearchProvider } from './context/SearchContext';
 import SearchPalette from './components/SearchPalette';
 
 import MembersOnlyModal from './components/MembersOnlyModal';
+import MobileBottomNav from './components/MobileBottomNav';
 
 function AppContent() {
   const location = useLocation();
@@ -108,7 +109,7 @@ function AppContent() {
       <Analytics />
       <SpeedInsights />
       {!isAdminRoute && <Navbar isDark={location.pathname === '/tournaments/broll'} />}
-      <div id="site-content" className={isHeroRoute ? '' : 'max-md:pt-20'}>
+      <div id="site-content" className={`${isHeroRoute ? '' : 'max-md:pt-20'} max-md:pb-28`}>
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/reports" element={<Reports />} />
@@ -147,6 +148,7 @@ function AppContent() {
         }}
       />
       <MembersOnlyModal isOpen={showMembersOnly} />
+      <MobileBottomNav />
     </div>
   );
 }
