@@ -228,6 +228,8 @@ const EventDetails = () => {
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
+    const [liveParticipantCount, setLiveParticipantCount] = useState(null);
+    const [localParticipants, setLocalParticipants] = useState([]);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
 
     const isEventPassed = useMemo(() => {
@@ -241,6 +243,21 @@ const EventDetails = () => {
         eventDate.setHours(0, 0, 0, 0);
 
         return eventDate < today;
+    }, [event]);
+
+    const isOrgHostedEvent = useMemo(() => {
+        if (!event) return false;
+        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+        return !!event.organization_id && !rId;
+    }, [event]);
+
+    const availableDivisions = useMemo(() => {
+        if (!event) return [];
+        if (event.allowed_divisions?.length) return event.allowed_divisions;
+        if (event.category_fees && Object.keys(event.category_fees).length > 0) {
+            return Object.keys(event.category_fees);
+        }
+        return EVENT_CATEGORIES;
     }, [event]);
 
     const stripHtml = (html) => {
@@ -261,6 +278,9 @@ const EventDetails = () => {
     const [registeredDivisions, setRegisteredDivisions] = useState([]);
     const [selectedDivisions, setSelectedDivisions] = useState([]);
     const [isCheckingReg, setIsCheckingReg] = useState(false);
+
+    const divisionsForRegistration = isOrgHostedEvent ? availableDivisions : registeredDivisions;
+    const displayParticipantCount = liveParticipantCount ?? event?.registered_players ?? 0;
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -547,6 +567,30 @@ const EventDetails = () => {
                 .map(p => (p.class_name || '').trim());
 
             setPaidDivisions(paidDivs);
+
+            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            const isOrgHosted = !!event.organization_id && !rId;
+
+            // Org-hosted events: use local DB only (no Rankedin player list required)
+            if (isOrgHosted) {
+                const regDivsFromParts = (localParts || [])
+                    .map(p => (p.class_name || '').trim())
+                    .filter(Boolean);
+                const regDivsFromLegacy = (legacyRegs || [])
+                    .map(r => (r.division || '').trim())
+                    .filter(Boolean);
+                const allRegDivs = Array.from(new Set([...regDivsFromParts, ...regDivsFromLegacy]));
+
+                setRegisteredDivisions(allRegDivs);
+                setIsRegistered(allRegDivs.length > 0);
+                setIsPaid(paidDivs.length > 0);
+
+                if (allRegDivs.length === 1 && !paidDivs.includes(allRegDivs[0])) {
+                    setSelectedDivisions([allRegDivs[0]]);
+                }
+                return;
+            }
+
             setIsPaid(paidDivs.length > 0);
 
             // 2. Check Registration Status (Rankedin Live Player List fallback)
@@ -721,6 +765,34 @@ const EventDetails = () => {
         fetchEventDetails();
     }, [slug]);
 
+    // Live participant count from tournament_participants (org-hosted + synced Rankedin events)
+    useEffect(() => {
+        if (!event?.id) return;
+
+        const fetchLiveCount = async () => {
+            const { count, error } = await supabase
+                .from('tournament_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('event_id', event.id);
+
+            let total = (!error && count !== null) ? count : 0;
+
+            const { count: regCount } = await supabase
+                .from('event_registrations')
+                .select('*', { count: 'exact', head: true })
+                .eq('event_id', event.id)
+                .eq('payment_status', 'paid');
+
+            if (regCount !== null) {
+                total = Math.max(total, regCount);
+            }
+
+            setLiveParticipantCount(total);
+        };
+
+        fetchLiveCount();
+    }, [event?.id, isPaid, isRegistered]);
+
     useEffect(() => {
         const checkRankedinStatus = async () => {
             if (!event) return;
@@ -839,7 +911,70 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchParticipantsData = async () => {
             if (activeTab !== 'players' || !event) return;
+
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+            const isOrgHosted = !!event.organization_id && !rId;
+
+            if (isOrgHosted) {
+                setFetchingParticipants(true);
+                try {
+                    const { data, error } = await supabase
+                        .from('tournament_participants')
+                        .select('id, full_name, email, class_name, is_paid, metadata, profile_id')
+                        .eq('event_id', event.id)
+                        .order('class_name', { ascending: true })
+                        .order('full_name', { ascending: true });
+
+                    if (error) throw error;
+
+                    let participantsList = data || [];
+
+                    if (participantsList.length === 0) {
+                        const { data: legacyRegs } = await supabase
+                            .from('event_registrations')
+                            .select('id, full_name, email, division, payment_status, partner_name')
+                            .eq('event_id', event.id)
+                            .eq('payment_status', 'paid')
+                            .order('full_name', { ascending: true });
+
+                        participantsList = (legacyRegs || []).map(r => ({
+                            id: r.id,
+                            full_name: r.full_name,
+                            email: r.email,
+                            class_name: r.division,
+                            is_paid: true,
+                            metadata: { partner_name: r.partner_name },
+                            profile_id: null
+                        }));
+                    }
+
+                    // Enrich with 4M profile pictures via profile_id, email, or name
+                    const profileIds = [...new Set(participantsList.map(p => p.profile_id).filter(Boolean))];
+                    let profileMap = {};
+
+                    if (profileIds.length > 0) {
+                        const { data: profiles } = await supabase
+                            .from('players')
+                            .select('id, name, email, image_url')
+                            .in('id', profileIds);
+
+                        (profiles || []).forEach(p => { profileMap[p.id] = p; });
+                    }
+
+                    participantsList = participantsList.map(p => ({
+                        ...p,
+                        image_url: profileMap[p.profile_id]?.image_url || null
+                    }));
+
+                    setLocalParticipants(participantsList);
+                } catch (err) {
+                    console.error('Error fetching local participants:', err);
+                } finally {
+                    setFetchingParticipants(false);
+                }
+                return;
+            }
+
             if (!rId) return;
 
             setFetchingParticipants(true);
@@ -874,7 +1009,7 @@ const EventDetails = () => {
             try {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('name, rankedin_id, image_url')
+                    .select('name, rankedin_id, email, image_url')
                     .not('image_url', 'is', null);
 
                 if (data && !error) {
@@ -882,6 +1017,7 @@ const EventDetails = () => {
                     data.forEach(p => {
                         if (p.rankedin_id) lookup[p.rankedin_id] = p.image_url;
                         if (p.name) lookup[p.name.toLowerCase()] = p.image_url;
+                        if (p.email) lookup[p.email.toLowerCase()] = p.image_url;
                     });
                     setFourMPlayers(lookup);
                 }
@@ -984,6 +1120,19 @@ const EventDetails = () => {
         }
         return Number(event?.entry_fee || 0);
     };
+
+    const getLocalProfileImage = useCallback((player) => {
+        if (!player) return null;
+        if (player.image_url) return player.image_url;
+
+        const name = (player.full_name || player.name || '').toLowerCase().trim();
+        const email = (player.email || '').toLowerCase().trim();
+
+        if (name && fourMPlayers[name]) return fourMPlayers[name];
+        if (email && fourMPlayers[email]) return fourMPlayers[email];
+
+        return null;
+    }, [fourMPlayers]);
 
     const calculateTotalAmount = () => {
         let entryFeesTotal = selectedDivisions.reduce((sum, div) => sum + getEntryFeeForCategory(div), 0);
@@ -1119,6 +1268,11 @@ const EventDetails = () => {
             return;
         }
 
+        if (isOrgHostedEvent && selectedDivisions.length === 0) {
+            toast.error('Please select at least one division.');
+            return;
+        }
+
         // Only block if they have already paid for ALL their registered divisions 
         // AND they haven't selected any new ones to pay for now
         const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
@@ -1126,6 +1280,12 @@ const EventDetails = () => {
 
         if (isFullyPaid && !hasUnpaidSelections) {
             toast.error('You have already paid for all your registered divisions!');
+            return;
+        }
+
+        // Free registration (R0 entry) — skip Paystack
+        if (calculateTotalAmount() === 0) {
+            handlePaymentSuccess({ reference: `FREE-${Date.now()}` });
             return;
         }
 
@@ -1452,9 +1612,64 @@ const EventDetails = () => {
             console.log("Saving payments...");
             await supabase.from('payments').insert(paymentsToInsert);
 
-            // 3. Mark in participants list (Improved Sync)
+            // 3. Upsert participants in tournament_participants (creates records for org-hosted events)
             console.log("Updating participants for Event ID:", event.id);
 
+            const upsertParticipantRecord = async (pId, pEmail, pName, division, partnerName = '') => {
+                try {
+                    const normalizedEmail = (pEmail || '').toLowerCase().trim();
+                    const localRId = `local:${normalizedEmail || (pName || '').toLowerCase().trim().replace(/\s+/g, '-')}`;
+
+                    const { error: upsertError } = await supabase
+                        .from('tournament_participants')
+                        .upsert({
+                            event_id: Number(event.id),
+                            rankedin_participant_id: localRId,
+                            full_name: pName,
+                            email: normalizedEmail,
+                            profile_id: pId || null,
+                            class_name: division,
+                            is_paid: true,
+                            is_test: isTestMode,
+                            last_synced_at: new Date().toISOString(),
+                            metadata: { partner_name: partnerName, source: '4m_registration' }
+                        }, { onConflict: 'event_id,rankedin_participant_id,class_name' });
+
+                    if (upsertError) {
+                        console.error(`Participant upsert error for ${pName}:`, upsertError);
+                    }
+                } catch (sErr) {
+                    console.error(`Participant upsert failure for ${pName}:`, sErr);
+                }
+            };
+
+            for (const reg of uniqueRegistrations) {
+                const isMainPlayer = reg.email.toLowerCase() === formData.email.trim().toLowerCase();
+                let regPlayerId = isMainPlayer ? playerId : null;
+
+                if (!regPlayerId) {
+                    const partnerEntry = selectedDivisions
+                        .map(d => divisionPartners[d])
+                        .find(p => p?.partnerProfile?.email?.toLowerCase() === reg.email.toLowerCase());
+                    regPlayerId = partnerEntry?.partnerProfile?.id || null;
+                }
+
+                await upsertParticipantRecord(regPlayerId, reg.email, reg.full_name, reg.division, reg.partner_name);
+            }
+
+            // Refresh live participant count and sync calendar.registered_players
+            const { count: participantCount } = await supabase
+                .from('tournament_participants')
+                .select('*', { count: 'exact', head: true })
+                .eq('event_id', event.id);
+
+            if (participantCount !== null) {
+                setLiveParticipantCount(participantCount);
+                setEvent(prev => prev ? { ...prev, registered_players: participantCount } : prev);
+                await supabase.from('calendar').update({ registered_players: participantCount }).eq('id', event.id);
+            }
+
+            // Legacy sync for Rankedin-sourced participant rows (mark existing records as paid)
             const syncParticipant = async (pId, pEmail, pName, label, targetDivisions = []) => {
                 try {
                     const filters = [];
@@ -1535,24 +1750,25 @@ const EventDetails = () => {
                 }
             };
 
-            // Get logged in player profile details for sync
-            const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
-            const mainPEmail = loggedInPlayer?.email || formData.email;
-            const mainPName = loggedInPlayer?.name || formData.full_name;
+            // Legacy Rankedin sync — only needed when participants were pre-synced from Rankedin
+            if (!isOrgHostedEvent) {
+                const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
+                const mainPEmail = loggedInPlayer?.email || formData.email;
+                const mainPName = loggedInPlayer?.name || formData.full_name;
 
-            if (!mainPId && !mainPEmail && !mainPName) {
-                console.error("FATAL: No registrant information available for sync!");
-            } else {
-                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
-                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
-            }
+                if (!mainPId && !mainPEmail && !mainPName) {
+                    console.error("FATAL: No registrant information available for sync!");
+                } else {
+                    console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
+                    await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
+                }
 
-            // Sync Partners per Division
-            for (const division of selectedDivisions) {
-                const part = divisionPartners[division];
-                if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
-                    console.info(`Starting sync for division partner:`, { id: part.partnerProfile.id, name: part.partnerProfile.name, division: division });
-                    await syncParticipant(part.partnerProfile.id, part.partnerProfile.email, part.partnerProfile.name, `Partner - ${division}`, [division]);
+                for (const division of selectedDivisions) {
+                    const part = divisionPartners[division];
+                    if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
+                        console.info(`Starting sync for division partner:`, { id: part.partnerProfile.id, name: part.partnerProfile.name, division: division });
+                        await syncParticipant(part.partnerProfile.id, part.partnerProfile.email, part.partnerProfile.name, `Partner - ${division}`, [division]);
+                    }
                 }
             }
 
@@ -1753,7 +1969,7 @@ const EventDetails = () => {
                                     <div className="flex flex-col items-center mb-8">
                                         <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
                                             <span className="text-3xl font-black text-slate-900 tabular-nums">
-                                                <CountUp end={event.registered_players || 0} />
+                                                <CountUp end={displayParticipantCount} />
                                             </span>
                                             <div className="text-left leading-none">
                                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Registered</p>
@@ -1773,7 +1989,9 @@ const EventDetails = () => {
                                                         <CheckCircle size={24} strokeWidth={3} />
                                                     </div>
                                                     <div className="text-center">
-                                                        <p className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] mb-1">Registered on Rankedin</p>
+                                                        <p className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] mb-1">
+                                                            {isOrgHostedEvent ? 'Registered' : 'Registered on Rankedin'}
+                                                        </p>
                                                         <p className="text-xs font-bold text-white leading-tight">You're on the player list! Good luck on the court.</p>
                                                     </div>
                                                 </div>
@@ -1783,6 +2001,15 @@ const EventDetails = () => {
                                                 >
                                                     Invitation Only
                                                 </div>
+                                            ) : isOrgHostedEvent ? (
+                                                <motion.button
+                                                    whileHover={{ scale: 1.02 }}
+                                                    whileTap={{ scale: 0.98 }}
+                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                    className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
+                                                >
+                                                    Register Now
+                                                </motion.button>
                                             ) : (
                                                 <motion.a
                                                     whileHover={{ scale: 1.02 }}
@@ -1798,6 +2025,7 @@ const EventDetails = () => {
 
                                             {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND there is something to pay */}
                                             {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && 
+                                             !isOrgHostedEvent &&
                                              (!isPaid || (isRegistered && !registeredDivisions.every(div => 
                                                  paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())
                                              ))) && (
@@ -1927,7 +2155,7 @@ const EventDetails = () => {
                     {/* Sticky Action Bar for Mobile */}
                     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between gap-4">
                         <div className="flex-1">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{event.registered_players || 0} Registered</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{displayParticipantCount} Registered</p>
                             <p className="font-bold text-slate-900 line-clamp-1">{event.event_name}</p>
                         </div>
                         <div className="shrink-0 flex gap-2">
@@ -1944,14 +2172,23 @@ const EventDetails = () => {
                                             ) : (
                                                 <>
                                                     {!isRegistered && (
-                                                        <a
-                                                            href={event.rankedin_url || `https://www.rankedin.com/`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                                        >
-                                                            Register
-                                                        </a>
+                                                        isOrgHostedEvent ? (
+                                                            <button
+                                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                                            >
+                                                                Register
+                                                            </button>
+                                                        ) : (
+                                                            <a
+                                                                href={event.rankedin_url || `https://www.rankedin.com/`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                                            >
+                                                                Register
+                                                            </a>
+                                                        )
                                                     )}
                                                     {isRegistered && !isPaid && (
                                                         <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
@@ -1959,7 +2196,7 @@ const EventDetails = () => {
                                                             <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Registered</span>
                                                         </div>
                                                     )}
-                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && !isOrgHostedEvent && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
                                                         <button
                                                             onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                             className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
@@ -2002,7 +2239,7 @@ const EventDetails = () => {
                                         return !isUpcoming || !noData;
                                     }
                                     if (tab === 'players') {
-                                        return !isEventPassed && (event.rankedin_id || extractRankedinId(event.rankedin_url));
+                                        return !isEventPassed && (isOrgHostedEvent || event.rankedin_id || extractRankedinId(event.rankedin_url));
                                     }
                                     return true;
                                 });
@@ -2179,15 +2416,94 @@ const EventDetails = () => {
                                             </div>
                                             <div className="flex items-center gap-3 bg-padel-green/10 px-4 py-2 rounded-xl border border-padel-green/30">
                                                 <User className="w-5 h-5 text-padel-green" />
-                                                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">{event.registered_players || 0} Total</span>
+                                                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">{displayParticipantCount} Total</span>
                                             </div>
                                         </div>
 
-                                        {fetchingParticipants && playerDivisions.length === 0 ? (
+                                        {fetchingParticipants && !isOrgHostedEvent && playerDivisions.length === 0 ? (
                                             <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-gray-200">
                                                 <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
                                                 <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Syncing athletes...</p>
                                             </div>
+                                        ) : isOrgHostedEvent ? (
+                                            fetchingParticipants ? (
+                                                <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-gray-200">
+                                                    <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
+                                                    <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Loading registered players...</p>
+                                                </div>
+                                            ) : localParticipants.length > 0 ? (
+                                                <div className="space-y-4">
+                                                    {Object.entries(
+                                                        localParticipants.reduce((acc, p) => {
+                                                            const div = p.class_name || 'General';
+                                                            if (!acc[div]) acc[div] = [];
+                                                            acc[div].push(p);
+                                                            return acc;
+                                                        }, {})
+                                                    ).map(([divName, divPlayers], idx) => (
+                                                        <ModuleAccordion
+                                                            key={divName}
+                                                            title={`${divName} (${divPlayers.length} ${divPlayers.length === 1 ? 'Player' : 'Players'})`}
+                                                            icon={User}
+                                                            defaultOpen={idx === 0}
+                                                        >
+                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
+                                                                {divPlayers.map((player) => {
+                                                                    const profileImage = getLocalProfileImage(player);
+                                                                    const partnerImage = player.metadata?.partner_name
+                                                                        ? getLocalProfileImage({ full_name: player.metadata.partner_name })
+                                                                        : null;
+
+                                                                    return (
+                                                                    <div
+                                                                        key={player.id}
+                                                                        className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-10 h-10 rounded-full overflow-hidden bg-white flex items-center justify-center text-slate-400 border border-gray-100 shrink-0 group-hover:border-padel-green/30 transition-colors">
+                                                                                {profileImage ? (
+                                                                                    <img src={profileImage} alt={player.full_name} className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    <User className="w-5 h-5" />
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="min-w-0 flex-1">
+                                                                                <p className="font-bold text-slate-800 truncate">{player.full_name}</p>
+                                                                                {player.metadata?.partner_name && (
+                                                                                    <div className="flex items-center gap-2 mt-1">
+                                                                                        <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center text-slate-300 border border-gray-100 shrink-0">
+                                                                                            {partnerImage ? (
+                                                                                                <img src={partnerImage} alt={player.metadata.partner_name} className="w-full h-full object-cover" />
+                                                                                            ) : (
+                                                                                                <User className="w-3 h-3" />
+                                                                                            )}
+                                                                                        </div>
+                                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">
+                                                                                            Partner: {player.metadata.partner_name}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            {player.is_paid && (
+                                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-1 rounded-full border border-padel-green/20 shrink-0">
+                                                                                    Paid
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </ModuleAccordion>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
+                                                    <User className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+                                                    <h3 className="text-2xl font-bold text-slate-800 mb-2">No Players Registered Yet</h3>
+                                                    <p className="text-gray-500">Be the first to register for this tournament.</p>
+                                                </div>
+                                            )
                                         ) : playerDivisions.length > 0 ? (
                                             <div className="space-y-4">
                                                 {playerDivisions.map((cls, idx) => {
@@ -2681,12 +2997,14 @@ const EventDetails = () => {
                                                         {isCheckingReg ? (
                                                             <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
                                                                 <Loader className="w-5 h-5 animate-spin text-padel-green" />
-                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
+                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">
+                                                                    {isOrgHostedEvent ? 'Loading divisions...' : 'Syncing Rankedin Status...'}
+                                                                </span>
                                                             </div>
-                                                        ) : registeredDivisions.length > 0 ? (
+                                                        ) : divisionsForRegistration.length > 0 ? (
                                                             <div className="grid grid-cols-1 gap-2.5">
-                                                                {registeredDivisions.map(divName => {
-                                                                    const alreadyPaid = paidDivisions.includes(divName);
+                                                                {divisionsForRegistration.map(divName => {
+                                                                    const alreadyPaid = paidDivisions.some(pd => pd.trim().toLowerCase() === divName.trim().toLowerCase());
                                                                     const isSelected = selectedDivisions.includes(divName);
                                                                     
                                                                     return (
@@ -2743,7 +3061,7 @@ const EventDetails = () => {
                                                                     );
                                                                 })}
                                                             </div>
-                                                        ) : formData.email && (
+                                                        ) : formData.email && !isOrgHostedEvent && (
                                                             <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
                                                                 <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
                                                                 <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>

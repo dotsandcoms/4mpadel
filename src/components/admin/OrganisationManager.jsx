@@ -376,6 +376,53 @@ const OrganisationManager = ({ permissions }) => {
         }
     };
 
+    // Paginate through participant tables to build accurate per-event counts
+    // (avoids Supabase 1000-row default limit breaking bulk .in() queries)
+    const fetchAllParticipantCounts = async () => {
+        const tpCounts = {};
+        const regCounts = {};
+        const pageSize = 1000;
+
+        let from = 0;
+        while (true) {
+            const { data, error } = await supabase
+                .from('tournament_participants')
+                .select('event_id')
+                .range(from, from + pageSize - 1);
+
+            if (error) throw error;
+            (data || []).forEach(r => {
+                tpCounts[r.event_id] = (tpCounts[r.event_id] || 0) + 1;
+            });
+            if (!data || data.length < pageSize) break;
+            from += pageSize;
+        }
+
+        from = 0;
+        while (true) {
+            const { data, error } = await supabase
+                .from('event_registrations')
+                .select('event_id')
+                .eq('payment_status', 'paid')
+                .range(from, from + pageSize - 1);
+
+            if (error) throw error;
+            (data || []).forEach(r => {
+                regCounts[r.event_id] = (regCounts[r.event_id] || 0) + 1;
+            });
+            if (!data || data.length < pageSize) break;
+            from += pageSize;
+        }
+
+        const merged = { ...tpCounts };
+        Object.entries(regCounts).forEach(([eventId, count]) => {
+            const id = Number(eventId);
+            merged[id] = Math.max(merged[id] || 0, count);
+        });
+
+        return merged;
+    };
+
     const fetchHostData = async () => {
         if (!currentOrg) return;
         setLoading(true);
@@ -390,17 +437,13 @@ const OrganisationManager = ({ permissions }) => {
             const evList = events || [];
             setOrgEvents(evList);
 
-            // Fetch live participant counts from tournament_participants for each event
+            // Fetch live participant counts (paginated — not limited to first 1000 rows)
             if (evList.length > 0) {
-                const eventIds = evList.map(e => e.id);
-                const { data: countRows } = await supabase
-                    .from('tournament_participants')
-                    .select('event_id')
-                    .in('event_id', eventIds);
-
+                const allCounts = await fetchAllParticipantCounts();
+                const eventIds = new Set(evList.map(e => e.id));
                 const counts = {};
-                (countRows || []).forEach(r => {
-                    counts[r.event_id] = (counts[r.event_id] || 0) + 1;
+                eventIds.forEach(id => {
+                    if (allCounts[id]) counts[id] = allCounts[id];
                 });
                 setParticipantCounts(prev => ({ ...prev, ...counts }));
             }
@@ -444,24 +487,9 @@ const OrganisationManager = ({ permissions }) => {
             if (approvedEvsError) throw approvedEvsError;
             setApprovedEvents(approvedEvs || []);
 
-            // Fetch live participant counts for all calendar events
-            const allEventIds = [
-                ...(events || []).map(e => e.id),
-                ...(approvedEvs || []).map(e => e.id)
-            ].filter(Boolean);
-
-            if (allEventIds.length > 0) {
-                const { data: countRows } = await supabase
-                    .from('tournament_participants')
-                    .select('event_id')
-                    .in('event_id', allEventIds);
-
-                const counts = {};
-                (countRows || []).forEach(r => {
-                    counts[r.event_id] = (counts[r.event_id] || 0) + 1;
-                });
-                setParticipantCounts(counts);
-            }
+            // Fetch live participant counts (paginated — not limited to first 1000 rows)
+            const allCounts = await fetchAllParticipantCounts();
+            setParticipantCounts(allCounts);
 
             // 3. Aggregate Stats
             const { data: allCalendarEvents } = await supabase
@@ -527,7 +555,7 @@ const OrganisationManager = ({ permissions }) => {
                 if (profileIds.length > 0) {
                     const { data: playerProfiles, error: profileError } = await supabase
                         .from('players')
-                        .select('id, contact_number, profile_image')
+                        .select('id, contact_number, image_url')
                         .in('id', profileIds);
 
                     if (profileError) {
@@ -538,10 +566,46 @@ const OrganisationManager = ({ permissions }) => {
                 }
 
                 // Step 3: Merge participant + profile data
-                const enriched = (participants || []).map(p => ({
+                let enriched = (participants || []).map(p => ({
                     ...p,
                     players: playerMap[p.profile_id] || null
                 }));
+
+                // Also include paid event_registrations (merge, not replace)
+                const { data: legacyRegs, error: legacyError } = await supabase
+                    .from('event_registrations')
+                    .select('id, full_name, email, division, payment_status, partner_name')
+                    .eq('event_id', selectedEventEntries.id)
+                    .eq('payment_status', 'paid')
+                    .order('full_name', { ascending: true });
+
+                if (legacyError) {
+                    console.warn('Could not load event_registrations fallback:', legacyError.message);
+                }
+
+                const existingKeys = new Set(
+                    enriched.map(e => `${(e.email || '').toLowerCase()}|${e.class_name || ''}`)
+                );
+
+                (legacyRegs || []).forEach(r => {
+                    const key = `${(r.email || '').toLowerCase()}|${r.division || ''}`;
+                    if (!existingKeys.has(key)) {
+                        enriched.push({
+                            id: r.id,
+                            profile_id: null,
+                            full_name: r.full_name,
+                            email: r.email,
+                            class_name: r.division,
+                            is_paid: true,
+                            metadata: { partner_name: r.partner_name },
+                            rankedin_participant_id: null,
+                            players: null
+                        });
+                        existingKeys.add(key);
+                    }
+                });
+
+                enriched.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
 
                 setEventEntriesList(enriched);
             } catch (err) {
@@ -1374,7 +1438,11 @@ const OrganisationManager = ({ permissions }) => {
                                                 <td className="py-4 px-4 align-middle text-right">
                                                     <div className="flex justify-end gap-2">
                                                         <button
-                                                            onClick={() => setSelectedEventEntries(ev)}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setSelectedEventDetails(null);
+                                                                setSelectedEventEntries(ev);
+                                                            }}
                                                             className="bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500 hover:text-white text-purple-400 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
                                                         >
                                                             <Users size={12} /> Entries ({participantCounts[ev.id] ?? ev.registered_players ?? 0})
@@ -1803,7 +1871,11 @@ const OrganisationManager = ({ permissions }) => {
                                             <div className="flex gap-2 mt-5 pt-3.5 border-t border-white/5 justify-between items-center">
                                                 {ev.sanction_status === 'approved' ? (
                                                     <button 
-                                                        onClick={() => setSelectedEventEntries(ev)}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedEventDetails(null);
+                                                            setSelectedEventEntries(ev);
+                                                        }}
                                                         className="text-[10px] text-purple-400 font-black hover:text-white flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
                                                     >
                                                         <Users size={12} /> {participantCounts[ev.id] ?? ev.registered_players ?? 0} Entries & Breakdown
@@ -2735,7 +2807,7 @@ const OrganisationManager = ({ permissions }) => {
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className="max-w-3xl w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 md:p-8 relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto custom-scrollbar text-left"
+                            className="max-w-6xl w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 md:p-10 relative shadow-2xl my-8 max-h-[90vh] overflow-y-auto custom-scrollbar text-left"
                         >
                             {/* Close Button */}
                             <button
@@ -2783,7 +2855,7 @@ const OrganisationManager = ({ permissions }) => {
                             </div>
 
                             {/* Two-Column Grid for Metadata details */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8">
                                 {/* Left Column: Logistics */}
                                 <div className="space-y-4">
                                     <div>
@@ -2934,7 +3006,9 @@ const OrganisationManager = ({ permissions }) => {
                                                 </p>
                                             </div>
                                             <button
+                                                type="button"
                                                 onClick={() => {
+                                                    setSelectedEventDetails(null);
                                                     setSelectedEventEntries(selectedEventDetails);
                                                 }}
                                                 className="mt-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all shrink-0 cursor-pointer"
@@ -2966,7 +3040,7 @@ const OrganisationManager = ({ permissions }) => {
                             </div>
 
                             {/* Section 4.1 Additional Details Grid */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 border-t border-white/5 pt-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 lg:gap-8 mt-6 border-t border-white/5 pt-6">
                                 <div className="space-y-4">
                                     <div>
                                         <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Director & Balls Info</span>
@@ -3495,9 +3569,9 @@ const OrganisationManager = ({ permissions }) => {
                                                 >
                                                     {/* Row 1: Avatar + Name + Payment badge */}
                                                     <div className="flex items-center gap-3 mb-3">
-                                                        {entry.players?.profile_image ? (
+                                                        {entry.players?.image_url ? (
                                                             <img
-                                                                src={entry.players.profile_image}
+                                                                src={entry.players.image_url}
                                                                 alt={entry.full_name}
                                                                 className="w-10 h-10 rounded-xl object-cover border border-white/10 shrink-0"
                                                             />
