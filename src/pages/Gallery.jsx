@@ -30,7 +30,7 @@ const Gallery = () => {
     }, []);
 
     return (
-        <div className="pt-4 md:pt-24 pb-4 md:pb-12 min-h-screen relative overflow-hidden bg-[#0A0D14]">
+        <div className="pt-4 md:pt-24 pb-4 md:pb-2 min-h-screen relative overflow-hidden bg-[#0A0D14]">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />
@@ -96,7 +96,7 @@ const Gallery = () => {
                         <p className="text-gray-500 font-bold text-lg">New memories are currently being processed.</p>
                     </motion.div>
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-12 pb-32">
+                    <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-12 pb-6">
                         {albums.map((album, index) => (
                             <motion.div
                                 key={album.id}
