@@ -30,7 +30,7 @@ const Gallery = () => {
     }, []);
 
     return (
-        <div className="pt-4 md:pt-24 pb-4 md:pb-2 min-h-screen relative overflow-hidden bg-[#0A0D14]">
+        <div className="pt-4 md:pt-24 pb-4 md:pb-2 min-h-[60vh] relative overflow-hidden bg-[#0A0D14]">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />
