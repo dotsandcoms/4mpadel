@@ -69,7 +69,7 @@ function AppContent() {
 
         if (isMagicLink) {
           const isRecovery = hash.includes('type=recovery');
-          const targetPath = isRecovery ? '/reset-password' : '/profile';
+          const targetPath = isRecovery ? '/reset-password' : '/';
 
           console.log(`App: Detected link sign-in (${targetPath}). Redirecting...`);
           // Small delay to ensure session is fully processed

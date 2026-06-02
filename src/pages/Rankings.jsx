@@ -245,9 +245,8 @@ const TierCard = ({ tier }) => {
                     {headers.map((header, hIdx) => (
                       <th
                         key={hIdx}
-                        className={`py-3 px-3 text-[10px] uppercase tracking-widest font-black text-gray-500 border-b border-white/10 text-right ${
-                          hIdx === headers.length - 1 ? 'pr-6' : ''
-                        }`}
+                        className={`py-3 px-3 text-[10px] uppercase tracking-widest font-black text-gray-500 border-b border-white/10 text-right ${hIdx === headers.length - 1 ? 'pr-6' : ''
+                          }`}
                       >
                         {header}
                       </th>
@@ -479,18 +478,17 @@ const FullRankingsTable = ({
               >
                 {/* Ranking circle badge */}
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 border ${
-                    player.rawRank === 1 
-                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                      : player.rawRank === 2
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 border ${player.rawRank === 1
+                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                    : player.rawRank === 2
                       ? 'bg-slate-300/20 text-slate-300 border-slate-300/30'
                       : player.rawRank === 3
-                      ? 'bg-amber-700/20 text-amber-600 border-amber-700/30'
-                      : 'bg-black/40 text-gray-400 border-white/5'
-                  }`}>
+                        ? 'bg-amber-700/20 text-amber-600 border-amber-700/30'
+                        : 'bg-black/40 text-gray-400 border-white/5'
+                    }`}>
                     #{player.rawRank}
                   </div>
-                  
+
                   {/* Avatar */}
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
                     {!imageErrors[player.id] ? (
@@ -929,25 +927,6 @@ const Rankings = () => {
             {!rankingsLoading && (
               <div className="relative pt-2">
                 <div className="w-full px-6 md:px-12 mb-10 flex flex-col items-center gap-4 text-center">
-                  <AnimatePresence mode="wait">
-                    {ORG_LOGOS[selectedOrgId] && (
-                      <motion.div
-                        key={selectedOrgId}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.3 }}
-                        className="mb-1 bg-white/5 border border-white/10 rounded-2xl p-3 h-16 w-36 flex items-center justify-center shadow-lg shadow-black/20"
-                      >
-                        <img
-                          src={ORG_LOGOS[selectedOrgId]}
-                          alt={`${ORG_LABELS[selectedOrgId]} Logo`}
-                          className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
-                        />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
                   <div>
                     <h2 className="text-3xl font-black text-white mb-1 uppercase tracking-tighter">
                       <span className="text-padel-green">
