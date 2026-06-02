@@ -45,30 +45,30 @@ const SiteFooter = () => {
                 </div>
             </section>
 
-            <footer className="relative bg-[#070913] border-t border-white/5 px-6 py-10 md:py-12 z-20">
+            <footer className="relative bg-[#070913] border-t border-white/5 px-6 pt-10 pb-32 md:pb-12 md:pt-12 z-20">
                 <div className="container mx-auto max-w-6xl">
-                                     {/* Main Row */}
+                    {/* Main Row */}
                     <div className="flex flex-col items-center text-center gap-4 pb-8 border-b border-white/5">
-                        
+
                         {/* Brand logo & details */}
                         <span className="text-2xl font-black tracking-tighter text-white uppercase">
                             4M <span className="text-padel-green">Padel</span>
                         </span>
-                        
+
                         <div className="flex flex-col items-center gap-2 text-xs text-gray-400 font-semibold max-w-xl">
                             <span className="flex items-center justify-center gap-1.5 text-center leading-relaxed">
-                                <MapPin size={12} className="text-padel-green shrink-0" /> 
+                                <MapPin size={12} className="text-padel-green shrink-0" />
                                 Commerce Square, building 2, 39 Rivonia Rd, Sandhurst, JHB, South Africa
                             </span>
                             <div className="flex flex-wrap justify-center gap-x-6 gap-y-1">
                                 <span className="flex items-center gap-1.5"><Clock size={12} className="text-padel-green" /> Mon-Sun 09:00-18:00</span>
-                                 <span className="flex items-center gap-1.5"><Phone size={12} className="text-padel-green" /> 083 790 9091</span>
+                                <span className="flex items-center gap-1.5"><Phone size={12} className="text-padel-green" /> 083 790 9091</span>
                             </div>
                         </div>
                     </div>
                     {/* Bottom Row */}
                     <div className="pt-6 flex flex-col items-center gap-4">
-                        
+
                         {/* Social Circle Links - Compact style (rendered unconditionally) */}
                         <div className="flex gap-4">
                             <a href={links.instagram || '#'} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white/5 border border-white/10 hover:border-padel-green text-white hover:text-padel-green transition-all duration-300 flex items-center justify-center hover:scale-105 active:scale-95 shadow-lg shadow-black/20">
@@ -90,7 +90,7 @@ const SiteFooter = () => {
                         {/* Legal Badge & Copyright */}
                         <div className="flex items-center gap-2 text-[10px] text-gray-500 font-black uppercase tracking-widest">
                             <Shield size={11} className="text-padel-green/80" />
-                            <span>© 2026 4M Padel • SAPA Certified</span>
+                            <span>© 2026 4M Padel</span>
                         </div>
                     </div>
                 </div>
