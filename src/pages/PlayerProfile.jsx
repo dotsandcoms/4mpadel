@@ -873,7 +873,7 @@ const PlayerProfile = () => {
                     </div>
 
                     {/* Avatar & Player Info card overlap - shifted up to where the title used to be */}
-                    <div className="px-5 -mt-14 relative z-20 space-y-4 pb-24">
+                    <div className="px-5 -mt-14 relative z-20 space-y-4 pb-6">
                         <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-start gap-4">
                             {/* Avatar Column */}
                             <div className="relative group shrink-0">
@@ -1110,19 +1110,19 @@ const PlayerProfile = () => {
 
                                 if (tab.id === 'events') {
                                     activeStyles = 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20';
-                                    inactiveStyles = 'text-gray-400 border border-transparent hover:text-purple-300 hover:bg-purple-500/10';
+                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-purple-500/10';
                                 } else if (tab.id === 'matches') {
                                     activeStyles = 'bg-orange-500 border border-orange-500 text-white shadow-lg shadow-orange-500/20';
-                                    inactiveStyles = 'text-gray-400 border border-transparent hover:text-orange-300 hover:bg-orange-500/10';
+                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-orange-500/10';
                                 } else if (tab.id === 'rankings') {
                                     activeStyles = 'bg-yellow-500 border border-yellow-500 text-black shadow-lg shadow-yellow-500/20';
-                                    inactiveStyles = 'text-gray-400 border border-transparent hover:text-yellow-300 hover:bg-yellow-500/10';
+                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-yellow-500/10';
                                 } else if (tab.id === 'payments') {
                                     activeStyles = 'bg-blue-500 border border-blue-500 text-white shadow-lg shadow-blue-500/20';
-                                    inactiveStyles = 'text-gray-400 border border-transparent hover:text-blue-300 hover:bg-blue-500/10';
+                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-blue-500/10';
                                 } else {
                                     activeStyles = 'bg-padel-green border border-padel-green text-black shadow-lg shadow-padel-green/20';
-                                    inactiveStyles = 'text-gray-400 border border-transparent hover:text-[#beff00] hover:bg-padel-green/10';
+                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-padel-green/10';
                                 }
 
                                 return (
@@ -1141,12 +1141,18 @@ const PlayerProfile = () => {
                         </div>
 
                         {/* Mobile Tab Contents Grid rendering directly underneath */}
-                        <div className="space-y-4">
+                        <div className={`p-4 rounded-3xl bg-[#0F172A]/40 backdrop-blur-2xl border transition-all duration-500 space-y-4 ${
+                            activeTab === 'events' ? 'border-purple-500/35 shadow-[0_0_20px_rgba(168,85,247,0.12)]' :
+                            activeTab === 'matches' ? 'border-orange-500/35 shadow-[0_0_20px_rgba(249,115,22,0.12)]' :
+                            activeTab === 'rankings' ? 'border-yellow-500/35 shadow-[0_0_20px_rgba(234,179,8,0.12)]' :
+                            activeTab === 'payments' ? 'border-blue-500/35 shadow-[0_0_20px_rgba(59,130,246,0.12)]' :
+                            'border-padel-green/35 shadow-[0_0_20px_rgba(204,255,0,0.12)]'
+                        }`}>
                             {/* Events Tab Content */}
                             {activeTab === 'events' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">My Tournaments</h4>
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">My Tournaments</h4>
                                     </div>
 
                                     {/* Secondary view tabs inside Tournaments */}
@@ -1155,7 +1161,7 @@ const PlayerProfile = () => {
                                             onClick={() => setEventViewTab('upcoming')}
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${currentTab === 'upcoming'
                                                 ? 'bg-purple-500 text-white shadow-md'
-                                                : 'text-gray-400 hover:text-white'
+                                                : 'text-white/70 hover:text-white'
                                                 }`}
                                         >
                                             Upcoming ({upcomingEvents.length})
@@ -1164,7 +1170,7 @@ const PlayerProfile = () => {
                                             onClick={() => setEventViewTab('past')}
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${currentTab === 'past'
                                                 ? 'bg-purple-500 text-white shadow-md'
-                                                : 'text-gray-400 hover:text-white'
+                                                : 'text-white/70 hover:text-white'
                                                 }`}
                                         >
                                             Complete ({pastEvents.length})
@@ -1243,7 +1249,7 @@ const PlayerProfile = () => {
                             {activeTab === 'matches' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">My Match Log</h4>
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">My Match Log</h4>
                                     </div>
 
                                     {/* Secondary view tabs inside Matches */}
@@ -1252,7 +1258,7 @@ const PlayerProfile = () => {
                                             onClick={() => { setMatchViewTab('upcoming'); setCurrentMatchPage(1); }}
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${matchViewTab === 'upcoming'
                                                 ? 'bg-orange-500 text-white shadow-md'
-                                                : 'text-gray-400 hover:text-white'
+                                                : 'text-white/70 hover:text-white'
                                                 }`}
                                         >
                                             Upcoming ({matchHistory.upcoming.length})
@@ -1261,7 +1267,7 @@ const PlayerProfile = () => {
                                             onClick={() => { setMatchViewTab('past'); setCurrentMatchPage(1); }}
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${matchViewTab === 'past'
                                                 ? 'bg-orange-500 text-white shadow-md'
-                                                : 'text-gray-400 hover:text-white'
+                                                : 'text-white/70 hover:text-white'
                                                 }`}
                                         >
                                             Past ({matchHistory.history.length})
@@ -1420,7 +1426,7 @@ const PlayerProfile = () => {
                             {activeTab === 'rankings' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Rankings Points Breakdown</h4>
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Rankings Points Breakdown</h4>
                                     </div>
 
                                     {/* Scrollable organizational pills selection */}
@@ -1433,8 +1439,8 @@ const PlayerProfile = () => {
                                                         key={i}
                                                         onClick={() => setSelectedRankingForBreakdown(r)}
                                                         className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all whitespace-nowrap border shrink-0 cursor-pointer ${isSelected
-                                                            ? 'bg-padel-green text-black border-padel-green font-extrabold shadow-lg shadow-padel-green/10'
-                                                            : 'bg-white/[0.02] border-white/10 text-gray-400 hover:text-white'
+                                                            ? 'bg-yellow-500 text-black border-yellow-500 font-extrabold shadow-lg shadow-yellow-500/10'
+                                                            : 'bg-white/[0.02] border-white/10 text-white/70 hover:text-white'
                                                             }`}
                                                     >
                                                         {r.org} ({r.age_group || 'Open'})
@@ -1450,7 +1456,7 @@ const PlayerProfile = () => {
                                             <div className="grid grid-cols-3 gap-2">
                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 text-center">
                                                     <p className="text-[7.5px] font-black text-gray-500 uppercase tracking-widest mb-0.5">Standing</p>
-                                                    <p className="text-lg font-black text-padel-green">#{selectedRankingForBreakdown.rank}</p>
+                                                    <p className="text-lg font-black text-yellow-500">#{selectedRankingForBreakdown.rank}</p>
                                                 </div>
                                                 <div className="bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-3.5 text-center">
                                                     <p className="text-[7.5px] font-black text-gray-500 uppercase tracking-widest mb-0.5">Points</p>
@@ -1472,13 +1478,13 @@ const PlayerProfile = () => {
                                                                 <div className="min-w-0">
                                                                     <h5 className="font-extrabold text-xs text-white uppercase tracking-tight leading-tight">{item.name}</h5>
                                                                     {item.class && (
-                                                                        <span className="inline-block mt-1 text-[7.5px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/20 px-2 py-0.5 rounded-full">
+                                                                        <span className="inline-block mt-1 text-[7.5px] font-black uppercase tracking-wider text-yellow-500 bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">
                                                                             {item.class}
                                                                         </span>
                                                                     )}
                                                                 </div>
                                                                 <div className="text-right shrink-0">
-                                                                    <span className="text-xs font-black text-padel-green">+{item.points} PTS</span>
+                                                                    <span className="text-xs font-black text-yellow-500">+{item.points} PTS</span>
                                                                 </div>
                                                             </div>
                                                             <div className="flex justify-between items-center text-[8px] text-gray-500 font-bold uppercase tracking-wider pt-2.5 border-t border-white/5">
@@ -1510,7 +1516,7 @@ const PlayerProfile = () => {
                             {activeTab === 'payments' && (
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Transaction History</h4>
+                                        <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-300">Transaction History</h4>
                                     </div>
                                     {transactionsLoading ? (
                                         <div className="flex items-center justify-center py-12">
@@ -1522,7 +1528,7 @@ const PlayerProfile = () => {
                                                 <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg backdrop-blur-xl">
                                                     <div className="min-w-0 space-y-1">
                                                         <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-block ${t.status?.toLowerCase() === 'success'
-                                                            ? 'bg-padel-green/10 border border-padel-green/20 text-padel-green'
+                                                            ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
                                                             : 'bg-red-500/10 border border-red-500/20 text-red-400'
                                                             }`}>
                                                             {t.status}
@@ -1531,7 +1537,7 @@ const PlayerProfile = () => {
                                                         <span className="text-[8px] text-gray-500 font-bold uppercase block">{t.date}</span>
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <span className="text-xs font-black text-padel-green">{t.amount}</span>
+                                                        <span className="text-xs font-black text-blue-400">{t.amount}</span>
                                                         <span className="text-[7.5px] text-gray-500 font-semibold block uppercase tracking-widest mt-1">{t.payment_type?.replace(/_/g, ' ')}</span>
                                                     </div>
                                                 </div>
