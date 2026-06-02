@@ -116,11 +116,11 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setMessage(null);
                 onClose();
                 
-                // Determine redirect path based on where the user logged in from
-                const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
-                const targetPath = isAdminContext ? '/admin' : '/profile';
-                
-                navigate(targetPath);
+                 // Determine redirect path based on where the user logged in from
+                 const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
+                 const targetPath = isAdminContext ? '/admin' : '/';
+                 
+                 navigate(targetPath);
             }, 2500);
         }
     };
