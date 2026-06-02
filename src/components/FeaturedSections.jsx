@@ -237,139 +237,131 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
     return (
-        <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: isMobile ? 0 : index * 0.15 }}
-            className={`relative flex flex-col w-full min-h-[225px] md:h-[260px] h-auto rounded-[24px] overflow-hidden group cursor-pointer border-2 ${colors.border} ${colors.hover} transition-all duration-500 bg-[#060913] shadow-2xl`}
+        <div
+            className={`relative flex flex-col w-full h-[460px] md:h-[500px] rounded-[32px] overflow-hidden group cursor-pointer border border-white/10 hover:border-white/20 transition-all duration-700 bg-[#060913] shadow-2xl hover:shadow-white/5 shrink-0`}
             onClick={() => navigate(linkPath)}
         >
+            {/* Background Image & Gradient */}
+            <div className="absolute inset-0 z-0 overflow-hidden bg-[#0A0F1C]">
+                {image ? (
+                    <FallbackImage src={image} alt={title} title={title} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-1000 ease-out" />
+                ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#0B1121] to-black opacity-50" />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/80 to-transparent" />
+                <div className={`absolute inset-0 bg-gradient-to-br ${colors.glow.replace('shadow-', 'from-').replace('/20', '/10')} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
+            </div>
+
             {/* Corner Ribbon */}
-            <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none z-20 overflow-hidden rounded-tr-[24px]">
-                <div className={`absolute top-[22px] right-[-45px] w-[160px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
-                    <span className={`text-[8px] font-black ${colors.solidText} uppercase tracking-wider`}>
+            <div className="absolute top-0 right-0 w-28 h-28 pointer-events-none z-20 overflow-hidden rounded-tr-[32px]">
+                <div className={`absolute top-[28px] right-[-50px] w-[180px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
+                    <span className={`text-[9px] font-black ${colors.solidText} uppercase tracking-widest`}>
                         {label || status}
                     </span>
                 </div>
             </div>
 
             {/* Content Section */}
-            <div className="flex flex-col h-full p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
+            <div className="flex flex-col h-full p-6 md:p-8 relative z-10">
                 {/* Top Section Actions */}
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-2">
                         {isLive && (
-                            <div className="flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-2.5 py-1 rounded-full shadow-lg shadow-red-600/20">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Live</span>
+                            <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-3 py-1.5 rounded-full shadow-lg shadow-red-600/30">
+                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Now</span>
                             </div>
                         )}
                     </div>
                 </div>
-                <h3 className={`text-base md:text-xl font-bold text-white line-clamp-2 md:line-clamp-2 mb-3 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
-                    {renderBrollTitle(title, status)}
-                </h3>
 
-                {/* Info Grid */}
-                <div className="grid grid-cols-2 gap-y-2 gap-x-3 mb-auto">
-                    {date && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                            <Calendar className="w-3.5 h-3.5 text-padel-green shrink-0" />
-                            <span className="text-[10px] sm:text-xs text-padel-green font-bold truncate">{date}</span>
-                        </div>
-                    )}
-                    {city && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={city}>{city}</span>
-                        </div>
-                    )}
-                    {venue && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={venue}>{venue}</span>
-                        </div>
-                    )}
-                    {organizerName && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                            <Shield className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={organizerName}>{organizerName}</span>
-                        </div>
-                    )}
-                    {registeredPlayers > 0 && (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
-                            <Users className={`w-3.5 h-3.5 ${colors.text} shrink-0`} />
-                            <span className="text-[10px] sm:text-xs text-white font-bold truncate">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
-                        </div>
-                    )}
-                </div>
+                <div className="mt-auto flex flex-col">
+                    {/* Fixed Height Title */}
+                    <div className="h-[72px] mb-4">
+                        <h3 className={`text-2xl md:text-3xl font-bold text-white line-clamp-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
+                            {renderBrollTitle(title, status)}
+                        </h3>
+                    </div>
 
-                {isLive && (livePlayers || nextMatch) && (
-                    <div className="mb-2 space-y-1.5 mt-3 bg-white/5 rounded-xl p-2 border border-white/10">
-                        {livePlayers && (
-                            <div className="flex items-center gap-2 overflow-hidden">
-                                <span className="text-[8px] font-black text-red-500 uppercase tracking-widest bg-red-500/10 px-1.5 rounded shrink-0">NOW</span>
-                                <span className="text-[10px] sm:text-xs font-bold text-white truncate">{livePlayers}</span>
+                    {/* Fixed Height Info List */}
+                    <div className="flex flex-col gap-2 h-[88px] justify-start mb-4">
+                        {date && (
+                            <div className="flex items-center gap-2.5">
+                                <Calendar className="w-4 h-4 text-padel-green shrink-0" />
+                                <span className="text-[11px] text-white/90 font-medium tracking-wide uppercase">{date}</span>
                             </div>
                         )}
-                        {nextMatch && (
-                            <div className="flex items-center gap-2 overflow-hidden">
-                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest bg-white/10 px-1.5 rounded shrink-0">NEXT</span>
-                                <span className="text-[10px] sm:text-xs font-medium text-gray-300 truncate">{nextMatch}</span>
+                        {(city || venue) && (
+                            <div className="flex items-center gap-2.5">
+                                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">
+                                    {[venue, city].filter(Boolean).join(', ')}
+                                </span>
+                            </div>
+                        )}
+                        {organizerName && (
+                            <div className="flex items-center gap-2.5">
+                                <Shield className="w-4 h-4 text-gray-400 shrink-0" />
+                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">{organizerName}</span>
+                            </div>
+                        )}
+                        {registeredPlayers > 0 && (
+                            <div className="flex items-center gap-2.5">
+                                <Users className={`w-4 h-4 ${colors.text} shrink-0`} />
+                                <span className="text-[11px] text-white font-bold tracking-wide uppercase">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
                             </div>
                         )}
                     </div>
-                )}
 
-                {/* Actions bottom row */}
-                <div className="flex flex-col gap-2 mt-auto pt-4 border-t border-white/5">
-                    {/* Watch Live Button (Primary if Live) */}
-                    {isLive && (
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (youtubeUrl) {
-                                    if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                    else window.open(youtubeUrl, '_blank');
-                                } else {
-                                    navigate(linkPath);
-                                }
-                            }}
-                            className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/10 group/live"
-                        >
-                            <PlayCircle className="absolute left-4 w-4 h-4 text-white" />
-                            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] leading-none">
-                                {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
+                    {/* Actions bottom row */}
+                    <div className="flex flex-col gap-3 pt-5 border-t border-white/10">
+                        {isLive && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (youtubeUrl) {
+                                        if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                        else window.open(youtubeUrl, '_blank');
+                                    } else {
+                                        navigate(linkPath);
+                                    }
+                                }}
+                                className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3.5 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/20 group/live"
+                            >
+                                <PlayCircle className="absolute left-5 w-4 h-4 text-white" />
+                                <span className="text-[11px] font-black text-white uppercase tracking-[0.2em] leading-none mt-0.5">
+                                    {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
+                                </span>
+                                <ChevronRight className="absolute right-5 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
+                            </button>
+                        )}
+
+                        <div className={`group/btn relative flex items-center justify-between w-full bg-white/5 backdrop-blur-sm border border-white/10 hover:${colors.solid} hover:border-transparent px-5 py-3.5 rounded-xl transition-all duration-500`}>
+                            <span className={`text-[11px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none mt-0.5`}>
+                                {buttonLabel}
                             </span>
-                            <ChevronRight className="absolute right-4 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
-                        </button>
-                    )}
+                            <ChevronRight className={`w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                        </div>
 
-                    {/* View Details Button */}
-                    <div className={`group/btn relative flex items-center justify-center w-full bg-white/5 border ${colors.border} group-hover:${colors.solid} py-3 rounded-xl transition-all duration-500`}>
-                        <span className={`text-[10px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none`}>
-                            {buttonLabel}
-                        </span>
-                        <ChevronRight className={`absolute right-4 w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                        {/* Draws & Results Button */}
+                        {drawPath && (hasDraw || hasResults) && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
+                                className={`group/btn relative flex items-center justify-between w-full bg-black/20 backdrop-blur-sm border border-white/5 hover:${colors.solid} hover:border-transparent px-5 py-2.5 rounded-xl transition-all duration-300 group/draw`}
+                            >
+                                <div className="flex items-center gap-2">
+                                    <GitBranch className={`w-3.5 h-3.5 text-white/40 group-hover/draw:${colors.solidText} transition-colors`} />
+                                    <span className={`text-[10px] font-black text-white/50 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-[0.1em] mt-0.5`}>
+                                        Draws & Results
+                                    </span>
+                                </div>
+                                <ChevronRight className={`w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} group-hover/draw:translate-x-1 transition-all duration-500`} />
+                            </button>
+                        )}
                     </div>
-
-                    {/* Draws & Results Button */}
-                    {drawPath && (hasDraw || hasResults) && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                            className={`group/btn relative flex items-center justify-center w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:${colors.solid} transition-all duration-300 group/draw`}
-                        >
-                            <GitBranch className={`absolute left-4 w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} transition-colors`} />
-                            <span className={`text-[9px] font-black text-white/40 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-widest`}>
-                                Draws & Results
-                            </span>
-                            <ChevronRight className={`absolute right-4 w-4 h-4 text-white/20 group-hover/draw:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
-                        </button>
-                    )}
                 </div>
             </div>
-        </motion.div>
+        </div>
     );
 };
 
@@ -456,7 +448,29 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const statusColors = getStatusColors(displayStatus);
 
     // Text content for the left/top side of the hero section
-    const textContent = (
+    const textContent = isGridSection ? (
+        <div className={`relative z-10 flex flex-col sm:flex-row sm:items-end justify-between mb-6 md:mb-8`}>
+            <div>
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${isFeatured ? 'border-black/20 text-black bg-black/5' : isLiveSection ? 'border-red-500/20 text-red-400 bg-red-500/10' : 'border-white/10 text-padel-green bg-padel-green/5'} text-[10px] font-bold uppercase tracking-widest mb-3`}>
+                    {isLiveSection ? <Play className="w-3.5 h-3.5 fill-current" /> : <Icon className="w-3.5 h-3.5" />}
+                    <span>{data.highlight}</span>
+                </div>
+                <h2 className={`text-3xl md:text-4xl lg:text-5xl font-bold font-display tracking-tight ${isFeatured ? 'text-black' : 'text-white'}`}>
+                    {data.title}
+                </h2>
+            </div>
+            
+            {data.linkPath && (
+                <button 
+                    onClick={() => navigate(data.linkPath)}
+                    className={`mt-4 sm:mt-0 sm:mb-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest ${isFeatured ? 'text-black/60 hover:text-black' : 'text-gray-400 hover:text-white'} transition-colors group`}
+                >
+                    View All
+                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+                </button>
+            )}
+        </div>
+    ) : (
         <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
             <motion.div
                 initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
@@ -469,14 +483,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <span>{data.highlight}</span>
                 </div>
 
-                <h2 className={`font-bold mb-6 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} ${isGridSection ? 'text-3xl xl:text-[42px]' : 'text-5xl lg:text-[64px] xl:text-[72px]'}`}>
-                    {data.title.split(' ')[0]} <br className={isGridSection ? 'hidden lg:block' : ''} />
+                <h2 className={`font-bold mb-6 font-display leading-[1.0] tracking-tighter ${isFeatured ? 'text-black' : 'text-white'} text-5xl lg:text-[64px] xl:text-[72px]`}>
+                    {data.title.split(' ')[0]} <br />
                     <span className={isFeatured ? 'text-black/70' : 'text-transparent bg-clip-text bg-gradient-to-r from-gray-200 via-gray-400 to-gray-600'}>
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
                 
-                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 ${isGridSection ? 'text-sm' : 'text-base md:text-lg max-w-md'}`}>
+                <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 text-base md:text-lg max-w-md`}>
                     {data.description}
                 </p>
 
@@ -565,36 +579,28 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             {/* Pagination / Scroll buttons - visible on mobile when > 1 item, on desktop when isSlider */}
             {(isSlider || (items && items.length > 1)) && (
                 <div className={`flex gap-4 z-20 mt-8 justify-center min-h-[44px] ${isSlider ? '' : 'md:hidden'}`}>
-                    <AnimatePresence>
-                        {canScrollLeft && (
-                            <motion.button
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                onClick={() => scroll('left')}
-                                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${isFeatured
-                                    ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white'
-                                    : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black'
-                                    }`}
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </motion.button>
-                        )}
-                        {canScrollRight && (
-                            <motion.button
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                onClick={() => scroll('right')}
-                                className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${isFeatured
-                                    ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white'
-                                    : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black'
-                                    }`}
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </motion.button>
-                        )}
-                    </AnimatePresence>
+                    <button
+                        onClick={() => canScrollLeft && scroll('left')}
+                        disabled={!canScrollLeft}
+                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                            !canScrollLeft 
+                                ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                                : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                        }`}
+                    >
+                        <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <button
+                        onClick={() => canScrollRight && scroll('right')}
+                        disabled={!canScrollRight}
+                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${
+                            !canScrollRight 
+                                ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                                : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                        }`}
+                    >
+                        <ChevronRight className="w-5 h-5" />
+                    </button>
                 </div>
             )}
         </div>
@@ -713,37 +719,22 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 
     return (
-        <section className={`relative py-16 lg:py-24 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
-            <div className={`w-full ${isGridSection ? 'max-w-[1500px]' : 'max-w-[1200px]'} mx-auto px-6 md:px-8 relative z-10 ${isGridSection ? 'grid lg:grid-cols-4 gap-6 xl:gap-12 items-start' : 'grid lg:grid-cols-2 gap-8 lg:gap-16 items-start'}`}>
+        <section className={`relative py-12 lg:py-16 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
+            <div className={`w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10`}>
                 {isGridSection ? (
                     <>
-                        {/* Text takes 1 column on the left */}
-                        <div className="lg:col-span-1">
-                            {textContent}
-                        </div>
-                        {/* Cards take 3 columns on the right */}
-                        <div className="lg:col-span-3 w-full min-w-0">
-                            {imageContent}
-                        </div>
-                    </>
-                ) : isLeft ? (
-                    <>
-                        <div className="lg:col-span-1 border border-transparent">
-                            {textContent}
-                        </div>
-                        <div className="lg:col-span-1 border border-transparent">
-                            {imageContent}
-                        </div>
+                        {textContent}
+                        {imageContent}
                     </>
                 ) : (
-                    <>
-                        <div className="order-2 lg:order-1 lg:col-span-1 border border-transparent">
-                            {imageContent}
+                    <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center max-w-[1200px] mx-auto">
+                        <div className={`order-2 lg:order-1 border border-transparent`}>
+                            {isLeft ? textContent : imageContent}
                         </div>
-                        <div className="order-1 lg:order-2 lg:col-span-1 border border-transparent">
-                            {textContent}
+                        <div className={`order-1 lg:order-2 border border-transparent`}>
+                            {isLeft ? imageContent : textContent}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         </section>
