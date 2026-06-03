@@ -1676,6 +1676,7 @@ const EventDetails = () => {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full block text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                        style={{ color: '#0F172A' }}
                     >
                         Register Now
                     </a>
@@ -1870,6 +1871,7 @@ const EventDetails = () => {
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="flex-1 sm:flex-none text-center text-[10px] font-black uppercase tracking-widest px-6 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                    style={{ color: '#0F172A' }}
                                                 >
                                                     Register Now
                                                 </a>
