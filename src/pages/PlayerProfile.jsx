@@ -308,13 +308,49 @@ const PlayerProfile = () => {
 
 
     useEffect(() => {
-        if (player?.rankedin_id) {
+        if (player) {
             const fetchEvents = async () => {
-                const events = await getPlayerEventsAsync(player.rankedin_id);
+                const events = (player.rankedin_id ? await getPlayerEventsAsync(player.rankedin_id) : []) || [];
+
+                let queryStr = `email.ilike.${player.email}`;
+                if (player.name) {
+                    // Escape special characters for PostgREST if necessary, though ilike is generally safe with plain strings
+                    // Wrap the name in quotes to handle spaces safely
+                    queryStr += `,partner_name.ilike."${player.name}"`;
+                }
+
+                // Fetch local registrations
+                const { data: localRegs } = await supabase
+                    .from('event_registrations')
+                    .select('*, calendar(*)')
+                    .or(queryStr);
+
+                if (localRegs) {
+                    localRegs.forEach(reg => {
+                        const cal = reg.calendar;
+                        if (!cal) return;
+                        // Avoid duplicates if already fetched from Rankedin
+                        const rId = cal.rankedin_url ? cal.rankedin_url.split('/').filter(Boolean).pop() : null;
+                        const isDuplicate = events.some(e => e.id?.toString() === rId);
+                        
+                        if (!isDuplicate && !events.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
+                            events.push({
+                                id: `local_${cal.id}`,
+                                db_id: cal.id,
+                                start_date: cal.start_date,
+                                end_date: cal.end_date,
+                                name: cal.event_name,
+                                state: 1, // Default to upcoming
+                                payment_status: reg.payment_status
+                            });
+                        }
+                    });
+                }
+
                 const startOfToday = new Date();
                 startOfToday.setHours(0, 0, 0, 0);
 
-                const upcoming = (events || [])
+                const upcoming = events
                     .filter(e => {
                         const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
                         eventEnd.setHours(23, 59, 59, 999);
@@ -323,7 +359,7 @@ const PlayerProfile = () => {
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
 
                 // Filter for past events (state === 4 or date is in past, excluding state 2)
-                const past = (events || [])
+                const past = events
                     .filter(e => {
                         const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
                         eventEnd.setHours(23, 59, 59, 999);
@@ -366,7 +402,10 @@ const PlayerProfile = () => {
 
                     if (dbEvents) {
                         allFiltered.forEach(e => {
-                            const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
+                            const match = e.id?.toString().startsWith('local_')
+                                ? dbEvents.find(dbE => dbE.id === e.db_id)
+                                : dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${e.id}/`));
+                                
                             if (match) {
                                 e.db_id = match.id;
                                 e.slug = match.slug;
@@ -388,7 +427,7 @@ const PlayerProfile = () => {
             };
             fetchEvents();
         }
-    }, [player?.rankedin_id, player?.email, getPlayerEventsAsync]);
+    }, [player, player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 
     useEffect(() => {
         if (player?.rankedin_id && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
@@ -3648,7 +3687,7 @@ const PlayerProfile = () => {
 
                                                                         const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                                         const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
-                                                                        const needsPayment = currentTab !== 'past' && event.db_id && (hasPending || (!event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0))));
+                                                                        const needsPayment = currentTab !== 'past' && event.db_id && (hasPending || event.payment_status === 'pending' || (!event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0))));
 
                                                                         return (
                                                                             <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
@@ -3693,7 +3732,7 @@ const PlayerProfile = () => {
                                                                                     </div>
 
                                                                                     <h4 className={`text-lg font-black text-white mb-4 line-clamp-2 uppercase tracking-tight ${textColor} transition-colors`}>
-                                                                                        {event.event_name}
+                                                                                        {event.name || event.event_name}
                                                                                     </h4>
 
                                                                                     {needsPayment && (
