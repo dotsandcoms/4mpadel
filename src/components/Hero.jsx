@@ -80,7 +80,7 @@ const Hero = () => {
                     if (cachedPlayer) {
                         playerData = JSON.parse(cachedPlayer);
                     }
-                } catch (_) {}
+                } catch (_) { }
 
                 if (!playerData || !playerData.rankedin_id) {
                     const { data, error } = await supabase
@@ -94,7 +94,7 @@ const Hero = () => {
                         playerData = data;
                         try {
                             localStorage.setItem(PLAYER_METADATA_KEY, JSON.stringify(data));
-                        } catch (_) {}
+                        } catch (_) { }
                     }
                 }
 
@@ -257,10 +257,10 @@ const Hero = () => {
                 >
                     <div className="absolute inset-0 bg-gradient-to-b from-[#060913]/90 via-[#060913]/50 to-[#060913]/95 z-10" />
                     <div className="absolute inset-0 bg-gradient-to-r from-[#060913]/90 via-transparent to-[#060913]/90 z-10" />
-                    
+
                     {/* Floating Orbs */}
-                    <motion.div 
-                        animate={{ 
+                    <motion.div
+                        animate={{
                             scale: [1, 1.5, 1],
                             opacity: [0.3, 0.7, 0.3],
                             x: [0, 300, -150, 0],
@@ -271,10 +271,10 @@ const Hero = () => {
                             repeat: Infinity,
                             ease: "easeInOut"
                         }}
-                        className="absolute top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none" 
+                        className="absolute top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
                     />
-                    <motion.div 
-                        animate={{ 
+                    <motion.div
+                        animate={{
                             scale: [1, 1.8, 1],
                             opacity: [0.2, 0.6, 0.2],
                             x: [0, -300, 200, 0],
@@ -286,9 +286,9 @@ const Hero = () => {
                             ease: "easeInOut",
                             delay: 1
                         }}
-                        className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none" 
+                        className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
                     />
-                    
+
                     <img
                         src={heroBg}
                         alt="Premium Padel Court"
@@ -331,22 +331,8 @@ const Hero = () => {
                         transition={{ delay: 0.8, duration: 0.8 }}
                         className="text-gray-400 text-lg md:text-xl lg:text-2xl max-w-2xl mb-8 leading-relaxed font-light"
                     >
-                        Your ultimate <strong className="text-white font-medium">padel ecosystem</strong>. Discover events, track rankings, and join the fastest-growing community nationwide.
+                        The platform connecting the padel community.  <strong className="text-white font-medium">Events, rankings, clubs, players and organisers </strong>— all in one place.
                     </motion.p>
-
-                    {/* Sleek Sub-nav Pills */}
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.9, duration: 0.8 }}
-                        className="flex flex-wrap items-center gap-2 md:gap-3 mb-10"
-                    >
-                        {['Calendar', 'Tournaments', 'Players', 'Leaderboard', 'Training', 'Media'].map((item) => (
-                            <div key={item} className="px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-md text-xs md:text-sm font-bold uppercase tracking-widest text-white/70 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all cursor-pointer">
-                                {item}
-                            </div>
-                        ))}
-                    </motion.div>
 
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -448,7 +434,7 @@ const Hero = () => {
                                                             className="relative flex-shrink-0 w-52 md:w-64 h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-left animate-pulse flex flex-col justify-between overflow-hidden shadow-lg"
                                                         >
                                                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
-                                                            
+
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <span className="w-12 h-3.5 bg-purple-500/10 border border-purple-500/20 rounded" />
                                                                 <span className="w-6 h-3 bg-white/10 rounded" />
