@@ -118,9 +118,14 @@ const AuthModal = ({ isOpen, onClose }) => {
                 
                  // Determine redirect path based on where the user logged in from
                  const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
-                 const targetPath = isAdminContext ? '/admin' : '/';
-                 
-                 navigate(targetPath);
+                 if (isAdminContext) {
+                     navigate('/admin');
+                 } else if (location.pathname === '/' || location.pathname === '/login') {
+                     navigate('/');
+                 } else {
+                     // Stay on the current page
+                     navigate(location.pathname + location.search, { replace: true });
+                 }
             }, 2500);
         }
     };
