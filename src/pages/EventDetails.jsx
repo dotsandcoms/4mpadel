@@ -1799,7 +1799,7 @@ const EventDetails = () => {
                     <img
                         src={event.custom_image_url || event.image_url || tournamentHero}
                         alt={event.event_name}
-                        className="w-full h-full object-cover animate-fade-in z-0"
+                        className="w-full h-full object-cover object-top animate-fade-in z-0"
                     />
 
                     {/* Gradient overlay for blending and text readability */}
