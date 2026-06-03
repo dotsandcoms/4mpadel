@@ -576,7 +576,7 @@ const EventDetails = () => {
     // Debounced email lookup
     useEffect(() => {
         const checkEmail = async () => {
-            if (!formData.email || formData.email.length < 5 || !formData.email.includes('@')) {
+            if (!formData.email || formData.email.length < 5 || !formData.email.includes('@') || !event?.id) {
                 setEmailCheckStatus('idle');
                 setPlayerProfileData(null);
                 return;
@@ -590,6 +590,20 @@ const EventDetails = () => {
                     .maybeSingle();
 
                 if (data) {
+                    if (data.license_type === 'temporary') {
+                        // Check if they have a temporary license for THIS specific event
+                        const { data: tempLic } = await supabase
+                            .from('temporary_licenses')
+                            .select('id')
+                            .eq('player_id', data.id)
+                            .eq('event_id', event.id)
+                            .maybeSingle();
+                        
+                        if (!tempLic) {
+                            // No temporary license for this event, override paid_registration to false
+                            data.paid_registration = false;
+                        }
+                    }
                     setPlayerProfileData(data);
                     setEmailCheckStatus('found');
                 } else {
@@ -604,7 +618,7 @@ const EventDetails = () => {
 
         const timeoutId = setTimeout(checkEmail, 400); // 400ms debounce
         return () => clearTimeout(timeoutId);
-    }, [formData.email]);
+    }, [formData.email, event?.id]);
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
@@ -1100,12 +1114,22 @@ const EventDetails = () => {
             try {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('id, name, email, paid_registration, license_type, category')
+                    .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
                     .ilike('name', `%${name.trim()}%`)
                     .limit(8);
 
                 if (data && data.length > 0) {
-                    setPartnerSearchResults(data);
+                    const enrichedData = data.map(player => {
+                        if (player.license_type === 'temporary') {
+                            const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
+                            return {
+                                ...player,
+                                paid_registration: hasTempForEvent ? player.paid_registration : false
+                            };
+                        }
+                        return player;
+                    });
+                    setPartnerSearchResults(enrichedData);
                     setPartnerLookupError(null);
                 } else {
                     setPartnerSearchResults([]);

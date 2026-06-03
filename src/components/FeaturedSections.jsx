@@ -98,7 +98,7 @@ const featuredDataTemplate = [
     {
         id: 'featured-tournaments',
         title: 'Featured Tournaments',
-        highlight: 'Upcoming',
+        highlight: 'Up Next',
         description: 'Get ready for the biggest clashes of the season. Top players gather to battle it out for the ultimate prize. Do not miss the action and secure your spot today!',
         cardLabel: 'Major Event',
         cardTitle: 'Loading Featured Event...',
@@ -310,7 +310,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                         </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
-                    
+
                     {isLive && (
                         <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
                             <div className="w-1 h-1 rounded-full bg-white" />
@@ -369,7 +369,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                                     </Link>
                                 )}
                             </div>
-                            
+
                             <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
                                 <span>{buttonLabel}</span>
                                 <ArrowRight className="w-3 h-3" />
@@ -477,9 +477,9 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     {data.title}
                 </h2>
             </div>
-            
+
             {data.linkPath && (
-                <button 
+                <button
                     onClick={() => navigate(data.linkPath)}
                     className={`mt-4 sm:mt-0 sm:mb-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest ${isFeatured ? 'text-black/60 hover:text-black' : 'text-gray-400 hover:text-white'} transition-colors group`}
                 >
@@ -507,7 +507,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         {data.title.split(' ').slice(1).join(' ')}
                     </span>
                 </h2>
-                
+
                 <p className={`${isFeatured ? 'text-black/80 font-medium' : 'text-gray-400'} leading-relaxed mb-6 text-base md:text-lg max-w-md`}>
                     {data.description}
                 </p>
@@ -561,18 +561,16 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
                 ref={scrollRef}
-                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide w-full ${
-                    isSlider
+                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide w-full ${isSlider
                         ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8'
                         : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0'
-                }`}
+                    }`}
             >
                 {items?.map((t, i) => (
                     <div
                         key={t.id || t.eventId}
-                        className={`flex-none w-[290px] snap-start ${
-                            isSlider ? 'md:w-[calc(33.333%-16px)]' : 'md:w-full'
-                        }`}
+                        className={`flex-none w-[290px] snap-start ${isSlider ? 'md:w-[calc(33.333%-16px)]' : 'md:w-full'
+                            }`}
                     >
                         <TournamentCard
                             index={i}
@@ -600,22 +598,20 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <button
                         onClick={() => canScrollLeft && scroll('left')}
                         disabled={!canScrollLeft}
-                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                            !canScrollLeft 
+                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollLeft
                                 ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
                                 : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <ChevronLeft className="w-5 h-5" />
                     </button>
                     <button
                         onClick={() => canScrollRight && scroll('right')}
                         disabled={!canScrollRight}
-                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                            !canScrollRight 
+                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollRight
                                 ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
                                 : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <ChevronRight className="w-5 h-5" />
                     </button>

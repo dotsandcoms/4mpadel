@@ -8,7 +8,7 @@ const FAQ = () => {
     const questions = [
         {
             q: "What is 4M Padel?",
-            a: "4M Padel is the central online platform for padel in South Africa — bringing together tournaments, rankings, players, and all SAPA-sanctioned events in one place."
+            a: "4M Padel is your online home for everything padel. It is a platform created to keep you up to date with tournaments, rankings, events and results, while bringing the padel community together in one place. 4M Padel is built for federations, organisers, clubs, players and fans — making it easier for everyone to connect, follow the game and be part of the padel community."
         },
         {
             q: "How do I enter a SAPA tournament?",
