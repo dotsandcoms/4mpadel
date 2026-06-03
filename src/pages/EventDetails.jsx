@@ -9,7 +9,6 @@ import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
-import { sendEmail } from '../utils/emails';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -20,6 +19,7 @@ const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '
 const isTestMode = PAYSTACK_PUBLIC_KEY.startsWith('pk_test');
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
+import logo4m from '../assets/logo_4m_lowercase.png';
 
 const EVENT_CATEGORIES = [
     "Men's Open (Pro/Elite)",
@@ -228,8 +228,6 @@ const EventDetails = () => {
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
-    const [liveParticipantCount, setLiveParticipantCount] = useState(null);
-    const [localParticipants, setLocalParticipants] = useState([]);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
 
     const isEventPassed = useMemo(() => {
@@ -243,21 +241,6 @@ const EventDetails = () => {
         eventDate.setHours(0, 0, 0, 0);
 
         return eventDate < today;
-    }, [event]);
-
-    const isOrgHostedEvent = useMemo(() => {
-        if (!event) return false;
-        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-        return !!event.organization_id && !rId;
-    }, [event]);
-
-    const availableDivisions = useMemo(() => {
-        if (!event) return [];
-        if (event.allowed_divisions?.length) return event.allowed_divisions;
-        if (event.category_fees && Object.keys(event.category_fees).length > 0) {
-            return Object.keys(event.category_fees);
-        }
-        return EVENT_CATEGORIES;
     }, [event]);
 
     const stripHtml = (html) => {
@@ -279,9 +262,6 @@ const EventDetails = () => {
     const [selectedDivisions, setSelectedDivisions] = useState([]);
     const [isCheckingReg, setIsCheckingReg] = useState(false);
 
-    const divisionsForRegistration = isOrgHostedEvent ? availableDivisions : registeredDivisions;
-    const displayParticipantCount = liveParticipantCount ?? event?.registered_players ?? 0;
-
     const [formData, setFormData] = useState({
         full_name: '',
         email: '',
@@ -302,152 +282,129 @@ const EventDetails = () => {
     const [emailCheckStatus, setEmailCheckStatus] = useState('idle'); // 'idle', 'checking', 'found', 'not_found'
     const [playerProfileData, setPlayerProfileData] = useState(null);
     const [licenseChoice, setLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
+    const [partnerLicenseChoice, setPartnerLicenseChoice] = useState('temporary'); // 'temporary' | 'full'
 
-    // Division-specific partner configurations state
-    const [divisionPartners, setDivisionPartners] = useState({});
+    const [collapsedSections, setCollapsedSections] = useState({
+        about: true,
+        details: true,
+        location: true,
+        sponsors: true,
+        weather: true,
+        organiser: true
+    });
 
-    // Dynamic state helper handlers for division-scoped partners
-    const toggleHasPartnerForDivision = (division) => {
-        setDivisionPartners(prev => {
-            const current = prev[division] || {};
-            const newState = !current.hasPartner;
-            return {
-                ...prev,
-                [division]: {
-                    ...current,
-                    hasPartner: newState,
-                    partnerName: newState ? (current.partnerName || '') : '',
-                    partnerProfile: newState ? current.partnerProfile : null,
-                    payForPartner: newState ? current.payForPartner : false,
-                    partnerSearchResults: [],
-                    partnerLookupError: null
-                }
-            };
-        });
+    const toggleSection = (section) => {
+        setCollapsedSections(prev => ({
+            ...prev,
+            [section]: !prev[section]
+        }));
     };
 
-    const handlePartnerSearchForDivision = (division, name) => {
-        if (searchTimeout) clearTimeout(searchTimeout);
+    const [expandedDivisions, setExpandedDivisions] = useState({});
 
-        // Immediate update for search input value and cleanup of old search results/profiles
-        setDivisionPartners(prev => {
-            const current = prev[division] || {};
-            return {
-                ...prev,
-                [division]: {
-                    ...current,
-                    partnerName: name,
-                    partnerProfile: null,
-                    partnerLookupError: null,
-                    payForPartner: false,
-                    partnerSearchResults: []
-                }
-            };
-        });
-
-        if (!name || name.length < 2) return;
-
-        const timeout = setTimeout(async () => {
-            setDivisionPartners(prev => {
-                const current = prev[division] || {};
-                return {
-                    ...prev,
-                    [division]: {
-                        ...current,
-                        isLookingUpPartner: true
-                    }
-                };
-            });
-
-            try {
-                const { data, error } = await supabase
-                    .from('players')
-                    .select('id, name, email, paid_registration, license_type, category')
-                    .ilike('name', `%${name.trim()}%`)
-                    .limit(8);
-
-                setDivisionPartners(prev => {
-                    const current = prev[division] || {};
-                    if (data && data.length > 0) {
-                        return {
-                            ...prev,
-                            [division]: {
-                                ...current,
-                                isLookingUpPartner: false,
-                                partnerSearchResults: data,
-                                partnerLookupError: null
-                            }
-                        };
-                    } else {
-                        return {
-                            ...prev,
-                            [division]: {
-                                ...current,
-                                isLookingUpPartner: false,
-                                partnerSearchResults: [],
-                                partnerLookupError: "Profile not found. Partner must register to be paid for."
-                            }
-                        };
-                    }
-                });
-            } catch (err) {
-                console.error("Partner lookup error for division:", err);
-                setDivisionPartners(prev => {
-                    const current = prev[division] || {};
-                    return {
-                        ...prev,
-                        [division]: {
-                            ...current,
-                            isLookingUpPartner: false
-                        }
-                    };
-                });
-            }
-        }, 500);
-        setSearchTimeout(timeout);
+    const toggleDivision = (divId) => {
+        setExpandedDivisions(prev => ({
+            ...prev,
+            [divId]: !prev[divId]
+        }));
     };
 
-    const handleSelectPartnerForDivision = (division, player) => {
-        setDivisionPartners(prev => {
-            const current = prev[division] || {};
+    const getTierTheme = () => {
+        const status = event?.sapa_status?.trim();
+
+        if (status === 'Major') {
             return {
-                ...prev,
-                [division]: {
-                    ...current,
-                    partnerName: player.name,
-                    partnerProfile: player,
-                    partnerSearchResults: [],
-                    partnerLookupError: null
-                }
+                primary: 'bg-red-600 hover:bg-red-700 text-white',
+                primaryText: 'text-white',
+                accentText: 'text-red-600',
+                accentBg: 'bg-red-600/10 border-red-600/20',
+                badgeBg: 'bg-red-600 text-white',
+                badgeText: 'text-white',
+                glow: 'shadow-lg shadow-red-600/20',
+                border: 'border-red-600',
+                fill: '#DC2626'
             };
-        });
+        }
+        if (status === 'Super Gold' || status === 'S Gold') {
+            return {
+                primary: 'bg-amber-500 hover:bg-amber-600 text-[#0F172A]',
+                primaryText: 'text-[#0F172A]',
+                accentText: 'text-amber-500',
+                accentBg: 'bg-amber-500/10 border-amber-500/20',
+                badgeBg: 'bg-amber-500 text-[#0F172A]',
+                badgeText: 'text-[#0F172A]',
+                glow: 'shadow-lg shadow-amber-500/20',
+                border: 'border-amber-500',
+                fill: '#F59E0B'
+            };
+        }
+        if (status === 'Gold') {
+            return {
+                primary: 'bg-yellow-500 hover:bg-yellow-600 text-[#0F172A]',
+                primaryText: 'text-[#0F172A]',
+                accentText: 'text-yellow-500',
+                accentBg: 'bg-yellow-500/10 border-yellow-500/20',
+                badgeBg: 'bg-yellow-500 text-[#0F172A]',
+                badgeText: 'text-[#0F172A]',
+                glow: 'shadow-lg shadow-yellow-500/20',
+                border: 'border-yellow-500',
+                fill: '#EAB308'
+            };
+        }
+        if (status === 'Silver') {
+            return {
+                primary: 'bg-gray-400 hover:bg-gray-500 text-[#0F172A]',
+                primaryText: 'text-[#0F172A]',
+                accentText: 'text-gray-400',
+                accentBg: 'bg-gray-400/10 border-gray-400/20',
+                badgeBg: 'bg-gray-400 text-[#0F172A]',
+                badgeText: 'text-[#0F172A]',
+                glow: 'shadow-lg shadow-gray-400/20',
+                border: 'border-gray-400',
+                fill: '#9CA3AF'
+            };
+        }
+        if (status === 'Bronze') {
+            return {
+                primary: 'bg-orange-700 hover:bg-orange-800 text-white',
+                primaryText: 'text-white',
+                accentText: 'text-orange-700',
+                accentBg: 'bg-orange-700/10 border-orange-700/20',
+                badgeBg: 'bg-orange-700 text-white',
+                badgeText: 'text-white',
+                glow: 'shadow-lg shadow-orange-700/20',
+                border: 'border-orange-700',
+                fill: '#C2410C'
+            };
+        }
+        if (status === 'FIP event') {
+            return {
+                primary: 'bg-blue-600 hover:bg-blue-700 text-white',
+                primaryText: 'text-white',
+                accentText: 'text-blue-600',
+                accentBg: 'bg-blue-600/10 border-blue-600/20',
+                badgeBg: 'bg-blue-600 text-white',
+                badgeText: 'text-white',
+                glow: 'shadow-lg shadow-blue-600/20',
+                border: 'border-blue-600',
+                fill: '#2563EB'
+            };
+        }
+        return {
+            primary: 'bg-[#CCFF00] hover:bg-[#CCFF00]/80 text-[#0F172A]',
+            primaryText: 'text-[#0F172A]',
+            accentText: 'text-[#CCFF00]',
+            accentBg: 'bg-[#CCFF00]/10 border-[#CCFF00]/20',
+            badgeBg: 'bg-[#CCFF00] text-[#0F172A]',
+            badgeText: 'text-[#0F172A]',
+            glow: 'shadow-lg shadow-[#CCFF00]/20',
+            border: 'border-[#CCFF00]',
+            fill: '#CCFF00'
+        };
     };
 
-    const togglePayForPartnerForDivision = (division) => {
-        setDivisionPartners(prev => {
-            const current = prev[division] || {};
-            return {
-                ...prev,
-                [division]: {
-                    ...current,
-                    payForPartner: !current.payForPartner
-                }
-            };
-        });
-    };
+    const theme = getTierTheme();
 
-    const setPartnerLicenseChoiceForDivision = (division, choice) => {
-        setDivisionPartners(prev => {
-            const current = prev[division] || {};
-            return {
-                ...prev,
-                [division]: {
-                    ...current,
-                    partnerLicenseChoice: choice
-                }
-            };
-        });
-    };
 
     // Prefill form from logged-in player profile when modal opens
     useEffect(() => {
@@ -516,7 +473,7 @@ const EventDetails = () => {
         const checkStatus = async () => {
             const { data: { session } } = await supabase.auth.getSession();
             const userEmail = session?.user?.email?.toLowerCase().trim() || formData.email?.toLowerCase().trim();
-            
+
             if (!userEmail || userEmail.length < 5 || !userEmail.includes('@')) {
                 setRegisteredDivisions([]);
                 setIsRegistered(false);
@@ -561,41 +518,17 @@ const EventDetails = () => {
                 ...(localParts || []).filter(p => p.is_paid).map(p => (p.class_name || '').trim()),
                 ...(directPayments || []).map(p => (p.metadata?.division || '').trim())
             ].filter(Boolean)));
-            
+
             const unpaidLocalDivs = (localParts || [])
                 .filter(p => !p.is_paid)
                 .map(p => (p.class_name || '').trim());
 
             setPaidDivisions(paidDivs);
-
-            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-            const isOrgHosted = !!event.organization_id && !rId;
-
-            // Org-hosted events: use local DB only (no Rankedin player list required)
-            if (isOrgHosted) {
-                const regDivsFromParts = (localParts || [])
-                    .map(p => (p.class_name || '').trim())
-                    .filter(Boolean);
-                const regDivsFromLegacy = (legacyRegs || [])
-                    .map(r => (r.division || '').trim())
-                    .filter(Boolean);
-                const allRegDivs = Array.from(new Set([...regDivsFromParts, ...regDivsFromLegacy]));
-
-                setRegisteredDivisions(allRegDivs);
-                setIsRegistered(allRegDivs.length > 0);
-                setIsPaid(paidDivs.length > 0);
-
-                if (allRegDivs.length === 1 && !paidDivs.includes(allRegDivs[0])) {
-                    setSelectedDivisions([allRegDivs[0]]);
-                }
-                return;
-            }
-
             setIsPaid(paidDivs.length > 0);
 
             // 2. Check Registration Status (Rankedin Live Player List fallback)
             const regDivs = [...unpaidLocalDivs];
-            
+
             if (rId && regDivs.length === 0) {
                 setIsCheckingReg(true);
                 try {
@@ -618,7 +551,7 @@ const EventDetails = () => {
                                     (userName && pName === userName);
                             });
                         });
-                        
+
                         const divName = (cls.Name || '').trim();
                         if (isMatch && !regDivs.includes(divName)) regDivs.push(divName);
                     }));
@@ -631,7 +564,7 @@ const EventDetails = () => {
 
             setRegisteredDivisions(Array.from(new Set(regDivs)));
             setIsRegistered(regDivs.length > 0);
-            
+
             // Default select the first division if only one found and not yet paid
             if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
                 setSelectedDivisions([regDivs[0]]);
@@ -643,7 +576,7 @@ const EventDetails = () => {
     // Debounced email lookup
     useEffect(() => {
         const checkEmail = async () => {
-            if (!formData.email || formData.email.length < 5 || !formData.email.includes('@')) {
+            if (!formData.email || formData.email.length < 5 || !formData.email.includes('@') || !event?.id) {
                 setEmailCheckStatus('idle');
                 setPlayerProfileData(null);
                 return;
@@ -657,6 +590,20 @@ const EventDetails = () => {
                     .maybeSingle();
 
                 if (data) {
+                    if (data.license_type === 'temporary') {
+                        // Check if they have a temporary license for THIS specific event
+                        const { data: tempLic } = await supabase
+                            .from('temporary_licenses')
+                            .select('id')
+                            .eq('player_id', data.id)
+                            .eq('event_id', event.id)
+                            .maybeSingle();
+                        
+                        if (!tempLic) {
+                            // No temporary license for this event, override paid_registration to false
+                            data.paid_registration = false;
+                        }
+                    }
                     setPlayerProfileData(data);
                     setEmailCheckStatus('found');
                 } else {
@@ -671,7 +618,7 @@ const EventDetails = () => {
 
         const timeoutId = setTimeout(checkEmail, 400); // 400ms debounce
         return () => clearTimeout(timeoutId);
-    }, [formData.email]);
+    }, [formData.email, event?.id]);
 
     const [playlistVideos, setPlaylistVideos] = useState([]);
     const [fetchingVideos, setFetchingVideos] = useState(false);
@@ -764,34 +711,6 @@ const EventDetails = () => {
 
         fetchEventDetails();
     }, [slug]);
-
-    // Live participant count from tournament_participants (org-hosted + synced Rankedin events)
-    useEffect(() => {
-        if (!event?.id) return;
-
-        const fetchLiveCount = async () => {
-            const { count, error } = await supabase
-                .from('tournament_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('event_id', event.id);
-
-            let total = (!error && count !== null) ? count : 0;
-
-            const { count: regCount } = await supabase
-                .from('event_registrations')
-                .select('*', { count: 'exact', head: true })
-                .eq('event_id', event.id)
-                .eq('payment_status', 'paid');
-
-            if (regCount !== null) {
-                total = Math.max(total, regCount);
-            }
-
-            setLiveParticipantCount(total);
-        };
-
-        fetchLiveCount();
-    }, [event?.id, isPaid, isRegistered]);
 
     useEffect(() => {
         const checkRankedinStatus = async () => {
@@ -911,70 +830,7 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchParticipantsData = async () => {
             if (activeTab !== 'players' || !event) return;
-
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-            const isOrgHosted = !!event.organization_id && !rId;
-
-            if (isOrgHosted) {
-                setFetchingParticipants(true);
-                try {
-                    const { data, error } = await supabase
-                        .from('tournament_participants')
-                        .select('id, full_name, email, class_name, is_paid, metadata, profile_id')
-                        .eq('event_id', event.id)
-                        .order('class_name', { ascending: true })
-                        .order('full_name', { ascending: true });
-
-                    if (error) throw error;
-
-                    let participantsList = data || [];
-
-                    if (participantsList.length === 0) {
-                        const { data: legacyRegs } = await supabase
-                            .from('event_registrations')
-                            .select('id, full_name, email, division, payment_status, partner_name')
-                            .eq('event_id', event.id)
-                            .eq('payment_status', 'paid')
-                            .order('full_name', { ascending: true });
-
-                        participantsList = (legacyRegs || []).map(r => ({
-                            id: r.id,
-                            full_name: r.full_name,
-                            email: r.email,
-                            class_name: r.division,
-                            is_paid: true,
-                            metadata: { partner_name: r.partner_name },
-                            profile_id: null
-                        }));
-                    }
-
-                    // Enrich with 4M profile pictures via profile_id, email, or name
-                    const profileIds = [...new Set(participantsList.map(p => p.profile_id).filter(Boolean))];
-                    let profileMap = {};
-
-                    if (profileIds.length > 0) {
-                        const { data: profiles } = await supabase
-                            .from('players')
-                            .select('id, name, email, image_url')
-                            .in('id', profileIds);
-
-                        (profiles || []).forEach(p => { profileMap[p.id] = p; });
-                    }
-
-                    participantsList = participantsList.map(p => ({
-                        ...p,
-                        image_url: profileMap[p.profile_id]?.image_url || null
-                    }));
-
-                    setLocalParticipants(participantsList);
-                } catch (err) {
-                    console.error('Error fetching local participants:', err);
-                } finally {
-                    setFetchingParticipants(false);
-                }
-                return;
-            }
-
             if (!rId) return;
 
             setFetchingParticipants(true);
@@ -993,6 +849,68 @@ const EventDetails = () => {
                         participantsMap[cls.Id] = data;
                     }
                     setParticipants(prev => ({ ...prev, ...participantsMap }));
+
+                    // Gather all player names and Rankedin IDs for bulk database query
+                    const names = new Set();
+                    const rankedInIds = new Set();
+
+                    Object.values(participantsMap).forEach(classParticipants => {
+                        if (!classParticipants) return;
+                        classParticipants.forEach(item => {
+                            const p = item.Participant || {};
+                            if (p.Players && p.Players.length > 0) {
+                                p.Players.forEach(player => {
+                                    if (player.Name) names.add(player.Name);
+                                    if (player.RankedinId) rankedInIds.add(player.RankedinId.toString());
+                                    if (player.Id) rankedInIds.add(player.Id.toString());
+                                });
+                            }
+                            if (p.FirstPlayer) {
+                                if (p.FirstPlayer.Name) names.add(p.FirstPlayer.Name);
+                                if (p.FirstPlayer.RankedinId) rankedInIds.add(p.FirstPlayer.RankedinId.toString());
+                                if (p.FirstPlayer.Id) rankedInIds.add(p.FirstPlayer.Id.toString());
+                            }
+                            if (p.SecondPlayer) {
+                                if (p.SecondPlayer.Name) names.add(p.SecondPlayer.Name);
+                                if (p.SecondPlayer.RankedinId) rankedInIds.add(p.SecondPlayer.RankedinId.toString());
+                                if (p.SecondPlayer.Id) rankedInIds.add(p.SecondPlayer.Id.toString());
+                            }
+                        });
+                    });
+
+                    const namesArray = Array.from(names);
+                    const idsArray = Array.from(rankedInIds);
+
+                    if (namesArray.length > 0 || idsArray.length > 0) {
+                        // Query the Supabase players table for profile photos
+                        const query = supabase.from('players').select('name, image_url, rankedin_id');
+
+                        const filters = [];
+                        if (namesArray.length > 0) {
+                            filters.push(`name.in.(${namesArray.map(n => `"${n.replace(/"/g, '""')}"`).join(',')})`);
+                        }
+                        if (idsArray.length > 0) {
+                            filters.push(`rankedin_id.in.(${idsArray.join(',')})`);
+                        }
+
+                        const { data: dbPlayers, error } = await query.or(filters.join(','));
+
+                        if (!error && dbPlayers) {
+                            const playerMap = {};
+                            dbPlayers.forEach(player => {
+                                if (!player.image_url) return;
+                                if (player.rankedin_id) {
+                                    playerMap[player.rankedin_id.toString()] = player.image_url;
+                                }
+                                if (player.name) {
+                                    const key = player.name.toLowerCase().trim();
+                                    playerMap[key] = player.image_url;
+                                    playerMap[player.name.toLowerCase()] = player.image_url;
+                                }
+                            });
+                            setFourMPlayers(playerMap);
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Error fetching participants:", err);
@@ -1009,7 +927,7 @@ const EventDetails = () => {
             try {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('name, rankedin_id, email, image_url')
+                    .select('name, rankedin_id, image_url')
                     .not('image_url', 'is', null);
 
                 if (data && !error) {
@@ -1017,7 +935,6 @@ const EventDetails = () => {
                     data.forEach(p => {
                         if (p.rankedin_id) lookup[p.rankedin_id] = p.image_url;
                         if (p.name) lookup[p.name.toLowerCase()] = p.image_url;
-                        if (p.email) lookup[p.email.toLowerCase()] = p.image_url;
                     });
                     setFourMPlayers(lookup);
                 }
@@ -1121,19 +1038,6 @@ const EventDetails = () => {
         return Number(event?.entry_fee || 0);
     };
 
-    const getLocalProfileImage = useCallback((player) => {
-        if (!player) return null;
-        if (player.image_url) return player.image_url;
-
-        const name = (player.full_name || player.name || '').toLowerCase().trim();
-        const email = (player.email || '').toLowerCase().trim();
-
-        if (name && fourMPlayers[name]) return fourMPlayers[name];
-        if (email && fourMPlayers[email]) return fourMPlayers[email];
-
-        return null;
-    }, [fourMPlayers]);
-
     const calculateTotalAmount = () => {
         let entryFeesTotal = selectedDivisions.reduce((sum, div) => sum + getEntryFeeForCategory(div), 0);
         let total = entryFeesTotal;
@@ -1143,24 +1047,13 @@ const EventDetails = () => {
             total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
         }
 
-        // Add partner entry fees and unique partner license fees across divisions
-        const seenPartnerIds = new Set();
-        selectedDivisions.forEach(div => {
-            const part = divisionPartners[div];
-            if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
-                // Add partner entry fee for this division
-                total += getEntryFeeForCategory(div);
-
-                // Add partner license fee exactly once per unique partner
-                if (!part.partnerProfile.paid_registration) {
-                    if (!seenPartnerIds.has(part.partnerProfile.id)) {
-                        seenPartnerIds.add(part.partnerProfile.id);
-                        const choice = part.partnerLicenseChoice || 'temporary';
-                        total += choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
-                    }
-                }
+        // Add Partner costs if paying for them and partner registration is enabled
+        if (hasPartner && payForPartner && partnerProfile) {
+            total += entryFeesTotal; // Same divisions assumed for partners usually
+            if (!partnerProfile.paid_registration) {
+                total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
             }
-        });
+        }
 
         return total;
     };
@@ -1180,23 +1073,15 @@ const EventDetails = () => {
             event_id: event?.id,
             event_name: event?.event_name,
             full_name: formData.full_name,
+            partner_name: formData.partner_name,
+            partner_id: partnerProfile?.id,
             division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
             is_test: isTestMode,
             includes_license: playerProfileData && !playerProfileData.paid_registration,
             license_type: licenseChoice,
-            division_partners: JSON.stringify(
-                selectedDivisions.map(div => {
-                    const part = divisionPartners[div] || {};
-                    return {
-                        division: div,
-                        has_partner: !!part.hasPartner,
-                        partner_name: part.partnerProfile ? part.partnerProfile.name : part.partnerName || '',
-                        partner_id: part.partnerProfile?.id || null,
-                        pay_for_partner: !!part.payForPartner,
-                        partner_license: part.partnerProfile && !part.partnerProfile.paid_registration ? (part.partnerLicenseChoice || 'temporary') : null
-                    };
-                })
-            )
+            paying_for_partner: hasPartner && payForPartner,
+            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
+            partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
         }
     };
 
@@ -1229,12 +1114,22 @@ const EventDetails = () => {
             try {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('id, name, email, paid_registration, license_type, category')
+                    .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
                     .ilike('name', `%${name.trim()}%`)
                     .limit(8);
 
                 if (data && data.length > 0) {
-                    setPartnerSearchResults(data);
+                    const enrichedData = data.map(player => {
+                        if (player.license_type === 'temporary') {
+                            const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
+                            return {
+                                ...player,
+                                paid_registration: hasTempForEvent ? player.paid_registration : false
+                            };
+                        }
+                        return player;
+                    });
+                    setPartnerSearchResults(enrichedData);
                     setPartnerLookupError(null);
                 } else {
                     setPartnerSearchResults([]);
@@ -1268,11 +1163,6 @@ const EventDetails = () => {
             return;
         }
 
-        if (isOrgHostedEvent && selectedDivisions.length === 0) {
-            toast.error('Please select at least one division.');
-            return;
-        }
-
         // Only block if they have already paid for ALL their registered divisions 
         // AND they haven't selected any new ones to pay for now
         const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
@@ -1280,12 +1170,6 @@ const EventDetails = () => {
 
         if (isFullyPaid && !hasUnpaidSelections) {
             toast.error('You have already paid for all your registered divisions!');
-            return;
-        }
-
-        // Free registration (R0 entry) — skip Paystack
-        if (calculateTotalAmount() === 0) {
-            handlePaymentSuccess({ reference: `FREE-${Date.now()}` });
             return;
         }
 
@@ -1423,31 +1307,27 @@ const EventDetails = () => {
 
         try {
             const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
-            
+
             // 1. Create registrations for EACH selected division
             const registrationsToUpsert = [];
-            
+
             selectedDivisions.forEach(division => {
-                const part = divisionPartners[division] || {};
-                
-                // Add Main Player Registration
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
                     email: formData.email,
                     phone: formData.phone,
-                    partner_name: part.partnerProfile ? part.partnerProfile.name : part.partnerName || '',
+                    partner_name: formData.partner_name,
                     division: division,
                     payment_status: 'paid',
                     is_test: isTestMode
                 });
 
-                // Add Partner Registration if paying for them
-                if (part.hasPartner && part.payForPartner && part.partnerProfile) {
+                if (payForPartner && partnerProfile) {
                     registrationsToUpsert.push({
                         event_id: event.id,
-                        full_name: part.partnerProfile.name,
-                        email: part.partnerProfile.email,
+                        full_name: partnerProfile.name,
+                        email: partnerProfile.email,
                         partner_name: formData.full_name,
                         division: division,
                         payment_status: 'paid',
@@ -1477,9 +1357,8 @@ const EventDetails = () => {
             // Entry Fees for each division
             selectedDivisions.forEach(division => {
                 const fee = getEntryFeeForCategory(division);
-                const part = divisionPartners[division] || {};
-                const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? fee : 0;
-                
+                const partnerEntryFee = (payForPartner && partnerProfile) ? fee : 0;
+
                 // Main Player (gets the combined fee for the pair)
                 paymentsToInsert.push({
                     player_id: playerId,
@@ -1490,20 +1369,20 @@ const EventDetails = () => {
                     payment_method: 'paystack',
                     reference: `REG-${paystackRef}-${division.replaceAll(' ', '_')}`,
                     is_test: isTestMode,
-                    metadata: { 
-                        paystack_ref: paystackRef, 
+                    metadata: {
+                        paystack_ref: paystackRef,
                         division: division,
                         line_items: [
                             { type: 'entry_fee', amount: fee, player: formData.full_name },
-                            ...(part.hasPartner && part.payForPartner && part.partnerProfile ? [{ type: 'entry_fee', amount: fee, player: part.partnerProfile.name }] : [])
+                            ...(payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerProfile.name }] : [])
                         ]
                     }
                 });
 
                 // Partner (gets R0 record with attribution)
-                if (part.hasPartner && part.payForPartner && part.partnerProfile) {
+                if (payForPartner && partnerProfile) {
                     paymentsToInsert.push({
-                        player_id: part.partnerProfile.id,
+                        player_id: partnerProfile.id,
                         event_id: event.id,
                         amount: 0,
                         status: 'success',
@@ -1511,13 +1390,13 @@ const EventDetails = () => {
                         payment_method: 'paystack',
                         reference: `REG-PARTNER-${paystackRef}-${division.replaceAll(' ', '_')}`,
                         is_test: isTestMode,
-                        metadata: { 
-                            paystack_ref: paystackRef, 
+                        metadata: {
+                            paystack_ref: paystackRef,
                             division: division,
                             paid_by_name: formData.full_name,
                             paid_by_id: playerId,
                             line_items: [
-                                { type: 'entry_fee', amount: 0, player: part.partnerProfile.name, paid_by: formData.full_name }
+                                { type: 'entry_fee', amount: 0, player: partnerProfile.name, paid_by: formData.full_name }
                             ]
                         }
                     });
@@ -1542,6 +1421,7 @@ const EventDetails = () => {
                 });
 
                 if (!isFull) {
+                    // Add to temporary_licenses table
                     await supabase.from('temporary_licenses').insert({
                         player_id: playerId,
                         event_id: event.id,
@@ -1553,123 +1433,74 @@ const EventDetails = () => {
                 await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isFull ? 'full' : 'temporary' }).eq('id', playerId);
             }
 
-            // Partner Licenses (if applicable - exactly once per unique partner being paid for)
-            const seenPartnerLicenseIds = new Set();
-            for (const division of selectedDivisions) {
-                const part = divisionPartners[division];
-                if (part?.hasPartner && part?.payForPartner && part?.partnerProfile && !part.partnerProfile.paid_registration) {
-                    const partnerId = part.partnerProfile.id;
-                    if (!seenPartnerLicenseIds.has(partnerId)) {
-                        seenPartnerLicenseIds.add(partnerId);
-                        
-                        const isPartnerFull = part.partnerLicenseChoice === 'full';
-                        const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+            // Partner side
+            if (payForPartner && partnerProfile) {
+                // Partner: Entry Fee (handled in selectedDivisions loop above)
 
-                        // Main player pays for the partner's license
-                        paymentsToInsert.push({
-                            player_id: playerId,
-                            event_id: event.id,
-                            amount: partnerLicenseAmount,
-                            status: 'success',
-                            payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                            payment_method: 'paystack',
-                            reference: `LIC-FOR-PARTNER-${paystackRef}`,
-                            is_test: isTestMode,
-                            metadata: { paystack_ref: paystackRef, paid_for_name: part.partnerProfile.name }
-                        });
+                // Partner License
+                if (!partnerProfile.paid_registration) {
+                    const isPartnerFull = partnerLicenseChoice === 'full';
+                    const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
 
-                        // Partner gets R0 license record
-                        paymentsToInsert.push({
-                            player_id: partnerId,
-                            event_id: event.id,
-                            amount: 0,
-                            status: 'success',
-                            payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                            payment_method: 'paystack',
-                            reference: `LIC-PARTNER-${paystackRef}`,
-                            is_test: isTestMode,
-                            metadata: { 
-                                paystack_ref: paystackRef,
-                                paid_by_name: formData.full_name,
-                                paid_by_id: playerId
-                            }
-                        });
+                    // Main player pays for the partner's license
+                    paymentsToInsert.push({
+                        player_id: playerId,
+                        event_id: event.id,
+                        amount: partnerLicenseAmount,
+                        status: 'success',
+                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
+                        payment_method: 'paystack',
+                        reference: `LIC-FOR-PARTNER-${paystackRef}`,
+                        is_test: isTestMode,
+                        metadata: { paystack_ref: paystackRef, paid_for_name: partnerProfile.name }
+                    });
 
-                        if (!isPartnerFull) {
-                            await supabase.from('temporary_licenses').insert({
-                                player_id: partnerId,
-                                event_id: event.id,
-                                event_name: event.event_name,
-                                event_date: event.start_date
-                            });
+                    // Partner gets R0 license record
+                    paymentsToInsert.push({
+                        player_id: partnerProfile.id,
+                        event_id: event.id,
+                        amount: 0,
+                        status: 'success',
+                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
+                        payment_method: 'paystack',
+                        reference: `LIC-PARTNER-${paystackRef}`,
+                        is_test: isTestMode,
+                        metadata: {
+                            paystack_ref: paystackRef,
+                            paid_by_name: formData.full_name,
+                            paid_by_id: playerId
                         }
+                    });
 
-                        await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerId);
+                    if (!isPartnerFull) {
+                        // Add to temporary_licenses table
+                        await supabase.from('temporary_licenses').insert({
+                            player_id: partnerProfile.id,
+                            event_id: event.id,
+                            event_name: event.event_name,
+                            event_date: event.start_date
+                        });
                     }
+
+                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerProfile.id);
                 }
             }
 
             console.log("Saving payments...");
             await supabase.from('payments').insert(paymentsToInsert);
 
-            // 3. Upsert participants in tournament_participants (creates records for org-hosted events)
+            // 3. Mark in participants list
+            console.log("Updating participants...");
+
+            // Sync Main Player
+            const mainPlayerFilters = [];
+            if (playerId) mainPlayerFilters.push(`profile_id.eq.${playerId}`);
+            if (formData.email) mainPlayerFilters.push(`email.ilike.${formData.email}`);
+            if (formData.full_name) mainPlayerFilters.push(`full_name.ilike.%${formData.full_name}%`);
+
+            // 3. Mark in participants list (Improved Sync)
             console.log("Updating participants for Event ID:", event.id);
 
-            const upsertParticipantRecord = async (pId, pEmail, pName, division, partnerName = '') => {
-                try {
-                    const normalizedEmail = (pEmail || '').toLowerCase().trim();
-                    const localRId = `local:${normalizedEmail || (pName || '').toLowerCase().trim().replace(/\s+/g, '-')}`;
-
-                    const { error: upsertError } = await supabase
-                        .from('tournament_participants')
-                        .upsert({
-                            event_id: Number(event.id),
-                            rankedin_participant_id: localRId,
-                            full_name: pName,
-                            email: normalizedEmail,
-                            profile_id: pId || null,
-                            class_name: division,
-                            is_paid: true,
-                            is_test: isTestMode,
-                            last_synced_at: new Date().toISOString(),
-                            metadata: { partner_name: partnerName, source: '4m_registration' }
-                        }, { onConflict: 'event_id,rankedin_participant_id,class_name' });
-
-                    if (upsertError) {
-                        console.error(`Participant upsert error for ${pName}:`, upsertError);
-                    }
-                } catch (sErr) {
-                    console.error(`Participant upsert failure for ${pName}:`, sErr);
-                }
-            };
-
-            for (const reg of uniqueRegistrations) {
-                const isMainPlayer = reg.email.toLowerCase() === formData.email.trim().toLowerCase();
-                let regPlayerId = isMainPlayer ? playerId : null;
-
-                if (!regPlayerId) {
-                    const partnerEntry = selectedDivisions
-                        .map(d => divisionPartners[d])
-                        .find(p => p?.partnerProfile?.email?.toLowerCase() === reg.email.toLowerCase());
-                    regPlayerId = partnerEntry?.partnerProfile?.id || null;
-                }
-
-                await upsertParticipantRecord(regPlayerId, reg.email, reg.full_name, reg.division, reg.partner_name);
-            }
-
-            // Refresh live participant count and sync calendar.registered_players
-            const { count: participantCount } = await supabase
-                .from('tournament_participants')
-                .select('*', { count: 'exact', head: true })
-                .eq('event_id', event.id);
-
-            if (participantCount !== null) {
-                setLiveParticipantCount(participantCount);
-                setEvent(prev => prev ? { ...prev, registered_players: participantCount } : prev);
-                await supabase.from('calendar').update({ registered_players: participantCount }).eq('id', event.id);
-            }
-
-            // Legacy sync for Rankedin-sourced participant rows (mark existing records as paid)
             const syncParticipant = async (pId, pEmail, pName, label, targetDivisions = []) => {
                 try {
                     const filters = [];
@@ -1750,62 +1581,22 @@ const EventDetails = () => {
                 }
             };
 
-            // Legacy Rankedin sync — only needed when participants were pre-synced from Rankedin
-            if (!isOrgHostedEvent) {
-                const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
-                const mainPEmail = loggedInPlayer?.email || formData.email;
-                const mainPName = loggedInPlayer?.name || formData.full_name;
+            // Get logged in player profile details for sync
+            const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
+            const mainPEmail = loggedInPlayer?.email || formData.email;
+            const mainPName = loggedInPlayer?.name || formData.full_name;
 
-                if (!mainPId && !mainPEmail && !mainPName) {
-                    console.error("FATAL: No registrant information available for sync!");
-                } else {
-                    console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
-                    await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
-                }
-
-                for (const division of selectedDivisions) {
-                    const part = divisionPartners[division];
-                    if (part?.hasPartner && part?.payForPartner && part?.partnerProfile) {
-                        console.info(`Starting sync for division partner:`, { id: part.partnerProfile.id, name: part.partnerProfile.name, division: division });
-                        await syncParticipant(part.partnerProfile.id, part.partnerProfile.email, part.partnerProfile.name, `Partner - ${division}`, [division]);
-                    }
-                }
+            if (!mainPId && !mainPEmail && !mainPName) {
+                console.error("FATAL: No registrant information available for sync!");
+            } else {
+                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
+                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
             }
 
-            // Send Confirmation Emails via sendEmail utility
-            for (const division of selectedDivisions) {
-                const part = divisionPartners[division] || {};
-                const partnerName = part.partnerProfile ? part.partnerProfile.name : part.partnerName || 'TBD';
-                const entryFee = getEntryFeeForCategory(division);
-                const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? entryFee : 0;
-                
-                // 1. Send to Main Player
-                try {
-                    sendEmail(formData.email.trim(), 'event_entry', {
-                        playerName: formData.full_name,
-                        eventName: event.event_name,
-                        division: division,
-                        partnerName: partnerName,
-                        amount: `R ${(entryFee + partnerEntryFee).toFixed(2)}`
-                    });
-                } catch (emailErr) {
-                    console.error("Failed to send registrant email:", emailErr);
-                }
-
-                // 2. Send to Partner if profile is active and has email
-                if (part.hasPartner && part.payForPartner && part.partnerProfile?.email) {
-                    try {
-                        sendEmail(part.partnerProfile.email.trim(), 'event_entry', {
-                            playerName: part.partnerProfile.name,
-                            eventName: event.event_name,
-                            division: division,
-                            partnerName: formData.full_name,
-                            amount: 'R 0.00 (Paid by Partner)'
-                        });
-                    } catch (emailErr) {
-                        console.error("Failed to send partner email:", emailErr);
-                    }
-                }
+            // Sync Partner
+            if (payForPartner && partnerProfile) {
+                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name, divisions: selectedDivisions });
+                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner", selectedDivisions);
             }
 
             console.log("Registration Save Complete!");
@@ -1828,7 +1619,7 @@ const EventDetails = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-white">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center text-slate-800">
                 <Loader className="w-10 h-10 animate-spin text-padel-green" />
             </div>
         );
@@ -1836,7 +1627,7 @@ const EventDetails = () => {
 
     if (!event) {
         return (
-            <div className="min-h-screen bg-[#0F172A] flex items-center justify-center text-white">
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center text-slate-800">
                 <div className="text-center">
                     <h2 className="text-2xl font-bold mb-4">Event not found</h2>
                     <Link to="/calendar" className="text-padel-green hover:underline">Back to Calendar</Link>
@@ -1845,376 +1636,282 @@ const EventDetails = () => {
         );
     }
 
+    const registrationBlock = (isRegistered || isPaid) && (
+        <div className="bg-[#0F172A] rounded-2xl shadow-lg overflow-hidden p-5 border border-white/5 space-y-5">
+            {isRegistered && (
+                <div className="flex flex-col items-center text-center pb-4 border-b border-white/10">
+                    <div className="w-12 h-12 rounded-full bg-[#A3E635]/10 border border-[#A3E635]/25 flex items-center justify-center mb-2.5 relative">
+                        <div className="absolute inset-0 rounded-full bg-[#A3E635]/10 filter blur-md animate-pulse" />
+                        <CheckCircle className="w-6 h-6 text-[#A3E635] relative z-10" />
+                    </div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#A3E635] mb-1">Registered on RankedIn</p>
+                    <p className="text-white text-xs font-semibold leading-relaxed max-w-[240px]">You're on the player list! Good luck on the court.</p>
+                </div>
+            )}
+            <div>
+                <p className="text-[9px] font-black uppercase tracking-widest mb-3" style={{ color: theme.fill }}>Your Registration</p>
+                <div className="space-y-1">
+                    {registeredDivisions.length > 0 ? (
+                        registeredDivisions.map((div, i) => (
+                            <div key={i} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                                <span className="text-xs font-bold text-white">{div}</span>
+                                {paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()) ? (
+                                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: theme.fill + '20', borderColor: theme.fill + '30', color: theme.fill }}>Paid</span>
+                                ) : (
+                                    <button
+                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
+                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                    >
+                                        Pay Now
+                                    </button>
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="flex items-center justify-between py-2">
+                            <span className="text-xs font-bold text-white">Main Event Entry</span>
+                            {isPaid ? (
+                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: theme.fill + '20', borderColor: theme.fill + '30', color: theme.fill }}>Paid</span>
+                            ) : (
+                                <button
+                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                    className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
+                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                >
+                                    Pay Now
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+
+    const readyToCompeteBlock = !isEventPassed && !isPaid && (
+        <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
+            <p className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
+            <p className="text-xs text-gray-400 mb-4">Secure your spot at {event.event_name}.</p>
+            <div className="space-y-2">
+                {!isRegistered && (
+                    <a
+                        href={event.rankedin_url || 'https://www.rankedin.com/'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full block text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                        style={{ color: '#0F172A' }}
+                    >
+                        Register Now
+                    </a>
+                )}
+                {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                    <button
+                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                        className={`w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                    >
+                        Pay Entry Fee
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <>
             <Helmet>
                 <title>{`${event.event_name} | 4M Padel`}</title>
                 <meta property="og:title" content={`${event.event_name} | 4M Padel`} />
-                <meta property="og:description" content={`${event.event_dates} at ${event.venue}. View draws, results, and registration info on 4M Padel.`} />
+                <meta property="og:description" content={`${event.event_dates || ''} at ${event.venue || ''}. View draws, results, and registration info on 4M Padel.`} />
                 <meta property="og:image" content={event.custom_image_url || event.image_url || tournamentHero} />
                 <meta property="og:type" content="article" />
             </Helmet>
-            <main className="bg-slate-50 min-h-screen text-slate-900 relative font-sans pb-24 md:pb-0">
-                {/* Hero Section with Image */}
-                <div className="relative h-[20vh] md:h-[45vh] min-h-[140px] md:min-h-[400px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
-                    <img
-                        src={event.custom_image_url || event.image_url || tournamentHero}
-                        alt={event.event_name}
-                        className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50 blur-sm scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-slate-50" />
 
-                    {/* Background Big Text Inside Hero */}
-                    <div className="relative z-10 w-full overflow-hidden select-none pointer-events-none translate-y-1/3">
-                        <motion.h1
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-[70px] md:text-[220px] font-black text-white/[0.07] uppercase leading-none whitespace-nowrap text-center tracking-tighter"
+            {/* ===== MAIN PAGE ===== */}
+            <div className="min-h-screen bg-gray-50 font-sans relative">
+
+                {/* Floating nav bar (Placed outside Hero to prevent overflow cutting by Hero's overflow-hidden) */}
+                <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-safe pt-24 md:pt-28">
+                    <Link
+                        to="/calendar"
+                        className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </Link>
+
+                    {/* Add to Calendar Button */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                            className="h-9 px-4 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center gap-2 text-white hover:bg-white/40 transition-all shadow-lg text-[10px] font-black uppercase tracking-widest"
+                            title="Add to Calendar / Share"
                         >
-                            {event.event_name.split(' ').slice(0, 3).join(' ')}
-                        </motion.h1>
+                            <CalendarIcon className="w-3.5 h-3.5 text-white" />
+                            <span>Add to Calendar</span>
+                        </button>
+                        <AnimatePresence>
+                            {isCalendarMenuOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    className="absolute top-11 right-0 left-auto w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
+                                >
+                                    <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                        <p className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md inline-block" style={{ backgroundColor: theme.fill + '20', color: theme.fill }}>Add to Calendar</p>
+                                    </div>
+                                    {[
+                                        { label: 'Google Calendar', color: '#4285F4', fn: handleGoogleCalendar },
+                                        { label: 'Apple Calendar', color: '#999', fn: handleAppleCalendar },
+                                        { label: 'Outlook / Other', color: '#0078D4', fn: handleOutlookCalendar },
+                                    ].map(({ label, color, fn }) => (
+                                        <button
+                                            key={label}
+                                            onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors text-left"
+                                        >
+                                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                                            {label}
+                                        </button>
+                                    ))}
+                                    <div className="border-t border-gray-100 p-2 bg-gray-50/20">
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(window.location.href);
+                                                toast.success('Link copied!');
+                                                setIsCalendarMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors rounded-xl text-left"
+                                        >
+                                            <Share2 className="w-4 h-4 text-gray-400" /> Copy Link
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
 
-                <div className="container mx-auto px-4 lg:px-6 relative z-10 -mt-20 md:-mt-32 pb-32">
-                    <motion.div
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="mb-6"
-                    >
-                        <Link
-                            to="/calendar"
-                            className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md text-white px-4 py-2 rounded-full hover:bg-white hover:text-black transition-all duration-300 border border-white/20 group"
-                        >
-                            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
-                            <span className="text-xs font-black uppercase tracking-[0.2em]">Back to Calendar</span>
-                        </Link>
-                    </motion.div>
-                    <div className="flex flex-col lg:flex-row gap-8 relative">
-                        {/* Background Glow Effect */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-4xl h-full opacity-30 blur-[100px] pointer-events-none z-0">
-                            <div
-                                className="w-full h-full rounded-full bg-padel-green/40"
-                                style={{
-                                    background: event.image_url ? `url(${event.image_url})` : undefined,
-                                    backgroundSize: 'cover',
-                                    filter: 'blur(80px) saturate(2)'
-                                }}
-                            />
+                {/* ── HERO ── */}
+                <div className="relative w-full h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden bg-[#0F172A]">
+                    {/* Full width foreground flyer image (un-cropped, cover stretched) */}
+                    <img
+                        src={event.custom_image_url || event.image_url || tournamentHero}
+                        alt={event.event_name}
+                        className="w-full h-full object-cover object-top animate-fade-in z-0"
+                    />
+
+                    {/* Gradient overlay for blending and text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-[#0F172A] z-10" />
+
+                    {/* Live badge */}
+                    {isLive && (
+                        <div className="absolute top-20 left-4 z-20">
+                            <span className="inline-flex items-center gap-1.5 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Live Now
+                            </span>
                         </div>
+                    )}
 
-                        {/* Ticket Card (Floating & Glassmorphic) */}
-                        <motion.div
-                            variants={containerVariants}
-                            initial="hidden"
-                            animate="visible"
-                            className="bg-white/80 backdrop-blur-2xl rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.15)] overflow-hidden flex flex-col md:flex-row max-w-6xl w-full mx-auto border border-white/50 relative z-10"
-                        >
-                            {/* Left Side: Event Info */}
-                            <div className="p-8 md:p-12 flex-1 md:border-r border-dashed border-gray-300/50 relative">
-                                {/* Punch hole effect top/bottom on border */}
-                                <div className="hidden md:block absolute -top-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner" />
-                                <div className="hidden md:block absolute -bottom-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner" />
-
-                                <motion.div variants={itemVariants}>
-                                    {isLive && (
-                                        <div className="inline-flex items-center gap-2 bg-red-500/10 text-red-600 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 border border-red-500/20">
-                                            <span className="w-2 h-2 rounded-full bg-red-600 animate-pulse" />
-                                            Live Now
-                                        </div>
-                                    )}
-                                    <h1 className="text-2xl md:text-4xl font-black text-slate-900 mb-8 tracking-tighter leading-tight">{event.event_name}</h1>
-                                </motion.div>
-
-                                <div className="space-y-8">
-                                    {/* Date & Time */}
-                                    <motion.div variants={itemVariants} className="flex items-start gap-5">
-                                        <div className="w-12 h-12 rounded-2xl bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0 shadow-sm border border-padel-green/5">
-                                            <CalendarIcon className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Date and Time</p>
-                                            <p className="font-bold text-xl text-slate-900 tracking-tight">{event.event_dates}</p>
-                                            {(event.start_time || event.end_time) && (
-                                                <p className="text-slate-500 font-medium text-sm mt-1 bg-slate-100/50 inline-block px-2 py-0.5 rounded-md">
-                                                    {event.start_time} {event.end_time ? `- ${event.end_time}` : ''}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </motion.div>
-
-                                    {/* Location */}
-                                    <motion.div variants={itemVariants} className="flex items-start gap-5">
-                                        <div className="w-12 h-12 rounded-2xl bg-padel-green/10 flex items-center justify-center text-padel-green shrink-0 shadow-sm border border-padel-green/5">
-                                            <MapPin className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] mb-1.5 opacity-70">Address</p>
-                                            <p className="font-bold text-xl text-slate-900 tracking-tight">{event.venue}</p>
-                                            <p className="text-slate-500 font-medium text-sm mt-1">{event.address || event.city}</p>
-                                        </div>
-                                    </motion.div>
-                                </div>
-                            </div>
-
-                            {/* Middle Side: Registration Action */}
-                            <div className="p-6 md:p-12 w-full md:w-[340px] bg-slate-50/50 flex flex-col items-center justify-center gap-4 md:gap-8 relative overflow-hidden md:border-r border-dashed border-gray-300/50">
-                                <div className="absolute -top-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
-                                <div className="absolute -bottom-4 -left-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
-                                <div className="absolute -top-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
-                                <div className="absolute -bottom-4 -right-4 w-8 h-8 bg-slate-50 rounded-full z-10 shadow-inner md:block hidden" />
-
-                                <motion.div variants={itemVariants} className="text-center w-full relative z-10">
-                                    <div className="flex flex-col items-center mb-8">
-                                        <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-2xl shadow-sm border border-gray-100">
-                                            <span className="text-3xl font-black text-slate-900 tabular-nums">
-                                                <CountUp end={displayParticipantCount} />
-                                            </span>
-                                            <div className="text-left leading-none">
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Registered</p>
-                                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Players</p>
-                                            </div></div></div><h3 className="font-black text-slate-900 text-2xl mb-2 tracking-tight uppercase">
-                                        {isEventPassed ? 'Results' : 'Join In'}
-                                    </h3>
-                                    <p className="text-xs font-bold text-gray-400 mb-8 uppercase tracking-widest">
-                                        {isEventPassed ? 'Tournament concluded' : 'Secure your spot'}
-                                    </p>
-
-                                    {!isEventPassed && (
-                                        <div className="space-y-4">
-                                            {isRegistered ? (
-                                                <div className="flex flex-col items-center gap-3 p-6 rounded-2xl bg-slate-900 w-full shadow-xl shadow-slate-200 border border-white/5">
-                                                    <div className="w-10 h-10 rounded-full bg-padel-green flex items-center justify-center text-slate-900 shadow-lg shadow-padel-green/40">
-                                                        <CheckCircle size={24} strokeWidth={3} />
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <p className="text-[10px] font-black text-padel-green uppercase tracking-[0.2em] mb-1">
-                                                            {isOrgHostedEvent ? 'Registered' : 'Registered on Rankedin'}
-                                                        </p>
-                                                        <p className="text-xs font-bold text-white leading-tight">You're on the player list! Good luck on the court.</p>
-                                                    </div>
-                                                </div>
-                                            ) : slug === 'guardrisk-north-vs-south-2026' ? (
-                                                <div
-                                                    className="flex items-center justify-center w-full bg-padel-green text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
-                                                >
-                                                    Invitation Only
-                                                </div>
-                                            ) : isOrgHostedEvent ? (
-                                                <motion.button
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                    className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
-                                                >
-                                                    Register Now
-                                                </motion.button>
-                                            ) : (
-                                                <motion.a
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    href={event.rankedin_url || `https://www.rankedin.com/`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center justify-center w-full bg-padel-green !text-[#0F172A] font-black py-4 rounded-2xl shadow-xl shadow-padel-green/20 hover:bg-slate-900 hover:!text-white transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-black/5"
-                                                >
-                                                    Register Now
-                                                </motion.a>
-                                            )}
-
-                                            {/* Pay Entry Fee button — only shown when entry_fee or category_fees are configured AND there is something to pay */}
-                                            {(event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0)) && 
-                                             !isOrgHostedEvent &&
-                                             (!isPaid || (isRegistered && !registeredDivisions.every(div => 
-                                                 paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())
-                                             ))) && (
-                                                <motion.button
-                                                    whileHover={{ scale: 1.02 }}
-                                                    whileTap={{ scale: 0.98 }}
-                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                    className="flex items-center justify-center gap-2 w-full bg-slate-900 text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.2em] text-xs ring-1 ring-inset ring-white/5"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></svg>
-                                                    Pay Entry Fee
-                                                </motion.button>
-                                            )}
-
-                                            {isPaid && (
-                                                <div className="flex flex-col items-center gap-2 w-full bg-slate-900 p-4 rounded-2xl border border-white/10 shadow-lg">
-                                                    <div className="flex items-center justify-center gap-2 text-padel-green font-black uppercase tracking-[0.2em] text-[10px]">
-                                                        <CheckCircle size={16} strokeWidth={3} />
-                                                        Payment Received
-                                                    </div>
-                                                    <div className="flex flex-wrap justify-center gap-1">
-                                                        {paidDivisions.map(div => (
-                                                            <span key={div} className="px-2 py-0.5 bg-padel-green/10 text-padel-green border border-padel-green/20 rounded text-[8px] font-black uppercase tracking-widest">{div}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="relative">
-                                                <motion.button
-                                                    whileHover={{ border: '2px solid #0F172A' }}
-                                                    className="w-full bg-white border-2 border-slate-200 text-slate-600 font-black py-4 rounded-2xl hover:text-slate-900 transition-all duration-300 uppercase tracking-[0.1em] text-[10px] flex items-center justify-center gap-2"
-                                                    onClick={handleMainCalendarClick}
-                                                >
-                                                    Add to Calendar
-                                                    {/* Show chevron only on desktop where menu is used */}
-                                                    <div className="hidden md:block">
-                                                        <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${isCalendarMenuOpen ? 'rotate-180' : ''}`} />
-                                                    </div>
-                                                </motion.button>
-
-
-                                                <AnimatePresence>
-                                                    {isCalendarMenuOpen && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                                            className="absolute left-0 right-0 bottom-full mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[100]"
-                                                        >
-                                                            <button
-                                                                onClick={handleGoogleCalendar}
-                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
-                                                            >
-                                                                <div className="w-2 h-2 rounded-full bg-[#4285F4]" />
-                                                                Google Calendar (Android)
-                                                            </button>
-                                                            <button
-                                                                onClick={handleAppleCalendar}
-                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3 border-b border-slate-50"
-                                                            >
-                                                                <div className="w-2 h-2 rounded-full bg-slate-900" />
-                                                                Apple Calendar (iPhone)
-                                                            </button>
-                                                            <button
-                                                                onClick={handleOutlookCalendar}
-                                                                className="w-full px-6 py-4 text-left text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center gap-3"
-                                                            >
-                                                                <div className="w-2 h-2 rounded-full bg-[#0078D4]" />
-                                                                Outlook / Other
-                                                            </button>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-
-                                        </div>
-                                    )}
-
-                                    {(() => {
-                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                        if ((!hasDraw && !hasResults) || (!rId && !event.slug)) return null;
-
-                                        return (
-                                            <div className="w-full space-y-4">
-                                                {(hasDraw || hasResults) && (
-                                                    <motion.div whileHover={{ y: -2 }} whileTap={{ y: 0 }}>
-                                                        <Link
-                                                            to={`/draws/${event.slug || rId}`}
-                                                            className="w-full flex items-center justify-center gap-3 bg-slate-900 !text-padel-green font-black py-4 rounded-2xl shadow-xl hover:bg-padel-green hover:!text-black transition-all duration-300 uppercase tracking-[0.2em] text-xs"
-                                                        >
-                                                            <GitBranch className="w-4 h-4" />
-                                                            View Draws & Results
-                                                        </Link>
-                                                    </motion.div>
-                                                )}
-
-                                            </div>
-                                        );
-                                    })()}
-                                </motion.div>
-
-                                <div className="text-center pt-4 md:pt-8 border-t border-gray-200/50 w-full relative z-10">
-                                    <p className="text-[10px] text-gray-300 uppercase tracking-[0.3em] font-black">Powered by 4M Padel</p>
-                                </div>
-                            </div>
-
-                            {/* Right Side: Poster */}
-                            {(event.custom_image_url || event.image_url) && (
-                                <div className="p-4 md:p-12 w-full md:w-[300px] bg-white/40 flex flex-col items-center justify-center relative overflow-hidden">
-                                    <motion.div
-                                        variants={itemVariants}
-                                        whileHover={{ scale: 1.05 }}
-                                        className="w-2/3 md:w-full aspect-[3/4] rounded-2xl overflow-hidden shadow-2xl border-4 border-white transition-all duration-500 hover:shadow-padel-green/20 bg-black flex items-center justify-center"
-                                    >
-                                        <img
-                                            src={event.custom_image_url || event.image_url}
-                                            alt="Event Poster"
-                                            className="w-full h-full object-contain"
-                                        />
-                                    </motion.div>
-                                </div>
+                    {/* Hero text overlay */}
+                    <div className="absolute bottom-0 left-0 right-0 z-20 pb-8 md:pb-10 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/75 to-transparent pt-12">
+                        <div className="max-w-5xl mx-auto px-5 w-full flex flex-col md:items-center md:text-center">
+                            {event.sapa_status && event.sapa_status !== 'None' && (
+                                <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
+                                    {event.sapa_status}
+                                </span>
                             )}
-                        </motion.div>
-                    </div>
-
-                    {/* Sticky Action Bar for Mobile */}
-                    <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 z-[100] shadow-[0_-4px_20px_rgba(0,0,0,0.05)] flex items-center justify-between gap-4">
-                        <div className="flex-1">
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">{displayParticipantCount} Registered</p>
-                            <p className="font-bold text-slate-900 line-clamp-1">{event.event_name}</p>
+                            <h1 className="text-2xl md:text-4xl font-black text-white leading-tight uppercase tracking-tight mb-2 drop-shadow-lg w-full">
+                                {event.event_name}
+                            </h1>
+                            <div className="flex flex-wrap gap-3 items-center md:justify-center">
+                                <span className="flex items-center gap-1.5 text-white/80 text-xs font-bold">
+                                    <CalendarIcon className="w-3.5 h-3.5" style={{ color: theme.fill }} />
+                                    {event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
+                                </span>
+                                {event.city && (
+                                    <span className="flex items-center gap-1.5 text-white/80 text-xs font-bold">
+                                        <MapPin className="w-3.5 h-3.5" style={{ color: theme.fill }} />
+                                        {event.venue ? `${event.venue}, ` : ''}{event.city}
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <div className="shrink-0 flex gap-2">
+                    </div>
+                </div>
+
+                {/* ── REGISTRATION / ACTION BAR ── */}
+                {/* Sits right below the hero, navy strip */}
+                <div className="bg-[#0F172A] px-5 py-4 border-b border-white/5">
+                    <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                        {/* Player count pill */}
+                        <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center border" style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30' }}>
+                                <Users className="w-4 h-4" style={{ color: theme.fill }} />
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Registered</p>
+                                <p className="text-base font-black text-white leading-none">{event.registered_players || 0} <span className="text-xs text-gray-500 font-bold">players</span></p>
+                            </div>
+                            {event.entry_fee > 0 && (
+                                <>
+                                    <div className="w-px h-8 bg-white/10 mx-2" />
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Entry Fee</p>
+                                        <p className="text-base font-black leading-none" style={{ color: theme.fill }}>R{event.entry_fee}</p>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Primary CTAs */}
+                        <div className="flex items-center gap-2.5 w-full sm:w-auto">
                             {(() => {
                                 const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                 if (!isEventPassed) {
+                                    if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
+                                        return (
+                                            <div className="flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border" style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30' }}>
+                                                <CheckCircle className="w-4 h-4" style={{ color: theme.fill }} />
+                                                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.fill }}>Paid & Registered</span>
+                                            </div>
+                                        );
+                                    }
                                     return (
-                                        <div className="flex gap-2">
-                                            {isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())) ? (
-                                                <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
-                                                    <CheckCircle size={14} className="text-padel-green" />
-                                                    <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Paid</span>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {!isRegistered && (
-                                                        isOrgHostedEvent ? (
-                                                            <button
-                                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                                            >
-                                                                Register
-                                                            </button>
-                                                        ) : (
-                                                            <a
-                                                                href={event.rankedin_url || `https://www.rankedin.com/`}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                                            >
-                                                                Register
-                                                            </a>
-                                                        )
-                                                    )}
-                                                    {isRegistered && !isPaid && (
-                                                        <div className="flex items-center gap-2 bg-slate-900 px-4 py-2 rounded-xl border border-white/10">
-                                                            <CheckCircle size={14} className="text-padel-green" />
-                                                            <span className="text-[10px] font-black text-padel-green uppercase tracking-widest">Registered</span>
-                                                        </div>
-                                                    )}
-                                                    {(!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && !isOrgHostedEvent && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
-                                                        <button
-                                                            onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                            className="bg-slate-900 text-padel-green font-black py-3 px-5 rounded-xl hover:bg-padel-green hover:text-slate-900 transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
-                                                        >
-                                                            Pay Entry Fee
-                                                        </button>
-                                                    )}
-                                                </>
+                                        <>
+                                            {!isRegistered && (
+                                                <a
+                                                    href={event.rankedin_url || 'https://www.rankedin.com/'}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="flex-1 sm:flex-none text-center text-[10px] font-black uppercase tracking-widest px-6 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                    style={{ color: '#0F172A' }}
+                                                >
+                                                    Register Now
+                                                </a>
                                             )}
-                                        </div>
+                                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                                <button
+                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                >
+                                                    <CreditCard className="w-4 h-4" />
+                                                    Pay Entry Fee
+                                                </button>
+                                            )}
+                                        </>
                                     );
                                 } else if ((hasResults || hasDraw) && (rId || event.slug)) {
                                     return (
                                         <Link
                                             to={`/draws/${event.slug || rId}`}
-                                            className="bg-padel-green !text-[#0F172A] font-black py-3 px-6 rounded-xl hover:bg-slate-900 hover:!text-white transition-all duration-300 shadow-md whitespace-nowrap text-sm tracking-wide uppercase"
+                                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                         >
-                                            Draws & Results
+                                            <GitBranch className="w-4 h-4" />
+                                            View Draws & Results
                                         </Link>
                                     );
                                 }
@@ -2222,302 +1919,379 @@ const EventDetails = () => {
                             })()}
                         </div>
                     </div>
+                </div>
 
-                    {/* Content Component: Tabs Area */}
-                    <div className="mt-8 md:mt-12 max-w-6xl mx-auto space-y-8">
-
-                        {/* Tab Navigation */}
-                        <div className="flex overflow-x-auto hide-scrollbar space-x-2 bg-white/50 backdrop-blur-md p-2 rounded-2xl md:rounded-full border border-gray-200/50 shadow-sm mx-auto max-w-fit">
-                            {(() => {
-                                const tabs = ['overview', 'players', 'divisions', 'media'];
-                                // Hide 'divisions' if upcoming, hide 'players' if past
-                                const filteredTabs = tabs.filter(tab => {
-                                    if (tab === 'divisions') {
-                                        const isUpcoming = !isEventPassed;
-                                        const noData = !hasDraw && !hasResults;
-                                        // Hide Champions if it is upcoming AND we want to show Player List instead
-                                        return !isUpcoming || !noData;
-                                    }
-                                    if (tab === 'players') {
-                                        return !isEventPassed && (isOrgHostedEvent || event.rankedin_id || extractRankedinId(event.rankedin_url));
-                                    }
-                                    return true;
-                                });
-
-                                return filteredTabs.map((tab) => (
-                                    <button
-                                        key={tab}
-                                        onClick={() => setActiveTab(tab)}
-                                        className={`relative px-6 py-3 rounded-full font-bold text-sm tracking-wide uppercase transition-all duration-300 whitespace-nowrap ${activeTab === tab ? 'text-white' : 'text-slate-500 hover:text-slate-900 hover:bg-gray-100/50'
-                                            }`}
-                                    >
-                                        {activeTab === tab && (
-                                            <motion.div
-                                                layoutId="activeTabPill"
-                                                className="absolute inset-0 bg-slate-900 rounded-full shadow-md"
-                                                initial={false}
-                                                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                            />
-                                        )}
-                                        <span className="relative z-10">
-                                            {tab === 'divisions' ? 'Results' :
-                                                tab === 'players' ? 'Player List' :
-                                                    tab === 'media' ? 'Media' : 'Overview'}
-                                        </span>
-                                    </button>
-                                ));
-                            })()}
+                {/* ── EVENT DETAILS QUICK SPECS (shown prominently at top of page) ── */}
+                <div className="bg-white border-b border-gray-100 py-4 shadow-sm relative z-30">
+                    <div className="max-w-5xl mx-auto px-5">
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                            {[
+                                { label: 'Date', value: event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC'), icon: CalendarIcon, color: theme.fill },
+                                { label: 'Venue', value: event.venue || 'TBC', icon: MapPin, color: theme.fill },
+                                { label: 'City', value: event.city || 'TBC', icon: Globe, color: theme.fill },
+                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : 'Free', icon: CreditCard, color: theme.fill },
+                                { label: 'Organiser', value: event.organizer_name || '4M Padel', icon: User, color: theme.fill },
+                                { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : 'Upcoming', icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : theme.fill },
+                            ].map(({ label, value, icon: Icon, color }) => (
+                                <div key={label} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100/60 flex flex-col justify-center min-h-[58px]">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-gray-400">
+                                        <Icon className="w-3.5 h-3.5" style={{ color }} />
+                                        <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+                                    </div>
+                                    <p className="text-xs font-bold text-[#0F172A] leading-none truncate" title={value}>{value}</p>
+                                </div>
+                            ))}
                         </div>
+                    </div>
+                </div>
 
+                {/* ── TAB BAR ── */}
+                <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+                    <div className="max-w-5xl mx-auto px-4 flex gap-0 overflow-x-auto no-scrollbar">
+                        {[
+                            { id: 'overview', label: 'Info', icon: FileText },
+                            { id: 'players', label: 'Players', icon: Users },
+                            { id: 'results', label: 'Results', icon: Trophy },
+                            { id: 'media', label: 'Media', icon: ImageIcon },
+                        ].map(({ id, label, icon: Icon }) => {
+                            const active = activeTab === id;
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => setActiveTab(id)}
+                                    className={`flex items-center gap-2 px-5 py-4 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${active
+                                        ? 'text-[#0F172A]'
+                                        : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
+                                        }`}
+                                    style={{ borderBottomColor: active ? theme.fill : 'transparent' }}
+                                >
+                                    <Icon className={`w-4 h-4 ${active ? 'text-[#0F172A]' : ''}`} />
+                                    {label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
 
-                        {/* Tab Content Container */}
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={activeTab}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -10 }}
-                                transition={{ duration: 0.2 }}
-                                className="min-h-[400px]"
-                            >
-                                {activeTab === 'overview' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                                        {/* Left Column: Event Details & Map */}
-                                        <div className="lg:col-span-2 space-y-8">
-                                            <ModuleAccordion title="Event Details" icon={FileText} defaultOpen={false}>
+                {/* ── TAB CONTENT ── */}
+                <div className="max-w-5xl mx-auto px-4 py-6 pb-32 md:pb-10">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={activeTab}
+                            initial={{ opacity: 0, y: 12 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -12 }}
+                            transition={{ duration: 0.2 }}
+                        >
+
+                            {/* ══ OVERVIEW TAB ══ */}
+                            {activeTab === 'overview' && (
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                                    {/* MOBILE ONLY: Registration & Compete Blocks at the top */}
+                                    {(registrationBlock || readyToCompeteBlock) && (
+                                        <div className="lg:hidden space-y-5">
+                                            {registrationBlock}
+                                            {readyToCompeteBlock}
+                                        </div>
+                                    )}
+
+                                    {/* LEFT: Event Info */}
+                                    <div className="lg:col-span-2 space-y-5">
+
+                                        {/* Event Description */}
+                                        {event.description && (
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
                                                 <div
-                                                    className="text-slate-600 leading-relaxed md:text-lg event-rich-description"
-                                                    dangerouslySetInnerHTML={{
-                                                        __html: event.description || "Join us for this exciting event! More details will be announced soon. Expect high-level competition and a great atmosphere."
-                                                    }}
-                                                />
-                                            </ModuleAccordion>
+                                                    onClick={() => toggleSection('about')}
+                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                            <FileText className="w-4 h-4 text-[#0F172A]" />
+                                                        </div>
+                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">About This Event</h2>
+                                                    </div>
+                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.about ? '-rotate-90' : ''}`} />
+                                                </div>
+                                                <AnimatePresence initial={false}>
+                                                    {!collapsedSections.about && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="px-6 py-5">
+                                                                <div
+                                                                    className="text-slate-600 leading-relaxed text-sm prose max-w-none"
+                                                                    dangerouslySetInnerHTML={{ __html: event.description }}
+                                                                />
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )}
 
-                                            {(event.address || event.venue) && (
-                                                <ModuleAccordion title="Location" icon={MapPin} defaultOpen={false}>
-                                                    <div className="flex items-center justify-between mb-4">
-                                                        <p className="text-sm text-gray-500">{event.address || event.venue} {event.city || ''}</p>
+                                        {/* Location & Map */}
+                                        {(event.address || event.venue) && (
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                <div
+                                                    onClick={() => toggleSection('location')}
+                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                            <MapPin className="w-4 h-4 text-[#0F172A]" />
+                                                        </div>
+                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Location</h2>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
                                                         <a
                                                             href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
-                                                            className="text-padel-green font-bold text-sm tracking-wide hover:underline flex items-center gap-1"
+                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
+                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            onClick={(e) => e.stopPropagation()}
                                                         >
-                                                            Get Directions <ArrowLeft className="w-4 h-4 rotate-135" />
+                                                            Directions
                                                         </a>
-                                                    </div>
-                                                    <div className="h-[300px] w-full relative rounded-2xl overflow-hidden border border-gray-100">
-                                                        <iframe
-                                                            width="100%"
-                                                            height="100%"
-                                                            frameBorder="0"
-                                                            scrolling="no"
-                                                            marginHeight="0"
-                                                            marginWidth="0"
-                                                            src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                                            className="w-full h-full grayscale hover:grayscale-0 transition-all duration-700 ease-in-out"
-                                                            title="Event Location"
-                                                        ></iframe>
-                                                    </div>
-                                                </ModuleAccordion>
-                                            )}
-                                        </div>
-
-                                        {/* Right Column: Sidebar Widgets */}
-                                        <div className="lg:col-span-1 space-y-6 lg:sticky lg:top-32">
-                                            {/* Organizer Widget */}
-                                            <ModuleAccordion title="Event Organiser" icon={User} defaultOpen={false}>
-                                                <div className="flex items-center gap-4 mb-6 pt-2">
-                                                    <div className="w-12 h-12 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xl flex-shrink-0">
-                                                        {event.organizer_name ? event.organizer_name.charAt(0) : '4M'}
-                                                    </div>
-                                                    <div>
-                                                        <h4 className="font-bold text-lg text-slate-900">{event.organizer_name || '4M Padel'}</h4>
+                                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.location ? '-rotate-90' : ''}`} />
                                                     </div>
                                                 </div>
-
-                                                <div className="space-y-4">
-                                                    {event.organizer_phone && (
-                                                        <div>
-                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Phone Number</p>
-                                                            <a href={`tel:${event.organizer_phone}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
-                                                                <Phone className="w-4 h-4" /> {event.organizer_phone}
-                                                            </a>
-                                                        </div>
-                                                    )}
-                                                    {event.organizer_email && (
-                                                        <div>
-                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Email</p>
-                                                            <a href={`mailto:${event.organizer_email}`} className="text-padel-green font-medium hover:underline flex items-center gap-2">
-                                                                <Mail className="w-4 h-4" /> {event.organizer_email}
-                                                            </a>
-                                                        </div>
-                                                    )}
-                                                    {event.organizer_website && (
-                                                        <div>
-                                                            <p className="text-xs text-gray-400 font-bold uppercase mb-1">Website</p>
-                                                            <a href={`https://${event.organizer_website}`} target="_blank" rel="noopener noreferrer" className="text-padel-green font-medium hover:underline flex items-center gap-2 break-all">
-                                                                <Globe className="w-4 h-4 flex-shrink-0" /> {event.organizer_website}
-                                                            </a>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </ModuleAccordion>
-
-                                            {/* Weather Widget */}
-                                            {weather && (
-                                                <ModuleAccordion title="Event Forecast" icon={Cloud} defaultOpen={false}>
-                                                    <div className="flex items-center justify-between pt-2">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${weather.iconType === 'sun' ? 'bg-orange-100 text-orange-500' :
-                                                                weather.iconType === 'cloud' ? 'bg-gray-100 text-gray-500' :
-                                                                    weather.iconType === 'rain' ? 'bg-blue-100 text-blue-500' :
-                                                                        weather.iconType === 'thunder' ? 'bg-purple-100 text-purple-600' :
-                                                                            'bg-blue-50 text-blue-400'
-                                                                }`}>
-                                                                {weather.iconType === 'sun' && <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-sun"><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></svg>}
-                                                                {weather.iconType === 'cloud' && <Cloud className="w-6 h-6" />}
-                                                                {weather.iconType === 'rain' && <CloudRain className="w-6 h-6" />}
-                                                                {weather.iconType === 'thunder' && <CloudLightning className="w-6 h-6" />}
-                                                                {weather.iconType === 'snow' && <CloudSnow className="w-6 h-6" />}
+                                                <AnimatePresence initial={false}>
+                                                    {!collapsedSections.location && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="px-6 py-3 bg-gray-50/30 flex justify-between items-center border-b border-gray-100">
+                                                                <p className="text-sm font-bold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
+                                                                <a
+                                                                    href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
+                                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                >
+                                                                    Directions
+                                                                </a>
                                                             </div>
-                                                            <div>
-                                                                <p className="font-bold text-slate-900">{weather.condition}</p>
-                                                                <p className="text-xs text-gray-500">{Math.round(weather.temp)}°C | Precip: {weather.precip}%</p>
-                                                            </div></div></div></ModuleAccordion>
-                                            )}
-
-                                            {/* Sponsors Widget */}
-                                            <ModuleAccordion title="Event Sponsors" icon={ImageIcon} defaultOpen={false}>
-                                                <div className="grid grid-cols-2 gap-3 pt-2">
-                                                    {event.sponsor_logos && event.sponsor_logos.length > 0 ? (
-                                                        event.sponsor_logos.map((logo, i) => (
-                                                            <div key={i} className="aspect-[3/2] bg-gray-50 rounded-lg flex items-center justify-center border border-gray-100 hover:scale-105 transition-all duration-300 p-2">
-                                                                <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
+                                                            <div className="h-[220px] w-full relative">
+                                                                <iframe
+                                                                    width="100%"
+                                                                    height="100%"
+                                                                    frameBorder="0"
+                                                                    scrolling="no"
+                                                                    marginHeight="0"
+                                                                    marginWidth="0"
+                                                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                                                    className="w-full h-full"
+                                                                    title="Event Location"
+                                                                />
                                                             </div>
-                                                        ))
-                                                    ) : (
-                                                        <div className="col-span-2 py-8 text-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-                                                            <p className="text-gray-400 text-xs italic font-medium">No sponsors listed for this event</p>
-                                                        </div>
+                                                        </motion.div>
                                                     )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )}
+
+                                        {/* Sponsors */}
+                                        {event.sponsor_logos && event.sponsor_logos.length > 0 && (
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                <div
+                                                    onClick={() => toggleSection('sponsors')}
+                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                            <ImageIcon className="w-4 h-4 text-[#0F172A]" />
+                                                        </div>
+                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Sponsors</h2>
+                                                    </div>
+                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.sponsors ? '-rotate-90' : ''}`} />
                                                 </div>
-                                            </ModuleAccordion>
+                                                <AnimatePresence initial={false}>
+                                                    {!collapsedSections.sponsors && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="px-6 py-5 grid grid-cols-3 md:grid-cols-4 gap-4">
+                                                                {event.sponsor_logos.map((logo, i) => (
+                                                                    <div key={i} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
+                                                                        <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* RIGHT SIDEBAR */}
+                                    <div className="space-y-5">
+
+                                        {/* Registration Status Card (for logged-in users, hidden on mobile) */}
+                                        {registrationBlock && (
+                                            <div className="hidden lg:block">
+                                                {registrationBlock}
+                                            </div>
+                                        )}
+
+                                        {/* Quick Register / Pay button (sidebar, hidden on mobile) */}
+                                        {readyToCompeteBlock && (
+                                            <div className="hidden lg:block">
+                                                {readyToCompeteBlock}
+                                            </div>
+                                        )}
+
+                                        {/* Weather Card */}
+                                        {weather && (
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                <div
+                                                    onClick={() => toggleSection('weather')}
+                                                    className="flex items-center justify-between px-5 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                            <Cloud className="w-4 h-4 text-[#0F172A]" />
+                                                        </div>
+                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Weather Forecast</h2>
+                                                    </div>
+                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.weather ? '-rotate-90' : ''}`} slopes="" />
+                                                </div>
+                                                <AnimatePresence initial={false}>
+                                                    {!collapsedSections.weather && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: 'auto', opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="px-5 py-4 flex items-center gap-4">
+                                                                <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: theme.fill + '15' }}>
+                                                                    <Cloud className="w-7 h-7 text-[#0F172A]" />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-2xl font-black text-[#0F172A]">{Math.round(weather.temp)}°C</p>
+                                                                    <p className="text-xs font-bold text-gray-500 capitalize">{weather.condition}</p>
+                                                                    {weather.humidity && <p className="text-[10px] text-gray-400 font-bold mt-0.5">Humidity: {weather.humidity}%</p>}
+                                                                </div>
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )}
+
+                                        {/* Organiser Card */}
+                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                            <div
+                                                onClick={() => toggleSection('organiser')}
+                                                className="flex items-center justify-between px-5 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                        <User className="w-4 h-4 text-[#0F172A]" />
+                                                    </div>
+                                                    <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Organiser</h2>
+                                                </div>
+                                                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.organiser ? '-rotate-90' : ''}`} />
+                                            </div>
+                                            <AnimatePresence initial={false}>
+                                                {!collapsedSections.organiser && (
+                                                    <motion.div
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        transition={{ duration: 0.2 }}
+                                                        className="overflow-hidden"
+                                                    >
+                                                        <div className="px-5 py-4 space-y-3">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-full bg-[#0F172A] flex items-center justify-center font-black text-sm" style={{ color: theme.fill }}>
+                                                                    {(event.organizer_name || '4M').charAt(0)}
+                                                                </div>
+                                                                <p className="font-bold text-[#0F172A] text-sm">{event.organizer_name || '4M Padel'}</p>
+                                                            </div>
+                                                            {event.organizer_phone && (
+                                                                <a href={`tel:${event.organizer_phone}`} className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
+                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Phone className="w-3.5 h-3.5" /></div>
+                                                                    {event.organizer_phone}
+                                                                </a>
+                                                            )}
+                                                            {event.organizer_email && (
+                                                                <a href={`mailto:${event.organizer_email}`} className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
+                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Mail className="w-3.5 h-3.5" /></div>
+                                                                    <span className="truncate">{event.organizer_email}</span>
+                                                                </a>
+                                                            )}
+                                                            {event.organizer_website && (
+                                                                <a href={`https://${event.organizer_website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
+                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Globe className="w-3.5 h-3.5" /></div>
+                                                                    <span className="truncate">{event.organizer_website}</span>
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
                                         </div>
                                     </div>
-                                )}
+                                </div>
+                            )}
 
-                                {activeTab === 'players' && (
-                                    <div className="space-y-8">
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white/50 backdrop-blur-md p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-                                            <div>
-                                                <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Registered Players</h2>
-                                                <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">Tournament Field by Division</p>
-                                            </div>
-                                            <div className="flex items-center gap-3 bg-padel-green/10 px-4 py-2 rounded-xl border border-padel-green/30">
-                                                <User className="w-5 h-5 text-padel-green" />
-                                                <span className="font-black text-slate-900 text-sm uppercase tracking-wider">{displayParticipantCount} Total</span>
-                                            </div>
+                            {/* ══ PLAYERS TAB ══ */}
+                            {activeTab === 'players' && (
+                                <div className="space-y-6">
+                                    {fetchingParticipants && playerDivisions.length === 0 ? (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 flex flex-col items-center">
+                                            <Loader className="w-8 h-8 animate-spin text-[#0F172A] mb-4" />
+                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Loading Players...</p>
                                         </div>
+                                    ) : playerDivisions.length > 0 ? (
+                                        playerDivisions.map((cls) => {
+                                            const clsParticipants = participants[cls.Id] || [];
+                                            const isExpanded = !!expandedDivisions[cls.Id];
+                                            return (
+                                                <div key={cls.Id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div 
+                                                        onClick={() => toggleDivision(cls.Id)}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <h3 className="font-black text-[#0F172A] uppercase tracking-tight text-base">{cls.Name}</h3>
+                                                        <div className="flex items-center gap-3">
+                                                            <span className="text-[9px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-3 py-1.5 rounded-full">
+                                                                {clsParticipants.length} Teams
+                                                            </span>
+                                                            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                                        </div>
+                                                    </div>
 
-                                        {fetchingParticipants && !isOrgHostedEvent && playerDivisions.length === 0 ? (
-                                            <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-gray-200">
-                                                <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
-                                                <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Syncing athletes...</p>
-                                            </div>
-                                        ) : isOrgHostedEvent ? (
-                                            fetchingParticipants ? (
-                                                <div className="flex flex-col items-center justify-center py-20 bg-white/50 rounded-3xl border border-dashed border-gray-200">
-                                                    <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
-                                                    <p className="text-gray-400 font-bold uppercase tracking-widest text-xs">Loading registered players...</p>
-                                                </div>
-                                            ) : localParticipants.length > 0 ? (
-                                                <div className="space-y-4">
-                                                    {Object.entries(
-                                                        localParticipants.reduce((acc, p) => {
-                                                            const div = p.class_name || 'General';
-                                                            if (!acc[div]) acc[div] = [];
-                                                            acc[div].push(p);
-                                                            return acc;
-                                                        }, {})
-                                                    ).map(([divName, divPlayers], idx) => (
-                                                        <ModuleAccordion
-                                                            key={divName}
-                                                            title={`${divName} (${divPlayers.length} ${divPlayers.length === 1 ? 'Player' : 'Players'})`}
-                                                            icon={User}
-                                                            defaultOpen={idx === 0}
-                                                        >
-                                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
-                                                                {divPlayers.map((player) => {
-                                                                    const profileImage = getLocalProfileImage(player);
-                                                                    const partnerImage = player.metadata?.partner_name
-                                                                        ? getLocalProfileImage({ full_name: player.metadata.partner_name })
-                                                                        : null;
-
-                                                                    return (
-                                                                    <div
-                                                                        key={player.id}
-                                                                        className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group"
-                                                                    >
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-10 h-10 rounded-full overflow-hidden bg-white flex items-center justify-center text-slate-400 border border-gray-100 shrink-0 group-hover:border-padel-green/30 transition-colors">
-                                                                                {profileImage ? (
-                                                                                    <img src={profileImage} alt={player.full_name} className="w-full h-full object-cover" />
-                                                                                ) : (
-                                                                                    <User className="w-5 h-5" />
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="min-w-0 flex-1">
-                                                                                <p className="font-bold text-slate-800 truncate">{player.full_name}</p>
-                                                                                {player.metadata?.partner_name && (
-                                                                                    <div className="flex items-center gap-2 mt-1">
-                                                                                        <div className="w-6 h-6 rounded-full overflow-hidden bg-white flex items-center justify-center text-slate-300 border border-gray-100 shrink-0">
-                                                                                            {partnerImage ? (
-                                                                                                <img src={partnerImage} alt={player.metadata.partner_name} className="w-full h-full object-cover" />
-                                                                                            ) : (
-                                                                                                <User className="w-3 h-3" />
-                                                                                            )}
-                                                                                        </div>
-                                                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">
-                                                                                            Partner: {player.metadata.partner_name}
-                                                                                        </p>
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                            {player.is_paid && (
-                                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-1 rounded-full border border-padel-green/20 shrink-0">
-                                                                                    Paid
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        </ModuleAccordion>
-                                                    ))}
-                                                </div>
-                                            ) : (
-                                                <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
-                                                    <User className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                                                    <h3 className="text-2xl font-bold text-slate-800 mb-2">No Players Registered Yet</h3>
-                                                    <p className="text-gray-500">Be the first to register for this tournament.</p>
-                                                </div>
-                                            )
-                                        ) : playerDivisions.length > 0 ? (
-                                            <div className="space-y-4">
-                                                {playerDivisions.map((cls, idx) => {
-                                                    const clsParticipants = participants[cls.Id] || [];
-                                                    return (
-                                                        <ModuleAccordion
-                                                            key={cls.Id}
-                                                            title={`${cls.Name} (${clsParticipants.length} Teams)`}
-                                                            icon={User}
-                                                            defaultOpen={idx === 0}
-                                                        >
-                                                            <div className="pt-4">
+                                                    <AnimatePresence initial={false}>
+                                                        {isExpanded && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
                                                                 {clsParticipants.length > 0 ? (
-                                                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
+                                                                    <div className="divide-y divide-gray-50">
                                                                         {clsParticipants.map((item, pIdx) => {
                                                                             const p = item.Participant || {};
                                                                             const isTeam = p.Players && p.Players.length > 0 && !p.FirstPlayer;
@@ -2537,984 +2311,865 @@ const EventDetails = () => {
 
                                                                             if (isTeam) {
                                                                                 return (
-                                                                                    <motion.div
-                                                                                        key={pIdx}
-                                                                                        initial={{ opacity: 0, y: 10 }}
-                                                                                        animate={{ opacity: 1, y: 0 }}
-                                                                                        transition={{ delay: pIdx * 0.05 }}
-                                                                                        className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group col-span-1 md:col-span-2 lg:col-span-3"
-                                                                                    >
-                                                                                        <div className="flex items-center justify-between mb-4 border-b border-gray-200 pb-4">
-                                                                                            <div className="flex items-center gap-3">
-                                                                                                {p.Image && (
-                                                                                                    <div className="w-10 h-10 rounded-full overflow-hidden bg-white border border-gray-100 shrink-0 shadow-sm">
-                                                                                                        <img src={p.Image} alt={p.Name} className="w-full h-full object-cover" />
-                                                                                                    </div>
-                                                                                                )}
-                                                                                                <div>
-                                                                                                    <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">{p.Name}</h3>
-                                                                                                    {rank && <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mt-0.5">Rank: {rank}</span>}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                            <div className="flex flex-col items-end">
-                                                                                                <span className="bg-padel-green/10 border border-padel-green/20 text-padel-green text-[10px] font-black px-3 py-1 rounded-full uppercase">{p.Players.length} Players</span>
-                                                                                                {seed && <span className="bg-slate-900 text-padel-green text-[9px] font-black px-2 py-0.5 rounded-full uppercase mt-2">Seed {seed}</span>}
+                                                                                    <div key={pIdx} className="px-6 py-4">
+                                                                                        <div className="flex items-center justify-between mb-3">
+                                                                                            <h4 className="text-sm font-black text-[#0F172A] uppercase">{p.Name}</h4>
+                                                                                            <div className="flex gap-2">
+                                                                                                {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                                {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
                                                                                             </div>
                                                                                         </div>
-                                                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                                                        <div className="flex flex-wrap gap-2">
                                                                                             {p.Players.map((player, idx) => (
-                                                                                                <div key={idx} className="flex items-center gap-3 bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-padel-green/30 transition-colors">
-                                                                                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-50 shrink-0">
-                                                                                                        <img src={getProfileImage(player) || "https://cdn.rankedin.com/images/rin_logo_sm.png"} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                                                                                                    <div className="w-7 h-7 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                                                                        {getProfileImage(player) ? (
+                                                                                                            <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                        ) : (
+                                                                                                            <User className="w-4 h-4 text-gray-500" />
+                                                                                                        )}
                                                                                                     </div>
-                                                                                                    <div className="flex flex-col min-w-0">
-                                                                                                        <span className="font-bold text-slate-700 text-sm truncate">{player.Name}</span>
-                                                                                                        {player.Rating && <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rating: {player.Rating}</span>}
-                                                                                                    </div>
+                                                                                                    <span className="text-xs font-bold text-[#0F172A]">{player.Name}</span>
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
-                                                                                    </motion.div>
+                                                                                    </div>
                                                                                 );
                                                                             }
 
                                                                             return (
-                                                                                <motion.div
-                                                                                    key={pIdx}
-                                                                                    initial={{ opacity: 0, y: 10 }}
-                                                                                    animate={{ opacity: 1, y: 0 }}
-                                                                                    transition={{ delay: pIdx * 0.05 }}
-                                                                                    className="bg-gray-50/50 rounded-2xl p-5 shadow-sm border border-gray-100 hover:shadow-md transition-all group"
-                                                                                >
-                                                                                    <div className="flex items-center justify-between mb-4">
-                                                                                        <div className="flex flex-col">
-                                                                                            <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest leading-none mb-1">Team #{pIdx + 1}</span>
-                                                                                            {rank && <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Rank: {rank}</span>}
-                                                                                        </div>
-                                                                                        {seed && (
-                                                                                            <span className="bg-slate-900 text-padel-green text-[9px] font-black px-2 py-0.5 rounded-full uppercase">Seed {seed}</span>
-                                                                                        )}
-                                                                                    </div>
-
-                                                                                    <div className="space-y-3">
-                                                                                        <div className="flex items-center gap-3">
-                                                                                            <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors overflow-hidden shrink-0">
-                                                                                                {getProfileImage(fPlayer) ? (
-                                                                                                    <img src={getProfileImage(fPlayer)} alt={fPlayer.Name} className="w-full h-full object-cover" />
-                                                                                                ) : (
-                                                                                                    <User className="w-4 h-4" />
-                                                                                                )}
-                                                                                            </div>
-                                                                                            <span className="font-bold text-slate-700">{fPlayer.Name}</span>
-                                                                                        </div>
-                                                                                        {sPlayer.Name && (
-                                                                                            <div className="flex items-center gap-3">
-                                                                                                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-400 group-hover:bg-padel-green/10 group-hover:text-padel-green transition-colors overflow-hidden shrink-0">
-                                                                                                    {getProfileImage(sPlayer) ? (
-                                                                                                        <img src={getProfileImage(sPlayer)} alt={sPlayer.Name} className="w-full h-full object-cover" />
+                                                                                <div key={pIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
+                                                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                                                        <span className="w-5 text-[10px] font-black text-gray-400 flex-shrink-0">{pIdx + 1}</span>
+                                                                                        <div className="flex flex-wrap gap-2.5">
+                                                                                            {/* Player 1 */}
+                                                                                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5 shadow-sm">
+                                                                                                <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 border border-white flex items-center justify-center">
+                                                                                                    {getProfileImage(fPlayer) ? (
+                                                                                                        <img src={getProfileImage(fPlayer)} alt={fPlayer.Name} className="w-full h-full object-cover" />
                                                                                                     ) : (
-                                                                                                        <User className="w-4 h-4" />
+                                                                                                        <User className="w-3.5 h-3.5 text-gray-500" />
                                                                                                     )}
                                                                                                 </div>
-                                                                                                <span className="font-bold text-slate-700">{sPlayer.Name}</span>
+                                                                                                <span className="text-xs font-bold text-[#0F172A]">{fPlayer.Name}</span>
                                                                                             </div>
-                                                                                        )}
+
+                                                                                            {/* Player 2 */}
+                                                                                            {sPlayer.Name && (
+                                                                                                <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5 shadow-sm">
+                                                                                                    <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 border border-white flex items-center justify-center">
+                                                                                                        {getProfileImage(sPlayer) ? (
+                                                                                                            <img src={getProfileImage(sPlayer)} alt={sPlayer.Name} className="w-full h-full object-cover" />
+                                                                                                        ) : (
+                                                                                                            <User className="w-3.5 h-3.5 text-gray-500" />
+                                                                                                        )}
+                                                                                                    </div>
+                                                                                                    <span className="text-xs font-bold text-[#0F172A]">{sPlayer.Name}</span>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </div>
                                                                                     </div>
-                                                                                </motion.div>
+                                                                                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
+                                                                                        {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                        {seed && <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-gray-200" style={{ backgroundColor: theme.fill + '15', color: theme.fill, borderColor: theme.fill + '25' }}>Seed {seed}</span>}
+                                                                                    </div>
+                                                                                </div>
                                                                             );
                                                                         })}
                                                                     </div>
-                                                                ) : fetchingParticipants ? (
-                                                                    <div className="py-12 text-center">
-                                                                        <Loader className="w-6 h-6 animate-spin text-padel-green mx-auto mb-2" />
-                                                                        <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Updating field...</p>
-                                                                    </div>
                                                                 ) : (
-                                                                    <div className="py-12 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
-                                                                        <p className="text-gray-400 text-sm italic font-medium">No players registered in this division yet</p>
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        </ModuleAccordion>
-                                                    );
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 p-12 text-center">
-                                                <User className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-                                                <h3 className="text-2xl font-bold text-slate-800 mb-2">No Players Registered Yet</h3>
-                                                <p className="text-gray-500">The player list for this tournament will be available soon.</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {activeTab === 'divisions' && (
-                                    <div className="space-y-6">
-                                        <ModuleAccordion title="Champions" icon={Trophy} defaultOpen={false}>
-                                            <div className="py-4 space-y-4">
-                                                {fetchingRankedinData ? (
-                                                    <div className="flex flex-col items-center justify-center py-12">
-                                                        <Loader className="w-8 h-8 animate-spin text-padel-green mb-4" />
-                                                        <p className="text-gray-400 font-bold">Syncing data...</p>
-                                                    </div>
-                                                ) : tournamentClasses.length > 0 ? (
-                                                    <div className="grid grid-cols-1 gap-4">
-                                                        {tournamentClasses.map((cls, idx) => (
-                                                            <motion.div
-                                                                key={idx}
-                                                                initial={{ opacity: 0, x: -10 }}
-                                                                animate={{ opacity: 1, x: 0 }}
-                                                                transition={{ delay: idx * 0.05 }}
-                                                                className="bg-white/70 backdrop-blur-sm border border-slate-100 rounded-2xl p-5 flex flex-col md:flex-row items-center gap-5 group hover:shadow-xl hover:border-padel-green/30 transition-all duration-300"
-                                                            >
-                                                                {/* Icon Column */}
-                                                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${isEventPassed && winners.some(w => w.className === cls.Name) ? 'bg-padel-green/10 text-padel-green' : 'bg-slate-100 text-slate-400'}`}>
-                                                                    <Trophy className={isEventPassed && winners.some(w => w.className === cls.Name) ? 'w-7 h-7 drop-shadow-[0_0_8px_rgba(154,233,0,0.4)]' : 'w-6 h-6'} />
-                                                                </div>
-
-                                                                {/* Content Column */}
-                                                                <div className="flex-1 text-center md:text-left">
-                                                                    <span className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2 block">
-                                                                        {cls.Name}
-                                                                    </span>
-
-                                                                    {isEventPassed && winners.some(w => w.className === cls.Name) ? (
-                                                                        <div className="space-y-4">
-                                                                            {winners.filter(w => w.className === cls.Name).map((w, wi) => (
-                                                                                <div key={wi} className={wi > 0 ? "pt-3 border-t border-slate-100" : ""}>
-                                                                                    {w.drawName && !w.drawName.toLowerCase().includes('main') && (
-                                                                                        <span className="text-[10px] font-black text-padel-green uppercase tracking-wider mb-1 block">
-                                                                                            {w.drawName}
-                                                                                        </span>
-                                                                                    )}
-                                                                                    <h4 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
-                                                                                        {w.winners}
-                                                                                    </h4>
-                                                                                </div>
-                                                                            ))}
-                                                                        </div>
-                                                                    ) : !isEventPassed && upcomingMatches.some(m => m.MatchClass?.Id === cls.Id) ? (
-                                                                        <p className="text-sm font-bold text-slate-600 flex items-center justify-center md:justify-start gap-2">
-                                                                            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-                                                                            Tournament In Progress
-                                                                        </p>
-                                                                    ) : (
-                                                                        <p className="text-gray-400 text-sm font-medium italic">No results available yet</p>
-                                                                    )}
-                                                                </div>
-
-                                                                {/* Tag Column */}
-                                                                {isEventPassed && winners.some(w => w.className === cls.Name) && (
-                                                                    <div className="bg-slate-900 border border-slate-800 px-4 py-2 rounded-full shadow-lg shrink-0">
-                                                                        <span className="text-padel-green font-black text-[10px] uppercase tracking-widest">
-                                                                            Champions
-                                                                        </span>
+                                                                    <div className="px-6 py-10 text-center">
+                                                                        <Users className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                                                                        <p className="text-xs font-bold text-gray-400">No teams registered yet</p>
                                                                     </div>
                                                                 )}
                                                             </motion.div>
-                                                        ))}
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
+                                            <Users className="w-12 h-12 text-gray-200 mb-4" />
+                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Players Yet</h3>
+                                            <p className="text-sm text-gray-400">The player list will populate closer to the event.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ══ RESULTS & DRAWS TAB ══ */}
+                            {activeTab === 'results' && (
+                                <div className="space-y-6">
+                                    {/* Draws link */}
+                                    {(() => {
+                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                        if (hasDraw || hasResults) {
+                                            return (
+                                                <Link
+                                                    to={`/draws/${event.slug || rId}`}
+                                                    className="flex items-center justify-between p-6 bg-[#0F172A] rounded-2xl shadow-lg hover:bg-[#0F172A]/90 transition-all group"
+                                                >
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-xl bg-[#CCFF00]/10 flex items-center justify-center">
+                                                            <GitBranch className="w-6 h-6 text-[#CCFF00]" />
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-base font-black text-white uppercase tracking-tight">Tournament Draws</h3>
+                                                            <p className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest mt-0.5">View Live Brackets & Match Results</p>
+                                                        </div>
                                                     </div>
-                                                ) : (
-                                                    <div className="text-center py-12 bg-white/50 rounded-2xl border border-dashed border-slate-200">
-                                                        <p className="text-gray-400 font-bold italic">No division data available for this event.</p>
+                                                    <ArrowRight className="w-5 h-5 text-[#CCFF00] group-hover:translate-x-1 transition-transform" />
+                                                </Link>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+
+                                    {/* Winners */}
+                                    {(isEventPassed || hasResults) && (
+                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                                                <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
+                                                    <Trophy className="w-4 h-4 text-[#0F172A]" />
+                                                </div>
+                                                <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Champions</h2>
+                                            </div>
+                                            {winners.length > 0 ? (
+                                                <div className="divide-y divide-gray-50">
+                                                    {winners.map((winner, idx) => (
+                                                        <div key={idx} className="px-6 py-5">
+                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block mb-3">{winner.CategoryName}</p>
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between bg-[#CCFF00]/5 border border-[#CCFF00]/20 p-3 rounded-xl">
+                                                                    <div>
+                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">1st Place</p>
+                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || 'TBD'}</p>
+                                                                    </div>
+                                                                    <span className="text-2xl">🥇</span>
+                                                                </div>
+                                                                {winner.RunnerUp?.Name && (
+                                                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
+                                                                        <div>
+                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">2nd Place</p>
+                                                                            <p className="text-sm font-bold text-slate-700">{winner.RunnerUp.Name}</p>
+                                                                        </div>
+                                                                        <span className="text-2xl">🥈</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="px-6 py-10 text-center">
+                                                    <Trophy className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                                                    <p className="text-xs font-bold text-gray-400">Results pending</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!hasDraw && !hasResults && !isEventPassed && (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
+                                            <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
+                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">Draws Coming Soon</h3>
+                                            <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ══ MEDIA TAB ══ */}
+                            {activeTab === 'media' && (
+                                <div className="space-y-6">
+                                    {/* Gallery card */}
+                                    {albumInfo && (
+                                        <div className="bg-[#0F172A] rounded-2xl shadow-lg overflow-hidden">
+                                            {albumPhotos.length > 0 && (
+                                                <div className="grid grid-cols-3 h-48">
+                                                    {albumPhotos.slice(0, 3).map((photo, i) => (
+                                                        <div key={i} className={`relative overflow-hidden ${i === 0 ? 'col-span-2' : ''}`}>
+                                                            <img
+                                                                src={photo.url || photo.photo_url}
+                                                                alt=""
+                                                                className="w-full h-full object-cover opacity-80"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="p-6 flex items-center justify-between">
+                                                <div>
+                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] mb-1">Official Gallery</p>
+                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">{albumInfo.title}</h3>
+                                                    <p className="text-xs text-gray-400 mt-1 font-bold">{albumPhotos.length} Photos</p>
+                                                </div>
+                                                <Link
+                                                    to={`/gallery/${albumInfo.slug || albumInfo.id}`}
+                                                    className="px-6 py-3 bg-[#CCFF00] text-[#0F172A] rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors flex-shrink-0 ml-4"
+                                                >
+                                                    View All
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* YouTube Videos */}
+                                    {event.youtube_playlist_url && (
+                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
+                                                <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
+                                                    <PlayCircle className="w-4 h-4 text-[#0F172A]" />
+                                                </div>
+                                                <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Event Highlights</h2>
+                                            </div>
+                                            {fetchingVideos ? (
+                                                <div className="flex items-center justify-center py-12">
+                                                    <Loader className="w-6 h-6 animate-spin text-gray-300" />
+                                                </div>
+                                            ) : playlistVideos.length > 0 ? (
+                                                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                    {playlistVideos.map((video) => (
+                                                        <div
+                                                            key={video.id}
+                                                            className="group relative cursor-pointer rounded-xl overflow-hidden border border-gray-100 shadow-sm"
+                                                            onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
+                                                        >
+                                                            <div className="aspect-video relative bg-gray-100">
+                                                                <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover" />
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/10 transition-colors">
+                                                                    <div className="w-11 h-11 rounded-full bg-[#CCFF00] flex items-center justify-center shadow-lg">
+                                                                        <Play className="w-5 h-5 text-[#0F172A] fill-current ml-0.5" />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="p-3">
+                                                                <p className="text-xs font-bold text-[#0F172A] line-clamp-2 leading-tight group-hover:text-gray-600 transition-colors">{video.title}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <div className="p-5">
+                                                    {getPlaylistEmbedUrl(event.youtube_playlist_url) ? (
+                                                        <div className="aspect-video w-full rounded-xl overflow-hidden bg-gray-100">
+                                                            <iframe
+                                                                src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
+                                                                title="YouTube playlist player"
+                                                                className="w-full h-full border-0"
+                                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                                                allowFullScreen
+                                                            />
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {!albumInfo && !event.youtube_playlist_url && (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
+                                            <ImageIcon className="w-12 h-12 text-gray-200 mb-4" />
+                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Media Yet</h3>
+                                            <p className="text-sm text-gray-400">Media will be added after the event.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+
+                {/* ── FLOATING BOTTOM CTA CARD (mobile, sits above bottom nav) ── */}
+                {!isEventPassed && (() => {
+                    const hasEntryFee = event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0;
+                    const needsEntryPayment = !isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())));
+                    const needsLicensePayment = playerProfileData && !playerProfileData.paid_registration;
+                    
+                    const showRegister = !isRegistered;
+                    const showPay = (hasEntryFee && needsEntryPayment) || needsLicensePayment;
+                    const showDone = isRegistered && !needsEntryPayment && !needsLicensePayment;
+
+                    if (!showRegister && !showPay && !showDone) return null;
+
+                    return (
+                        <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+                            <div className="flex gap-2.5">
+                                {showRegister && (
+                                    <a
+                                        href={event.rankedin_url || 'https://www.rankedin.com/'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 bg-[#0F172A] text-white rounded-xl hover:bg-[#0F172A]/90 transition-all font-bold"
+                                    >
+                                        Register
+                                    </a>
+                                )}
+                                {showPay && (
+                                    <button
+                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                        className={`flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 ${theme.primary} ${theme.glow}`}
+                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                    >
+                                        <CreditCard className="w-4 h-4" />
+                                        {hasEntryFee ? `Pay R${event.entry_fee} Entry` : 'Pay License Fee'}
+                                    </button>
+                                )}
+                                {showDone && (
+                                    <div className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl">
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-green-700">
+                                            {isPaid ? 'Paid & Registered' : 'Registered'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
+                {isEventPassed && (hasResults || hasDraw) && (
+                    <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+                        {(() => {
+                            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                            return (
+                                <Link
+                                    to={`/draws/${event.slug || rId}`}
+                                    className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${theme.primary} ${theme.glow}`}
+                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                >
+                                    <GitBranch className="w-4 h-4" />
+                                    View Draws & Results
+                                </Link>
+                            );
+                        })()}
+                    </div>
+                )}
+
+            </div>
+
+            {/* Registration Modal */}
+            <AnimatePresence>
+                {isModalOpen && (
+                    <div className="fixed inset-0 z-[1100]">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100]"
+                            onClick={() => setIsModalOpen(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-6 md:p-8"
+                        >
+                            <div className="bg-[#0F172A] w-full max-w-xl rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
+                                {/* Modal Header */}
+                                <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
+                                    <h3 className="text-white font-bold text-lg">
+                                        {regStep === 1 ? 'Event Payment' : 'Payment Successful'}
+                                    </h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
+                                        <X className="w-6 h-6" />
+                                    </button>
+                                </div>
+
+                                {/* Modal Content */}
+                                <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
+                                    {regStep === 1 ? (
+                                        <>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
+                                                    <div className="relative group">
+                                                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green group-focus-within:text-white transition-colors" size={16} />
+                                                        <input
+                                                            type="text"
+                                                            name="full_name"
+                                                            value={formData.full_name}
+                                                            onChange={handleInputChange}
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                            placeholder="Player Full Name"
+                                                            required
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
+                                                    <div className="relative">
+                                                        <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
+                                                        <input
+                                                            type="email"
+                                                            name="email"
+                                                            value={formData.email}
+                                                            onChange={handleInputChange}
+                                                            className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                            placeholder="email@example.com"
+                                                            required
+                                                        />
+                                                        {emailCheckStatus === 'checking' && (
+                                                            <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                                                        )}
+                                                    </div>
+                                                    {emailCheckStatus === 'not_found' && (
+                                                        <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest bg-red-500/10 py-1.5 px-3 rounded-lg border border-red-500/20 inline-block mt-1">Profile not found. Please create a profile first.</p>
+                                                    )}
+                                                </div>
+
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
+                                                    <div className="relative">
+                                                        <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                        <input
+                                                            type="tel"
+                                                            name="phone"
+                                                            value={formData.phone}
+                                                            onChange={handleInputChange}
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                            placeholder="+27 00 000 0000"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between ml-3 mb-1">
+                                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
+                                                    {registeredDivisions.length > 0 && (
+                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
+                                                            {selectedDivisions.length} / {registeredDivisions.length} Selected
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {isCheckingReg ? (
+                                                    <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
+                                                        <Loader className="w-5 h-5 animate-spin text-padel-green" />
+                                                        <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
+                                                    </div>
+                                                ) : registeredDivisions.length > 0 ? (
+                                                    <div className="grid grid-cols-1 gap-2.5">
+                                                        {registeredDivisions.map(divName => {
+                                                            const alreadyPaid = paidDivisions.includes(divName);
+                                                            const isSelected = selectedDivisions.includes(divName);
+
+                                                            return (
+                                                                <button
+                                                                    key={divName}
+                                                                    type="button"
+                                                                    disabled={alreadyPaid}
+                                                                    onClick={() => {
+                                                                        setSelectedDivisions(prev =>
+                                                                            prev.includes(divName)
+                                                                                ? prev.filter(d => d !== divName)
+                                                                                : [...prev, divName]
+                                                                        );
+                                                                    }}
+                                                                    className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-300 ${alreadyPaid
+                                                                        ? 'bg-padel-green/5 border-padel-green/20 opacity-60 cursor-not-allowed'
+                                                                        : isSelected
+                                                                            ? 'bg-padel-green border-padel-green shadow-lg shadow-padel-green/20 scale-[1.02]'
+                                                                            : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
+                                                                        }`}
+                                                                >
+                                                                    <div className="flex items-center gap-4">
+                                                                        <div className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all duration-300 ${alreadyPaid ? 'bg-padel-green border-padel-green' :
+                                                                            isSelected ? 'bg-white border-white' : 'border-white/20 bg-black/20'
+                                                                            }`}>
+                                                                            {alreadyPaid && <CheckCircle size={14} className="text-white" />}
+                                                                            {isSelected && !alreadyPaid && <CheckCircle size={14} className="text-padel-green" />}
+                                                                        </div>
+                                                                        <div className="text-left">
+                                                                            <span className={`text-[13px] font-black uppercase tracking-tight block ${isSelected && !alreadyPaid ? 'text-black' : alreadyPaid ? 'text-padel-green' : 'text-white'
+                                                                                }`}>
+                                                                                {divName}
+                                                                            </span>
+                                                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${isSelected && !alreadyPaid ? 'text-black/60' : 'text-white/30'
+                                                                                }`}>
+                                                                                Tournament Entry
+                                                                            </span>
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="flex flex-col items-end gap-1">
+                                                                        {alreadyPaid ? (
+                                                                            <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-padel-green/20 text-padel-green px-3 py-1 rounded-full border border-padel-green/30">Already Paid</span>
+                                                                        ) : (
+                                                                            <span className={`text-sm font-black ${isSelected ? 'text-black' : 'text-padel-green'}`}>
+                                                                                R{getEntryFeeForCategory(divName)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : formData.email && (
+                                                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
+                                                        <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
+                                                        <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
+                                                        <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
+                                                            Please ensure you are registered on Rankedin <br />for this specific event.
+                                                        </p>
                                                     </div>
                                                 )}
                                             </div>
-                                        </ModuleAccordion>
 
-                                        <div className="pt-2">
-                                            {(() => {
-                                                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                                if (hasDraw || hasResults) {
-                                                    return (
-                                                        <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 400, damping: 10 }}>
-                                                            <Link
-                                                                to={`/draws/${event.slug || rId}`}
-                                                                className="w-full flex items-center justify-between p-6 md:p-8 bg-white rounded-3xl shadow-sm border border-gray-100 hover:bg-gray-50/80 hover:border-padel-green/30 transition-all group"
-                                                            >
-                                                                <div className="flex items-center gap-4">
-                                                                    <GitBranch className="w-6 h-6 text-padel-green" />
-                                                                    <h3 className="text-xl md:text-2xl font-bold text-slate-900">View Draws & Full Results</h3>
-                                                                </div>
-                                                                <ChevronDown className="w-6 h-6 text-gray-400 -rotate-90 group-hover:text-padel-green transition-colors" />
-                                                            </Link>
-                                                        </motion.div>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
-                                        </div>
-
-                                    </div>
-                                )}
-
-                                {activeTab === 'media' && (
-                                    <div className="space-y-12 pb-20">
-                                        {/* Simplified Media Header + Link to Full Gallery */}
-                                        {albumInfo ? (
-                                            <div className="bg-slate-900 rounded-[3rem] shadow-2xl border border-white/5 p-8 md:p-14 overflow-hidden relative">
-                                                {/* Background wording */}
-                                                <div className="absolute top-0 -left-10 select-none overflow-hidden h-full flex items-center transform -rotate-12 pointer-events-none opacity-[0.03]">
-                                                    <h2 className="text-[12vw] font-black text-white uppercase tracking-tighter w-[200%] leading-none whitespace-nowrap">
-                                                        {albumInfo.title}
-                                                    </h2>
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-padel-green/10 rounded-xl flex items-center justify-center text-padel-green group-hover:bg-padel-green group-hover:text-black transition-all duration-500">
+                                                            <Users size={20} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
+                                                            <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newState = !hasPartner;
+                                                            setHasPartner(newState);
+                                                            if (!newState) {
+                                                                setPartnerProfile(null);
+                                                                setPartnerSearchResults([]);
+                                                                setPayForPartner(false);
+                                                                setFormData(prev => ({ ...prev, partner_name: '' }));
+                                                            }
+                                                        }}
+                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-white/10'}`}
+                                                    >
+                                                        <span
+                                                            aria-hidden="true"
+                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                        />
+                                                    </button>
                                                 </div>
 
-                                                <div className="relative z-10 flex flex-col items-center text-center">
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: 20 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-padel-green/10 border border-padel-green/20 text-padel-green text-xs font-black uppercase tracking-[0.4em] mb-8"
-                                                    >
-                                                        <ImageIcon size={14} />
-                                                        <span>Official Media Available</span>
-                                                    </motion.div>
-
-                                                    <motion.h2
-                                                        initial={{ opacity: 0, scale: 0.9 }}
-                                                        animate={{ opacity: 1, scale: 1 }}
-                                                        className="text-4xl md:text-7xl font-black text-white tracking-tighter uppercase mb-8 drop-shadow-2xl max-w-4xl leading-[0.9]"
-                                                    >
-                                                        {albumInfo.title}
-                                                    </motion.h2>
-
-                                                    {albumInfo.description && (
-                                                        <p className="text-gray-400 text-lg md:text-xl max-w-2xl font-medium leading-relaxed italic opacity-80 mb-10 border-l border-padel-green/30 pl-6 mx-auto">
-                                                            {albumInfo.description}
-                                                        </p>
-                                                    )}
-
-                                                    <div className="flex flex-col items-center gap-8">
-                                                        <div className="flex items-center gap-4 text-white font-black text-xs uppercase tracking-[0.3em] bg-black/40 px-6 py-2.5 rounded-full border border-white/10">
-                                                            <span className="flex items-center gap-2">
-                                                                <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
-                                                                {albumPhotos.length} High-Res Moments
-                                                            </span>
-                                                        </div>
-
+                                                <AnimatePresence>
+                                                    {hasPartner && (
                                                         <motion.div
-                                                            initial={{ opacity: 0, y: 20 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            transition={{ delay: 0.2 }}
+                                                            initial={{ opacity: 0, height: 0 }}
+                                                            animate={{ opacity: 1, height: 'auto' }}
+                                                            exit={{ opacity: 0, height: 0 }}
+                                                            className="space-y-3"
                                                         >
-                                                            <Link
-                                                                to={`/gallery/${albumInfo.slug || albumInfo.id}`}
-                                                                className="group relative inline-flex items-center gap-10 pl-10 pr-4 py-4 bg-padel-green text-slate-950 rounded-full font-black uppercase tracking-widest text-base hover:bg-white hover:scale-105 transition-all duration-500 shadow-[0_0_50px_rgba(150,250,50,0.3)]"
-                                                            >
-                                                                <span className="relative z-10 !text-slate-950">Enter Full Gallery</span>
-                                                                <div className="w-14 h-14 rounded-full bg-slate-950 flex items-center justify-center text-padel-green group-hover:translate-x-2 transition-transform duration-500">
-                                                                    <ArrowLeft size={24} className="rotate-180" />
+                                                            <div className="space-y-1.5">
+                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
+                                                                <div className="relative group">
+                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                                    <input
+                                                                        type="text"
+                                                                        name="partner_name"
+                                                                        value={formData.partner_name}
+                                                                        onChange={handleInputChange}
+                                                                        autoComplete="off"
+                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                        placeholder="Type 2+ characters to search..."
+                                                                    />
+                                                                    {isLookingUpPartner && (
+                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                                            <Loader className="w-4 h-4 animate-spin text-padel-green" />
+                                                                        </div>
+                                                                    )}
+                                                                    {partnerProfile && !isLookingUpPartner && (
+                                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                            <CheckCircle className="w-3 h-3 fill-current" />
+                                                                            Found
+                                                                        </div>
+                                                                    )}
+
+                                                                    {/* Search Results Dropdown */}
+                                                                    <AnimatePresence>
+                                                                        {partnerSearchResults.length > 0 && (
+                                                                            <motion.div
+                                                                                initial={{ opacity: 0, y: -5 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                exit={{ opacity: 0, y: -5 }}
+                                                                                className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                            >
+                                                                                {partnerSearchResults.map((player) => (
+                                                                                    <button
+                                                                                        key={player.id}
+                                                                                        type="button"
+                                                                                        onClick={() => handleSelectPartner(player)}
+                                                                                        className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
+                                                                                    >
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
+                                                                                                <User size={12} />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <p className="text-xs font-bold text-slate-900">{player.name}</p>
+                                                                                                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                                                    </button>
+                                                                                ))}
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </AnimatePresence>
                                                                 </div>
-                                                            </Link>
-                                                        </motion.div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            !event.youtube_playlist_url && (
-                                                <div className="bg-slate-900 shadow-2xl border border-white/5 rounded-3xl p-12 text-center opacity-60">
-                                                    <ImageIcon className="w-16 h-16 text-slate-700 mx-auto mb-6" />
-                                                    <h3 className="text-2xl font-bold text-white mb-2">No Media Available Yet</h3>
-                                                    <p className="text-gray-500">Media from this event will be posted shortly after completion.</p>
-                                                </div>
-                                            )
-                                        )}
+                                                                {partnerLookupError && !partnerSearchResults.length && (
+                                                                    <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
+                                                                        {partnerLookupError}
+                                                                    </p>
+                                                                )}
+                                                            </div>
 
-                                        {/* YouTube Highlights Section */}
-                                        {event.youtube_playlist_url && (
-                                            <div className="bg-slate-900 rounded-[3rem] shadow-2xl border border-slate-800 p-8 md:p-14 overflow-hidden relative">
-                                                {/* Background wording */}
-                                                <div className="absolute top-0 -left-10 select-none overflow-hidden h-full flex items-center transform -rotate-12 pointer-events-none opacity-[0.03]">
-                                                    <h2 className="text-[120px] font-black text-white uppercase tracking-tighter w-[200%] leading-none">
-                                                        Highlights Highlights
-                                                    </h2>
-                                                </div>
-
-                                                <div className="relative z-10">
-                                                    <div className="flex items-center gap-4 mb-10">
-                                                        <div className="w-16 h-16 rounded-2xl bg-padel-green/10 flex items-center justify-center">
-                                                            <PlayCircle className="text-padel-green w-10 h-10" />
-                                                        </div>
-                                                        <h2 className="text-3xl md:text-5xl font-black text-white tracking-tight">Event Highlights</h2>
-                                                    </div>
-
-                                                    {fetchingVideos ? (
-                                                        <div className="flex flex-col items-center justify-center py-20 bg-slate-800/50 rounded-2xl border border-dashed border-slate-700">
-                                                            <Loader className="w-10 h-10 animate-spin text-padel-green mb-4" />
-                                                            <p className="text-gray-400 font-bold">Loading videos...</p>
-                                                        </div>
-                                                    ) : playlistVideos.length > 0 ? (
-                                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                            {playlistVideos.map((video) => (
-                                                                <motion.div
-                                                                    key={video.id}
-                                                                    whileHover={{ y: -8 }}
-                                                                    className="group relative cursor-pointer"
-                                                                    onClick={() => setVideoModal({ isOpen: true, url: video.id, title: video.title })}
-                                                                >
-                                                                    <div className="aspect-video rounded-2xl overflow-hidden bg-slate-800 relative shadow-md group-hover:shadow-xl transition-all">
-                                                                        <img src={video.thumbnail} alt={video.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                                                                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors" />
-                                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100">
-                                                                            <div className="w-14 h-14 rounded-full bg-padel-green text-black flex items-center justify-center shadow-2xl backdrop-blur-sm">
-                                                                                <Play className="w-8 h-8 fill-current ml-1" />
+                                                            {partnerProfile && (
+                                                                <>
+                                                                    <motion.div
+                                                                        initial={{ opacity: 0, y: 5 }}
+                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                        className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
+                                                                                <CreditCard className="w-5 h-5" />
+                                                                            </div>
+                                                                            <div>
+                                                                                <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
+                                                                                <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
+                                                                                    Multi-Division Fee Auto-Calculated
+                                                                                </p>
                                                                             </div>
                                                                         </div>
-                                                                    </div>
-                                                                    <div className="mt-4">
-                                                                        <h3 className="font-bold text-white line-clamp-2 group-hover:text-padel-green transition-colors leading-snug">{video.title}</h3>
-                                                                    </div>
-                                                                </motion.div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="aspect-video w-full rounded-2xl overflow-hidden shadow-xl bg-slate-800 border-2 border-slate-700">
-                                                            {getPlaylistEmbedUrl(event.youtube_playlist_url) ? (
-                                                                <iframe
-                                                                    src={getPlaylistEmbedUrl(event.youtube_playlist_url)}
-                                                                    title="YouTube playlist player"
-                                                                    className="w-full h-full border-0"
-                                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                                                    allowFullScreen
-                                                                />
-                                                            ) : (
-                                                                <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-                                                                    <PlayCircle className="w-16 h-16 mb-4 opacity-20 text-padel-green" />
-                                                                    <p className="font-bold text-xl text-white mb-2">Watch the highlights</p>
-                                                                    <p className="text-sm max-w-sm mx-auto">Could not load playlist grid. Please check back later.</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </motion.div>
-                        </AnimatePresence>
-                    </div>
-                </div>
-
-
-                {/* Registration Modal */}
-                <AnimatePresence>
-                    {isModalOpen && (
-                        <div className="fixed inset-0 z-[1100]">
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100]"
-                                onClick={() => setIsModalOpen(false)}
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                                animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                                className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-6 md:p-8"
-                            >
-                                <div className="bg-[#0F172A] w-full max-w-xl rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
-                                    {/* Modal Header */}
-                                    <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
-                                        <h3 className="text-white font-bold text-lg">
-                                            {regStep === 1 ? 'Event Payment' : 'Payment Successful'}
-                                        </h3>
-                                        <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
-                                            <X className="w-6 h-6" />
-                                        </button>
-                                    </div>
-
-                                    {/* Modal Content */}
-                                    <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
-                                        {regStep === 1 ? (
-                                            <>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
-                                                        <div className="relative group">
-                                                            <User className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green group-focus-within:text-white transition-colors" size={16} />
-                                                            <input
-                                                                type="text"
-                                                                name="full_name"
-                                                                value={formData.full_name}
-                                                                onChange={handleInputChange}
-                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
-                                                                placeholder="Player Full Name"
-                                                                required
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
-                                                        <div className="relative">
-                                                            <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
-                                                            <input
-                                                                type="email"
-                                                                name="email"
-                                                                value={formData.email}
-                                                                onChange={handleInputChange}
-                                                                className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
-                                                                placeholder="email@example.com"
-                                                                required
-                                                            />
-                                                            {emailCheckStatus === 'checking' && (
-                                                                <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
-                                                            )}
-                                                        </div>
-                                                        {emailCheckStatus === 'not_found' && (
-                                                            <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest bg-red-500/10 py-1.5 px-3 rounded-lg border border-red-500/20 inline-block mt-1">Profile not found. Please create a profile first.</p>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
-                                                        <div className="relative">
-                                                            <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
-                                                            <input
-                                                                type="tel"
-                                                                name="phone"
-                                                                value={formData.phone}
-                                                                onChange={handleInputChange}
-                                                                className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
-                                                                placeholder="+27 00 000 0000"
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                    <div className="space-y-3">
-                                                        <div className="flex items-center justify-between ml-3 mb-1">
-                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
-                                                            {registeredDivisions.length > 0 && (
-                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
-                                                                    {selectedDivisions.length} / {registeredDivisions.length} Selected
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        
-                                                        {isCheckingReg ? (
-                                                            <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
-                                                                <Loader className="w-5 h-5 animate-spin text-padel-green" />
-                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">
-                                                                    {isOrgHostedEvent ? 'Loading divisions...' : 'Syncing Rankedin Status...'}
-                                                                </span>
-                                                            </div>
-                                                        ) : divisionsForRegistration.length > 0 ? (
-                                                            <div className="grid grid-cols-1 gap-2.5">
-                                                                {divisionsForRegistration.map(divName => {
-                                                                    const alreadyPaid = paidDivisions.some(pd => pd.trim().toLowerCase() === divName.trim().toLowerCase());
-                                                                    const isSelected = selectedDivisions.includes(divName);
-                                                                    
-                                                                    return (
                                                                         <button
-                                                                            key={divName}
                                                                             type="button"
-                                                                            disabled={alreadyPaid}
-                                                                            onClick={() => {
-                                                                                setSelectedDivisions(prev => 
-                                                                                    prev.includes(divName) 
-                                                                                        ? prev.filter(d => d !== divName) 
-                                                                                        : [...prev, divName]
-                                                                                );
-                                                                            }}
-                                                                            className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-300 ${
-                                                                                alreadyPaid 
-                                                                                    ? 'bg-padel-green/5 border-padel-green/20 opacity-60 cursor-not-allowed' 
-                                                                                    : isSelected
-                                                                                        ? 'bg-padel-green border-padel-green shadow-lg shadow-padel-green/20 scale-[1.02]'
-                                                                                        : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
-                                                                            }`}
+                                                                            onClick={() => setPayForPartner(!payForPartner)}
+                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
                                                                         >
-                                                                            <div className="flex items-center gap-4">
-                                                                                <div className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all duration-300 ${
-                                                                                    alreadyPaid ? 'bg-padel-green border-padel-green' :
-                                                                                    isSelected ? 'bg-white border-white' : 'border-white/20 bg-black/20'
-                                                                                }`}>
-                                                                                    {alreadyPaid && <CheckCircle size={14} className="text-white" />}
-                                                                                    {isSelected && !alreadyPaid && <CheckCircle size={14} className="text-padel-green" />}
-                                                                                </div>
-                                                                                <div className="text-left">
-                                                                                    <span className={`text-[13px] font-black uppercase tracking-tight block ${
-                                                                                        isSelected && !alreadyPaid ? 'text-black' : alreadyPaid ? 'text-padel-green' : 'text-white'
-                                                                                    }`}>
-                                                                                        {divName}
-                                                                                    </span>
-                                                                                    <span className={`text-[9px] font-bold uppercase tracking-widest ${
-                                                                                        isSelected && !alreadyPaid ? 'text-black/60' : 'text-white/30'
-                                                                                    }`}>
-                                                                                        Tournament Entry
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="flex flex-col items-end gap-1">
-                                                                                {alreadyPaid ? (
-                                                                                    <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-padel-green/20 text-padel-green px-3 py-1 rounded-full border border-padel-green/30">Already Paid</span>
-                                                                                ) : (
-                                                                                    <span className={`text-sm font-black ${isSelected ? 'text-black' : 'text-padel-green'}`}>
-                                                                                        R{getEntryFeeForCategory(divName)}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
+                                                                            <span
+                                                                                aria-hidden="true"
+                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                            />
                                                                         </button>
-                                                                    );
-                                                                })}
+                                                                    </motion.div>
+
+                                                                    <AnimatePresence>
+                                                                        {payForPartner && !partnerProfile.paid_registration && (
+                                                                            <motion.div
+                                                                                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                                                                                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                className="overflow-hidden"
+                                                                            >
+                                                                                <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                                            <CreditCard size={16} />
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
+                                                                                            <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => setPartnerLicenseChoice('temporary')}
+                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                        >
+                                                                                            Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                                        </button>
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => setPartnerLicenseChoice('full')}
+                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                        >
+                                                                                            Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                                        </button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </motion.div>
+                                                                        )}
+                                                                    </AnimatePresence>
+                                                                </>
+                                                            )}
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+
+                                                {playerProfileData && !playerProfileData.paid_registration && (
+                                                    <motion.div
+                                                        initial={{ opacity: 0, y: 5 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                <CreditCard size={16} />
                                                             </div>
-                                                        ) : formData.email && !isOrgHostedEvent && (
-                                                            <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
-                                                                <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
-                                                                <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
-                                                                <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
-                                                                    Please ensure you are registered on Rankedin <br />for this specific event.
-                                                                </p>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
+                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
                                                             </div>
-                                                        )}
-                                                    </div>
+                                                        </div>
+                                                        <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setLicenseChoice('temporary')}
+                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                            >
+                                                                Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setLicenseChoice('full')}
+                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                            >
+                                                                Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                            </button>
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </div>
 
-                                                 <div className="space-y-4">
-                                                     <div className="flex items-center gap-3 ml-3 mb-1">
-                                                         <Users className="text-padel-green" size={20} />
-                                                         <div>
-                                                             <p className="text-xs font-black text-white uppercase tracking-tight">Team Setup & Partners</p>
-                                                             <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Configure partners and licenses per division</p>
-                                                         </div>
-                                                     </div>
+                                            <div className="pt-3 border-t border-white/10">
+                                                <div className="bg-slate-900/50 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/5 shadow-2xl">
+                                                    {/* Decorative Background Glow */}
+                                                    <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/5 rounded-full blur-3xl -mr-24 -mt-24 group-hover:bg-padel-green/10 transition-colors duration-1000" />
 
-                                                     {selectedDivisions.length === 0 ? (
-                                                         <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-6 text-center">
-                                                             <Users className="w-8 h-8 text-white/10 mx-auto mb-3" />
-                                                             <p className="text-xs text-slate-400 font-black uppercase tracking-[0.2em] mb-1">No Divisions Selected</p>
-                                                             <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest leading-relaxed">
-                                                                 Select one or more divisions above to configure your partners.
-                                                             </p>
-                                                         </div>
-                                                     ) : (
-                                                         <div className="space-y-3">
-                                                             {selectedDivisions.map(division => {
-                                                                 const part = divisionPartners[division] || {};
-                                                                 const hasPart = !!part.hasPartner;
-                                                                 const partnerProfile = part.partnerProfile;
-                                                                 const payForPartner = !!part.payForPartner;
-                                                                 const partnerLicenseChoice = part.partnerLicenseChoice || 'temporary';
-                                                                 const partnerSearchResults = part.partnerSearchResults || [];
-                                                                 const partnerLookupError = part.partnerLookupError;
-                                                                 const isLookingUpPartner = !!part.isLookingUpPartner;
-
-                                                                 return (
-                                                                     <div
-                                                                         key={`config-${division}`}
-                                                                         className="bg-slate-900/60 backdrop-blur border border-white/5 p-4 rounded-2xl space-y-3 relative overflow-hidden group hover:border-padel-green/20 transition-all duration-300"
-                                                                     >
-                                                                         {/* Division Header Indicator */}
-                                                                         <div className="flex items-center justify-between">
-                                                                             <span className="text-[10px] font-black text-padel-green uppercase tracking-wider bg-padel-green/10 border border-padel-green/20 px-3 py-1 rounded-full">
-                                                                                 {division}
-                                                                             </span>
-                                                                         </div>
-
-                                                                         {/* Toggle Area */}
-                                                                         <div className="flex items-center justify-between pt-1">
-                                                                             <div>
-                                                                                 <p className="text-xs font-bold text-white uppercase tracking-tight">Register with partner?</p>
-                                                                                 <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Toggle partner entry for this division</p>
-                                                                             </div>
-                                                                             <button
-                                                                                 type="button"
-                                                                                 onClick={() => toggleHasPartnerForDivision(division)}
-                                                                                 className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${
-                                                                                     hasPart ? 'bg-padel-green' : 'bg-white/10'
-                                                                                 }`}
-                                                                             >
-                                                                                 <span
-                                                                                     aria-hidden="true"
-                                                                                     className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${
-                                                                                         hasPart ? 'translate-x-5' : 'translate-x-0'
-                                                                                     }`}
-                                                                                 />
-                                                                             </button>
-                                                                         </div>
-
-                                                                         <AnimatePresence>
-                                                                             {hasPart && (
-                                                                                 <motion.div
-                                                                                     initial={{ opacity: 0, height: 0 }}
-                                                                                     animate={{ opacity: 1, height: 'auto' }}
-                                                                                     exit={{ opacity: 0, height: 0 }}
-                                                                                     className="space-y-3 pt-2 border-t border-white/5"
-                                                                                 >
-                                                                                     {/* Partner Search Input */}
-                                                                                     <div className="space-y-1.5">
-                                                                                         <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">
-                                                                                             Partner Name
-                                                                                         </label>
-                                                                                         <div className="relative group">
-                                                                                             <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
-                                                                                             <input
-                                                                                                 type="text"
-                                                                                                 value={part.partnerName || ''}
-                                                                                                 onChange={(e) => handlePartnerSearchForDivision(division, e.target.value)}
-                                                                                                 autoComplete="off"
-                                                                                                 className={`w-full bg-white/5 border ${
-                                                                                                     partnerLookupError ? 'border-red-500/50' : 'border-white/10'
-                                                                                                 } rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
-                                                                                                 placeholder="Type 2+ characters to search..."
-                                                                                             />
-                                                                                             {isLookingUpPartner && (
-                                                                                                 <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                                                                     <Loader className="w-4 h-4 animate-spin text-padel-green" />
-                                                                                                 </div>
-                                                                                             )}
-                                                                                             {partnerProfile && !isLookingUpPartner && (
-                                                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
-                                                                                                     <CheckCircle className="w-3 h-3 fill-current" />
-                                                                                                     Found
-                                                                                                 </div>
-                                                                                             )}
-
-                                                                                             {/* Dropdown Results */}
-                                                                                             <AnimatePresence>
-                                                                                                 {partnerSearchResults.length > 0 && (
-                                                                                                     <motion.div
-                                                                                                         initial={{ opacity: 0, y: -5 }}
-                                                                                                         animate={{ opacity: 1, y: 0 }}
-                                                                                                         exit={{ opacity: 0, y: -5 }}
-                                                                                                         className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
-                                                                                                     >
-                                                                                                         {partnerSearchResults.map((player) => (
-                                                                                                             <button
-                                                                                                                 key={player.id}
-                                                                                                                 type="button"
-                                                                                                                 onClick={() => handleSelectPartnerForDivision(division, player)}
-                                                                                                                 className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
-                                                                                                             >
-                                                                                                                 <div className="flex items-center gap-2">
-                                                                                                                     <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
-                                                                                                                         <User size={12} />
-                                                                                                                     </div>
-                                                                                                                     <div>
-                                                                                                                         <p className="text-xs font-bold text-slate-900">{player.name}</p>
-                                                                                                                         <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">
-                                                                                                                             {player.category || 'No Category'}
-                                                                                                                         </p>
-                                                                                                                     </div>
-                                                                                                                 </div>
-                                                                                                                 <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                                                                                             </button>
-                                                                                                         ))}
-                                                                                                     </motion.div>
-                                                                                                 )}
-                                                                                             </AnimatePresence>
-                                                                                         </div>
-                                                                                         {partnerLookupError && !partnerSearchResults.length && (
-                                                                                             <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
-                                                                                                 {partnerLookupError}
-                                                                                             </p>
-                                                                                         )}
-                                                                                     </div>
-
-                                                                                     {/* Pay for partner & license choice inside card */}
-                                                                                     {partnerProfile && (
-                                                                                         <>
-                                                                                             <motion.div
-                                                                                                 initial={{ opacity: 0, y: 5 }}
-                                                                                                 animate={{ opacity: 1, y: 0 }}
-                                                                                                 className="bg-padel-green/5 border border-padel-green/10 p-3 rounded-xl flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
-                                                                                             >
-                                                                                                 <div className="flex items-center gap-3">
-                                                                                                     <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-padel-green shadow-sm">
-                                                                                                         <CreditCard className="w-4 h-4" />
-                                                                                                     </div>
-                                                                                                     <div>
-                                                                                                         <h5 className="font-black text-white text-[10px] uppercase tracking-tight">
-                                                                                                             Pay for {partnerProfile.name}?
-                                                                                                         </h5>
-                                                                                                         <p className="text-[7px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
-                                                                                                             Entry fee and license (if needed)
-                                                                                                         </p>
-                                                                                                     </div>
-                                                                                                 </div>
-                                                                                                 <button
-                                                                                                     type="button"
-                                                                                                     onClick={() => togglePayForPartnerForDivision(division)}
-                                                                                                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                                                                                         payForPartner ? 'bg-padel-green' : 'bg-slate-200'
-                                                                                                     }`}
-                                                                                                 >
-                                                                                                     <span
-                                                                                                         aria-hidden="true"
-                                                                                                         className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                                                                                                             payForPartner ? 'translate-x-5' : 'translate-x-0'
-                                                                                                         }`}
-                                                                                                     />
-                                                                                                 </button>
-                                                                                             </motion.div>
-
-                                                                                             <AnimatePresence>
-                                                                                                 {payForPartner && !partnerProfile.paid_registration && (
-                                                                                                     <motion.div
-                                                                                                         initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                                         animate={{ opacity: 1, height: 'auto', marginTop: 8 }}
-                                                                                                         exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                                         className="overflow-hidden"
-                                                                                                     >
-                                                                                                         <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/10 shadow-inner group">
-                                                                                                             <div className="flex items-center gap-2">
-                                                                                                                 <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
-                                                                                                                     <CreditCard size={14} />
-                                                                                                                 </div>
-                                                                                                                 <div>
-                                                                                                                     <p className="text-[10px] font-bold text-white uppercase tracking-tight">Partner License</p>
-                                                                                                                     <p className="text-[8px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                                                                                 </div>
-                                                                                                             </div>
-                                                                                                             <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
-                                                                                                                 <button
-                                                                                                                     type="button"
-                                                                                                                     onClick={() => setPartnerLicenseChoiceForDivision(division, 'temporary')}
-                                                                                                                     className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full transition-all flex items-center gap-1 ${
-                                                                                                                         partnerLicenseChoice === 'temporary'
-                                                                                                                             ? 'bg-padel-green text-black shadow-md'
-                                                                                                                             : 'text-gray-400 hover:text-white'
-                                                                                                                     }`}
-                                                                                                                 >
-                                                                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                                                                                 </button>
-                                                                                                                 <button
-                                                                                                                     type="button"
-                                                                                                                     onClick={() => setPartnerLicenseChoiceForDivision(division, 'full')}
-                                                                                                                     className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full transition-all flex items-center gap-1 ${
-                                                                                                                         partnerLicenseChoice === 'full'
-                                                                                                                             ? 'bg-white text-black shadow-md'
-                                                                                                                             : 'text-gray-400 hover:text-white'
-                                                                                                                     }`}
-                                                                                                                 >
-                                                                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                                                                                 </button>
-                                                                                                             </div>
-                                                                                                         </div>
-                                                                                                     </motion.div>
-                                                                                                 )}
-                                                                                             </AnimatePresence>
-                                                                                         </>
-                                                                                     )}
-                                                                                 </motion.div>
-                                                                             )}
-                                                                         </AnimatePresence>
-                                                                     </div>
-                                                                 );
-                                                             })}
-                                                         </div>
-                                                     )}
-
-                                                     {playerProfileData && !playerProfileData.paid_registration && (
-                                                         <motion.div
-                                                             initial={{ opacity: 0, y: 5 }}
-                                                             animate={{ opacity: 1, y: 0 }}
-                                                             className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
-                                                         >
-                                                             <div className="flex items-center gap-2">
-                                                                 <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
-                                                                     <CreditCard size={16} />
-                                                                 </div>
-                                                                 <div>
-                                                                     <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
-                                                                     <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                                 </div>
-                                                             </div>
-                                                             <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
-                                                                 <button
-                                                                     type="button"
-                                                                     onClick={() => setLicenseChoice('temporary')}
-                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                 >
-                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                                 </button>
-                                                                 <button
-                                                                     type="button"
-                                                                     onClick={() => setLicenseChoice('full')}
-                                                                     className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
-                                                                 >
-                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                                 </button>
-                                                             </div>
-                                                         </motion.div>
-                                                     )}
-                                                 </div>
-
-                                                <div className="pt-3 border-t border-white/10">
-                                                    <div className="bg-slate-900/50 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/5 shadow-2xl">
-                                                        {/* Decorative Background Glow */}
-                                                        <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/5 rounded-full blur-3xl -mr-24 -mt-24 group-hover:bg-padel-green/10 transition-colors duration-1000" />
-
-                                                        <div className="relative z-10 space-y-4">
-                                                            {/* Itemized list */}
-                                                            <div className="space-y-3">
+                                                    <div className="relative z-10 space-y-4">
+                                                        {/* Itemized list */}
+                                                        <div className="space-y-3">
+                                                            <div className="space-y-2">
+                                                                {/* Registrant Section */}
                                                                 <div className="space-y-2">
-                                                                    {/* Registrant Section */}
-                                                                    <div className="space-y-2">
-                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green mb-1">Your Entries</p>
+                                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green mb-1">Your Entries</p>
+                                                                    {selectedDivisions.map(div => (
+                                                                        <div key={`reg-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                            <div className="space-y-0.5">
+                                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
+                                                                                <p className="text-[8px] font-black text-padel-green uppercase tracking-wider italic">{div}</p>
+                                                                            </div>
+                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                    {selectedDivisions.length === 0 && (
+                                                                        <div className="flex justify-between items-start gap-4 opacity-30 p-3">
+                                                                            <div className="space-y-0.5">
+                                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
+                                                                                <p className="text-[9px] font-medium text-white/40 uppercase tracking-wider">No Category Selected</p>
+                                                                            </div>
+                                                                            <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5">R0</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+
+                                                                {playerProfileData && !playerProfileData.paid_registration && (
+                                                                    <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20">
+                                                                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                        <span className="text-[10px] font-black text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                    </div>
+                                                                )}
+
+                                                                {/* Partner Section - Conditional */}
+                                                                {hasPartner && partnerProfile && (
+                                                                    <div className="space-y-2 pt-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
                                                                         {selectedDivisions.map(div => (
-                                                                            <div key={`reg-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                            <div key={`par-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
                                                                                 <div className="space-y-0.5">
-                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
-                                                                                    <p className="text-[8px] font-black text-padel-green uppercase tracking-wider italic">{div}</p>
+                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
+                                                                                    <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
                                                                                 </div>
                                                                                 <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
                                                                             </div>
                                                                         ))}
-                                                                        {selectedDivisions.length === 0 && (
-                                                                            <div className="flex justify-between items-start gap-4 opacity-30 p-3">
-                                                                                <div className="space-y-0.5">
-                                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
-                                                                                    <p className="text-[9px] font-medium text-white/40 uppercase tracking-wider">No Category Selected</p>
-                                                                                </div>
-                                                                                <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5">R0</span>
+                                                                        {payForPartner && !partnerProfile.paid_registration && (
+                                                                            <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
+                                                                                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                <span className="text-[10px] font-black text-blue-400">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                             </div>
                                                                         )}
                                                                     </div>
-
-                                                                    {playerProfileData && !playerProfileData.paid_registration && (
-                                                                        <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20">
-                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                            <span className="text-[10px] font-black text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Partner Section - Conditional per Division */}
-                                                                    {(() => {
-                                                                        const hasAnyPartnerEntry = selectedDivisions.some(div => {
-                                                                            const part = divisionPartners[div];
-                                                                            return part?.hasPartner && part?.partnerProfile && part?.payForPartner;
-                                                                        });
-
-                                                                        const uniquePaidPartnerLicenses = [];
-                                                                        const seenPartnerIds = new Set();
-                                                                        selectedDivisions.forEach(div => {
-                                                                            const part = divisionPartners[div];
-                                                                            if (part?.hasPartner && part?.partnerProfile && part?.payForPartner && !part.partnerProfile.paid_registration) {
-                                                                                if (!seenPartnerIds.has(part.partnerProfile.id)) {
-                                                                                    seenPartnerIds.add(part.partnerProfile.id);
-                                                                                    uniquePaidPartnerLicenses.push({
-                                                                                        name: part.partnerProfile.name,
-                                                                                        choice: part.partnerLicenseChoice || 'temporary'
-                                                                                    });
-                                                                                }
-                                                                            }
-                                                                        });
-
-                                                                        if (!hasAnyPartnerEntry && uniquePaidPartnerLicenses.length === 0) return null;
-
-                                                                        return (
-                                                                            <div className="space-y-2 pt-1">
-                                                                                {hasAnyPartnerEntry && (
-                                                                                    <>
-                                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
-                                                                                        {selectedDivisions.map(div => {
-                                                                                            const part = divisionPartners[div];
-                                                                                            if (!part?.hasPartner || !part?.partnerProfile || !part?.payForPartner) return null;
-                                                                                            return (
-                                                                                                <div key={`par-fee-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
-                                                                                                    <div className="space-y-0.5">
-                                                                                                        <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{part.partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
-                                                                                                        <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
-                                                                                                    </div>
-                                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
-                                                                                                </div>
-                                                                                            );
-                                                                                        })}
-                                                                                    </>
-                                                                                )}
-
-                                                                                {uniquePaidPartnerLicenses.map((lic, idx) => (
-                                                                                    <div key={`par-lic-${idx}`} className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
-                                                                                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">{lic.name} {lic.choice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                        <span className="text-[10px] font-black text-blue-400">R{lic.choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        );
-                                                                    })()}
-                                                                </div>
-                                                                </div>
-                                                            </div>
-
-                                                             {/* Bottom Action Area */}
-                                                            <div className="pt-4 border-t border-white/10 mt-1">
-                                                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
-                                                                    <div className="space-y-0.5">
-                                                                        <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
-                                                                        <div className="space-y-1">
-                                                                            <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
-                                                                            <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={handleRegister}
-                                                                        disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
-                                                                        className="h-16 md:h-14 px-12 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0"
-                                                                    >
-                                                                        <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                                                                        <span>Complete Payment</span>
-                                                                    </button>
-                                                                </div>
+                                                                )}
                                                             </div>
                                                         </div>
-                                                        </div>
-                                                        </>
-                                        ) : (
-                                             <>
-                                                {/* Ambient Glows */}
-                                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
-                                                <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
-
-                                                <div className="relative mb-10">
-                                                    <div className="w-28 h-28 bg-padel-green/20 rounded-full flex items-center justify-center mx-auto relative z-10 animate-in zoom-in duration-500 delay-150 shadow-2xl shadow-padel-green/40">
-                                                        <CheckCircle className="w-14 h-14 text-padel-green" />
                                                     </div>
-                                                    <div className="absolute inset-0 bg-padel-green/30 blur-2xl rounded-full scale-110 animate-pulse" />
+
+                                                    {/* Bottom Action Area */}
+                                                    <div className="pt-4 border-t border-white/10 mt-1">
+                                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
+                                                            <div className="space-y-0.5">
+                                                                <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
+                                                                <div className="space-y-1">
+                                                                    <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
+                                                                    <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleRegister}
+                                                                disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
+                                                                className="h-16 md:h-14 px-12 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0"
+                                                            >
+                                                                <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                                                                <span>Complete Payment</span>
+                                                            </button>
+                                                        </div>
+                                                    </div>
                                                 </div>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            {/* Ambient Glows */}
+                                            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-padel-green/10 blur-[120px] rounded-full pointer-events-none" />
+                                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-blue-500/10 blur-[80px] rounded-full pointer-events-none" />
 
-                                                <h3 className="text-4xl font-black text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
-                                                    Registration <br />
-                                                    <span className="text-padel-green">Confirmed</span>
-                                                </h3>
+                                            <div className="relative mb-10">
+                                                <div className="w-28 h-28 bg-padel-green/20 rounded-full flex items-center justify-center mx-auto relative z-10 animate-in zoom-in duration-500 delay-150 shadow-2xl shadow-padel-green/40">
+                                                    <CheckCircle className="w-14 h-14 text-padel-green" />
+                                                </div>
+                                                <div className="absolute inset-0 bg-padel-green/30 blur-2xl rounded-full scale-110 animate-pulse" />
+                                            </div>
 
-                                                <p className="text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
-                                                    You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>.
-                                                    Your payment was confirmed and your profile is updated.
-                                                </p>
+                                            <h3 className="text-4xl font-black text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
+                                                Registration <br />
+                                                <span className="text-padel-green">Confirmed</span>
+                                            </h3>
 
-                                                <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
-                                                    <button
-                                                        onClick={() => {
-                                                            setIsModalOpen(false);
-                                                            window.location.reload();
-                                                        }}
-                                                        className="w-full h-16 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/30 hover:scale-[1.03] active:scale-95"
-                                                    >
-                                                        <span>Close & Refresh</span>
-                                                        <ArrowRight className="w-4 h-4" />
-                                                    </button>
-                                                    <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Data Syncing Complete</p>
-                                                    </div>
-                                             </>
-                                        )}
-                                    </div>
+                                            <p className="text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
+                                                You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>.
+                                                Your payment was confirmed and your profile is updated.
+                                            </p>
+
+                                            <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
+                                                <button
+                                                    onClick={() => {
+                                                        setIsModalOpen(false);
+                                                        window.location.reload();
+                                                    }}
+                                                    className="w-full h-16 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/30 hover:scale-[1.03] active:scale-95"
+                                                >
+                                                    <span>Close & Refresh</span>
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </button>
+                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Data Syncing Complete</p>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
-                            </motion.div>
-                        </div>
-                    )}
-                </AnimatePresence>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
-                <VideoModal
-                    isOpen={videoModal.isOpen}
-                    onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
-                    videoUrl={videoModal.url}
-                    title={videoModal.title}
-                />
-            </main>
+            <VideoModal
+                isOpen={videoModal.isOpen}
+                onClose={() => setVideoModal({ ...videoModal, isOpen: false })}
+                videoUrl={videoModal.url}
+                title={videoModal.title}
+            />
         </>
     );
 };
