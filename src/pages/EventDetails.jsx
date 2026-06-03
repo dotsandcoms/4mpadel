@@ -1777,7 +1777,7 @@ const EventDetails = () => {
                                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                                         animate={{ opacity: 1, y: 0, scale: 1 }}
                                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                        className="absolute top-11 right-0 w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
+                                        className="absolute top-11 right-0 left-auto w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
                                     >
                                         <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                                             <p className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md inline-block" style={{ backgroundColor: theme.fill + '20', color: theme.fill }}>Add to Calendar</p>
@@ -2593,38 +2593,52 @@ const EventDetails = () => {
                 </div>
 
                 {/* ── FLOATING BOTTOM CTA CARD (mobile, sits above bottom nav) ── */}
-                {!isEventPassed && (
-                    <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-                        <div className="flex gap-2.5">
-                            {!isRegistered && (
-                                <a
-                                    href={event.rankedin_url || 'https://www.rankedin.com/'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 bg-[#0F172A] text-white rounded-xl hover:bg-[#0F172A]/90 transition-all font-bold"
-                                >
-                                    Register
-                                </a>
-                            )}
-                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && !isPaid && (
-                                <button
-                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                    className={`flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 ${theme.primary} ${theme.glow}`}
-                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                >
-                                    <CreditCard className="w-4 h-4" />
-                                    Pay R{event.entry_fee} Entry
-                                </button>
-                            )}
-                            {isPaid && (
-                                <div className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl">
-                                    <CheckCircle className="w-4 h-4 text-green-600" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-green-700">Paid & Registered</span>
-                                </div>
-                            )}
+                {!isEventPassed && (() => {
+                    const hasEntryFee = event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0;
+                    const needsEntryPayment = !isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())));
+                    const needsLicensePayment = playerProfileData && !playerProfileData.paid_registration;
+                    
+                    const showRegister = !isRegistered;
+                    const showPay = (hasEntryFee && needsEntryPayment) || needsLicensePayment;
+                    const showDone = isRegistered && !needsEntryPayment && !needsLicensePayment;
+
+                    if (!showRegister && !showPay && !showDone) return null;
+
+                    return (
+                        <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+                            <div className="flex gap-2.5">
+                                {showRegister && (
+                                    <a
+                                        href={event.rankedin_url || 'https://www.rankedin.com/'}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 bg-[#0F172A] text-white rounded-xl hover:bg-[#0F172A]/90 transition-all font-bold"
+                                    >
+                                        Register
+                                    </a>
+                                )}
+                                {showPay && (
+                                    <button
+                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                        className={`flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 ${theme.primary} ${theme.glow}`}
+                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                    >
+                                        <CreditCard className="w-4 h-4" />
+                                        {hasEntryFee ? `Pay R${event.entry_fee} Entry` : 'Pay License Fee'}
+                                    </button>
+                                )}
+                                {showDone && (
+                                    <div className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl">
+                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-green-700">
+                                            {isPaid ? 'Paid & Registered' : 'Registered'}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    );
+                })()}
                 {isEventPassed && (hasResults || hasDraw) && (
                     <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
                         {(() => {
