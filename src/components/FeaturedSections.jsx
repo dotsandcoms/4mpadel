@@ -237,131 +237,139 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
     const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
     return (
-        <div
-            className={`relative flex flex-col w-full h-[460px] md:h-[500px] rounded-[32px] overflow-hidden group cursor-pointer border border-white/10 hover:border-white/20 transition-all duration-700 bg-[#060913] shadow-2xl hover:shadow-white/5 shrink-0`}
+        <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: isMobile ? 0 : index * 0.15 }}
+            className={`relative flex flex-col w-full min-h-[225px] md:h-[260px] h-auto rounded-[24px] overflow-hidden group cursor-pointer border-2 ${colors.border} ${colors.hover} transition-all duration-500 bg-[#060913] shadow-2xl`}
             onClick={() => navigate(linkPath)}
         >
-            {/* Background Image & Gradient */}
-            <div className="absolute inset-0 z-0 overflow-hidden bg-[#0A0F1C]">
-                {image ? (
-                    <FallbackImage src={image} alt={title} title={title} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-1000 ease-out" />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#0B1121] to-black opacity-50" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/80 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-br ${colors.glow.replace('shadow-', 'from-').replace('/20', '/10')} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
-            </div>
-
             {/* Corner Ribbon */}
-            <div className="absolute top-0 right-0 w-28 h-28 pointer-events-none z-20 overflow-hidden rounded-tr-[32px]">
-                <div className={`absolute top-[28px] right-[-50px] w-[180px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
-                    <span className={`text-[9px] font-black ${colors.solidText} uppercase tracking-widest`}>
+            <div className="absolute top-0 right-0 w-24 h-24 pointer-events-none z-20 overflow-hidden rounded-tr-[24px]">
+                <div className={`absolute top-[22px] right-[-45px] w-[160px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
+                    <span className={`text-[8px] font-black ${colors.solidText} uppercase tracking-wider`}>
                         {label || status}
                     </span>
                 </div>
             </div>
 
             {/* Content Section */}
-            <div className="flex flex-col h-full p-6 md:p-8 relative z-10">
+            <div className="flex flex-col h-full p-4 md:p-5 relative z-10 bg-gradient-to-t from-[#05070A] to-[#080C17]">
                 {/* Top Section Actions */}
                 <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-2">
                         {isLive && (
-                            <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-3 py-1.5 rounded-full shadow-lg shadow-red-600/30">
-                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Now</span>
+                            <div className="flex items-center gap-1.5 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-2.5 py-1 rounded-full shadow-lg shadow-red-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest">Live</span>
                             </div>
                         )}
                     </div>
                 </div>
+                <h3 className={`text-base md:text-xl font-bold text-white line-clamp-2 mb-3 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
+                    {renderBrollTitle(title, status)}
+                </h3>
 
-                <div className="mt-auto flex flex-col">
-                    {/* Fixed Height Title */}
-                    <div className="h-[72px] mb-4">
-                        <h3 className={`text-2xl md:text-3xl font-bold text-white line-clamp-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
-                            {renderBrollTitle(title, status)}
-                        </h3>
-                    </div>
-
-                    {/* Fixed Height Info List */}
-                    <div className="flex flex-col gap-2 h-[88px] justify-start mb-4">
-                        {date && (
-                            <div className="flex items-center gap-2.5">
-                                <Calendar className="w-4 h-4 text-padel-green shrink-0" />
-                                <span className="text-[11px] text-white/90 font-medium tracking-wide uppercase">{date}</span>
-                            </div>
-                        )}
-                        {(city || venue) && (
-                            <div className="flex items-center gap-2.5">
-                                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">
-                                    {[venue, city].filter(Boolean).join(', ')}
-                                </span>
-                            </div>
-                        )}
-                        {organizerName && (
-                            <div className="flex items-center gap-2.5">
-                                <Shield className="w-4 h-4 text-gray-400 shrink-0" />
-                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">{organizerName}</span>
-                            </div>
-                        )}
-                        {registeredPlayers > 0 && (
-                            <div className="flex items-center gap-2.5">
-                                <Users className={`w-4 h-4 ${colors.text} shrink-0`} />
-                                <span className="text-[11px] text-white font-bold tracking-wide uppercase">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Actions bottom row */}
-                    <div className="flex flex-col gap-3 pt-5 border-t border-white/10">
-                        {isLive && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (youtubeUrl) {
-                                        if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                        else window.open(youtubeUrl, '_blank');
-                                    } else {
-                                        navigate(linkPath);
-                                    }
-                                }}
-                                className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3.5 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/20 group/live"
-                            >
-                                <PlayCircle className="absolute left-5 w-4 h-4 text-white" />
-                                <span className="text-[11px] font-black text-white uppercase tracking-[0.2em] leading-none mt-0.5">
-                                    {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
-                                </span>
-                                <ChevronRight className="absolute right-5 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
-                            </button>
-                        )}
-
-                        <div className={`group/btn relative flex items-center justify-between w-full bg-white/5 backdrop-blur-sm border border-white/10 hover:${colors.solid} hover:border-transparent px-5 py-3.5 rounded-xl transition-all duration-500`}>
-                            <span className={`text-[11px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none mt-0.5`}>
-                                {buttonLabel}
-                            </span>
-                            <ChevronRight className={`w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                {/* Info Grid */}
+                <div className="grid grid-cols-2 gap-y-2 gap-x-3 mb-auto">
+                    {date && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Calendar className="w-3.5 h-3.5 text-padel-green shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-padel-green font-bold truncate">{date}</span>
                         </div>
+                    )}
+                    {city && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={city}>{city}</span>
+                        </div>
+                    )}
+                    {venue && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={venue}>{venue}</span>
+                        </div>
+                    )}
+                    {organizerName && (
+                        <div className="flex items-center gap-1.5 overflow-hidden">
+                            <Shield className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <span className="text-[10px] sm:text-xs text-gray-300 font-medium truncate" title={organizerName}>{organizerName}</span>
+                        </div>
+                    )}
+                    {registeredPlayers > 0 && (
+                        <div className="flex items-center gap-1.5 overflow-hidden col-span-2 mt-1 pt-1.5 border-t border-white/5">
+                            <Users className={`w-3.5 h-3.5 ${colors.text} shrink-0`} />
+                            <span className="text-[10px] sm:text-xs text-white font-bold truncate">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
+                        </div>
+                    )}
+                </div>
 
-                        {/* Draws & Results Button */}
-                        {drawPath && (hasDraw || hasResults) && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                                className={`group/btn relative flex items-center justify-between w-full bg-black/20 backdrop-blur-sm border border-white/5 hover:${colors.solid} hover:border-transparent px-5 py-2.5 rounded-xl transition-all duration-300 group/draw`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <GitBranch className={`w-3.5 h-3.5 text-white/40 group-hover/draw:${colors.solidText} transition-colors`} />
-                                    <span className={`text-[10px] font-black text-white/50 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-[0.1em] mt-0.5`}>
-                                        Draws & Results
-                                    </span>
-                                </div>
-                                <ChevronRight className={`w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} group-hover/draw:translate-x-1 transition-all duration-500`} />
-                            </button>
+                {isLive && (livePlayers || nextMatch) && (
+                    <div className="mb-2 space-y-1.5 mt-3 bg-white/5 rounded-xl p-2 border border-white/10">
+                        {livePlayers && (
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="text-[8px] font-black text-red-500 uppercase tracking-widest bg-red-500/10 px-1.5 rounded shrink-0">NOW</span>
+                                <span className="text-[10px] sm:text-xs font-bold text-white truncate">{livePlayers}</span>
+                            </div>
+                        )}
+                        {nextMatch && (
+                            <div className="flex items-center gap-2 overflow-hidden">
+                                <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest bg-white/10 px-1.5 rounded shrink-0">NEXT</span>
+                                <span className="text-[10px] sm:text-xs font-medium text-gray-300 truncate">{nextMatch}</span>
+                            </div>
                         )}
                     </div>
+                )}
+
+                {/* Actions bottom row */}
+                <div className="flex flex-col gap-2 mt-auto pt-4 border-t border-white/5">
+                    {/* Watch Live Button (Primary if Live) */}
+                    {isLive && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (youtubeUrl) {
+                                    if (onWatchLive) onWatchLive(youtubeUrl, title);
+                                    else window.open(youtubeUrl, '_blank');
+                                } else {
+                                    navigate(linkPath);
+                                }
+                            }}
+                            className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/10 group/live"
+                        >
+                            <PlayCircle className="absolute left-4 w-4 h-4 text-white" />
+                            <span className="text-[10px] font-black text-white uppercase tracking-[0.2em] leading-none">
+                                {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
+                            </span>
+                            <ChevronRight className="absolute right-4 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
+                        </button>
+                    )}
+
+                    {/* View Details Button */}
+                    <div className={`group/btn relative flex items-center justify-center w-full bg-white/5 border ${colors.border} group-hover:${colors.solid} py-3 rounded-xl transition-all duration-500`}>
+                        <span className={`text-[10px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none`}>
+                            {buttonLabel}
+                        </span>
+                        <ChevronRight className={`absolute right-4 w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                    </div>
+
+                    {/* Draws & Results Button */}
+                    {drawPath && (hasDraw || hasResults) && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
+                            className={`group/btn relative flex items-center justify-center w-full py-2.5 rounded-xl bg-white/5 border border-white/10 hover:${colors.solid} transition-all duration-300 group/draw`}
+                        >
+                            <GitBranch className={`absolute left-4 w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} transition-colors`} />
+                            <span className={`text-[9px] font-black text-white/40 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-widest`}>
+                                Draws & Results
+                            </span>
+                            <ChevronRight className={`absolute right-4 w-4 h-4 text-white/20 group-hover/draw:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                        </button>
+                    )}
                 </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 
