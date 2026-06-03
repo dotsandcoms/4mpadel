@@ -1729,90 +1729,81 @@ const EventDetails = () => {
             </Helmet>
 
             {/* ===== MAIN PAGE ===== */}
-            <div className="min-h-screen bg-gray-50 font-sans">
+            <div className="min-h-screen bg-gray-50 font-sans relative">
+
+                {/* Floating nav bar (Placed outside Hero to prevent overflow cutting by Hero's overflow-hidden) */}
+                <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-safe pt-24 md:pt-28">
+                    <Link
+                        to="/calendar"
+                        className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </Link>
+
+                    {/* Add to Calendar Button */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                            className="h-9 px-4 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center gap-2 text-white hover:bg-white/40 transition-all shadow-lg text-[10px] font-black uppercase tracking-widest"
+                            title="Add to Calendar / Share"
+                        >
+                            <CalendarIcon className="w-3.5 h-3.5 text-white" />
+                            <span>Add to Calendar</span>
+                        </button>
+                        <AnimatePresence>
+                            {isCalendarMenuOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                    className="absolute top-11 right-0 left-auto w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
+                                >
+                                    <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                                        <p className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md inline-block" style={{ backgroundColor: theme.fill + '20', color: theme.fill }}>Add to Calendar</p>
+                                    </div>
+                                    {[
+                                        { label: 'Google Calendar', color: '#4285F4', fn: handleGoogleCalendar },
+                                        { label: 'Apple Calendar', color: '#999', fn: handleAppleCalendar },
+                                        { label: 'Outlook / Other', color: '#0078D4', fn: handleOutlookCalendar },
+                                    ].map(({ label, color, fn }) => (
+                                        <button
+                                            key={label}
+                                            onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors text-left"
+                                        >
+                                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+                                            {label}
+                                        </button>
+                                    ))}
+                                    <div className="border-t border-gray-100 p-2 bg-gray-50/20">
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(window.location.href);
+                                                toast.success('Link copied!');
+                                                setIsCalendarMenuOpen(false);
+                                            }}
+                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors rounded-xl text-left"
+                                        >
+                                            <Share2 className="w-4 h-4 text-gray-400" /> Copy Link
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </div>
 
                 {/* ── HERO ── */}
-                <div className="relative w-full h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden bg-[#0F172A] flex items-center justify-center">
-                    {/* Blurred background flyer */}
+                <div className="relative w-full h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden bg-[#0F172A]">
+                    {/* Full width foreground flyer image (un-cropped, cover stretched) */}
                     <img
                         src={event.custom_image_url || event.image_url || tournamentHero}
-                        alt=""
-                        className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-105 saturate-125 select-none pointer-events-none"
+                        alt={event.event_name}
+                        className="w-full h-full object-cover animate-fade-in z-0"
                     />
 
                     {/* Gradient overlay for blending and text readability */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-[#0F172A]/40 to-[#0F172A] z-0" />
-
-                    {/* Centered actual un-cropped flyer image */}
-                    <div className="absolute inset-0 flex items-center justify-center z-10 p-4 md:p-6 pb-24 md:pb-28">
-                        <img
-                            src={event.custom_image_url || event.image_url || tournamentHero}
-                            alt={event.event_name}
-                            className="max-w-full max-h-full object-contain rounded-xl shadow-2xl border border-white/10 animate-fade-in"
-                        />
-                    </div>
-
-                    {/* Floating nav bar */}
-                    <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-safe pt-24 md:pt-28">
-                        <Link
-                            to="/calendar"
-                            className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                        </Link>
-
-                        {/* Add to Calendar Button */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                                className="h-9 px-4 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center gap-2 text-white hover:bg-white/40 transition-all shadow-lg text-[10px] font-black uppercase tracking-widest"
-                                title="Add to Calendar / Share"
-                            >
-                                <CalendarIcon className="w-3.5 h-3.5 text-white" />
-                                <span>Add to Calendar</span>
-                            </button>
-                            <AnimatePresence>
-                                {isCalendarMenuOpen && (
-                                    <motion.div
-                                        initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                        className="absolute top-11 right-0 left-auto w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
-                                    >
-                                        <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                            <p className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md inline-block" style={{ backgroundColor: theme.fill + '20', color: theme.fill }}>Add to Calendar</p>
-                                        </div>
-                                        {[
-                                            { label: 'Google Calendar', color: '#4285F4', fn: handleGoogleCalendar },
-                                            { label: 'Apple Calendar', color: '#999', fn: handleAppleCalendar },
-                                            { label: 'Outlook / Other', color: '#0078D4', fn: handleOutlookCalendar },
-                                        ].map(({ label, color, fn }) => (
-                                            <button
-                                                key={label}
-                                                onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors text-left"
-                                            >
-                                                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                                                {label}
-                                            </button>
-                                        ))}
-                                        <div className="border-t border-gray-100 p-2 bg-gray-50/20">
-                                            <button
-                                                onClick={() => {
-                                                    navigator.clipboard.writeText(window.location.href);
-                                                    toast.success('Link copied!');
-                                                    setIsCalendarMenuOpen(false);
-                                                }}
-                                                className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors rounded-xl text-left"
-                                            >
-                                                <Share2 className="w-4 h-4 text-gray-400" /> Copy Link
-                                            </button>
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-[#0F172A] z-10" />
 
                     {/* Live badge */}
                     {isLive && (
