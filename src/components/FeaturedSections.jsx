@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 
 const getStatusColors = (status) => {
@@ -232,138 +232,156 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
         checkStatus();
     }, [drawPath, linkPath, getTournamentClasses, rankedinId]);
 
-    const colors = getStatusColors(status);
+    let tierColor = 'border-white/10';
+    let badgeColor = 'bg-white/10 text-gray-400';
+    let accentColor = 'text-padel-green';
+    let glowColor = 'shadow-padel-green/20';
 
-    const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+    const s = status?.toLowerCase() || '';
+    if (s.includes('major')) {
+        tierColor = 'border-red-500/30 hover:border-red-500/50';
+        badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+        accentColor = 'text-red-500';
+        glowColor = 'shadow-red-500/15';
+    } else if (s.includes('super gold') || s === 's gold') {
+        tierColor = 'border-amber-500/30 hover:border-amber-500/50';
+        badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+        accentColor = 'text-amber-500';
+        glowColor = 'shadow-amber-500/15';
+    } else if (s.includes('gold')) {
+        tierColor = 'border-yellow-500/30 hover:border-yellow-500/50';
+        badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
+        accentColor = 'text-yellow-500';
+        glowColor = 'shadow-yellow-500/15';
+    } else if (s.includes('silver')) {
+        tierColor = 'border-gray-400/30 hover:border-gray-400/50';
+        badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30';
+        accentColor = 'text-gray-400';
+        glowColor = 'shadow-gray-400/15';
+    } else if (s.includes('bronze')) {
+        tierColor = 'border-orange-700/30 hover:border-orange-700/50';
+        badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30';
+        accentColor = 'text-orange-700';
+        glowColor = 'shadow-orange-700/15';
+    } else if (s.includes('fip')) {
+        tierColor = 'border-blue-500/30 hover:border-blue-500/50';
+        badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+        accentColor = 'text-blue-500';
+        glowColor = 'shadow-blue-500/15';
+    } else if (s.includes('broll')) {
+        tierColor = 'border-[#F40020]/30 hover:border-[#F40020]/50';
+        badgeColor = 'bg-[#F40020]/20 text-[#F40020] border border-[#F40020]/30';
+        accentColor = 'text-[#F40020]';
+        glowColor = 'shadow-[#F40020]/15';
+    }
 
     return (
-        <div
-            className={`relative flex flex-col w-full h-[460px] md:h-[500px] rounded-[32px] overflow-hidden group cursor-pointer border border-white/10 hover:border-white/20 transition-all duration-700 bg-[#060913] shadow-2xl hover:shadow-white/5 shrink-0`}
-            onClick={() => navigate(linkPath)}
+        <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: index * 0.1 }}
+            className="h-full"
         >
-            {/* Background Image & Gradient */}
-            <div className="absolute inset-0 z-0 overflow-hidden bg-[#0A0F1C]">
-                {image ? (
-                    <FallbackImage src={image} alt={title} title={title} className="w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-110 transition-all duration-1000 ease-out" />
-                ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#0B1121] to-black opacity-50" />
-                )}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/80 to-transparent" />
-                <div className={`absolute inset-0 bg-gradient-to-br ${colors.glow.replace('shadow-', 'from-').replace('/20', '/10')} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700`} />
-            </div>
-
-            {/* Corner Ribbon */}
-            <div className="absolute top-0 right-0 w-28 h-28 pointer-events-none z-20 overflow-hidden rounded-tr-[32px]">
-                <div className={`absolute top-[28px] right-[-50px] w-[180px] py-1.5 ${colors.solid} rotate-45 flex items-center justify-center shadow-lg border-b border-white/20 transition-transform duration-500 group-hover:scale-105`}>
-                    <span className={`text-[9px] font-black ${colors.solidText} uppercase tracking-widest`}>
-                        {label || status}
-                    </span>
+            <Link
+                to={linkPath}
+                className={`group relative flex flex-row items-stretch h-full bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+            >
+                {/* Poster Image Container */}
+                <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
+                    {image ? (
+                        <>
+                            <FallbackImage
+                                src={image}
+                                alt=""
+                                title={title}
+                                className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125"
+                                aria-hidden="true"
+                            />
+                            <FallbackImage
+                                src={image}
+                                alt={title}
+                                title={title}
+                                className="relative z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            />
+                        </>
+                    ) : (
+                        <div className="w-full h-full bg-[#0A0F1C] flex items-center justify-center">
+                            <Calendar className="w-8 h-8 text-white/10" />
+                        </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
+                    
+                    {isLive && (
+                        <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
+                            <div className="w-1 h-1 rounded-full bg-white" />
+                            <span>Live</span>
+                        </div>
+                    )}
                 </div>
-            </div>
 
-            {/* Content Section */}
-            <div className="flex flex-col h-full p-6 md:p-8 relative z-10">
-                {/* Top Section Actions */}
-                <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center gap-2">
-                        {isLive && (
-                            <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-md border border-red-500/50 px-3 py-1.5 rounded-full shadow-lg shadow-red-600/30">
-                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Now</span>
-                            </div>
-                        )}
-                    </div>
-                </div>
-
-                <div className="mt-auto flex flex-col">
-                    {/* Fixed Height Title */}
-                    <div className="h-[72px] mb-4">
-                        <h3 className={`text-2xl md:text-3xl font-bold text-white line-clamp-2 group-hover:${colors.text} transition-colors duration-300 tracking-tight leading-tight`}>
-                            {renderBrollTitle(title, status)}
-                        </h3>
+                {/* Content */}
+                <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
+                            {label || status}
+                        </span>
                     </div>
 
-                    {/* Fixed Height Info List */}
-                    <div className="flex flex-col gap-2 h-[88px] justify-start mb-4">
+                    <h3 className="text-sm sm:text-lg font-black text-white mb-2 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
+                        {renderBrollTitle(title, status)}
+                    </h3>
+
+                    <div className="space-y-2 mt-auto">
                         {date && (
-                            <div className="flex items-center gap-2.5">
-                                <Calendar className="w-4 h-4 text-padel-green shrink-0" />
-                                <span className="text-[11px] text-white/90 font-medium tracking-wide uppercase">{date}</span>
+                            <div className="flex items-center gap-2 text-gray-400">
+                                <Calendar className={`w-3 h-3 sm:w-4 sm:h-4 ${accentColor} shrink-0`} />
+                                <span className={`text-[9px] sm:text-xs font-bold ${accentColor} truncate`}>
+                                    {date}
+                                </span>
                             </div>
                         )}
-                        {(city || venue) && (
-                            <div className="flex items-center gap-2.5">
-                                <MapPin className="w-4 h-4 text-gray-400 shrink-0" />
-                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">
+
+                        {(venue || city) && (
+                            <div className="flex items-center gap-2 text-gray-400">
+                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
+                                <span className="text-[9px] sm:text-xs font-medium truncate uppercase tracking-widest">
                                     {[venue, city].filter(Boolean).join(', ')}
                                 </span>
                             </div>
                         )}
-                        {organizerName && (
-                            <div className="flex items-center gap-2.5">
-                                <Shield className="w-4 h-4 text-gray-400 shrink-0" />
-                                <span className="text-[11px] text-gray-300 font-medium tracking-wide uppercase truncate">{organizerName}</span>
-                            </div>
-                        )}
-                        {registeredPlayers > 0 && (
-                            <div className="flex items-center gap-2.5">
-                                <Users className={`w-4 h-4 ${colors.text} shrink-0`} />
-                                <span className="text-[11px] text-white font-bold tracking-wide uppercase">{registeredPlayers} <span className="opacity-60 font-medium">Players</span></span>
-                            </div>
-                        )}
-                    </div>
 
-                    {/* Actions bottom row */}
-                    <div className="flex flex-col gap-3 pt-5 border-t border-white/10">
-                        {isLive && (
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (youtubeUrl) {
-                                        if (onWatchLive) onWatchLive(youtubeUrl, title);
-                                        else window.open(youtubeUrl, '_blank');
-                                    } else {
-                                        navigate(linkPath);
-                                    }
-                                }}
-                                className="group/btn relative flex items-center justify-center w-full bg-red-600/90 hover:bg-red-500 py-3.5 rounded-xl transition-all duration-500 shadow-lg shadow-red-600/20 group/live"
-                            >
-                                <PlayCircle className="absolute left-5 w-4 h-4 text-white" />
-                                <span className="text-[11px] font-black text-white uppercase tracking-[0.2em] leading-none mt-0.5">
-                                    {youtubeUrl ? 'WATCH LIVE NOW' : 'WATCH LIVE SOON'}
-                                </span>
-                                <ChevronRight className="absolute right-5 w-4 h-4 text-white group-hover/live:translate-x-1 transition-all duration-500" />
-                            </button>
-                        )}
-
-                        <div className={`group/btn relative flex items-center justify-between w-full bg-white/5 backdrop-blur-sm border border-white/10 hover:${colors.solid} hover:border-transparent px-5 py-3.5 rounded-xl transition-all duration-500`}>
-                            <span className={`text-[11px] font-black ${colors.text} uppercase tracking-[0.2em] group-hover:${colors.solidText} transition-all duration-500 leading-none mt-0.5`}>
-                                {buttonLabel}
-                            </span>
-                            <ChevronRight className={`w-4 h-4 ${colors.text} group-hover:${colors.solidText} group-hover:translate-x-1 transition-all duration-500`} />
+                        <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-3">
+                            <div className="flex items-center gap-2">
+                                {registeredPlayers > 0 && (
+                                    <div className="flex items-center gap-1">
+                                        <Users className={`w-3 h-3 ${accentColor}`} />
+                                        <span className="text-white font-bold text-[9px] sm:text-xs">{registeredPlayers}</span>
+                                    </div>
+                                )}
+                                {drawPath && (hasDraw || hasResults) && (
+                                    <Link
+                                        to={drawPath}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black text-white/50 hover:text-padel-green transition-colors uppercase tracking-widest border border-white/10 hover:border-padel-green/30 bg-white/5 px-2 py-0.5 rounded-full"
+                                    >
+                                        <GitBranch className="w-2.5 h-2.5 text-padel-green" />
+                                        <span>Draws</span>
+                                    </Link>
+                                )}
+                            </div>
+                            
+                            <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
+                                <span>{buttonLabel}</span>
+                                <ArrowRight className="w-3 h-3" />
+                            </div>
                         </div>
-
-                        {/* Draws & Results Button */}
-                        {drawPath && (hasDraw || hasResults) && (
-                            <button
-                                onClick={(e) => { e.stopPropagation(); navigate(drawPath); }}
-                                className={`group/btn relative flex items-center justify-between w-full bg-black/20 backdrop-blur-sm border border-white/5 hover:${colors.solid} hover:border-transparent px-5 py-2.5 rounded-xl transition-all duration-300 group/draw`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <GitBranch className={`w-3.5 h-3.5 text-white/40 group-hover/draw:${colors.solidText} transition-colors`} />
-                                    <span className={`text-[10px] font-black text-white/50 group-hover/draw:${colors.solidText} transition-colors uppercase tracking-[0.1em] mt-0.5`}>
-                                        Draws & Results
-                                    </span>
-                                </div>
-                                <ChevronRight className={`w-3.5 h-3.5 text-white/30 group-hover/draw:${colors.solidText} group-hover/draw:translate-x-1 transition-all duration-500`} />
-                            </button>
-                        )}
                     </div>
                 </div>
-            </div>
-        </div>
+            </Link>
+        </motion.div>
     );
 };
+
 
 const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments, liveFeaturedTournaments, onWatchLive }) => {
     const navigate = useNavigate();
