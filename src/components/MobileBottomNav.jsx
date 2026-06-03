@@ -43,7 +43,7 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[999] md:hidden flex justify-center">
       {/* iOS Liquid Glass Container */}
-      <div className="relative w-full max-w-[390px] bg-slate-950/40 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 flex items-center justify-around shadow-[0_15px_40px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] ring-1 ring-black/20">
+      <div className="relative w-full max-w-[390px] bg-slate-950/85 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 flex items-center justify-around shadow-[0_15px_40px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] ring-1 ring-black/20">
         
         {/* Subtle glass reflection highlight across the top half of the bar */}
         <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent rounded-t-2xl pointer-events-none" />
@@ -88,7 +88,7 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
                   damping: 15 
                 }}
                 className={`relative z-10 transition-colors duration-300 ${
-                  isActive ? 'text-black font-extrabold' : 'text-gray-400 group-hover:text-white'
+                  isActive ? 'text-black font-extrabold' : 'text-gray-300 group-hover:text-white'
                 }`}
               >
                 <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
@@ -98,7 +98,7 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
               <motion.span
                 layout
                 className={`text-[8px] font-black uppercase tracking-wider mt-0.5 z-10 transition-colors duration-300 ${
-                  isActive ? 'text-black' : 'text-gray-400/80 group-hover:text-white'
+                  isActive ? 'text-black' : 'text-gray-300/80 group-hover:text-white'
                 }`}
               >
                 {item.name}
