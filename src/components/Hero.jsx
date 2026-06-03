@@ -331,9 +331,8 @@ const Hero = () => {
                         transition={{ delay: 0.8, duration: 0.8 }}
                         className="text-gray-400 text-lg md:text-xl lg:text-2xl max-w-2xl mb-8 leading-relaxed font-light"
                     >
-                        The platform connecting the padel community.  <strong className="text-white font-medium">Events, rankings, clubs, players and organisers </strong>— all in one place.
+                        The platform connecting the padel community. <strong className="text-white font-medium">Events, rankings, clubs, players and organisers</strong>. — all in one place.
                     </motion.p>
-
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}

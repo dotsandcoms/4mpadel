@@ -38,6 +38,14 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         [events, selectedEventId]
     );
 
+    const getResolvedLicenseType = useCallback((p, eventId) => {
+        if (!p?.players) return 'none';
+        if (p.players.license_type === 'full') return 'full';
+        const hasTemp = p.players.temporary_licenses?.some(lic => lic.event_id === eventId);
+        if (hasTemp) return 'temporary';
+        return 'none';
+    }, []);
+
     const filteredEvents = useMemo(() => {
         let sorted = [...events].sort((a, b) => {
             const dateA = new Date(a.start_date);
@@ -103,9 +111,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             const profileKey = p.profile_id || p.full_name?.toLowerCase().trim();
             if (profileKey && !uniqueProfiles.has(profileKey)) {
                 uniqueProfiles.add(profileKey);
-                const lic = p.players?.license_type?.toLowerCase() || 'none';
+                const lic = getResolvedLicenseType(p, selectedEvent.id);
                 if (lic === 'full') licenseCounts.full++;
-                else if (lic === 'temporary' || lic === 'temp') licenseCounts.temp++;
+                else if (lic === 'temporary') licenseCounts.temp++;
                 else licenseCounts.none++;
             }
         });
@@ -118,7 +126,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             licenses: licenseCounts,
             uniquePlayers: uniqueProfiles.size
         };
-    }, [localParticipants, selectedEvent, totalCollected]);
+    }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -149,7 +157,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             const [{ data: pData, error: pError }, { data: payData, error: payError }] = await Promise.all([
                 supabase
                     .from('tournament_participants')
-                    .select('*, players(id, name, email, contact_number, license_type, paid_registration)')
+                    .select('*, players(id, name, email, contact_number, license_type, paid_registration, temporary_licenses(id, event_id))')
                     .eq('event_id', eventId)
                     .order('full_name'),
                 supabase
@@ -694,13 +702,15 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             // Add Data Rows
             sortedParticipants.forEach(p => {
                 const amountPaid = p.is_paid ? (p.actual_payment?.amount || 0) : 0;
+                const lic = getResolvedLicenseType(p, selectedEvent?.id);
+                const licLabel = lic === 'full' ? 'Full' : lic === 'temporary' ? 'Temporary' : 'None';
                 sheet.addRow([
                     p.full_name,
                     p.class_name || 'N/A',
                     p.players?.name || 'Unlinked',
                     p.players?.email || 'N/A',
                     p.players?.contact_number || 'N/A',
-                    p.players?.license_type || 'None',
+                    licLabel,
                     p.is_paid ? 'PAID' : 'UNPAID',
                     p.is_paid ? (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || 'System')) : 'N/A',
                     amountPaid,
@@ -774,7 +784,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             (filterProfile === 'linked' && isLinked) || 
             (filterProfile === 'unlinked' && !isLinked);
             
-        const lic = p.players?.license_type || 'none';
+        const lic = getResolvedLicenseType(p, selectedEvent?.id);
         const matchesLicense = filterLicense === 'all' || lic === filterLicense;
         
         const matchesPayment = filterPayment === 'all' || 
@@ -1242,18 +1252,25 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             </td>
                                             <td className="px-6 py-4">
                                                 {p.players ? (
-                                                    <div className="flex flex-col gap-1">
-                                                        <span className={`text-[9px] font-black px-2 py-0.5 rounded-md max-w-fit uppercase ${
-                                                            p.players.license_type === 'full' ? 'bg-padel-green/10 text-padel-green border border-padel-green/20' :
-                                                            p.players.license_type === 'temporary' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                                            'bg-red-500/10 text-red-400 border border-red-500/20'
-                                                        }`}>
-                                                            {p.players.license_type || 'None'}
-                                                        </span>
-                                                        {!p.players.paid_registration && (
-                                                            <span className="text-[8px] text-red-500 font-bold uppercase">Payment Required</span>
-                                                        )}
-                                                    </div>
+                                                    (() => {
+                                                        const lic = getResolvedLicenseType(p, selectedEvent?.id);
+                                                        const isFull = lic === 'full';
+                                                        const isTemp = lic === 'temporary';
+                                                        return (
+                                                            <div className="flex flex-col gap-1">
+                                                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-md max-w-fit uppercase ${
+                                                                    isFull ? 'bg-padel-green/10 text-padel-green border border-padel-green/20' :
+                                                                    isTemp ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                                                                    'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                                }`}>
+                                                                    {lic === 'full' ? 'Full' : lic === 'temporary' ? 'Temporary' : 'None'}
+                                                                </span>
+                                                                {lic === 'none' && (
+                                                                    <span className="text-[8px] text-red-500 font-bold uppercase">Payment Required</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })()
                                                 ) : (
                                                     <span className="text-gray-600 text-[10px] font-bold uppercase italic">Unlinked</span>
                                                 )}
@@ -1412,13 +1429,18 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">License</p>
-                                            <span className={`text-[10px] font-black uppercase tracking-widest ${
-                                                p.players?.license_type === 'full' ? 'text-padel-green' :
-                                                p.players?.license_type === 'temporary' ? 'text-sky-400' :
-                                                'text-red-500'
-                                            }`}>
-                                                {p.players?.license_type || 'No License'}
-                                            </span>
+                                            {(() => {
+                                                const lic = getResolvedLicenseType(p, selectedEvent?.id);
+                                                return (
+                                                    <span className={`text-[10px] font-black uppercase tracking-widest ${
+                                                        lic === 'full' ? 'text-padel-green' :
+                                                        lic === 'temporary' ? 'text-sky-400' :
+                                                        'text-red-500'
+                                                    }`}>
+                                                        {lic === 'full' ? 'Full' : lic === 'temporary' ? 'Temporary' : 'No License'}
+                                                    </span>
+                                                );
+                                            })()}
                                         </div>
                                         <div className="space-y-1">
                                             <p className="text-[9px] text-gray-500 font-black uppercase tracking-widest">Payment Info</p>

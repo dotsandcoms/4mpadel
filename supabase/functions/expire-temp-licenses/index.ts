@@ -21,12 +21,14 @@ serve(async (req) => {
 
         // 1. Find all expired temporary licenses
         // We use the date string to expire ONLY when the current date is AFTER the event date.
+        // We inner join and filter to only find records of players who currently have an active 'temporary' license.
         const today = new Date().toISOString().split('T')[0];
 
         const { data: expiredLicenses, error: fetchError } = await supabaseAdmin
             .from('temporary_licenses')
-            .select('player_id')
-            .lt('event_date', today);
+            .select('player_id, players!inner(license_type)')
+            .lt('event_date', today)
+            .eq('players.license_type', 'temporary');
 
         if (fetchError) {
             throw new Error(`Failed to fetch expired licenses: ${fetchError.message}`)
@@ -51,17 +53,6 @@ serve(async (req) => {
             }
 
             expiredCount = updatedPlayers?.length || 0;
-
-            // 3. Clean up the expired licenses from the tracking table
-            const { error: deleteError } = await supabaseAdmin
-                .from('temporary_licenses')
-                .delete()
-                .in('player_id', playerIds)
-                .lt('event_date', today);
-
-            if (deleteError) {
-                throw new Error(`Failed to clean up expired licenses: ${deleteError.message}`);
-            }
         }
 
         // Pass 2: The aggressive reconciliation pass was removed to prevent manual syncs 
