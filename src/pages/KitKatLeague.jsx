@@ -53,7 +53,7 @@ const KitKatLeague = () => {
             const teamsAPI = await getTeamLeagueTeams(12616);
             let dynamicTeams = [];
             let dynamicPlayers = [];
-            
+
             if (teamsAPI) {
                 dynamicTeams = teamsAPI.map((t, index) => {
                     const visuals = TEAM_VISUALS[t.Name] || TEAM_VISUALS['Atholl Aces'];
@@ -65,7 +65,7 @@ const KitKatLeague = () => {
                         ...visuals
                     };
                 });
-                
+
                 teamsAPI.forEach(t => {
                     if (t.Players) {
                         t.Players.forEach(p => {
@@ -73,7 +73,7 @@ const KitKatLeague = () => {
                         });
                     }
                 });
-                
+
                 setTeamsData(dynamicTeams);
                 setRawPlayers(dynamicPlayers);
             }
@@ -83,7 +83,7 @@ const KitKatLeague = () => {
                 .from('players')
                 .select('*')
                 .eq('approved', true);
-            
+
             if (dbPlayers) {
                 setSupabasePlayers(dbPlayers);
             }
@@ -123,7 +123,7 @@ const KitKatLeague = () => {
                             const team1Match = teamsList.find(t => t.name === match.Team1.Name) || teamsList[0];
                             const team2Match = teamsList.find(t => t.name === match.Team2.Name) || teamsList[0];
                             const timeParts = match.Details?.Time ? match.Details.Time.split(' ') : [];
-                            
+
                             mappedFixtures.push({
                                 id: match.MatchId || index,
                                 round: roundNum,
@@ -141,9 +141,9 @@ const KitKatLeague = () => {
                 });
                 setFixturesData(mappedFixtures);
                 setMaxRound(foundMaxRound);
-                
+
                 // Default to Matchweek 4 as requested
-                setSelectedRound(4);
+                setSelectedRound(7);
             }
         };
 
@@ -461,7 +461,7 @@ const KitKatLeague = () => {
                             <div className="max-w-4xl mx-auto space-y-6">
                                 {/* Week selector */}
                                 <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-slate-200 mb-8 shadow-sm">
-                                    <button 
+                                    <button
                                         onClick={() => setSelectedRound(prev => Math.max(1, prev - 1))}
                                         disabled={selectedRound === 1}
                                         className={`p-2 rounded-xl transition-colors ${selectedRound === 1 ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-900 bg-slate-50'}`}
@@ -472,7 +472,7 @@ const KitKatLeague = () => {
                                         <p className="text-[#D41B2C] font-black text-xs uppercase tracking-[0.2em]">Matchweek {selectedRound}</p>
                                         <p className="text-slate-900 font-bold">2026 Season</p>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={() => setSelectedRound(prev => Math.min(maxRound, prev + 1))}
                                         disabled={selectedRound === maxRound}
                                         className={`p-2 rounded-xl transition-colors ${selectedRound === maxRound ? 'text-slate-200 cursor-not-allowed' : 'text-slate-400 hover:text-slate-900 bg-slate-50'}`}
@@ -593,7 +593,7 @@ const KitKatLeague = () => {
                                                                             {game.Challenger.Player2Name}
                                                                         </span>
                                                                     </div>
-                                                                    
+
                                                                     {/* Game Score */}
                                                                     <div className="flex flex-col items-center justify-center shrink-0">
                                                                         <div className="bg-white px-2 sm:px-4 py-1 rounded-full border border-slate-200 shadow-sm flex items-center gap-2 sm:gap-3">
@@ -613,7 +613,7 @@ const KitKatLeague = () => {
                                                                             ))}
                                                                         </div>
                                                                     </div>
-                                                                    
+
                                                                     {/* Player Pair 2 */}
                                                                     <div className="flex-1 flex flex-col gap-0.5 text-right min-w-0">
                                                                         <span className={`text-[9px] sm:text-[11px] font-black uppercase tracking-wider truncate ${!game.MatchResult?.IsFirstParticipantWinner ? 'text-slate-900' : 'text-slate-400'}`}>
@@ -645,7 +645,7 @@ const KitKatLeague = () => {
                         {activeTab === 'teams' && (
                             <div className="space-y-12">
                                 {/* Team Quick Select Logos */}
-                                <motion.div 
+                                <motion.div
                                     initial={{ opacity: 0, y: 10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     className="flex flex-wrap justify-center gap-3 sm:gap-4 md:gap-6 mb-8"
