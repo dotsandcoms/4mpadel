@@ -6,6 +6,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { usePaystackPayment } from 'react-paystack';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
+import { useClubs } from '../hooks/useClubs';
+import SearchableSelect from './SearchableSelect';
+import { Trophy } from 'lucide-react';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -41,7 +44,8 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [nationality, setNationality] = useState('');
     const [idNumber, setIdNumber] = useState('');
     const [bio, setBio] = useState('');
-    const [homeClub, setHomeClub] = useState('');
+    const [clubId, setClubId] = useState('');
+    const [customClub, setCustomClub] = useState('');
     const [sponsors, setSponsors] = useState('');
     const [instagramLink, setInstagramLink] = useState('');
     const [acceptTerms, setAcceptTerms] = useState(false);
@@ -59,6 +63,7 @@ const AuthModal = ({ isOpen, onClose }) => {
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState('');
     const [eventsLoading, setEventsLoading] = useState(false);
+    const { clubs } = useClubs();
 
     React.useEffect(() => {
         if (step === 3 && paymentOption === 'temporary' && upcomingEvents.length === 0) {
@@ -310,8 +315,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                 }
             }
 
-            // 4. Create the initial profile (unpaid) or paid depending on logic
-            const baseParams = {
+            const { error: insertError } = await supabase.rpc('create_player_profile', {
                 p_email: email,
                 p_name: `${firstName} ${lastName}`.trim(),
                 p_contact: contactNumber,
@@ -320,18 +324,14 @@ const AuthModal = ({ isOpen, onClose }) => {
                 p_nationality: nationality,
                 p_id_number: idNumber,
                 p_bio: bio,
-                p_home_club: homeClub,
+                p_home_club: clubId === 'Other' ? customClub : (clubId ? clubs.find(c => c.id === clubId)?.name : ''),
                 p_sponsors: sponsors,
                 p_region: region,
-                p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
-            };
-
-            const { error: insertError } = await supabase.rpc('create_player_profile', {
-                ...baseParams,
                 p_paid_registration: false,
                 p_license_type: 'none',
                 p_image_url: uploadedImageUrl,
                 p_racket_brand: racketBrand === 'Other' ? customRacketBrand : racketBrand,
+                p_club_id: clubId === 'Other' ? null : (clubId || null)
             });
 
             if (insertError) {
@@ -666,14 +666,28 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                     <option value="Ladies Intermediate">Ladies Intermediate</option>
                                                 </optgroup>
                                             </select>
-                                            <input
-                                                type="text"
-                                                placeholder="Home Club"
-                                                value={homeClub}
-                                                onChange={(e) => setHomeClub(e.target.value)}
-                                                className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
-                                                required
+                                            <SearchableSelect
+                                                options={[...clubs.map(club => ({ label: club.name, value: club.id })), { label: "Other (Type your own)", value: "Other" }]}
+                                                value={clubId}
+                                                onChange={(e) => setClubId(e.target.value)}
+                                                placeholder="Select Home Club"
+                                                icon={Trophy}
                                             />
+                                            {clubId === 'Other' && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                >
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Please specify your club name"
+                                                        value={customClub}
+                                                        onChange={(e) => setCustomClub(e.target.value)}
+                                                        className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all"
+                                                        required
+                                                    />
+                                                </motion.div>
+                                            )}
                                             <textarea
                                                 placeholder="Tell us about your padel journey..."
                                                 value={bio}

@@ -9,6 +9,8 @@ import CoachProfileModal from '../components/CoachProfileModal';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
+import { useClubs } from '../hooks/useClubs';
+import SearchableSelect from '../components/SearchableSelect';
 import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X } from 'lucide-react';
 
 const PlayerProfile = () => {
@@ -55,6 +57,7 @@ const PlayerProfile = () => {
     const [loadingMatches, setLoadingMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
     const { pendingPayments } = usePendingPayments(player?.email, player?.rankedin_id);
+    const { clubs } = useClubs();
     const pendingPaymentEvents = upcomingEvents.filter(event => pendingPayments?.some(p => p.id === event.db_id));
     const currentTab = (eventViewTab === 'pending' && pendingPaymentEvents.length === 0) ? 'upcoming' : eventViewTab;
     const filteredEvents = currentTab === 'pending' ? pendingPaymentEvents : (currentTab === 'past' ? pastEvents : upcomingEvents);
@@ -69,6 +72,8 @@ const PlayerProfile = () => {
         category: '',
         id_number: '',
         home_club: '',
+        club_id: '',
+        custom_club: '',
         age: '',
         instagram_link: '',
         region: '',
@@ -216,6 +221,8 @@ const PlayerProfile = () => {
                     gender: playerData.gender || '',
                     bio: playerData.bio || '',
                     home_club: playerData.home_club || '',
+                    club_id: playerData.club_id || (playerData.home_club && clubs.length > 0 && !clubs.some(c => c.id === playerData.club_id) ? 'Other' : ''),
+                    custom_club: (playerData.home_club && clubs.length > 0 && !clubs.some(c => c.id === playerData.club_id)) ? playerData.home_club : '',
                     sponsors: sponsorsString,
                     image_url: playerData.image_url || '',
                     category: playerData.category || '',
@@ -489,7 +496,8 @@ const PlayerProfile = () => {
             nationality: formData.nationality,
             gender: formData.gender,
             bio: formData.bio,
-            home_club: formData.home_club,
+            home_club: formData.club_id === 'Other' ? formData.custom_club : formData.home_club,
+            club_id: formData.club_id === 'Other' ? null : (formData.club_id || null),
             sponsors: sponsorsJson,
             image_url: formData.image_url,
             category: formData.category,
@@ -1784,16 +1792,25 @@ const PlayerProfile = () => {
                                             {/* Home Club */}
                                             <div className="space-y-1">
                                                 <label className="text-[8.5px] font-black uppercase tracking-wider text-padel-green ml-1">Home Club</label>
-                                                <div className="relative">
-                                                    <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75 w-3.5 h-3.5" />
-                                                    <input
-                                                        type="text"
-                                                        value={formData.home_club}
-                                                        onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-padel-green/50 transition-all font-bold placeholder:text-gray-700"
-                                                        placeholder="Home Club"
-                                                    />
-                                                </div>
+                                                <SearchableSelect
+                                                    options={[...clubs.map(club => ({ label: club.name, value: club.id })), { label: "Other (Type your own)", value: "Other" }]}
+                                                    value={formData.club_id}
+                                                    onChange={(e) => setFormData({ ...formData, club_id: e.target.value, home_club: e.target.value !== 'Other' ? clubs.find(c => c.id === e.target.value)?.name || '' : formData.home_club })}
+                                                    placeholder="Select Home Club"
+                                                    icon={Trophy}
+                                                />
+                                                {formData.club_id === 'Other' && (
+                                                    <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Please specify your club name"
+                                                            value={formData.custom_club}
+                                                            onChange={(e) => setFormData({ ...formData, custom_club: e.target.value })}
+                                                            className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all text-xs"
+                                                            required
+                                                        />
+                                                    </motion.div>
+                                                )}
                                             </div>
 
                                             {/* Racket Brand */}
@@ -2997,16 +3014,25 @@ const PlayerProfile = () => {
 
                                                                     <div className="space-y-2">
                                                                         <label className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-4">Home Club</label>
-                                                                        <div className="relative">
-                                                                            <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75" size={18} />
-                                                                            <input
-                                                                                type="text"
-                                                                                value={formData.home_club}
-                                                                                onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700"
-                                                                                placeholder="Your Home Club"
-                                                                            />
-                                                                        </div>
+                                                                        <SearchableSelect
+                                                                            options={[...clubs.map(club => ({ label: club.name, value: club.id })), { label: "Other (Type your own)", value: "Other" }]}
+                                                                            value={formData.club_id}
+                                                                            onChange={(e) => setFormData({ ...formData, club_id: e.target.value, home_club: e.target.value !== 'Other' ? clubs.find(c => c.id === e.target.value)?.name || '' : formData.home_club })}
+                                                                            placeholder="Select Home Club"
+                                                                            icon={Trophy}
+                                                                        />
+                                                                        {formData.club_id === 'Other' && (
+                                                                            <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-2">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    placeholder="Please specify your club name"
+                                                                                    value={formData.custom_club}
+                                                                                    onChange={(e) => setFormData({ ...formData, custom_club: e.target.value })}
+                                                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all text-xs"
+                                                                                    required
+                                                                                />
+                                                                            </motion.div>
+                                                                        )}
                                                                     </div>
 
                                                                     <div className="space-y-2">
@@ -4224,16 +4250,25 @@ const PlayerProfile = () => {
 
                                                 <div className="space-y-1.5">
                                                     <label className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.2em] text-padel-green ml-3 md:ml-4">Home Club</label>
-                                                    <div className="relative">
-                                                        <Trophy className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green/75 w-4 h-4 md:w-5 md:h-5" />
-                                                        <input
-                                                            type="text"
-                                                            value={formData.home_club}
-                                                            onChange={(e) => setFormData({ ...formData, home_club: e.target.value })}
-                                                            className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-xl md:rounded-2xl pl-11 md:pl-12 pr-4 py-3 md:py-4 text-white focus:outline-none focus:border-padel-green/50 focus:bg-white/[0.05] hover:border-white/20 transition-all font-bold placeholder:text-gray-700 text-xs md:text-sm"
-                                                            placeholder="Your Home Club"
-                                                        />
-                                                    </div>
+                                                    <SearchableSelect
+                                                        options={[...clubs.map(club => ({ label: club.name, value: club.id })), { label: "Other (Type your own)", value: "Other" }]}
+                                                        value={formData.club_id}
+                                                        onChange={(e) => setFormData({ ...formData, club_id: e.target.value, home_club: e.target.value !== 'Other' ? clubs.find(c => c.id === e.target.value)?.name || '' : formData.home_club })}
+                                                        placeholder="Select Home Club"
+                                                        icon={Trophy}
+                                                    />
+                                                    {formData.club_id === 'Other' && (
+                                                        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-2">
+                                                            <input
+                                                                type="text"
+                                                                placeholder="Please specify your club name"
+                                                                value={formData.custom_club}
+                                                                onChange={(e) => setFormData({ ...formData, custom_club: e.target.value })}
+                                                                className="w-full bg-black/50 border border-white/10 rounded-xl py-3 px-4 text-white focus:outline-none focus:border-padel-green transition-all text-[11px]"
+                                                                required
+                                                            />
+                                                        </motion.div>
+                                                    )}
                                                 </div>
                                             </div>
 

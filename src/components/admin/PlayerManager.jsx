@@ -4,6 +4,8 @@ import { Trash2, Edit2, Plus, X, CheckCircle, AlertCircle, Search, Users, Credit
 import { motion, AnimatePresence } from 'framer-motion';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
+import { useClubs } from '../../hooks/useClubs';
+import SearchableSelect from '../SearchableSelect';
 import {
     PieChart,
     Pie,
@@ -45,6 +47,7 @@ const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', de
 
 const PlayerManager = () => {
     const [players, setPlayers] = useState([]);
+    const { clubs, loading: loadingClubs } = useClubs();
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
     const [currentPlayer, setCurrentPlayer] = useState(null);
@@ -82,6 +85,7 @@ const PlayerManager = () => {
         win_rate: '',
         image_url: '',
         home_club: '',
+        club_id: '',
         age_group: '',
         category: '',
         level: '',
@@ -357,7 +361,8 @@ const PlayerManager = () => {
             points: player.points ?? '',
             win_rate: player.win_rate || '',
             image_url: player.image_url || '',
-            home_club: player.home_club || '',
+            home_club: player.club_id ? '' : (player.home_club || ''),
+            club_id: player.club_id || '',
             age_group: player.age_group || '',
             category: player.category || '',
             level: player.level || '',
@@ -461,7 +466,8 @@ const PlayerManager = () => {
             points: parseInt(formData.points) || 0,
             win_rate: formData.win_rate,
             image_url: formData.image_url,
-            home_club: formData.home_club,
+            home_club: formData.club_id === 'Other' ? formData.home_club : (formData.club_id ? clubs.find(c => c.id === formData.club_id)?.name : ''),
+            club_id: formData.club_id === 'Other' ? null : (formData.club_id || null),
             age_group: formData.age_group,
             category: formData.category,
             level: formData.level,
@@ -1095,7 +1101,7 @@ const PlayerManager = () => {
 
                             <form onSubmit={handleSubmit} className="p-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                                    {['name', 'rank_label', 'points', 'win_rate', 'home_club', 'age_group', 'category', 'region', 'level', 'nationality', 'contact_number', 'email'].map(field => (
+                                    {['name', 'rank_label', 'points', 'win_rate', 'age_group', 'category', 'region', 'level', 'nationality', 'contact_number', 'email'].map(field => (
                                         <div key={field}>
                                             <label className="block text-gray-400 text-sm mb-1 capitalize">{field.replace('_', ' ')}</label>
                                             {field === 'category' ? (
@@ -1147,6 +1153,29 @@ const PlayerManager = () => {
                                             )}
                                         </div>
                                     ))}
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Home Club</label>
+                                        <div className="space-y-2">
+                                            <SearchableSelect
+                                                options={loadingClubs ? [{ value: '', label: 'Loading clubs...' }] : [...clubs.map(c => ({ value: c.id, label: c.name })), { value: 'Other', label: 'Other (Type your own)' }]}
+                                                value={formData.club_id || (formData.home_club ? 'Other' : '')}
+                                                onChange={(val) => {
+                                                    setFormData({ ...formData, club_id: val });
+                                                }}
+                                                placeholder="Search clubs..."
+                                            />
+                                            {(formData.club_id === 'Other' || (!formData.club_id && formData.home_club)) && (
+                                                <input
+                                                    type="text"
+                                                    value={formData.home_club}
+                                                    onChange={e => setFormData({ ...formData, home_club: e.target.value })}
+                                                    placeholder="Specify club name"
+                                                    className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none"
+                                                    required
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
                                     <div>
                                         <label className="block text-gray-400 text-sm mb-1">Gender</label>
                                         <select value={formData.gender || ''} onChange={e => setFormData({ ...formData, gender: e.target.value })} className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 text-white focus:border-padel-green outline-none">
