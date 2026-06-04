@@ -102,7 +102,8 @@ const AuthModal = ({ isOpen, onClose }) => {
         setNationality('');
         setIdNumber('');
         setBio('');
-        setHomeClub('');
+        setClubId('');
+        setCustomClub('');
         setSponsors('');
         setInstagramLink('');
         setAcceptTerms(false);
@@ -246,7 +247,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
         // Validation for Step 2: Padel Profile
         if (step === 2) {
-            if (!category || !homeClub || !bio) {
+            if (!category || !clubId || (clubId === 'Other' && !customClub) || !bio) {
                 setMessage({ type: 'error', text: 'Please fill in all required fields for Step 2.' });
                 return;
             }
