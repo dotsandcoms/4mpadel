@@ -3687,7 +3687,8 @@ const PlayerProfile = () => {
 
                                                                         const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                                         const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
-                                                                        const needsPayment = currentTab !== 'past' && event.db_id && (hasPending || event.payment_status === 'pending' || (!event.isPaid && (event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0))));
+                                                                        const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0);
+                                                                        const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
 
                                                                         return (
                                                                             <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>

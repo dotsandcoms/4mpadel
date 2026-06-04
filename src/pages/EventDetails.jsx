@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, Trophy, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, UserPlus, Trophy, AlertCircle } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -279,6 +279,7 @@ const EventDetails = () => {
     const [registeredDivisions, setRegisteredDivisions] = useState([]);
     const [selectedDivisions, setSelectedDivisions] = useState([]);
     const [divisionPartners, setDivisionPartners] = useState({});
+    const [initialPartners, setInitialPartners] = useState({});
     const [isCheckingReg, setIsCheckingReg] = useState(false);
     const [isDivisionsDropdownOpen, setIsDivisionsDropdownOpen] = useState(false);
 
@@ -625,24 +626,24 @@ const EventDetails = () => {
                     .select('id, name, email, paid_registration, license_type')
                     .in('name', partnerNames);
 
-                if (partnerProfiles && partnerProfiles.length > 0) {
-                    setDivisionPartners(prev => {
-                        const next = { ...prev };
-                        for (const [div, pName] of Object.entries(divPartnersMap)) {
-                            const pProf = partnerProfiles.find(p => p.name.toLowerCase() === pName.toLowerCase());
-                            if (pProf && !next[div]?.partnerProfile) {
-                                next[div] = {
-                                    ...next[div],
-                                    partnerName: pProf.name,
-                                    partnerProfile: pProf,
-                                    payForPartner: false,
-                                    partnerLicenseChoice: 'temporary'
-                                };
-                            }
+                setDivisionPartners(prev => {
+                    const next = { ...prev };
+                    for (const [div, pName] of Object.entries(divPartnersMap)) {
+                        const pProf = partnerProfiles?.find(p => p.name.toLowerCase() === pName.toLowerCase());
+                        if (!next[div]?.partnerProfile && !next[div]?.partnerName) {
+                            next[div] = {
+                                ...next[div],
+                                hasPartner: true,
+                                partnerName: pProf ? pProf.name : pName,
+                                partnerProfile: pProf || null,
+                                payForPartner: false,
+                                partnerLicenseChoice: 'temporary'
+                            };
                         }
-                        return next;
-                    });
-                }
+                    }
+                    setInitialPartners(next);
+                    return next;
+                });
             }
 
             // Auto-select all unpaid registered divisions
@@ -1820,7 +1821,7 @@ const EventDetails = () => {
                                         className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                     >
-                                        Pay Now
+                                        Registered
                                     </button>
                                 )}
                             </div>
@@ -1836,7 +1837,7 @@ const EventDetails = () => {
                                     className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
                                     style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                 >
-                                    Pay Now
+                                    Registered
                                 </button>
                             )}
                         </div>
@@ -2483,13 +2484,14 @@ const EventDetails = () => {
                                                                             if (isTeam) {
                                                                                 return (
                                                                                     <div key={pIdx} className="px-6 py-4">
-                                                                                        <div className="flex items-center justify-between mb-3">
-                                                                                            <h4 className="text-sm font-black text-[#0F172A] uppercase">{p.Name}</h4>
-                                                                                            <div className="flex gap-2">
-                                                                                                {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                                {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                        {(rank || seed) && (
+                                                                                            <div className="flex justify-end mb-3">
+                                                                                                <div className="flex gap-2">
+                                                                                                    {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                                    {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                                </div>
                                                                                             </div>
-                                                                                        </div>
+                                                                                        )}
                                                                                         <div className="flex flex-wrap gap-2">
                                                                                             {p.Players.map((player, idx) => (
                                                                                                 <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
@@ -2845,7 +2847,9 @@ const EventDetails = () => {
                                 <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                     <h3 className="text-white font-bold text-lg">
                                         {regStep === 1 
-                                            ? (isRegistered ? `${event?.event_name || 'Event'} Payment` : `Registration for ${event?.event_name || 'Event'}`)
+                                            ? (calculateTotalAmount() > 0 
+                                                ? `${event?.event_name || 'Event'} - Payment` 
+                                                : (isRegistered ? `${event?.event_name || 'Event'} - Registered` : `Registration for ${event?.event_name || 'Event'}`))
                                             : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
                                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
@@ -3261,19 +3265,48 @@ const EventDetails = () => {
                                                                                     <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
                                                                                 </div>
                                                                                 <div className="mt-2 pt-2 border-t border-white/5 space-y-3">
-                                                                                    {!pProf ? (
+                                                                                    {!pState.hasPartner ? (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                setDivisionPartners(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [div]: { ...prev[div], hasPartner: true }
+                                                                                                }));
+                                                                                            }}
+                                                                                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-white/20 text-gray-400 hover:text-white hover:border-padel-green/50 hover:bg-padel-green/5 transition-all text-xs font-bold tracking-wider"
+                                                                                        >
+                                                                                            <UserPlus size={14} /> Add a Partner
+                                                                                        </button>
+                                                                                    ) : !pProf ? (
                                                                                         <div className="relative">
-                                                                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                                                            <input
-                                                                                                type="text"
-                                                                                                value={pState.partnerName || ''}
-                                                                                                onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
-                                                                                                autoComplete="off"
-                                                                                                className={`w-full bg-black/40 border ${
-                                                                                                    pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
-                                                                                                } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
-                                                                                                placeholder={`Search partner for ${div}...`}
-                                                                                            />
+                                                                                            <div className="flex justify-between items-center mb-2 px-1">
+                                                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Partner Search</span>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        setDivisionPartners(prev => ({
+                                                                                                            ...prev,
+                                                                                                            [div]: { ...prev[div], hasPartner: false, partnerName: '', partnerProfile: null, payForPartner: false }
+                                                                                                        }));
+                                                                                                    }}
+                                                                                                    className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider"
+                                                                                                >
+                                                                                                    Remove
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div className="relative">
+                                                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    value={pState.partnerName || ''}
+                                                                                                    onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
+                                                                                                    autoComplete="off"
+                                                                                                    className={`w-full bg-black/40 border ${
+                                                                                                        pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
+                                                                                                    } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
+                                                                                                    placeholder={`Search partner for ${div}...`}
+                                                                                                />
                                                                                             {pState.isLookingUpPartner && (
                                                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                                                                                     <Loader className="w-3 h-3 animate-spin text-padel-green" />
@@ -3297,6 +3330,7 @@ const EventDetails = () => {
                                                                                                     </div>
                                                                                                 </div>
                                                                                             )}
+                                                                                            </div>
                                                                                         </div>
                                                                                     ) : (
                                                                                         <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl p-3">
@@ -3316,27 +3350,31 @@ const EventDetails = () => {
                                                                                                     <X className="w-3 h-3" />
                                                                                                 </button>
                                                                                             </div>
-                                                                                            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                                                                                                <div className="flex items-center gap-2">
-                                                                                                    <CreditCard className="w-3 h-3 text-white/50" />
-                                                                                                    <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner?</span>
-                                                                                                </div>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartner: !pState.payForPartner } }))}
-                                                                                                    className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-slate-700'}`}
-                                                                                                >
-                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
-                                                                                                </button>
-                                                                                            </div>
-                                                                                            {pState.payForPartner && !pProf.paid_registration && (
-                                                                                                <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
-                                                                                                    <span className="text-[9px] font-bold text-white uppercase">License Choice</span>
-                                                                                                    <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
-                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
-                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                            {getEntryFeeForCategory(div) > 0 && (
+                                                                                                <>
+                                                                                                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                        <div className="flex items-center gap-2">
+                                                                                                            <CreditCard className="w-3 h-3 text-white/50" />
+                                                                                                            <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner?</span>
+                                                                                                        </div>
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartner: !pState.payForPartner } }))}
+                                                                                                            className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-slate-700'}`}
+                                                                                                        >
+                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                        </button>
                                                                                                     </div>
-                                                                                                </div>
+                                                                                                    {pState.payForPartner && !pProf.paid_registration && (
+                                                                                                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                            <span className="text-[9px] font-bold text-white uppercase">License Choice</span>
+                                                                                                            <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
+                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </>
                                                                                             )}
                                                                                         </div>
                                                                                     )}
@@ -3423,14 +3461,34 @@ const EventDetails = () => {
                                                                     <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={calculateTotalAmount() > 0 ? handlePayNow : handleRegisterOnly}
-                                                                disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
-                                                                className="h-16 md:h-14 px-12 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0"
-                                                            >
-                                                                <span>{calculateTotalAmount() > 0 ? 'Pay Now' : 'Register Now'}</span>
-                                                            </button>
+                                                            {(() => {
+                                                                const totalAmt = calculateTotalAmount();
+                                                                const hasNewDivisions = selectedDivisions.some(div => !registeredDivisions.includes(div));
+                                                                const hasPartnerChanges = selectedDivisions.some(div => {
+                                                                    const current = divisionPartners[div]?.partnerName?.trim().toLowerCase() || '';
+                                                                    const initial = initialPartners[div]?.partnerName?.trim().toLowerCase() || '';
+                                                                    return current !== initial;
+                                                                });
+                                                                const needsUpdate = hasNewDivisions || hasPartnerChanges;
+                                                                const isConfirmedWithoutChanges = !needsUpdate && isRegistered && totalAmt === 0;
+
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
+                                                                        disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
+                                                                        className={`h-16 md:h-14 px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-gray-700/50 text-white/50 border border-white/10' : 'bg-padel-green text-black hover:bg-white hover:scale-[1.03] active:scale-95 shadow-2xl shadow-padel-green/30'}`}
+                                                                    >
+                                                                        <span>
+                                                                            {isConfirmedWithoutChanges 
+                                                                                ? 'Registration Confirmed' 
+                                                                                : totalAmt > 0 
+                                                                                    ? 'Pay Now' 
+                                                                                    : (isRegistered ? (needsUpdate ? 'Update Registration' : 'Register Now') : 'Register Now')}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 </div>
