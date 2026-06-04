@@ -60,6 +60,92 @@ serve(async (req) => {
           image = images[0].image_url;
         }
       }
+    } else if (url.searchParams.get('path')) {
+      const pathValue = url.searchParams.get('path');
+      const segments = pathValue.split('/').filter(Boolean);
+      const rootPath = segments[0] || '';
+      
+      const id = url.searchParams.get('id');
+      
+      const searchParams = new URLSearchParams(url.search);
+      searchParams.delete('path');
+      const searchStr = searchParams.toString();
+      redirectUrl = `https://4mpadel.co.za/${segments.join('/')}${searchStr ? '?' + searchStr : ''}`;
+
+      switch (rootPath) {
+        case 'players':
+          if (id) {
+            const { data: player } = await supabase
+              .from('players')
+              .select('name, category, skill_rating, image_url')
+              .eq('id', id)
+              .single();
+            if (player) {
+              title = `${player.name} | 4M Padel Players`;
+              description = `Division: ${player.category || 'Open'} | Skill: ${player.skill_rating || '-'}`;
+              if (player.image_url) image = player.image_url;
+            } else {
+              title = "Players | 4M Padel";
+              description = "Meet the elite talent driving the sport forward.";
+            }
+          } else {
+            title = "Players | 4M Padel";
+            description = "Meet the elite talent driving the sport forward. From rising tournament stars to seasoned champions.";
+          }
+          break;
+        case 'rankings':
+          title = "Rankings | 4M Padel";
+          description = "Official 4M Padel rankings and standings.";
+          break;
+        case 'calendar':
+          title = "Tournament Calendar | 4M Padel";
+          description = "Upcoming Padel tournaments and events at 4M Padel.";
+          break;
+        case 'gallery':
+          title = "Gallery | 4M Padel";
+          description = "Official tournament action shots and media highlights.";
+          break;
+        case 'blog':
+          if (segments[1]) {
+             const { data: post } = await supabase
+               .from('blog_posts')
+               .select('title, excerpt, cover_image')
+               .eq('slug', segments[1])
+               .single();
+             if (post) {
+               title = `${post.title} | 4M Padel`;
+               description = post.excerpt || description;
+               if (post.cover_image) image = post.cover_image;
+             }
+          } else {
+             title = "Blog | 4M Padel";
+             description = "Latest news, updates, and articles from 4M Padel.";
+          }
+          break;
+        case 'academy':
+          if (segments[1] === 'coaches') {
+            title = "Approved Coaches | 4M Padel Academy";
+            description = "Find and connect with approved Padel coaches.";
+          } else if (segments[1] === 'videos') {
+            title = "Coaching Videos | 4M Padel Academy";
+            description = "Improve your game with our library of Padel coaching videos.";
+          } else {
+            title = "Academy | 4M Padel";
+          }
+          break;
+        case 'tournaments':
+          title = "Tournaments | 4M Padel";
+          description = "Join and compete in 4M Padel tournaments.";
+          break;
+        case 'contact':
+          title = "Contact Us | 4M Padel";
+          description = "Get in touch with the 4M Padel team.";
+          break;
+        case 'profile':
+          title = "Player Profile | 4M Padel";
+          description = "View player statistics and match history.";
+          break;
+      }
     }
   } catch (err) {
     console.error("SEO Preview Error:", err);
