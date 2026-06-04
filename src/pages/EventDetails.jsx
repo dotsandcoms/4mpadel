@@ -2848,8 +2848,8 @@ const EventDetails = () => {
                                     <h3 className="text-white font-bold text-lg">
                                         {regStep === 1 
                                             ? (calculateTotalAmount() > 0 
-                                                ? `${event?.event_name || 'Event'} - Payment` 
-                                                : (isRegistered ? `${event?.event_name || 'Event'} - Registered` : `Registration for ${event?.event_name || 'Event'}`))
+                                                ? 'Payment' 
+                                                : (isRegistered ? 'Registered' : `Registration for ${event?.event_name || 'Event'}`))
                                             : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
                                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
