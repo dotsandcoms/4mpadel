@@ -12,9 +12,10 @@ import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
 import EventManagement from '../components/admin/EventManagement';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
+import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Menu, ShieldAlert, ExternalLink, Home } from 'lucide-react';
+import { Menu, ShieldAlert, ExternalLink, Home, Bell, MapPin, DollarSign, UserPlus, CalendarPlus } from 'lucide-react';
 
 const Admin = () => {
     const [session, setSession] = useState(null);
@@ -24,9 +25,12 @@ const Admin = () => {
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [player, setPlayer] = useState(null);
+    const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
     const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
     const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(targetEmail);
+    const { notifications } = useAdminFeedNotifications();
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -42,6 +46,25 @@ const Admin = () => {
 
         return () => subscription.unsubscribe();
     }, []);
+
+    useEffect(() => {
+        const fetchPlayerData = async () => {
+            if (!targetEmail) {
+                setPlayer(null);
+                return;
+            }
+
+            const { data } = await supabase
+                .from('players')
+                .select('id, name, email, rankedin_id, image_url')
+                .ilike('email', targetEmail)
+                .maybeSingle();
+
+            setPlayer(data);
+        };
+
+        fetchPlayerData();
+    }, [targetEmail]);
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -144,6 +167,71 @@ const Admin = () => {
                     <span className="text-xl font-bold bg-gradient-to-r from-white to-gray-500 bg-clip-text text-transparent">4M Admin</span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* Mobile Notifications Bell */}
+                    {session && permissions?.role === 'super_admin' && (
+                        <div className="relative">
+                            <button
+                                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                                className="p-2 text-gray-400 hover:text-white rounded-full transition-colors relative"
+                            >
+                                <motion.div
+                                    animate={notifications.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                                    transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
+                                >
+                                    <Bell size={20} />
+                                </motion.div>
+                                {notifications.length > 0 && (
+                                    <span className="absolute top-1 right-1 flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-padel-green opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-padel-green"></span>
+                                    </span>
+                                )}
+                            </button>
+
+                            <AnimatePresence>
+                                {isNotificationsOpen && (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: 10 }}
+                                        className="absolute top-full right-0 mt-2 w-72 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
+                                    >
+                                        <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                                            <h3 className="font-bold text-sm text-white">Admin Activity</h3>
+                                            {notifications.length > 0 && (
+                                                <span className="bg-padel-green/20 text-padel-green text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                                                    {notifications.length} Recent
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                            {notifications.map(item => (
+                                                <a
+                                                    key={item.id}
+                                                    href={item.link}
+                                                    className="block p-4 transition-colors border-b last:border-0 hover:bg-white/5 border-white/5 flex items-start gap-3"
+                                                >
+                                                    <div className="mt-1 bg-white/5 p-2 rounded-lg shrink-0">
+                                                        {item.type === 'payment' && <span className="w-4 h-4 flex items-center justify-center font-bold text-[14px] text-padel-green">R</span>}
+                                                        {item.type === 'player' && <UserPlus className="w-4 h-4 text-blue-400" />}
+                                                        {item.type === 'event' && <CalendarPlus className="w-4 h-4 text-purple-400" />}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold mb-1 text-white">{item.title}</p>
+                                                        <p className="text-xs text-gray-400">{item.subtitle}</p>
+                                                        <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-gray-500">{item.timeAgo}</p>
+                                                    </div>
+                                                </a>
+                                            ))}
+                                            {notifications.length === 0 && (
+                                                <div className="p-4 text-center text-gray-400 text-sm">No recent activity</div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    )}
                     <a
                         href="/"
                         target="_blank"
@@ -153,6 +241,7 @@ const Admin = () => {
                         <Home size={18} />
                         <span className="hidden xs:inline">Live Site</span>
                     </a>
+
                     <button
                         onClick={() => setIsSidebarOpen(true)}
                         className="p-2 text-gray-400 hover:text-white"
@@ -169,12 +258,79 @@ const Admin = () => {
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 permissions={permissions}
+                player={player}
+                session={session}
             />
 
             <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
                 <div className="max-w-7xl mx-auto">
                     {/* Desktop Header Actions */}
-                    <div className="hidden lg:flex justify-end mb-8">
+                    <div className="hidden lg:flex justify-end mb-8 gap-4 items-center">
+                        {/* Desktop Notifications Bell */}
+                        {session && permissions?.role === 'super_admin' && (
+                            <div className="relative">
+                                <button
+                                    onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                                    className="p-3 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-full transition-all relative group"
+                                >
+                                    <motion.div
+                                        animate={notifications.length > 0 ? { rotate: [0, -15, 15, -15, 15, 0] } : {}}
+                                        transition={{ duration: 0.6, repeat: Infinity, repeatDelay: 3 }}
+                                    >
+                                        <Bell className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                                    </motion.div>
+                                    {notifications.length > 0 && (
+                                        <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-padel-green opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-padel-green"></span>
+                                        </span>
+                                    )}
+                                </button>
+
+                                <AnimatePresence>
+                                    {isNotificationsOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: 10 }}
+                                            className="absolute top-full right-0 mt-2 w-80 bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl z-[9999] overflow-hidden"
+                                        >
+                                            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                                                <h3 className="font-bold text-sm text-white">Admin Activity</h3>
+                                                {notifications.length > 0 && (
+                                                    <span className="bg-padel-green/20 text-padel-green text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full">
+                                                        {notifications.length} Recent
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="max-h-[300px] overflow-y-auto custom-scrollbar">
+                                                {notifications.map(item => (
+                                                    <a
+                                                        key={item.id}
+                                                        href={item.link}
+                                                        className="block p-4 transition-colors border-b last:border-0 hover:bg-white/5 border-white/5 flex items-start gap-3"
+                                                    >
+                                                        <div className="mt-1 bg-white/5 p-2 rounded-lg shrink-0">
+                                                            {item.type === 'payment' && <span className="w-4 h-4 flex items-center justify-center font-bold text-[14px] text-padel-green">R</span>}
+                                                            {item.type === 'player' && <UserPlus className="w-4 h-4 text-blue-400" />}
+                                                            {item.type === 'event' && <CalendarPlus className="w-4 h-4 text-purple-400" />}
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold mb-1 text-white">{item.title}</p>
+                                                            <p className="text-xs text-gray-400">{item.subtitle}</p>
+                                                            <p className="text-[10px] mt-2 uppercase tracking-widest font-bold text-gray-500">{item.timeAgo}</p>
+                                                        </div>
+                                                    </a>
+                                                ))}
+                                                {notifications.length === 0 && (
+                                                    <div className="p-4 text-center text-gray-400 text-sm">No recent activity</div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        )}
                         <a
                             href="/"
                             target="_blank"
