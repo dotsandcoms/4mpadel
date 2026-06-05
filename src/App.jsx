@@ -39,7 +39,7 @@ import SearchPalette from './components/SearchPalette';
 
 import MembersOnlyModal from './components/MembersOnlyModal';
 import MobileBottomNav from './components/MobileBottomNav';
-import PwaInstallPrompt from './components/PwaInstallPrompt';
+
 import { requiresAuth } from './utils/routeAccess';
 
 function AppContent() {
@@ -163,7 +163,7 @@ function AppContent() {
         authLoading={loading}
         onRestrictedNav={handleRestrictedNav}
       />
-      <PwaInstallPrompt />
+
     </div>
   );
 }

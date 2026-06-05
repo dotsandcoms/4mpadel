@@ -912,7 +912,7 @@ const EventDetails = () => {
 
             setFetchingParticipants(true);
             try {
-                let divisions = [...playerDivisions];
+                let divisions = [];
                 let participantsMap = {};
 
                 // 1. Fetch from Rankedin if rId exists
@@ -1044,7 +1044,7 @@ const EventDetails = () => {
         };
 
         fetchParticipantsData();
-    }, [event, getTournamentParticipants, getTournamentPlayerTabs, playerDivisions]);
+    }, [event, getTournamentParticipants, getTournamentPlayerTabs]);
 
     useEffect(() => {
         const fetchFourMPlayers = async () => {
@@ -1156,13 +1156,17 @@ const EventDetails = () => {
     }, [event]);
 
     const getEntryFeeForCategory = (category) => {
-        if (event?.category_fees && event.category_fees[category]) {
+        if (!event?.allow_payments) return 0;
+
+        if (event?.category_fees && event.category_fees[category] !== undefined) {
             return Number(event.category_fees[category]);
         }
         return Number(event?.entry_fee || 0);
     };
 
     const calculateTotalAmount = () => {
+        if (!event?.allow_payments) return 0;
+
         let entryFeesTotal = 0;
         let partnerTotal = 0;
 
@@ -1848,7 +1852,7 @@ const EventDetails = () => {
     );
 
     const needsRegistration = !isRegistered;
-    const needsPayment = (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
+    const needsPayment = event?.allow_payments && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
     const showReadyToCompete = !isEventPassed;
 
     const readyToCompeteBlock = showReadyToCompete && (
@@ -2063,7 +2067,7 @@ const EventDetails = () => {
                                                     Register Now
                                                 </button>
                                             )}
-                                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                            {event?.allow_payments && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
                                                 <button
                                                     onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                     className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
@@ -3458,7 +3462,9 @@ const EventDetails = () => {
                                                                 <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
                                                                 <div className="space-y-1">
                                                                     <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
-                                                                    <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                    {event?.allow_payments && (
+                                                                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                             {(() => {
