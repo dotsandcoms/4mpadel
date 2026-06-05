@@ -41,6 +41,6 @@
       ],
       "destination": "/api/seo-preview?path=:path*"
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!assets/).*)", "destination": "/index.html" }
   ]
 }
