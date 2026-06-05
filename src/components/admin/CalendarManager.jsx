@@ -134,7 +134,8 @@ const CalendarManager = () => {
         sponsor_logos: [],
         category_fees: {},
         is_visible: true,
-        finance_managed: false
+        finance_managed: false,
+        allow_payments: false
     });
 
     useEffect(() => {
@@ -431,7 +432,8 @@ const CalendarManager = () => {
             sponsor_logos: [],
             category_fees: {},
             is_visible: true,
-            finance_managed: false
+            finance_managed: false,
+            allow_payments: false
         });
     }
 
@@ -533,7 +535,8 @@ const CalendarManager = () => {
             sponsor_logos: event.sponsor_logos || [],
             category_fees: event.category_fees || {},
             is_visible: event.is_visible !== false, // Default to true if undefined
-            finance_managed: event.finance_managed || false
+            finance_managed: event.finance_managed || false,
+            allow_payments: event.allow_payments || false
         });
         setIsModalOpen(true);
     };
@@ -1367,6 +1370,19 @@ const CalendarManager = () => {
                                             <label htmlFor="finance_managed" className="text-sm font-bold text-white uppercase cursor-pointer flex flex-col">
                                                 <span>Finance Manage</span>
                                                 <span className="text-[10px] text-padel-green font-normal">Show in Event Mgmt</span>
+                                            </label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="checkbox"
+                                                id="allow_payments"
+                                                name="allow_payments"
+                                                checked={formData.allow_payments}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-padel-green focus:ring-padel-green"
+                                            />
+                                            <label htmlFor="allow_payments" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Allow Payments
                                             </label>
                                         </div>
                                         <div className="flex items-center gap-2">

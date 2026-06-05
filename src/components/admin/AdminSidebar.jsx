@@ -1,9 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
-const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, permissions }) => {
+const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, permissions, player, session }) => {
     const allMenuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
         { id: 'players', label: 'Players', icon: Users },
@@ -89,7 +89,28 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, perm
                     })}
                 </nav>
 
-                <div className="p-4 border-t border-white/10 space-y-1">
+                <div className="p-4 border-t border-white/10 space-y-1 bg-black/20">
+                    {session && (
+                        <div className="w-full flex items-center gap-3 px-4 py-3 bg-white/5 border border-white/10 rounded-xl mb-2">
+                            {player?.image_url ? (
+                                <img src={player.image_url} alt={player?.name} className="w-10 h-10 rounded-xl object-cover border border-white/20 shrink-0" />
+                            ) : (
+                                <div className="w-10 h-10 rounded-xl bg-padel-green/20 border border-padel-green/30 flex items-center justify-center text-padel-green text-sm font-black uppercase shrink-0">
+                                    {player?.name ? player.name.charAt(0) : 'A'}
+                                </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-white uppercase tracking-wider truncate">
+                                    {player?.name || session.user.email}
+                                </p>
+                                {player?.rankedin_id && (
+                                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-0.5 truncate">
+                                        ID: {player.rankedin_id}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     <a
                         href="/"
                         target="_blank"

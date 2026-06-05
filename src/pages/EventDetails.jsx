@@ -4,11 +4,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, Trophy, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, UserPlus, Trophy, AlertCircle } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
+import { sendEmail } from '../utils/emails';
 
 const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
     .trim()
@@ -230,6 +231,23 @@ const EventDetails = () => {
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
 
+    const totalPlayersCount = useMemo(() => {
+        if (!participants || Object.keys(participants).length === 0) return event?.registered_players || 0;
+        const uniqueNames = new Set();
+        Object.values(participants).forEach(divisionPlayers => {
+            if (!divisionPlayers) return;
+            divisionPlayers.forEach(item => {
+                const p = item.Participant || {};
+                if (p.Players) {
+                    p.Players.forEach(pl => { if (pl.Name) uniqueNames.add(pl.Name.toLowerCase()); });
+                }
+                if (p.FirstPlayer?.Name) uniqueNames.add(p.FirstPlayer.Name.toLowerCase());
+                if (p.SecondPlayer?.Name) uniqueNames.add(p.SecondPlayer.Name.toLowerCase());
+            });
+        });
+        return Math.max(uniqueNames.size, event?.registered_players || 0);
+    }, [participants, event?.registered_players]);
+
     const isEventPassed = useMemo(() => {
         if (!event) return false;
         const compareDate = event.end_date || event.start_date;
@@ -260,7 +278,16 @@ const EventDetails = () => {
     const [paidDivisions, setPaidDivisions] = useState([]);
     const [registeredDivisions, setRegisteredDivisions] = useState([]);
     const [selectedDivisions, setSelectedDivisions] = useState([]);
+    const [divisionPartners, setDivisionPartners] = useState({});
+    const [initialPartners, setInitialPartners] = useState({});
     const [isCheckingReg, setIsCheckingReg] = useState(false);
+    const [isDivisionsDropdownOpen, setIsDivisionsDropdownOpen] = useState(false);
+
+    const availableDivisions = useMemo(() => {
+        if (event?.allowed_divisions?.length) return event.allowed_divisions;
+        if (event?.category_fees) return Object.keys(event.category_fees);
+        return [];
+    }, [event]);
 
     const [formData, setFormData] = useState({
         full_name: '',
@@ -491,18 +518,25 @@ const EventDetails = () => {
             const userRID = profile?.rankedin_id;
 
             // 1. Check Registration & Payment Status (Local DB)
+            let orConditions = [`email.ilike.${userEmail}`];
+            if (profile?.id) orConditions.push(`profile_id.eq.${profile.id}`);
+            if (userName) orConditions.push(`full_name.ilike.%${userName}%`);
+
             const { data: localParts } = await supabase
                 .from('tournament_participants')
                 .select('class_name, is_paid')
                 .eq('event_id', event.id)
-                .or(profile?.id ? `profile_id.eq.${profile.id},email.ilike.${userEmail}` : `email.ilike.${userEmail}`);
+                .or(orConditions.join(','));
 
             // 1b. Check legacy event_registrations table
+            let legacyOr = [`email.ilike.${userEmail}`];
+            if (userName) legacyOr.push(`partner_name.ilike.%${userName}%`);
+            
             const { data: legacyRegs } = await supabase
                 .from('event_registrations')
-                .select('division, payment_status')
+                .select('division, payment_status, partner_name, full_name, email')
                 .eq('event_id', event.id)
-                .ilike('email', userEmail);
+                .or(legacyOr.join(','));
 
             // 1c. Check Direct Payments table
             const { data: directPayments } = await supabase
@@ -519,29 +553,40 @@ const EventDetails = () => {
                 ...(directPayments || []).map(p => (p.metadata?.division || '').trim())
             ].filter(Boolean)));
 
-            const unpaidLocalDivs = (localParts || [])
-                .filter(p => !p.is_paid)
-                .map(p => (p.class_name || '').trim());
+            const unpaidLocalDivs = [
+                ...(localParts || []).filter(p => !p.is_paid).map(p => (p.class_name || '').trim()),
+                ...(legacyRegs || []).filter(r => r.payment_status !== 'paid').map(r => (r.division || '').trim())
+            ];
 
             setPaidDivisions(paidDivs);
             setIsPaid(paidDivs.length > 0);
 
             // 2. Check Registration Status (Rankedin Live Player List fallback)
             const regDivs = [...unpaidLocalDivs];
+            const divPartnersMap = {};
+
+            // Get local partners from legacyRegs
+            (legacyRegs || []).forEach(reg => {
+                if (reg.partner_name && (reg.division || '').trim()) {
+                    const isPartner = userName && reg.partner_name.toLowerCase().includes(userName);
+                    divPartnersMap[reg.division.trim()] = isPartner ? reg.full_name.trim() : reg.partner_name.trim();
+                }
+            });
 
             if (rId && regDivs.length === 0) {
                 setIsCheckingReg(true);
                 try {
                     const divisions = await getTournamentPlayerTabs(rId);
-                    // ... scraper logic follows if needed, but we already have local ones
                     await Promise.all(divisions.map(async (cls) => {
                         const teams = await getTournamentParticipants(rId, cls.Id);
+                        const divName = (cls.Name || '').trim();
+                        
                         const isMatch = teams.some(t => {
                             const p = t.Participant || t;
                             const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
                             if (players.length === 0) players.push(p);
 
-                            return players.some(player => {
+                            const userMatch = players.find(player => {
                                 const pEmail = (player.Email || '').toLowerCase().trim();
                                 const pName = (player.Name || player.FullName || '').toLowerCase().trim();
                                 const pRID = player.RankedinId?.toString() || player.Id?.toString();
@@ -550,9 +595,17 @@ const EventDetails = () => {
                                     (userRID && pRID === userRID?.toString()) ||
                                     (userName && pName === userName);
                             });
+
+                            if (userMatch) {
+                                const partnerMatch = players.find(player => player !== userMatch);
+                                if (partnerMatch) {
+                                    divPartnersMap[divName] = (partnerMatch.Name || partnerMatch.FullName || '').trim();
+                                }
+                                return true;
+                            }
+                            return false;
                         });
 
-                        const divName = (cls.Name || '').trim();
                         if (isMatch && !regDivs.includes(divName)) regDivs.push(divName);
                     }));
                 } catch (e) {
@@ -565,9 +618,38 @@ const EventDetails = () => {
             setRegisteredDivisions(Array.from(new Set(regDivs)));
             setIsRegistered(regDivs.length > 0);
 
-            // Default select the first division if only one found and not yet paid
-            if (regDivs.length === 1 && !paidDivs.includes(regDivs[0])) {
-                setSelectedDivisions([regDivs[0]]);
+            // Fetch profiles for any found partners
+            const partnerNames = Object.values(divPartnersMap).filter(Boolean);
+            if (partnerNames.length > 0) {
+                const { data: partnerProfiles } = await supabase
+                    .from('players')
+                    .select('id, name, email, paid_registration, license_type')
+                    .in('name', partnerNames);
+
+                setDivisionPartners(prev => {
+                    const next = { ...prev };
+                    for (const [div, pName] of Object.entries(divPartnersMap)) {
+                        const pProf = partnerProfiles?.find(p => p.name.toLowerCase() === pName.toLowerCase());
+                        if (!next[div]?.partnerProfile && !next[div]?.partnerName) {
+                            next[div] = {
+                                ...next[div],
+                                hasPartner: true,
+                                partnerName: pProf ? pProf.name : pName,
+                                partnerProfile: pProf || null,
+                                payForPartner: false,
+                                partnerLicenseChoice: 'temporary'
+                            };
+                        }
+                    }
+                    setInitialPartners(next);
+                    return next;
+                });
+            }
+
+            // Auto-select all unpaid registered divisions
+            const unpaidRegDivs = Array.from(new Set(regDivs)).filter(d => !paidDivs.includes(d));
+            if (unpaidRegDivs.length > 0) {
+                setSelectedDivisions(unpaidRegDivs);
             }
         };
         checkStatus();
@@ -697,11 +779,7 @@ const EventDetails = () => {
                 if (error) throw error;
                 setEvent(data);
 
-                // Auto-open registration modal if URL param is present
-                const params = new URLSearchParams(window.location.search);
-                if (params.get('register') === 'true') {
-                    setIsModalOpen(true);
-                }
+                // Removed auto-open registration modal
             } catch (error) {
                 console.error('Error fetching event details:', error);
             } finally {
@@ -829,26 +907,73 @@ const EventDetails = () => {
 
     useEffect(() => {
         const fetchParticipantsData = async () => {
-            if (activeTab !== 'players' || !event) return;
+            if (!event) return;
             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-            if (!rId) return;
 
             setFetchingParticipants(true);
             try {
-                // First get the divisions (tabs) specifically from the players view
-                let divisions = playerDivisions;
-                if (divisions.length === 0) {
-                    divisions = await getTournamentPlayerTabs(rId);
-                    setPlayerDivisions(divisions);
+                let divisions = [];
+                let participantsMap = {};
+
+                // 1. Fetch from Rankedin if rId exists
+                if (rId) {
+                    if (divisions.length === 0) {
+                        const fetchedDivs = await getTournamentPlayerTabs(rId);
+                        if (fetchedDivs) divisions = fetchedDivs;
+                    }
+                    if (divisions.length > 0) {
+                        for (const cls of divisions) {
+                            const data = await getTournamentParticipants(rId, cls.Id);
+                            participantsMap[cls.Id] = data || [];
+                        }
+                    }
                 }
 
-                if (divisions.length > 0) {
-                    const participantsMap = {};
-                    for (const cls of divisions) {
-                        const data = await getTournamentParticipants(rId, cls.Id);
-                        participantsMap[cls.Id] = data;
-                    }
-                    setParticipants(prev => ({ ...prev, ...participantsMap }));
+                // 2. Fetch from local event_registrations
+                const { data: localRegs } = await supabase.from('event_registrations').select('*').eq('event_id', event.id);
+
+                if (localRegs && localRegs.length > 0) {
+                    localRegs.forEach(reg => {
+                        // Find division by name, case-insensitive
+                        let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
+                        if (!div) {
+                            div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
+                            divisions.push(div);
+                        }
+                        
+                        if (!participantsMap[div.Id]) {
+                            participantsMap[div.Id] = [];
+                        }
+
+                        // Check if this player is already in the Rankedin list for this division
+                        const existingInRankedin = participantsMap[div.Id].some(item => {
+                            const p = item.Participant || {};
+                            const pNames = [];
+                            if (p.Players) p.Players.forEach(pl => pNames.push((pl.Name || '').toLowerCase()));
+                            if (p.FirstPlayer) pNames.push((p.FirstPlayer.Name || '').toLowerCase());
+                            if (p.SecondPlayer) pNames.push((p.SecondPlayer.Name || '').toLowerCase());
+                            return pNames.includes(reg.full_name.toLowerCase());
+                        });
+
+                        if (!existingInRankedin) {
+                            const players = [{ Name: reg.full_name, Email: reg.email }];
+                            if (reg.partner_name) {
+                                players.push({ Name: reg.partner_name });
+                            }
+
+                            participantsMap[div.Id].push({
+                                Participant: {
+                                    Id: `local_${reg.id}`,
+                                    Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
+                                    Players: players
+                                }
+                            });
+                        }
+                    });
+                }
+
+                setPlayerDivisions(divisions);
+                setParticipants(prev => ({ ...prev, ...participantsMap }));
 
                     // Gather all player names and Rankedin IDs for bulk database query
                     const names = new Set();
@@ -911,7 +1036,6 @@ const EventDetails = () => {
                             setFourMPlayers(playerMap);
                         }
                     }
-                }
             } catch (err) {
                 console.error("Error fetching participants:", err);
             } finally {
@@ -920,7 +1044,7 @@ const EventDetails = () => {
         };
 
         fetchParticipantsData();
-    }, [activeTab, event, getTournamentParticipants, getTournamentPlayerTabs, playerDivisions]);
+    }, [event, getTournamentParticipants, getTournamentPlayerTabs]);
 
     useEffect(() => {
         const fetchFourMPlayers = async () => {
@@ -1032,27 +1156,39 @@ const EventDetails = () => {
     }, [event]);
 
     const getEntryFeeForCategory = (category) => {
-        if (event?.category_fees && event.category_fees[category]) {
+        if (!event?.allow_payments) return 0;
+
+        if (event?.category_fees && event.category_fees[category] !== undefined) {
             return Number(event.category_fees[category]);
         }
         return Number(event?.entry_fee || 0);
     };
 
     const calculateTotalAmount = () => {
-        let entryFeesTotal = selectedDivisions.reduce((sum, div) => sum + getEntryFeeForCategory(div), 0);
-        let total = entryFeesTotal;
+        if (!event?.allow_payments) return 0;
+
+        let entryFeesTotal = 0;
+        let partnerTotal = 0;
+
+        selectedDivisions.forEach(div => {
+            // Add base entry fee
+            entryFeesTotal += getEntryFeeForCategory(div);
+            
+            // Add partner costs for this division
+            const pState = divisionPartners[div];
+            if (pState && pState.partnerProfile && pState.payForPartner) {
+                partnerTotal += getEntryFeeForCategory(div);
+                if (!pState.partnerProfile.paid_registration) {
+                    partnerTotal += pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                }
+            }
+        });
+
+        let total = entryFeesTotal + partnerTotal;
 
         // Add Temp License or Full License fee if player doesn't have a valid license
         if (playerProfileData && !playerProfileData.paid_registration) {
             total += licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
-        }
-
-        // Add Partner costs if paying for them and partner registration is enabled
-        if (hasPartner && payForPartner && partnerProfile) {
-            total += entryFeesTotal; // Same divisions assumed for partners usually
-            if (!partnerProfile.paid_registration) {
-                total += partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
-            }
         }
 
         return total;
@@ -1090,27 +1226,30 @@ const EventDetails = () => {
     const handleInputChange = (e) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
-
-        if (name === 'partner_name') {
-            handlePartnerSearch(value);
-        }
     };
 
-    const handlePartnerSearch = (name) => {
+    const handlePartnerSearchForDivision = (division, name) => {
         if (searchTimeout) clearTimeout(searchTimeout);
 
-        // Immediate cleanup for better UX
-        setPartnerProfile(null);
-        setPartnerLookupError(null);
-        setPayForPartner(false);
+        setDivisionPartners(prev => {
+            const current = prev[division] || {};
+            return {
+                ...prev,
+                [division]: {
+                    ...current,
+                    partnerName: name,
+                    partnerProfile: null,
+                    partnerLookupError: null,
+                    payForPartner: false,
+                    partnerSearchResults: []
+                }
+            };
+        });
 
-        if (!name || name.length < 2) {
-            setPartnerSearchResults([]);
-            return;
-        }
+        if (!name || name.length < 2) return;
 
         const timeout = setTimeout(async () => {
-            setIsLookingUpPartner(true);
+            setDivisionPartners(prev => ({ ...prev, [division]: { ...prev[division], isLookingUpPartner: true } }));
             try {
                 const { data, error } = await supabase
                     .from('players')
@@ -1122,37 +1261,146 @@ const EventDetails = () => {
                     const enrichedData = data.map(player => {
                         if (player.license_type === 'temporary') {
                             const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
-                            return {
-                                ...player,
-                                paid_registration: hasTempForEvent ? player.paid_registration : false
-                            };
+                            return { ...player, paid_registration: hasTempForEvent ? player.paid_registration : false };
                         }
                         return player;
-                    });
-                    setPartnerSearchResults(enrichedData);
-                    setPartnerLookupError(null);
+                    }).filter(p => p.id !== playerProfileData?.id);
+                    
+                    setDivisionPartners(prev => ({
+                        ...prev,
+                        [division]: {
+                            ...prev[division],
+                            partnerSearchResults: enrichedData,
+                            partnerLookupError: enrichedData.length === 0 ? "Profile not found." : null,
+                            isLookingUpPartner: false
+                        }
+                    }));
                 } else {
-                    setPartnerSearchResults([]);
-                    setPartnerLookupError("Profile not found. Partner must register to be paid for.");
+                    setDivisionPartners(prev => ({
+                        ...prev,
+                        [division]: {
+                            ...prev[division],
+                            partnerSearchResults: [],
+                            partnerLookupError: "Profile not found. Partner must register to be paid for.",
+                            isLookingUpPartner: false
+                        }
+                    }));
                 }
             } catch (err) {
-                console.error("Partner lookup error:", err);
-            } finally {
-                setIsLookingUpPartner(false);
+                setDivisionPartners(prev => ({ ...prev, [division]: { ...prev[division], isLookingUpPartner: false } }));
             }
         }, 500);
         setSearchTimeout(timeout);
     };
 
-    const handleSelectPartner = (player) => {
-        setPartnerProfile(player);
-        setFormData(prev => ({ ...prev, partner_name: player.name }));
-        setPartnerSearchResults([]);
-        setPartnerLookupError(null);
+    const handleSelectPartnerForDivision = (division, player) => {
+        setDivisionPartners(prev => ({
+            ...prev,
+            [division]: {
+                ...prev[division],
+                partnerProfile: player,
+                partnerName: player.name,
+                partnerSearchResults: [],
+                partnerLookupError: null,
+                partnerLicenseChoice: 'temporary'
+            }
+        }));
+    };
+    
+    const handleSelectPartner = (player) => {};
+
+    const finalizeRegistrationEmailsAndSync = async (isPaidStatus) => {
+        // 1. Send Emails
+        for (const division of selectedDivisions) {
+            const part = divisionPartners[division] || {};
+            const partnerName = part.partnerProfile ? part.partnerProfile.name : part.partnerName || 'TBD';
+            const entryFee = getEntryFeeForCategory(division);
+            const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? entryFee : 0;
+            
+            try {
+                sendEmail(formData.email.trim(), 'event_entry', {
+                    playerName: formData.full_name,
+                    eventName: event.event_name,
+                    division: division,
+                    partnerName: partnerName,
+                    amount: isPaidStatus ? `R ${(entryFee + partnerEntryFee).toFixed(2)}` : 'R 0.00'
+                });
+            } catch (err) { console.error(err); }
+
+            if (part.hasPartner && part.partnerProfile?.email) {
+                try {
+                    sendEmail(part.partnerProfile.email.trim(), 'event_entry', {
+                        playerName: part.partnerProfile.name,
+                        eventName: event.event_name,
+                        division: division,
+                        partnerName: formData.full_name,
+                        amount: isPaidStatus ? 'R 0.00 (Paid by Partner)' : 'R 0.00'
+                    });
+                } catch (err) { console.error(err); }
+            }
+        }
+
+        // 2. Sync / Insert to tournament_participants
+        const insertParticipant = async (pEmail, pName, targetDivs) => {
+            let pId = null;
+            let finalEmail = pEmail;
+            
+            if (pEmail) {
+                const { data: pData } = await supabase.from('players').select('id, email').ilike('email', pEmail).maybeSingle();
+                if (pData) {
+                    pId = pData.id;
+                    finalEmail = pData.email;
+                }
+            } else if (pName) {
+                const { data: pData } = await supabase.from('players').select('id, email').ilike('name', pName).maybeSingle();
+                if (pData) {
+                    pId = pData.id;
+                    finalEmail = pData.email;
+                }
+            }
+
+            for (const div of targetDivs) {
+                const { data: existing } = await supabase.from('tournament_participants')
+                    .select('id')
+                    .eq('event_id', event.id)
+                    .ilike('full_name', pName)
+                    .ilike('class_name', div)
+                    .maybeSingle();
+
+                if (!existing) {
+                    await supabase.from('tournament_participants').insert({
+                        event_id: event.id,
+                        full_name: pName,
+                        email: finalEmail || null,
+                        class_name: div,
+                        profile_id: pId,
+                        is_paid: isPaidStatus,
+                        last_synced_at: new Date().toISOString()
+                    });
+                } else {
+                    await supabase.from('tournament_participants').update({
+                        is_paid: isPaidStatus,
+                        last_synced_at: new Date().toISOString()
+                    }).eq('id', existing.id);
+                }
+            }
+        };
+
+        await insertParticipant(formData.email, formData.full_name, selectedDivisions);
+
+        for (const div of selectedDivisions) {
+            const part = divisionPartners[div];
+            if (part?.hasPartner) {
+                if (part.partnerProfile) {
+                    await insertParticipant(part.partnerProfile.email, part.partnerProfile.name, [div]);
+                } else if (part.partnerName) {
+                    await insertParticipant(null, part.partnerName, [div]);
+                }
+            }
+        }
     };
 
-    const handleRegister = () => {
-        // Validation — must be synchronous to avoid popup blocking/redirects
+    const handleRegisterOnly = async () => {
         if (!formData.full_name.trim() || !formData.email.trim()) {
             toast.error('Please fill in your name and email.');
             return;
@@ -1163,13 +1411,87 @@ const EventDetails = () => {
             return;
         }
 
-        // Only block if they have already paid for ALL their registered divisions 
-        // AND they haven't selected any new ones to pay for now
         const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
-        const isFullyPaid = isRegistered && registeredDivisions.length > 0 && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
+        if (!hasUnpaidSelections) {
+            toast.error('You have already registered for these divisions!');
+            return;
+        }
 
-        if (isFullyPaid && !hasUnpaidSelections) {
-            toast.error('You have already paid for all your registered divisions!');
+        setIsCheckingReg(true);
+        toast.info("Recording your registration...");
+
+        try {
+            const registrationsToUpsert = [];
+            selectedDivisions.forEach(division => {
+                const partnerState = divisionPartners[division] || {};
+                
+                registrationsToUpsert.push({
+                    event_id: event.id,
+                    full_name: formData.full_name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    partner_name: partnerState.partnerName || null,
+                    division: division,
+                    payment_status: 'pending',
+                    is_test: isTestMode
+                });
+
+                if (partnerState.payForPartner && partnerState.partnerProfile) {
+                    registrationsToUpsert.push({
+                        event_id: event.id,
+                        full_name: partnerState.partnerProfile.name,
+                        email: partnerState.partnerProfile.email,
+                        partner_name: formData.full_name,
+                        division: division,
+                        payment_status: 'pending',
+                        is_test: isTestMode
+                    });
+                }
+            });
+
+            const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
+            
+            // Avoid constraint issues by manually deleting pending entries first
+            for (const reg of uniqueRegistrations) {
+                await supabase.from('event_registrations')
+                    .delete()
+                    .eq('event_id', reg.event_id)
+                    .ilike('email', reg.email)
+                    .eq('division', reg.division)
+                    .eq('payment_status', 'pending');
+            }
+
+            const { error: regError } = await supabase.from('event_registrations').insert(uniqueRegistrations);
+
+            if (regError) {
+                console.error("Reg Error:", regError);
+                toast.error(`Error saving registration: ${regError.message}`);
+                return;
+            }
+
+            // Sync emails and participants
+            await finalizeRegistrationEmailsAndSync(false);
+
+            setRegStep(2);
+            setIsRegistered(true);
+            toast.success("Registration Successful!");
+        } catch (err) {
+            console.error("Registration Error:", err);
+            toast.error(`Registration Error: ${err.message}`);
+        } finally {
+            setIsCheckingReg(false);
+        }
+    };
+
+    const handlePayNow = () => {
+        // Validation
+        if (!formData.full_name.trim() || !formData.email.trim()) {
+            toast.error('Please fill in your name and email.');
+            return;
+        }
+
+        if (emailCheckStatus === 'not_found') {
+            toast.error('Profile not found. Please create a profile first.');
             return;
         }
 
@@ -1178,7 +1500,6 @@ const EventDetails = () => {
             return;
         }
 
-        // Open Paystack inline popup directly using the exact pattern from License Modal
         initializePayment({
             onSuccess: (ref) => handlePaymentSuccess(ref),
             onClose: () => {
@@ -1187,6 +1508,8 @@ const EventDetails = () => {
             }
         });
     };
+
+    // End of pay/register handlers
 
     const getCalendarData = () => {
         if (!event) return null;
@@ -1299,7 +1622,6 @@ const EventDetails = () => {
     const handlePaymentSuccess = async (reference) => {
         console.log("SUCCESS CALLBACK TRIGGERED. Reference:", reference);
 
-        // Move to success step immediately for UX closure (matches License Modal's immediate reaction)
         setRegStep(2);
         setIsPaid(true);
         setIsRegistered(true);
@@ -1308,26 +1630,26 @@ const EventDetails = () => {
         try {
             const paystackRef = typeof reference === 'string' ? reference : (reference?.reference || reference?.trxref || 'Unknown');
 
-            // 1. Create registrations for EACH selected division
             const registrationsToUpsert = [];
-
             selectedDivisions.forEach(division => {
+                const partnerState = divisionPartners[division] || {};
+                
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
                     email: formData.email,
                     phone: formData.phone,
-                    partner_name: formData.partner_name,
+                    partner_name: partnerState.partnerName || null,
                     division: division,
                     payment_status: 'paid',
                     is_test: isTestMode
                 });
 
-                if (payForPartner && partnerProfile) {
+                if (partnerState.payForPartner && partnerState.partnerProfile) {
                     registrationsToUpsert.push({
                         event_id: event.id,
-                        full_name: partnerProfile.name,
-                        email: partnerProfile.email,
+                        full_name: partnerState.partnerProfile.name,
+                        email: partnerState.partnerProfile.email,
                         partner_name: formData.full_name,
                         division: division,
                         payment_status: 'paid',
@@ -1336,30 +1658,32 @@ const EventDetails = () => {
                 }
             });
 
-            // Ensure unique registrations by email + division
             const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
+            
+            // Clear previous entries to avoid constraint clashes
+            for (const reg of uniqueRegistrations) {
+                await supabase.from('event_registrations')
+                    .delete()
+                    .eq('event_id', reg.event_id)
+                    .ilike('email', reg.email)
+                    .eq('division', reg.division);
+            }
 
-            const { error: regError } = await supabase
-                .from('event_registrations')
-                .upsert(uniqueRegistrations, { onConflict: 'event_id, email, division' });
+            const { error: regError } = await supabase.from('event_registrations').insert(uniqueRegistrations);
 
             if (regError) {
                 console.error("Reg Error:", regError);
-                toast.error(`Database Error: ${regError.message}`);
             }
 
-            // 2. Record Payment Records
             const { data: pData } = await supabase.from('players').select('id').ilike('email', formData.email).maybeSingle();
             const playerId = pData?.id || null;
 
             const paymentsToInsert = [];
-
-            // Entry Fees for each division
             selectedDivisions.forEach(division => {
                 const fee = getEntryFeeForCategory(division);
-                const partnerEntryFee = (payForPartner && partnerProfile) ? fee : 0;
+                const partnerState = divisionPartners[division] || {};
+                const partnerEntryFee = (partnerState.payForPartner && partnerState.partnerProfile) ? fee : 0;
 
-                // Main Player (gets the combined fee for the pair)
                 paymentsToInsert.push({
                     player_id: playerId,
                     event_id: event.id,
@@ -1374,15 +1698,14 @@ const EventDetails = () => {
                         division: division,
                         line_items: [
                             { type: 'entry_fee', amount: fee, player: formData.full_name },
-                            ...(payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerProfile.name }] : [])
+                            ...(partnerState.payForPartner ? [{ type: 'entry_fee', amount: fee, player: partnerState.partnerProfile.name }] : [])
                         ]
                     }
                 });
 
-                // Partner (gets R0 record with attribution)
-                if (payForPartner && partnerProfile) {
+                if (partnerState.payForPartner && partnerState.partnerProfile) {
                     paymentsToInsert.push({
-                        player_id: partnerProfile.id,
+                        player_id: partnerState.partnerProfile.id,
                         event_id: event.id,
                         amount: 0,
                         status: 'success',
@@ -1395,19 +1718,15 @@ const EventDetails = () => {
                             division: division,
                             paid_by_name: formData.full_name,
                             paid_by_id: playerId,
-                            line_items: [
-                                { type: 'entry_fee', amount: 0, player: partnerProfile.name, paid_by: formData.full_name }
-                            ]
+                            line_items: [{ type: 'entry_fee', amount: 0, player: partnerState.partnerProfile.name, paid_by: formData.full_name }]
                         }
                     });
                 }
             });
 
-            // Main Player: License (if applicable)
             if (playerProfileData && !playerProfileData.paid_registration) {
                 const isFull = licenseChoice === 'full';
                 const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
-
                 paymentsToInsert.push({
                     player_id: playerId,
                     event_id: event.id,
@@ -1417,189 +1736,40 @@ const EventDetails = () => {
                     payment_method: 'paystack',
                     reference: `License - ${formData.full_name}`,
                     is_test: isTestMode,
-                    metadata: { paystack_ref: paystackRef }
+                    metadata: { paystack_ref: paystackRef, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: formData.full_name }] }
                 });
-
-                if (!isFull) {
-                    // Add to temporary_licenses table
-                    await supabase.from('temporary_licenses').insert({
-                        player_id: playerId,
-                        event_id: event.id,
-                        event_name: event.event_name,
-                        event_date: event.start_date
-                    });
-                }
-
-                await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isFull ? 'full' : 'temporary' }).eq('id', playerId);
             }
 
-            // Partner side
-            if (payForPartner && partnerProfile) {
-                // Partner: Entry Fee (handled in selectedDivisions loop above)
-
-                // Partner License
-                if (!partnerProfile.paid_registration) {
-                    const isPartnerFull = partnerLicenseChoice === 'full';
-                    const partnerLicenseAmount = isPartnerFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
-
-                    // Main player pays for the partner's license
-                    paymentsToInsert.push({
-                        player_id: playerId,
-                        event_id: event.id,
-                        amount: partnerLicenseAmount,
-                        status: 'success',
-                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                        payment_method: 'paystack',
-                        reference: `LIC-FOR-PARTNER-${paystackRef}`,
-                        is_test: isTestMode,
-                        metadata: { paystack_ref: paystackRef, paid_for_name: partnerProfile.name }
-                    });
-
-                    // Partner gets R0 license record
-                    paymentsToInsert.push({
-                        player_id: partnerProfile.id,
-                        event_id: event.id,
-                        amount: 0,
-                        status: 'success',
-                        payment_type: isPartnerFull ? 'full_license' : 'temp_license',
-                        payment_method: 'paystack',
-                        reference: `LIC-PARTNER-${paystackRef}`,
-                        is_test: isTestMode,
-                        metadata: {
-                            paystack_ref: paystackRef,
-                            paid_by_name: formData.full_name,
-                            paid_by_id: playerId
-                        }
-                    });
-
-                    if (!isPartnerFull) {
-                        // Add to temporary_licenses table
-                        await supabase.from('temporary_licenses').insert({
-                            player_id: partnerProfile.id,
+            selectedDivisions.forEach(division => {
+                const partnerState = divisionPartners[division];
+                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration) {
+                    const isFull = partnerState.partnerLicenseChoice === 'full';
+                    const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
+                    const existingLicensePayment = paymentsToInsert.find(p => p.player_id === partnerState.partnerProfile.id && (p.payment_type === 'full_license' || p.payment_type === 'temp_license'));
+                    
+                    if (!existingLicensePayment) {
+                        paymentsToInsert.push({
+                            player_id: partnerState.partnerProfile.id,
                             event_id: event.id,
-                            event_name: event.event_name,
-                            event_date: event.start_date
+                            amount: licenseAmount,
+                            status: 'success',
+                            payment_type: isFull ? 'full_license' : 'temp_license',
+                            payment_method: 'paystack',
+                            reference: `License - ${partnerState.partnerProfile.name} (Paid by ${formData.full_name})`,
+                            is_test: isTestMode,
+                            metadata: { paystack_ref: paystackRef, paid_by_name: formData.full_name, paid_by_id: playerId, line_items: [{ type: isFull ? 'full_license' : 'temp_license', amount: licenseAmount, player: partnerState.partnerProfile.name, paid_by: formData.full_name }] }
                         });
                     }
-
-                    await supabase.from('players').update({ paid_registration: true, approved: true, license_type: isPartnerFull ? 'full' : 'temporary' }).eq('id', partnerProfile.id);
                 }
+            });
+            
+            const { error: payError } = await supabase.from('payments').insert(paymentsToInsert);
+            if (payError) {
+                console.error("Payment Record Error:", payError);
             }
 
-            console.log("Saving payments...");
-            await supabase.from('payments').insert(paymentsToInsert);
-
-            // 3. Mark in participants list
-            console.log("Updating participants...");
-
-            // Sync Main Player
-            const mainPlayerFilters = [];
-            if (playerId) mainPlayerFilters.push(`profile_id.eq.${playerId}`);
-            if (formData.email) mainPlayerFilters.push(`email.ilike.${formData.email}`);
-            if (formData.full_name) mainPlayerFilters.push(`full_name.ilike.%${formData.full_name}%`);
-
-            // 3. Mark in participants list (Improved Sync)
-            console.log("Updating participants for Event ID:", event.id);
-
-            const syncParticipant = async (pId, pEmail, pName, label, targetDivisions = []) => {
-                try {
-                    const filters = [];
-                    if (pId) filters.push(`profile_id.eq.${pId}`);
-                    if (pName) filters.push(`full_name.ilike.%${pName}%`);
-
-                    if (filters.length === 0) {
-                        console.warn(`No sync data provided for ${label}`);
-                        return;
-                    }
-
-                    console.info(`Searching for ${label} participant...`, filters.join(','));
-
-                    // 1. Try finding with combined filters (OR)
-                    let { data: matches, error: fetchError } = await supabase
-                        .from('tournament_participants')
-                        .select('id, full_name, profile_id, event_id, class_name')
-                        .eq('event_id', Number(event.id))
-                        .or(filters.join(','));
-
-                    // 1b. Fallback: If no match and we have a name, try searching for name match in this event specifically
-                    if ((!matches || matches.length === 0) && pName) {
-                        console.info(`No filters match for ${label}. Trying direct name match in event...`);
-                        const { data: nameMatch } = await supabase
-                            .from('tournament_participants')
-                            .select('id, full_name, profile_id')
-                            .eq('event_id', Number(event.id))
-                            .ilike('full_name', `%${pName}%`);
-
-                        if (nameMatch && nameMatch.length > 0) {
-                            matches = nameMatch;
-                        }
-                    }
-
-                    if (fetchError) {
-                        console.error(`${label} Participant Sync Fetch Error:`, fetchError);
-                        return;
-                    }
-
-                    if (!matches || matches.length === 0) {
-                        console.warn(`CRITICAL: No participant record found for ${label} (${pName}) in event ${event.id}. Check if Rankedin sync is complete.`);
-                        return;
-                    }
-
-                    console.info(`Found ${matches.length} matching record(s) for ${label}:`, matches);
-
-                    // 2. Update each match by its unique UUID (filtering by division if provided)
-                    for (const match of matches) {
-                        if (targetDivisions && targetDivisions.length > 0) {
-                            const normalizedMatchDiv = (match.class_name || '').toLowerCase().trim().replace(/[^a-z]/g, '');
-                            const isTargetDiv = targetDivisions.some(d => {
-                                const normalizedTarget = (d || '').toLowerCase().trim().replace(/[^a-z]/g, '');
-                                return normalizedMatchDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedMatchDiv);
-                            });
-                            if (!isTargetDiv) {
-                                console.info(`Skipping sync for division ${match.class_name} as it was not part of this payment.`);
-                                continue;
-                            }
-                        }
-
-                        const { error: updateError } = await supabase
-                            .from('tournament_participants')
-                            .update({
-                                is_paid: true,
-                                is_test: isTestMode,
-                                last_synced_at: new Date().toISOString()
-                            })
-                            .eq('id', match.id);
-
-                        if (updateError) {
-                            console.error(`Update Error for ${label} (Row: ${match.id}):`, updateError);
-                        } else {
-                            console.info(`MATCH SUCCESS: ${label} marked as PAID. Row ID: ${match.id}`);
-                        }
-                    }
-                } catch (sErr) {
-                    console.error(`${label} sync logic failure:`, sErr);
-                }
-            };
-
-            // Get logged in player profile details for sync
-            const mainPId = loggedInPlayer?.profile_id || loggedInPlayer?.id;
-            const mainPEmail = loggedInPlayer?.email || formData.email;
-            const mainPName = loggedInPlayer?.name || formData.full_name;
-
-            if (!mainPId && !mainPEmail && !mainPName) {
-                console.error("FATAL: No registrant information available for sync!");
-            } else {
-                console.info("Starting sync for Main Player:", { id: mainPId, email: mainPEmail, name: mainPName, divisions: selectedDivisions });
-                await syncParticipant(mainPId, mainPEmail, mainPName, "Main Player", selectedDivisions);
-            }
-
-            // Sync Partner
-            if (payForPartner && partnerProfile) {
-                console.info("Starting sync for Partner:", { id: partnerProfile.id, name: partnerProfile.name, divisions: selectedDivisions });
-                await syncParticipant(partnerProfile.id, partnerProfile.email, partnerProfile.name, "Partner", selectedDivisions);
-            }
-
-            console.log("Registration Save Complete!");
+            // Sync emails and participants
+            await finalizeRegistrationEmailsAndSync(true);
 
         } catch (err) {
             console.error("Critical Save Error:", err);
@@ -1607,15 +1777,7 @@ const EventDetails = () => {
         }
     };
 
-    const handlePayNow = () => {
-        if (!PAYSTACK_PUBLIC_KEY.startsWith('pk_')) {
-            toast.error('Payment system not configured correctly');
-            return;
-        }
-        initializePayment(handlePaymentSuccess, () => {
-            toast.info('Payment cancelled');
-        });
-    };
+    // handlePayNow removed from here since it's now at the top
 
     if (loading) {
         return (
@@ -1644,7 +1806,7 @@ const EventDetails = () => {
                         <div className="absolute inset-0 rounded-full bg-[#A3E635]/10 filter blur-md animate-pulse" />
                         <CheckCircle className="w-6 h-6 text-[#A3E635] relative z-10" />
                     </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#A3E635] mb-1">Registered on RankedIn</p>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[#A3E635] mb-1">Registered on {event?.rankedin_id ? 'RankedIn' : '4M Padel'}</p>
                     <p className="text-white text-xs font-semibold leading-relaxed max-w-[240px]">You're on the player list! Good luck on the court.</p>
                 </div>
             )}
@@ -1659,11 +1821,11 @@ const EventDetails = () => {
                                     <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: theme.fill + '20', borderColor: theme.fill + '30', color: theme.fill }}>Paid</span>
                                 ) : (
                                     <button
-                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                        onClick={() => { setSelectedDivisions([div]); setRegStep(1); setIsModalOpen(true); }}
                                         className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                     >
-                                        Pay Now
+                                        Registered
                                     </button>
                                 )}
                             </div>
@@ -1679,7 +1841,7 @@ const EventDetails = () => {
                                     className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
                                     style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                 >
-                                    Pay Now
+                                    Registered
                                 </button>
                             )}
                         </div>
@@ -1689,29 +1851,40 @@ const EventDetails = () => {
         </div>
     );
 
-    const readyToCompeteBlock = !isEventPassed && !isPaid && (
+    const needsRegistration = !isRegistered;
+    const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
+    const showReadyToCompete = !isEventPassed;
+
+    const readyToCompeteBlock = showReadyToCompete && (
         <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
             <p className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
             <p className="text-xs text-gray-400 mb-4">Secure your spot at {event.event_name}.</p>
             <div className="space-y-2">
-                {!isRegistered && (
-                    <a
-                        href={event.rankedin_url || 'https://www.rankedin.com/'}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                {needsRegistration && (
+                    <button
+                        type="button"
+                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                         className="w-full block text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                         style={{ color: '#0F172A' }}
                     >
                         Register Now
-                    </a>
+                    </button>
                 )}
-                {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (
+                {needsPayment && (
                     <button
                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                         className={`w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                     >
                         Pay Entry Fee
+                    </button>
+                )}
+                {(!needsRegistration && !needsPayment) && (
+                    <button
+                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                        className="w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all bg-green-500 text-white hover:bg-green-600"
+                    >
+                        Add Division
                     </button>
                 )}
             </div>
@@ -1852,7 +2025,7 @@ const EventDetails = () => {
                             </div>
                             <div>
                                 <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Registered</p>
-                                <p className="text-base font-black text-white leading-none">{event.registered_players || 0} <span className="text-xs text-gray-500 font-bold">players</span></p>
+                                <p className="text-base font-black text-white leading-none">{totalPlayersCount} <span className="text-xs text-gray-500 font-bold">players</span></p>
                             </div>
                             {event.entry_fee > 0 && (
                                 <>
@@ -1872,26 +2045,29 @@ const EventDetails = () => {
                                 if (!isEventPassed) {
                                     if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
                                         return (
-                                            <div className="flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border" style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30' }}>
-                                                <CheckCircle className="w-4 h-4" style={{ color: theme.fill }} />
-                                                <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.fill }}>Paid & Registered</span>
-                                            </div>
+                                            <button 
+                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                className="flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border hover:opacity-80 transition-opacity" 
+                                                style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30', color: theme.fill }}
+                                            >
+                                                <CheckCircle className="w-4 h-4" />
+                                                <span className="text-[10px] font-black uppercase tracking-widest">Paid & Registered (Add Div)</span>
+                                            </button>
                                         );
                                     }
                                     return (
                                         <>
                                             {!isRegistered && (
-                                                <a
-                                                    href={event.rankedin_url || 'https://www.rankedin.com/'}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                     className="flex-1 sm:flex-none text-center text-[10px] font-black uppercase tracking-widest px-6 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                                                     style={{ color: '#0F172A' }}
                                                 >
                                                     Register Now
-                                                </a>
+                                                </button>
                                             )}
-                                            {(event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                            {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
                                                 <button
                                                     onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                     className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
@@ -1929,7 +2105,7 @@ const EventDetails = () => {
                                 { label: 'Date', value: event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC'), icon: CalendarIcon, color: theme.fill },
                                 { label: 'Venue', value: event.venue || 'TBC', icon: MapPin, color: theme.fill },
                                 { label: 'City', value: event.city || 'TBC', icon: Globe, color: theme.fill },
-                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : 'Free', icon: CreditCard, color: theme.fill },
+                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard, color: theme.fill },
                                 { label: 'Organiser', value: event.organizer_name || '4M Padel', icon: User, color: theme.fill },
                                 { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : 'Upcoming', icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : theme.fill },
                             ].map(({ label, value, icon: Icon, color }) => (
@@ -2312,13 +2488,14 @@ const EventDetails = () => {
                                                                             if (isTeam) {
                                                                                 return (
                                                                                     <div key={pIdx} className="px-6 py-4">
-                                                                                        <div className="flex items-center justify-between mb-3">
-                                                                                            <h4 className="text-sm font-black text-[#0F172A] uppercase">{p.Name}</h4>
-                                                                                            <div className="flex gap-2">
-                                                                                                {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                                {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                        {(rank || seed) && (
+                                                                                            <div className="flex justify-end mb-3">
+                                                                                                <div className="flex gap-2">
+                                                                                                    {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                                    {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                                </div>
                                                                                             </div>
-                                                                                        </div>
+                                                                                        )}
                                                                                         <div className="flex flex-wrap gap-2">
                                                                                             {p.Players.map((player, idx) => (
                                                                                                 <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
@@ -2599,14 +2776,13 @@ const EventDetails = () => {
                         <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
                             <div className="flex gap-2.5">
                                 {showRegister && (
-                                    <a
-                                        href={event.rankedin_url || 'https://www.rankedin.com/'}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <button
+                                        type="button"
+                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                         className="flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 bg-[#0F172A] text-white rounded-xl hover:bg-[#0F172A]/90 transition-all font-bold"
                                     >
                                         Register
-                                    </a>
+                                    </button>
                                 )}
                                 {showPay && (
                                     <button
@@ -2619,12 +2795,15 @@ const EventDetails = () => {
                                     </button>
                                 )}
                                 {showDone && (
-                                    <div className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl">
+                                    <button 
+                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                        className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors"
+                                    >
                                         <CheckCircle className="w-4 h-4 text-green-600" />
                                         <span className="text-[10px] font-black uppercase tracking-widest text-green-700">
-                                            {isPaid ? 'Paid & Registered' : 'Registered'}
+                                            {isPaid ? 'Paid (Add Div)' : 'Registered (Add Div)'}
                                         </span>
-                                    </div>
+                                    </button>
                                 )}
                             </div>
                         </div>
@@ -2671,7 +2850,11 @@ const EventDetails = () => {
                                 {/* Modal Header */}
                                 <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
                                     <h3 className="text-white font-bold text-lg">
-                                        {regStep === 1 ? 'Event Payment' : 'Payment Successful'}
+                                        {regStep === 1 
+                                            ? (calculateTotalAmount() > 0 
+                                                ? 'Payment' 
+                                                : (isRegistered ? 'Registered' : `Registration for ${event?.event_name || 'Event'}`))
+                                            : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
                                     <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
                                         <X className="w-6 h-6" />
@@ -2751,61 +2934,86 @@ const EventDetails = () => {
                                                         <Loader className="w-5 h-5 animate-spin text-padel-green" />
                                                         <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
                                                     </div>
-                                                ) : registeredDivisions.length > 0 ? (
-                                                    <div className="grid grid-cols-1 gap-2.5">
-                                                        {registeredDivisions.map(divName => {
-                                                            const alreadyPaid = paidDivisions.includes(divName);
-                                                            const isSelected = selectedDivisions.includes(divName);
-
-                                                            return (
-                                                                <button
-                                                                    key={divName}
-                                                                    type="button"
-                                                                    disabled={alreadyPaid}
-                                                                    onClick={() => {
-                                                                        setSelectedDivisions(prev =>
-                                                                            prev.includes(divName)
-                                                                                ? prev.filter(d => d !== divName)
-                                                                                : [...prev, divName]
-                                                                        );
-                                                                    }}
-                                                                    className={`group relative flex items-center justify-between px-5 py-4 rounded-2xl border transition-all duration-300 ${alreadyPaid
-                                                                        ? 'bg-padel-green/5 border-padel-green/20 opacity-60 cursor-not-allowed'
-                                                                        : isSelected
-                                                                            ? 'bg-padel-green border-padel-green shadow-lg shadow-padel-green/20 scale-[1.02]'
-                                                                            : 'bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/[0.07]'
-                                                                        }`}
-                                                                >
-                                                                    <div className="flex items-center gap-4">
-                                                                        <div className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all duration-300 ${alreadyPaid ? 'bg-padel-green border-padel-green' :
-                                                                            isSelected ? 'bg-white border-white' : 'border-white/20 bg-black/20'
-                                                                            }`}>
-                                                                            {alreadyPaid && <CheckCircle size={14} className="text-white" />}
-                                                                            {isSelected && !alreadyPaid && <CheckCircle size={14} className="text-padel-green" />}
-                                                                        </div>
-                                                                        <div className="text-left">
-                                                                            <span className={`text-[13px] font-black uppercase tracking-tight block ${isSelected && !alreadyPaid ? 'text-black' : alreadyPaid ? 'text-padel-green' : 'text-white'
-                                                                                }`}>
-                                                                                {divName}
-                                                                            </span>
-                                                                            <span className={`text-[9px] font-bold uppercase tracking-widest ${isSelected && !alreadyPaid ? 'text-black/60' : 'text-white/30'
-                                                                                }`}>
-                                                                                Tournament Entry
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="flex flex-col items-end gap-1">
-                                                                        {alreadyPaid ? (
-                                                                            <span className="text-[9px] font-black uppercase tracking-[0.2em] bg-padel-green/20 text-padel-green px-3 py-1 rounded-full border border-padel-green/30">Already Paid</span>
-                                                                        ) : (
-                                                                            <span className={`text-sm font-black ${isSelected ? 'text-black' : 'text-padel-green'}`}>
-                                                                                R{getEntryFeeForCategory(divName)}
-                                                                            </span>
+                                                ) : availableDivisions.length > 0 ? (
+                                                    <div className="relative">
+                                                        {/* The Select Box */}
+                                                        <div 
+                                                            onClick={() => setIsDivisionsDropdownOpen(!isDivisionsDropdownOpen)}
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-h-[50px] flex flex-wrap items-center gap-2 cursor-pointer transition-all hover:border-padel-green/50"
+                                                        >
+                                                            {selectedDivisions.length === 0 ? (
+                                                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Click to select divisions...</span>
+                                                            ) : (
+                                                                selectedDivisions.map(div => (
+                                                                    <span key={div} className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md flex items-center gap-2 ${paidDivisions.includes(div) ? 'bg-padel-green/20 text-padel-green border border-padel-green/30' : 'bg-padel-green text-black'}`}>
+                                                                        {div}
+                                                                        {!paidDivisions.includes(div) && (
+                                                                            <button 
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    setSelectedDivisions(prev => prev.filter(d => d !== div));
+                                                                                }}
+                                                                                className="hover:text-red-600 transition-colors"
+                                                                            >
+                                                                                <X size={12} />
+                                                                            </button>
                                                                         )}
+                                                                    </span>
+                                                                ))
+                                                            )}
+                                                            <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform ${isDivisionsDropdownOpen ? 'rotate-180' : ''}`} />
+                                                        </div>
+
+                                                        {/* The Dropdown Menu */}
+                                                        <AnimatePresence>
+                                                            {isDivisionsDropdownOpen && (
+                                                                <motion.div 
+                                                                    initial={{ opacity: 0, y: -10 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    exit={{ opacity: 0, y: -10 }}
+                                                                    className="absolute z-50 w-full mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+                                                                >
+                                                                    <div className="max-h-[250px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                                                                        {availableDivisions.map(divName => {
+                                                                            const alreadyPaid = paidDivisions.includes(divName);
+                                                                            const isSelected = selectedDivisions.includes(divName);
+                                                                            
+                                                                            return (
+                                                                                <div 
+                                                                                    key={divName}
+                                                                                    onClick={() => {
+                                                                                        if (alreadyPaid) return;
+                                                                                        setSelectedDivisions(prev => 
+                                                                                            prev.includes(divName) 
+                                                                                                ? prev.filter(d => d !== divName)
+                                                                                                : [...prev, divName]
+                                                                                        );
+                                                                                    }}
+                                                                                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
+                                                                                        alreadyPaid ? 'opacity-50 cursor-not-allowed bg-white/5' : 
+                                                                                        isSelected ? 'bg-padel-green/10 text-padel-green' : 
+                                                                                        'hover:bg-white/5 text-white'
+                                                                                    }`}
+                                                                                >
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-all ${
+                                                                                            alreadyPaid ? 'bg-padel-green border-padel-green' :
+                                                                                            isSelected ? 'bg-padel-green border-padel-green' : 'border-white/30'
+                                                                                        }`}>
+                                                                                            {(isSelected || alreadyPaid) && <CheckCircle size={10} className={isSelected && !alreadyPaid ? 'text-black' : 'text-white'} />}
+                                                                                        </div>
+                                                                                        <span className="text-[11px] font-black uppercase tracking-wider">{divName}</span>
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-bold">
+                                                                                        {alreadyPaid ? 'PAID' : `R${getEntryFeeForCategory(divName)}`}
+                                                                                    </span>
+                                                                                </div>
+                                                                            );
+                                                                        })}
                                                                     </div>
-                                                                </button>
-                                                            );
-                                                        })}
+                                                                </motion.div>
+                                                            )}
+                                                        </AnimatePresence>
                                                     </div>
                                                 ) : formData.email && (
                                                     <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
@@ -2819,9 +3027,9 @@ const EventDetails = () => {
                                             </div>
 
                                             <div className="space-y-3">
-                                                <div className="flex items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
+                                                <div className="hidden items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-padel-green/10 rounded-xl flex items-center justify-center text-padel-green group-hover:bg-padel-green group-hover:text-black transition-all duration-500">
+                                                        <div className="w-10 h-10 bg-blue-400/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-400 group-hover:text-black transition-all duration-500">
                                                             <Users size={20} />
                                                         </div>
                                                         <div>
@@ -2841,7 +3049,7 @@ const EventDetails = () => {
                                                                 setFormData(prev => ({ ...prev, partner_name: '' }));
                                                             }
                                                         }}
-                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-padel-green' : 'bg-white/10'}`}
+                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-blue-400' : 'bg-white/10'}`}
                                                     >
                                                         <span
                                                             aria-hidden="true"
@@ -2861,23 +3069,23 @@ const EventDetails = () => {
                                                             <div className="space-y-1.5">
                                                                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
                                                                 <div className="relative group">
-                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-400" size={16} />
                                                                     <input
                                                                         type="text"
                                                                         name="partner_name"
                                                                         value={formData.partner_name}
                                                                         onChange={handleInputChange}
                                                                         autoComplete="off"
-                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 outline-none transition-all font-bold placeholder:text-gray-600`}
                                                                         placeholder="Type 2+ characters to search..."
                                                                     />
                                                                     {isLookingUpPartner && (
                                                                         <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                                            <Loader className="w-4 h-4 animate-spin text-padel-green" />
+                                                                            <Loader className="w-4 h-4 animate-spin text-blue-400" />
                                                                         </div>
                                                                     )}
                                                                     {partnerProfile && !isLookingUpPartner && (
-                                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-padel-green text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-400 text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
                                                                             <CheckCircle className="w-3 h-3 fill-current" />
                                                                             Found
                                                                         </div>
@@ -2900,7 +3108,7 @@ const EventDetails = () => {
                                                                                         className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
                                                                                     >
                                                                                         <div className="flex items-center gap-2">
-                                                                                            <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center text-padel-green group-hover/item:bg-padel-green group-hover/item:text-black transition-colors">
+                                                                                            <div className="w-6 h-6 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-400 group-hover/item:bg-blue-400 group-hover/item:text-black transition-colors">
                                                                                                 <User size={12} />
                                                                                             </div>
                                                                                             <div>
@@ -2908,7 +3116,7 @@ const EventDetails = () => {
                                                                                                 <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
                                                                                             </div>
                                                                                         </div>
-                                                                                        <CheckCircle className="w-3 h-3 text-padel-green opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                                                        <CheckCircle className="w-3 h-3 text-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
                                                                                     </button>
                                                                                 ))}
                                                                             </motion.div>
@@ -2927,10 +3135,10 @@ const EventDetails = () => {
                                                                     <motion.div
                                                                         initial={{ opacity: 0, y: 5 }}
                                                                         animate={{ opacity: 1, y: 0 }}
-                                                                        className="bg-padel-green/5 border border-padel-green/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-padel-green/10 transition-colors"
+                                                                        className="bg-blue-400/5 border border-blue-400/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-400/10 transition-colors"
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-padel-green shadow-sm">
+                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-400 shadow-sm">
                                                                                 <CreditCard className="w-5 h-5" />
                                                                             </div>
                                                                             <div>
@@ -2943,7 +3151,7 @@ const EventDetails = () => {
                                                                         <button
                                                                             type="button"
                                                                             onClick={() => setPayForPartner(!payForPartner)}
-                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-padel-green' : 'bg-slate-200'}`}
+                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-blue-400' : 'bg-slate-200'}`}
                                                                         >
                                                                             <span
                                                                                 aria-hidden="true"
@@ -2962,7 +3170,7 @@ const EventDetails = () => {
                                                                             >
                                                                                 <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
                                                                                     <div className="flex items-center gap-2">
-                                                                                        <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                                                        <div className="w-8 h-8 bg-blue-400/10 rounded-lg flex items-center justify-center text-blue-400">
                                                                                             <CreditCard size={16} />
                                                                                         </div>
                                                                                         <div>
@@ -2974,7 +3182,7 @@ const EventDetails = () => {
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => setPartnerLicenseChoice('temporary')}
-                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
                                                                                         >
                                                                                             Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                                         </button>
@@ -3003,7 +3211,7 @@ const EventDetails = () => {
                                                         className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 bg-padel-green/10 rounded-lg flex items-center justify-center text-padel-green">
+                                                            <div className="w-8 h-8 bg-blue-400/10 rounded-lg flex items-center justify-center text-blue-400">
                                                                 <CreditCard size={16} />
                                                             </div>
                                                             <div>
@@ -3043,15 +3251,141 @@ const EventDetails = () => {
                                                                 {/* Registrant Section */}
                                                                 <div className="space-y-2">
                                                                     <p className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green mb-1">Your Entries</p>
-                                                                    {selectedDivisions.map(div => (
-                                                                        <div key={`reg-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
-                                                                            <div className="space-y-0.5">
-                                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
-                                                                                <p className="text-[8px] font-black text-padel-green uppercase tracking-wider italic">{div}</p>
+                                                                    {selectedDivisions.map(div => {
+                                                                        const pState = divisionPartners[div] || {};
+                                                                        const pProf = pState.partnerProfile;
+                                                                        return (
+                                                                            <div key={`div-${div}`} className="flex flex-col gap-2 bg-white/[0.03] p-3 rounded-xl border border-white/10 shadow-inner">
+                                                                                <div className="flex justify-between items-center">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center border border-padel-green/30 text-padel-green font-black text-[9px] uppercase">
+                                                                                            {div.substring(0, 2)}
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <h4 className="font-bold text-white text-xs leading-none">{div}</h4>
+                                                                                            <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">Selected Category</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
+                                                                                </div>
+                                                                                <div className="mt-2 pt-2 border-t border-white/5 space-y-3">
+                                                                                    {!pState.hasPartner ? (
+                                                                                        <button
+                                                                                            type="button"
+                                                                                            onClick={() => {
+                                                                                                setDivisionPartners(prev => ({
+                                                                                                    ...prev,
+                                                                                                    [div]: { ...prev[div], hasPartner: true }
+                                                                                                }));
+                                                                                            }}
+                                                                                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-white/20 text-gray-400 hover:text-white hover:border-padel-green/50 hover:bg-padel-green/5 transition-all text-xs font-bold tracking-wider"
+                                                                                        >
+                                                                                            <UserPlus size={14} /> Add a Partner
+                                                                                        </button>
+                                                                                    ) : !pProf ? (
+                                                                                        <div className="relative">
+                                                                                            <div className="flex justify-between items-center mb-2 px-1">
+                                                                                                <span className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Partner Search</span>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => {
+                                                                                                        setDivisionPartners(prev => ({
+                                                                                                            ...prev,
+                                                                                                            [div]: { ...prev[div], hasPartner: false, partnerName: '', partnerProfile: null, payForPartner: false }
+                                                                                                        }));
+                                                                                                    }}
+                                                                                                    className="text-[9px] text-red-400 hover:text-red-300 font-bold uppercase tracking-wider"
+                                                                                                >
+                                                                                                    Remove
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            <div className="relative">
+                                                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                                                                <input
+                                                                                                    type="text"
+                                                                                                    value={pState.partnerName || ''}
+                                                                                                    onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
+                                                                                                    autoComplete="off"
+                                                                                                    className={`w-full bg-black/40 border ${
+                                                                                                        pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
+                                                                                                    } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
+                                                                                                    placeholder={`Search partner for ${div}...`}
+                                                                                                />
+                                                                                            {pState.isLookingUpPartner && (
+                                                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                                                                    <Loader className="w-3 h-3 animate-spin text-padel-green" />
+                                                                                                </div>
+                                                                                            )}
+                                                                                            {pState.partnerSearchResults?.length > 0 && (
+                                                                                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[1150]">
+                                                                                                    <div className="max-h-48 overflow-y-auto p-1.5 custom-scrollbar space-y-1">
+                                                                                                        {pState.partnerSearchResults.map(player => (
+                                                                                                            <button
+                                                                                                                key={player.id}
+                                                                                                                onClick={() => handleSelectPartnerForDivision(div, player)}
+                                                                                                                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors group text-left"
+                                                                                                            >
+                                                                                                                <div>
+                                                                                                                    <p className="text-white font-bold text-xs group-hover:text-padel-green transition-colors">{player.name}</p>
+                                                                                                                    <p className="text-gray-400 text-[10px] mt-0.5 line-clamp-1">{player.email}</p>
+                                                                                                                </div>
+                                                                                                            </button>
+                                                                                                        ))}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl p-3">
+                                                                                            <div className="flex items-center justify-between mb-3">
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center">
+                                                                                                        <CheckCircle className="w-3 h-3 text-padel-green" />
+                                                                                                    </div>
+                                                                                                    <div>
+                                                                                                        <p className="text-xs font-bold text-white leading-none">{pProf.name}</p>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <button
+                                                                                                    onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerProfile: null, partnerName: '' } }))}
+                                                                                                    className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                                                                                >
+                                                                                                    <X className="w-3 h-3" />
+                                                                                                </button>
+                                                                                            </div>
+                                                                                            {getEntryFeeForCategory(div) > 0 && (
+                                                                                                <>
+                                                                                                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                        <div className="flex items-center gap-2">
+                                                                                                            <CreditCard className="w-3 h-3 text-white/50" />
+                                                                                                            <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner?</span>
+                                                                                                        </div>
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartner: !pState.payForPartner } }))}
+                                                                                                            className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-slate-700'}`}
+                                                                                                        >
+                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                    {pState.payForPartner && !pProf.paid_registration && (
+                                                                                                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                            <span className="text-[9px] font-bold text-white uppercase">License Choice</span>
+                                                                                                            <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
+                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                                            </div>
+                                                                                                        </div>
+                                                                                                    )}
+                                                                                                </>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
-                                                                            <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
-                                                                        </div>
-                                                                    ))}
+                                                                        );
+                                                                    })}
                                                                     {selectedDivisions.length === 0 && (
                                                                         <div className="flex justify-between items-start gap-4 opacity-30 p-3">
                                                                             <div className="space-y-0.5">
@@ -3071,7 +3405,33 @@ const EventDetails = () => {
                                                                 )}
 
                                                                 {/* Partner Section - Conditional */}
-                                                                {hasPartner && partnerProfile && (
+                                                                {selectedDivisions.some(div => divisionPartners[div]?.partnerProfile) && (
+                                                                    <div className="space-y-2 pt-1">
+                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
+                                                                        {selectedDivisions.map(div => {
+                                                                            const pState = divisionPartners[div] || {};
+                                                                            if (!pState.partnerProfile) return null;
+                                                                            return (
+                                                                                <React.Fragment key={`summary-partner-${div}`}>
+                                                                                    <div className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                                        <div className="space-y-0.5">
+                                                                                            <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{pState.partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
+                                                                                            <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
+                                                                                        </div>
+                                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
+                                                                                    </div>
+                                                                                    {pState.payForPartner && !pState.partnerProfile.paid_registration && (
+                                                                                        <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
+                                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                            <span className="text-[10px] font-black text-blue-400">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </React.Fragment>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+                                                                {false && (
                                                                     <div className="space-y-2 pt-1">
                                                                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
                                                                         {selectedDivisions.map(div => (
@@ -3102,18 +3462,39 @@ const EventDetails = () => {
                                                                 <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
                                                                 <div className="space-y-1">
                                                                     <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
-                                                                    <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                    {event?.allow_payments && (
+                                                                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                    )}
                                                                 </div>
                                                             </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleRegister}
-                                                                disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0}
-                                                                className="h-16 md:h-14 px-12 bg-padel-green text-black rounded-xl flex items-center justify-center gap-3 hover:bg-white hover:scale-[1.03] active:scale-95 transition-all duration-500 shadow-2xl shadow-padel-green/30 disabled:opacity-30 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0"
-                                                            >
-                                                                <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" />
-                                                                <span>Complete Payment</span>
-                                                            </button>
+                                                            {(() => {
+                                                                const totalAmt = calculateTotalAmount();
+                                                                const hasNewDivisions = selectedDivisions.some(div => !registeredDivisions.includes(div));
+                                                                const hasPartnerChanges = selectedDivisions.some(div => {
+                                                                    const current = divisionPartners[div]?.partnerName?.trim().toLowerCase() || '';
+                                                                    const initial = initialPartners[div]?.partnerName?.trim().toLowerCase() || '';
+                                                                    return current !== initial;
+                                                                });
+                                                                const needsUpdate = hasNewDivisions || hasPartnerChanges;
+                                                                const isConfirmedWithoutChanges = !needsUpdate && isRegistered && totalAmt === 0;
+
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
+                                                                        disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
+                                                                        className={`h-16 md:h-14 px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-gray-700/50 text-white/50 border border-white/10' : 'bg-padel-green text-black hover:bg-white hover:scale-[1.03] active:scale-95 shadow-2xl shadow-padel-green/30'}`}
+                                                                    >
+                                                                        <span>
+                                                                            {isConfirmedWithoutChanges 
+                                                                                ? 'Registration Confirmed' 
+                                                                                : totalAmt > 0 
+                                                                                    ? 'Pay Now' 
+                                                                                    : (isRegistered ? (needsUpdate ? 'Update Registration' : 'Register Now') : 'Register Now')}
+                                                                        </span>
+                                                                    </button>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -3132,28 +3513,38 @@ const EventDetails = () => {
                                                 <div className="absolute inset-0 bg-padel-green/30 blur-2xl rounded-full scale-110 animate-pulse" />
                                             </div>
 
-                                            <h3 className="text-4xl font-black text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
+                                            <h3 className="text-4xl font-black text-center text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
                                                 Registration <br />
                                                 <span className="text-padel-green">Confirmed</span>
                                             </h3>
 
-                                            <p className="text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
+                                            <p className="text-center text-gray-400 text-sm mb-12 max-w-xs mx-auto leading-relaxed animate-in fade-in slide-in-from-bottom duration-1000">
                                                 You've been successfully registered for <span className="text-white font-bold">{event.event_name}</span>.
-                                                Your payment was confirmed and your profile is updated.
+                                                {isPaid && " Your payment was confirmed and your profile is updated."}
+                                                {!isPaid && calculateTotalAmount() > 0 && " You can complete your payment below or pay later."}
                                             </p>
 
-                                            <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300">
+                                            <div className="flex flex-col gap-4 w-full max-w-xs animate-in fade-in slide-in-from-bottom duration-1000 delay-300 mx-auto">
+                                                {!isPaid && calculateTotalAmount() > 0 && (
+                                                    <button
+                                                        onClick={handlePayNow}
+                                                        className="w-full h-16 bg-blue-500 hover:bg-blue-400 text-white font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-blue-500/30 hover:scale-[1.03] active:scale-95"
+                                                    >
+                                                        <CreditCard className="w-5 h-5" />
+                                                        <span>Pay R{calculateTotalAmount()} Now</span>
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => {
                                                         setIsModalOpen(false);
                                                         window.location.reload();
                                                     }}
-                                                    className="w-full h-16 bg-padel-green hover:bg-white text-black font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-padel-green/30 hover:scale-[1.03] active:scale-95"
+                                                    className="w-full h-14 bg-white/10 hover:bg-white/20 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300"
                                                 >
                                                     <span>Close & Refresh</span>
                                                     <ArrowRight className="w-4 h-4" />
                                                 </button>
-                                                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em]">Data Syncing Complete</p>
+                                                {isPaid && <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] text-center">Data Syncing Complete</p>}
                                             </div>
                                         </>
                                     )}
