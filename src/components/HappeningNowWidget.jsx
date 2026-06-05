@@ -123,7 +123,7 @@ const HappeningNowWidget = () => {
                                         key={event.id}
                                         onClick={() => {
                                             if (event.slug || event.id) {
-                                                navigate(`/calendar/${event.slug || event.id}`);
+                                                navigate(`/draws/${event.slug || event.id}`);
                                             } else if (event.rankedin_url) {
                                                 window.open(event.rankedin_url, '_blank');
                                             }

@@ -1851,9 +1851,10 @@ const EventDetails = () => {
         </div>
     );
 
-    const needsRegistration = !isRegistered;
+    const isRegistrationAllowed = !isEventPassed && !isLive;
+    const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
-    const showReadyToCompete = !isEventPassed;
+    const showReadyToCompete = isRegistrationAllowed || needsPayment;
 
     const readyToCompeteBlock = showReadyToCompete && (
         <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
@@ -1879,7 +1880,7 @@ const EventDetails = () => {
                         Pay Entry Fee
                     </button>
                 )}
-                {(!needsRegistration && !needsPayment) && (
+                {(!needsRegistration && !needsPayment && isRegistrationAllowed) && (
                     <button
                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                         className="w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all bg-green-500 text-white hover:bg-green-600"
@@ -2046,18 +2047,18 @@ const EventDetails = () => {
                                     if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
                                         return (
                                             <button 
-                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                className="flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border hover:opacity-80 transition-opacity" 
+                                                onClick={() => { if (!isLive) { setRegStep(1); setIsModalOpen(true); } }}
+                                                className={`flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`} 
                                                 style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30', color: theme.fill }}
                                             >
                                                 <CheckCircle className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">Paid & Registered (Add Div)</span>
+                                                <span className="text-[10px] font-black uppercase tracking-widest">{isLive ? 'Paid & Registered' : 'Paid & Registered (Add Div)'}</span>
                                             </button>
                                         );
                                     }
                                     return (
                                         <>
-                                            {!isRegistered && (
+                                            {!isRegistered && !isLive && (
                                                 <button
                                                     type="button"
                                                     onClick={() => { setRegStep(1); setIsModalOpen(true); }}
@@ -2162,18 +2163,18 @@ const EventDetails = () => {
 
                             {/* ══ OVERVIEW TAB ══ */}
                             {activeTab === 'overview' && (
-                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="flex flex-col gap-5">
 
-                                    {/* MOBILE ONLY: Registration & Compete Blocks at the top */}
+                                    {/* Registration & Compete Blocks at the top */}
                                     {(registrationBlock || readyToCompeteBlock) && (
-                                        <div className="lg:hidden space-y-5">
+                                        <div className="space-y-5">
                                             {registrationBlock}
                                             {readyToCompeteBlock}
                                         </div>
                                     )}
 
-                                    {/* LEFT: Event Info */}
-                                    <div className="lg:col-span-2 space-y-5">
+                                    {/* Event Info */}
+                                    <div className="space-y-5">
 
                                         {/* Event Description */}
                                         {event.description && (
@@ -2316,22 +2317,8 @@ const EventDetails = () => {
                                         )}
                                     </div>
 
-                                    {/* RIGHT SIDEBAR */}
+                                    {/* Weather & Organiser */}
                                     <div className="space-y-5">
-
-                                        {/* Registration Status Card (for logged-in users, hidden on mobile) */}
-                                        {registrationBlock && (
-                                            <div className="hidden lg:block">
-                                                {registrationBlock}
-                                            </div>
-                                        )}
-
-                                        {/* Quick Register / Pay button (sidebar, hidden on mobile) */}
-                                        {readyToCompeteBlock && (
-                                            <div className="hidden lg:block">
-                                                {readyToCompeteBlock}
-                                            </div>
-                                        )}
 
                                         {/* Weather Card */}
                                         {weather && (
@@ -2760,55 +2747,6 @@ const EventDetails = () => {
                     </AnimatePresence>
                 </div>
 
-                {/* ── FLOATING BOTTOM CTA CARD (mobile, sits above bottom nav) ── */}
-                {!isEventPassed && (() => {
-                    const hasEntryFee = event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0;
-                    const needsEntryPayment = !isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())));
-                    const needsLicensePayment = playerProfileData && !playerProfileData.paid_registration;
-                    
-                    const showRegister = !isRegistered;
-                    const showPay = (hasEntryFee && needsEntryPayment) || needsLicensePayment;
-                    const showDone = isRegistered && !needsEntryPayment && !needsLicensePayment;
-
-                    if (!showRegister && !showPay && !showDone) return null;
-
-                    return (
-                        <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-                            <div className="flex gap-2.5">
-                                {showRegister && (
-                                    <button
-                                        type="button"
-                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                        className="flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 bg-[#0F172A] text-white rounded-xl hover:bg-[#0F172A]/90 transition-all font-bold"
-                                    >
-                                        Register
-                                    </button>
-                                )}
-                                {showPay && (
-                                    <button
-                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                        className={`flex-1 text-center text-[10px] font-black uppercase tracking-widest py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 ${theme.primary} ${theme.glow}`}
-                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                    >
-                                        <CreditCard className="w-4 h-4" />
-                                        {hasEntryFee ? `Pay R${event.entry_fee} Entry` : 'Pay License Fee'}
-                                    </button>
-                                )}
-                                {showDone && (
-                                    <button 
-                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                        className="flex-1 flex items-center justify-center gap-2 py-3.5 bg-green-50 border border-green-200 rounded-xl hover:bg-green-100 transition-colors"
-                                    >
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-green-700">
-                                            {isPaid ? 'Paid (Add Div)' : 'Registered (Add Div)'}
-                                        </span>
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    );
-                })()}
                 {isEventPassed && (hasResults || hasDraw) && (
                     <div className="fixed bottom-[88px] inset-x-4 z-50 md:hidden bg-white/95 backdrop-blur-md border border-gray-200/80 p-3.5 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
                         {(() => {
