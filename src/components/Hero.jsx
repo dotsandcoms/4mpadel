@@ -344,12 +344,9 @@ const Hero = () => {
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-5xl font-display"
+                            className="text-5xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
                         >
-                            FOR THE <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-300 to-gray-500">
-                                PLAYERS.
-                            </span>
+                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-300 to-gray-500">FOR THE PLAYERS.</span>
                         </motion.h1>
                     </div>
 
@@ -357,9 +354,9 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-400 text-lg md:text-xl lg:text-2xl max-w-2xl mb-8 leading-relaxed font-light"
+                        className="text-gray-400 text-base md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light"
                     >
-                        The platform connecting the padel community. <strong className="text-white font-medium">Events, rankings, clubs, players and organisers</strong>. — all in one place.
+                        <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -368,17 +365,7 @@ const Hero = () => {
                         className="flex flex-col sm:flex-row items-center gap-4"
                     >
 
-                        {!session && (
-                            <button
-                                onClick={() => setIsAuthModalOpen(true)}
-                                className="group relative px-8 py-4 bg-black/40 backdrop-blur-md border border-white/10 hover:border-white/30 rounded-full font-bold text-white text-sm tracking-widest uppercase transition-all duration-300 w-full sm:w-auto flex justify-center items-center overflow-hidden"
-                            >
-                                <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] pointer-events-none" />
-                                <span className="relative z-10 flex items-center justify-center gap-2 text-white/80 group-hover:text-white">
-                                    Register / Login
-                                </span>
-                            </button>
-                        )}
+
 
                         {liveEvent && (
                             <motion.button
