@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/hero_bg.png';
 import AuthModal from './AuthModal';
@@ -14,6 +14,19 @@ const Hero = () => {
     const { scrollY } = useScroll();
     const yBackend = useTransform(scrollY, [0, 500], [0, 150]);
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
+    
+    // Mouse tracking for desktop light effect
+    const mouseX = useMotionValue(0);
+    const mouseY = useMotionValue(0);
+    const smoothMouseX = useSpring(mouseX, { damping: 50, stiffness: 400 });
+    const smoothMouseY = useSpring(mouseY, { damping: 50, stiffness: 400 });
+
+    const handleMouseMove = (e) => {
+        const { currentTarget, clientX, clientY } = e;
+        const { left, top } = currentTarget.getBoundingClientRect();
+        mouseX.set(clientX - left);
+        mouseY.set(clientY - top);
+    };
     const navigate = useNavigate();
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
     const [liveEvent, setLiveEvent] = useState(null);
@@ -243,7 +256,10 @@ const Hero = () => {
 
     return (
         <div className="relative w-full px-0 md:px-6 pb-0 md:pb-6 bg-black">
-            <div className="relative w-full overflow-hidden rounded-none md:rounded-[2rem] border-y border-x-0 md:border border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0">
+            <div 
+                className="relative w-full overflow-hidden rounded-none md:rounded-[2rem] border-y border-x-0 md:border border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0"
+                onMouseMove={handleMouseMove}
+            >
                 {/* Parallax Background */}
                 <motion.div
                     style={{ y: yBackend }}
@@ -259,7 +275,7 @@ const Hero = () => {
                     <div className="absolute inset-0 bg-gradient-to-b from-[#060913]/90 via-[#060913]/50 to-[#060913]/95 z-10" />
                     <div className="absolute inset-0 bg-gradient-to-r from-[#060913]/90 via-transparent to-[#060913]/90 z-10" />
 
-                    {/* Floating Orbs */}
+                    {/* Floating Orbs (Ambient for Mobile) */}
                     <motion.div
                         animate={{
                             scale: [1, 1.5, 1],
@@ -272,7 +288,18 @@ const Hero = () => {
                             repeat: Infinity,
                             ease: "easeInOut"
                         }}
-                        className="absolute top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
+                        className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
+                    />
+                    
+                    {/* Mouse Follow Orb (Desktop only) */}
+                    <motion.div
+                        style={{
+                            x: smoothMouseX,
+                            y: smoothMouseY,
+                            left: -200,
+                            top: -200,
+                        }}
+                        className="absolute hidden lg:block w-[400px] h-[400px] bg-padel-green/60 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
                     />
                     <motion.div
                         animate={{
