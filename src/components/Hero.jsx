@@ -8,6 +8,7 @@ import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy,
 import VideoModal from './VideoModal';
 import { useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
+import HappeningNowWidget from './HappeningNowWidget';
 
 const Hero = () => {
     const { scrollY } = useScroll();
@@ -398,17 +399,21 @@ const Hero = () => {
                         )}
                     </motion.div>
                 </motion.div>
-
+                
                 {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
-                <AnimatePresence>
-                    {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 20 }}
-                            transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-                            className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5"
-                        >
+                <div className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5 flex flex-col gap-4">
+                    {/* Happening Now Widget — Global live events */}
+                    <HappeningNowWidget />
+                    
+                    <AnimatePresence>
+                        {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 20 }}
+                                transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+                                className="w-full"
+                            >
                             {/* Glass panel */}
                             <div className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
                                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
@@ -699,6 +704,7 @@ const Hero = () => {
                         </motion.div>
                     )}
                 </AnimatePresence>
+                </div>
             </div>
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
             <VideoModal
