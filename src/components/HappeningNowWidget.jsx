@@ -107,14 +107,14 @@ const HappeningNowWidget = () => {
                                         <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
                                         {/* Left: Poster/Image */}
-                                        <div className="w-16 h-16 sm:w-[80px] sm:h-[80px] rounded-xl bg-black/50 border border-white/5 overflow-hidden shrink-0 relative flex items-center justify-center">
+                                        <div className="w-20 sm:w-[84px] rounded-xl bg-black/50 border border-white/5 overflow-hidden shrink-0 relative flex items-center justify-center self-stretch">
                                             {poster ? (
-                                                <img src={poster} alt={event.event_name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                                                <img src={poster} alt={event.event_name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                                             ) : (
-                                                <Calendar className="text-white/20 w-6 h-6" />
+                                                <Calendar className="text-white/20 w-6 h-6 relative z-10" />
                                             )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                                            <div className="absolute bottom-1 left-0 right-0 text-center flex justify-center">
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-10 pointer-events-none" />
+                                            <div className="absolute bottom-1.5 left-0 right-0 text-center flex justify-center z-20">
                                                 <span className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1">
                                                     <span className="w-1 h-1 bg-white rounded-full"></span> LIVE
                                                 </span>
@@ -144,9 +144,6 @@ const HappeningNowWidget = () => {
                                                 <button className="flex-1 rounded-lg bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white border border-red-500/20 hover:border-red-500 transition-all font-black text-[8px] sm:text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 py-1 shadow-sm group-hover:bg-red-600 group-hover:text-white">
                                                     <PlayCircle size={10} />
                                                     View
-                                                </button>
-                                                <button className="w-7 sm:w-8 rounded-lg bg-white/5 hover:bg-white/20 flex items-center justify-center text-white/50 hover:text-white transition-colors border border-white/5">
-                                                    <ExternalLink size={10} />
                                                 </button>
                                             </div>
                                         </div>
