@@ -526,26 +526,42 @@ const Hero = () => {
                                                         <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
                                                             {upcomingEvents.map((event, idx) => {
                                                                 // colour accent
-                                                                let accent = 'hover:border-padel-green/40 hover:shadow-[0_0_15px_rgba(46,213,115,0.1)]';
+                                                                let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
+                                                                let hoverCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
                                                                 let dateCls = 'text-padel-green';
                                                                 let glowBg = 'from-padel-green/10 to-transparent';
                                                                 let ringCls = 'border-padel-green/30 text-padel-green';
 
                                                                 if (event.sapa_status === 'Major') {
-                                                                    accent = 'hover:border-red-500/40 hover:shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+                                                                    borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+                                                                    hoverCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
                                                                     dateCls = 'text-red-400';
                                                                     glowBg = 'from-red-500/10 to-transparent';
                                                                     ringCls = 'border-red-500/30 text-red-400';
                                                                 } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                    accent = 'hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+                                                                    borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+                                                                    hoverCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
                                                                     dateCls = 'text-amber-400';
                                                                     glowBg = 'from-amber-500/10 to-transparent';
                                                                     ringCls = 'border-amber-500/30 text-amber-400';
                                                                 } else if (event.sapa_status === 'Gold') {
-                                                                    accent = 'hover:border-yellow-500/40 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                                                    borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                                                    hoverCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
                                                                     dateCls = 'text-yellow-400';
                                                                     glowBg = 'from-yellow-500/10 to-transparent';
                                                                     ringCls = 'border-yellow-500/30 text-yellow-400';
+                                                                } else if (event.sapa_status === 'Silver') {
+                                                                    borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
+                                                                    hoverCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
+                                                                    dateCls = 'text-gray-300';
+                                                                    glowBg = 'from-gray-400/10 to-transparent';
+                                                                    ringCls = 'border-gray-400/30 text-gray-300';
+                                                                } else if (event.sapa_status === 'Bronze') {
+                                                                    borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
+                                                                    hoverCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
+                                                                    dateCls = 'text-orange-400';
+                                                                    glowBg = 'from-orange-600/10 to-transparent';
+                                                                    ringCls = 'border-orange-600/30 text-orange-400';
                                                                 }
 
                                                                 return (
@@ -558,7 +574,7 @@ const Hero = () => {
                                                                             if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
                                                                             else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                                         }}
-                                                                        className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border border-white/10 ${accent} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
+                                                                        className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border ${borderCls} ${hoverCls} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02]`}
                                                                     >
                                                                         {/* Subtle status top gradient bar */}
                                                                         <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
