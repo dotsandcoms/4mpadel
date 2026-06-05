@@ -1852,7 +1852,7 @@ const EventDetails = () => {
     );
 
     const needsRegistration = !isRegistered;
-    const needsPayment = event?.allow_payments && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
+    const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
     const showReadyToCompete = !isEventPassed;
 
     const readyToCompeteBlock = showReadyToCompete && (
@@ -2067,7 +2067,7 @@ const EventDetails = () => {
                                                     Register Now
                                                 </button>
                                             )}
-                                            {event?.allow_payments && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                            {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
                                                 <button
                                                     onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                     className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
@@ -2105,7 +2105,7 @@ const EventDetails = () => {
                                 { label: 'Date', value: event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC'), icon: CalendarIcon, color: theme.fill },
                                 { label: 'Venue', value: event.venue || 'TBC', icon: MapPin, color: theme.fill },
                                 { label: 'City', value: event.city || 'TBC', icon: Globe, color: theme.fill },
-                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : 'Free', icon: CreditCard, color: theme.fill },
+                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard, color: theme.fill },
                                 { label: 'Organiser', value: event.organizer_name || '4M Padel', icon: User, color: theme.fill },
                                 { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : 'Upcoming', icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : theme.fill },
                             ].map(({ label, value, icon: Icon, color }) => (
