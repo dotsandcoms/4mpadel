@@ -255,9 +255,9 @@ const Hero = () => {
     }, [session, getPlayerEventsAsync, getPlayerMatches]);
 
     return (
-        <div className="relative w-full px-0 md:px-6 pb-0 md:pb-6 bg-black">
+        <div className="relative w-full bg-black">
             <div
-                className="relative w-full overflow-hidden rounded-none md:rounded-[2rem] border-y border-x-0 md:border border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0"
+                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0"
                 onMouseMove={handleMouseMove}
             >
                 {/* Parallax Background */}
@@ -344,7 +344,7 @@ const Hero = () => {
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="text-5xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
+                            className="text-[8vw] sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
                         >
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-300 to-gray-500">FOR THE PLAYERS.</span>
                         </motion.h1>
@@ -354,7 +354,7 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-400 text-base md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light"
+                        className="text-gray-400 text-[2.7vw] sm:text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-nowrap lg:whitespace-normal tracking-tight sm:tracking-normal"
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
