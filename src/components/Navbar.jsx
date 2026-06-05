@@ -515,53 +515,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       </div>
                     </a>
 
-                    {/* Mobile Drawer Notifications block */}
-                    {(pendingPayments.length > 0 || (player && !player.region)) && (
-                      <div className="mt-3 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl shadow-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Bell className="w-4 h-4 text-amber-500 animate-bounce" />
-                          <span className="text-[10px] font-black text-amber-500 uppercase tracking-wider">Notifications</span>
-                          <span className="ml-auto bg-amber-500 text-black text-[8px] font-black uppercase px-2 py-0.5 rounded-full">
-                            {pendingPayments.length + (player && !player.region ? 1 : 0)} Total
-                          </span>
-                        </div>
-                        <div className="flex flex-col gap-2.5 max-h-[160px] overflow-y-auto custom-scrollbar pr-1">
-                          {player && !player.region && (
-                            <a
-                              href="/profile?edit=true"
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="block p-2.5 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl transition-all"
-                            >
-                              <div className="flex items-start gap-2">
-                                <MapPin className="w-3.5 h-3.5 text-padel-green shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-[10px] font-bold text-white leading-tight">Region Missing</p>
-                                  <p className="text-[9px] text-gray-400 mt-0.5">Please select your home region.</p>
-                                </div>
-                              </div>
-                            </a>
-                          )}
-                          {pendingPayments.map(payment => (
-                            <a
-                              key={`${payment.id}_${payment.division || 'N/A'}`}
-                              href={`/calendar/${payment.slug}?register=true`}
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="block p-2.5 bg-black/40 hover:bg-black/60 border border-white/5 rounded-xl transition-all"
-                            >
-                              <p className="text-[10px] font-bold text-gray-300 leading-tight">
-                                Outstanding fee for <span className="text-amber-500 font-extrabold">{payment.name}</span>
-                                {payment.division && payment.division !== 'N/A' && (
-                                  <span className="text-gray-400 font-semibold"> ({payment.division})</span>
-                                )}
-                              </p>
-                              <span className="inline-flex items-center gap-1 text-[9px] font-black text-padel-green uppercase tracking-widest mt-1.5">
-                                Pay Now ↗
-                              </span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {/* Mobile Drawer Notifications removed - using top bell icon instead */}
                   </>
                 ) : (
                   <div className="p-4 bg-gradient-to-br from-[#ccff00]/10 to-[#ccff00]/5 border border-[#ccff00]/20 rounded-2xl text-center">
