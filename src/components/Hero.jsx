@@ -344,7 +344,7 @@ const Hero = () => {
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="text-[8vw] sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
+                            className="text-[9.5vw] sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
                         >
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-300 to-gray-500">FOR THE PLAYERS.</span>
                         </motion.h1>
@@ -354,7 +354,7 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-400 text-[2.7vw] sm:text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-nowrap lg:whitespace-normal tracking-tight sm:tracking-normal"
+                        className="text-gray-400 text-[3vw] sm:text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-nowrap lg:whitespace-normal tracking-tight sm:tracking-normal"
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
