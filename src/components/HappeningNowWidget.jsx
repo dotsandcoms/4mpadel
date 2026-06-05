@@ -65,10 +65,10 @@ const HappeningNowWidget = () => {
                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     className="relative z-40 w-full"
                 >
-                    <div className="relative w-full py-2">
+                    <div className="bg-white/5 backdrop-blur-xl border-t border-l border-white/20 border-r border-b border-padel-green/20 rounded-3xl p-4 md:p-5 relative overflow-hidden shadow-2xl w-full">
                         {/* Header */}
-                        <div className="relative z-10 flex items-center justify-center mb-4">
-                            <div className="flex items-center justify-center gap-2.5">
+                        <div className="relative z-10 flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2.5">
                                 <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
                                     <span className="absolute inline-flex w-full h-full rounded-lg bg-red-500 opacity-40 animate-ping"></span>
                                     <span className="text-base relative z-10 leading-none">🎾</span>
@@ -82,7 +82,7 @@ const HappeningNowWidget = () => {
                         </div>
 
                         {/* Events List */}
-                        <div className="relative z-10 flex justify-center overflow-x-auto snap-x snap-mandatory gap-3 pb-1 hide-scrollbar scroll-smooth">
+                        <div className="relative z-10 flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 hide-scrollbar scroll-smooth">
                             {liveEvents.map(event => {
                                 const poster = event.custom_image_url || event.image_url || event.poster_url;
 

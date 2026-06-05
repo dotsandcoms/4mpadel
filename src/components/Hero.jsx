@@ -257,7 +257,7 @@ const Hero = () => {
     return (
         <div className="relative w-full bg-black">
             <div
-                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0"
+                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-between min-h-[100vh] lg:min-h-[85vh]"
                 onMouseMove={handleMouseMove}
             >
                 {/* Parallax Background */}
@@ -327,7 +327,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 flex flex-col justify-start pt-24 pb-8 lg:h-full lg:justify-center lg:pt-0 lg:pb-0 px-6 lg:px-20 container mx-auto"
+                    className="relative z-20 flex flex-col flex-none lg:flex-1 justify-start lg:justify-center pt-28 pb-4 lg:pt-32 lg:pb-12 px-4 lg:px-8 container mx-auto"
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -406,7 +406,7 @@ const Hero = () => {
                 </motion.div>
 
                 {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
-                <div className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5 flex flex-col gap-4">
+                <div className="relative z-30 px-4 pb-28 lg:pb-5 mt-8 lg:mt-auto w-full lg:px-8 flex flex-col gap-4 container mx-auto">
                     {/* Happening Now Widget — Global live events */}
                     <HappeningNowWidget />
 
@@ -420,7 +420,7 @@ const Hero = () => {
                                 className="w-full"
                             >
                                 {/* Glass panel */}
-                                <div className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
+                                <div className="bg-white/5 backdrop-blur-xl border-t border-l border-white/20 border-r border-b border-white/5 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
 
                                         {eventsLoading && upcomingEvents.length === 0 && !nextMatch ? (
