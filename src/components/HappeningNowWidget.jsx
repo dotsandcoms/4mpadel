@@ -106,27 +106,17 @@ const HappeningNowWidget = () => {
                                     >
                                         <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
-                                        {/* Left: Poster/Image */}
-                                        <div className="w-20 sm:w-[84px] rounded-xl bg-black/50 border border-white/5 overflow-hidden shrink-0 relative flex items-center justify-center self-stretch">
-                                            {poster ? (
-                                                <img src={poster} alt={event.event_name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                            ) : (
-                                                <Calendar className="text-white/20 w-6 h-6 relative z-10" />
-                                            )}
-                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent z-10 pointer-events-none" />
-                                            <div className="absolute bottom-1.5 left-0 right-0 text-center flex justify-center z-20">
-                                                <span className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1">
-                                                    <span className="w-1 h-1 bg-white rounded-full"></span> LIVE
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Right: Info */}
+                                        {/* Event Info */}
                                         <div className="flex flex-col justify-between flex-1 py-0.5 min-w-0">
                                             <div className="min-w-0">
-                                                <h3 className="text-xs sm:text-sm font-bold text-white leading-tight line-clamp-2 group-hover:text-red-400 transition-colors mb-1 truncate whitespace-normal">
-                                                    {event.event_name}
-                                                </h3>
+                                                <div className="flex justify-between items-start mb-1 gap-2">
+                                                    <h3 className="text-xs sm:text-sm font-bold text-white leading-tight truncate group-hover:text-red-400 transition-colors">
+                                                        {event.event_name}
+                                                    </h3>
+                                                    <span className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-0.5">
+                                                        <span className="w-1 h-1 bg-white rounded-full"></span> LIVE
+                                                    </span>
+                                                </div>
                                                 <div className="flex items-center gap-1 text-gray-400 mb-1">
                                                     <Calendar size={10} className="text-red-400 shrink-0" />
                                                     <span className="text-[9px] sm:text-[10px] font-semibold text-white/90 leading-none">Today</span>

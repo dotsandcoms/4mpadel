@@ -14,7 +14,7 @@ const Hero = () => {
     const { scrollY } = useScroll();
     const yBackend = useTransform(scrollY, [0, 500], [0, 150]);
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
-    
+
     // Mouse tracking for desktop light effect
     const mouseX = useMotionValue(0);
     const mouseY = useMotionValue(0);
@@ -256,7 +256,7 @@ const Hero = () => {
 
     return (
         <div className="relative w-full px-0 md:px-6 pb-0 md:pb-6 bg-black">
-            <div 
+            <div
                 className="relative w-full overflow-hidden rounded-none md:rounded-[2rem] border-y border-x-0 md:border border-white/10 flex flex-col justify-between lg:block lg:h-[85vh] lg:min-h-0"
                 onMouseMove={handleMouseMove}
             >
@@ -290,7 +290,7 @@ const Hero = () => {
                         }}
                         className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
                     />
-                    
+
                     {/* Mouse Follow Orb (Desktop only) */}
                     <motion.div
                         style={{
@@ -367,15 +367,6 @@ const Hero = () => {
                         transition={{ delay: 1, duration: 0.8 }}
                         className="flex flex-col sm:flex-row items-center gap-4"
                     >
-                        <button
-                            onClick={() => navigate('/calendar')}
-                            className="group relative px-8 py-4 bg-padel-green rounded-full font-black text-black text-sm tracking-widest uppercase overflow-hidden hover:scale-105 transition-all duration-300 w-full sm:w-auto flex justify-center items-center shadow-[0_0_30px_rgba(46,213,115,0.2)] hover:shadow-[0_0_40px_rgba(46,213,115,0.4)]"
-                        >
-                            <span className="relative z-10 flex items-center justify-center gap-2">
-                                View Tournaments
-                                <ChevronRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
-                            </span>
-                        </button>
 
                         {!session && (
                             <button
@@ -426,12 +417,12 @@ const Hero = () => {
                         )}
                     </motion.div>
                 </motion.div>
-                
+
                 {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
                 <div className="relative z-30 px-4 pb-5 mt-auto lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:px-8 lg:pb-5 flex flex-col gap-4">
                     {/* Happening Now Widget — Global live events */}
                     <HappeningNowWidget />
-                    
+
                     <AnimatePresence>
                         {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
                             <motion.div
@@ -441,296 +432,296 @@ const Hero = () => {
                                 transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                 className="w-full"
                             >
-                            {/* Glass panel */}
-                            <div className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
-                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
+                                {/* Glass panel */}
+                                <div className="bg-white/5 backdrop-blur-3xl border border-white/10 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
+                                    <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
 
-                                    {eventsLoading && upcomingEvents.length === 0 && !nextMatch ? (
-                                        // ── Shimmering Skeleton UI ──
-                                        <>
-                                            {/* Left Side Skeleton: Upcoming Events */}
-                                            <div className="order-2 lg:order-1 lg:col-span-8 lg:pr-5">
-                                                <div className="flex items-center justify-between mb-3.5 px-1 animate-pulse">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-5 h-5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400" />
-                                                        <div className="w-24 h-3 bg-white/10 rounded" />
-                                                    </div>
-                                                    <div className="w-12 h-3 bg-white/10 rounded" />
-                                                </div>
-
-                                                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                                                    {[1, 2, 3].map((item) => (
-                                                        <div
-                                                            key={item}
-                                                            className="relative flex-shrink-0 w-52 md:w-64 h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-left animate-pulse flex flex-col justify-between overflow-hidden shadow-lg"
-                                                        >
-                                                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
-
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <span className="w-12 h-3.5 bg-purple-500/10 border border-purple-500/20 rounded" />
-                                                                <span className="w-6 h-3 bg-white/10 rounded" />
-                                                            </div>
-
-                                                            <div className="space-y-1.5 mb-3.5">
-                                                                <div className="w-full h-3 bg-white/10 rounded" />
-                                                                <div className="w-2/3 h-3 bg-white/10 rounded" />
-                                                            </div>
-
-                                                            <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
-                                                                <div className="w-20 h-2.5 bg-purple-500/10 rounded" />
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Right Side Skeleton: My Next Match */}
-                                            <div className="order-1 lg:order-2 lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6">
-                                                <div className="flex items-center justify-between mb-3.5 px-1 animate-pulse">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-5 h-5 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400" />
-                                                        <div className="w-24 h-3 bg-white/10 rounded" />
-                                                    </div>
-                                                    <div className="w-16 h-3 bg-white/10 rounded" />
-                                                </div>
-
-                                                <div className="w-full h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 animate-pulse flex flex-col justify-between relative overflow-hidden shadow-lg">
-                                                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
-
-                                                    <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
-                                                        <div className="w-24 h-2.5 bg-orange-500/10 rounded" />
-                                                        <div className="w-10 h-2.5 bg-white/10 rounded" />
-                                                    </div>
-
-                                                    <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5">
-                                                        <div className="flex-1 flex flex-col items-end space-y-1">
-                                                            <div className="w-16 h-2.5 bg-white/10 rounded" />
-                                                            <div className="w-10 h-2 bg-white/5 rounded" />
-                                                        </div>
-                                                        <div className="w-7 h-7 rounded-full bg-orange-500/15 border border-orange-500/20 flex items-center justify-center" />
-                                                        <div className="flex-1 flex flex-col items-start space-y-1">
-                                                            <div className="w-16 h-2.5 bg-white/10 rounded" />
-                                                            <div className="w-10 h-2 bg-white/5 rounded" />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                        <div className="w-24 h-2.5 bg-white/10 rounded" />
-                                                        <div className="w-10 h-2.5 bg-orange-500/10 rounded" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        // ── Actual Data ──
-                                        <>
-                                            {/* Left Side: Upcoming Events */}
-                                            {upcomingEvents.length > 0 && (
-                                                <div className={`order-2 lg:order-1 ${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
-                                                    {/* Header row */}
-                                                    <div className="flex items-center justify-between mb-3.5 px-1">
+                                        {eventsLoading && upcomingEvents.length === 0 && !nextMatch ? (
+                                            // ── Shimmering Skeleton UI ──
+                                            <>
+                                                {/* Left Side Skeleton: Upcoming Events */}
+                                                <div className="order-2 lg:order-1 lg:col-span-8 lg:pr-5">
+                                                    <div className="flex items-center justify-between mb-3.5 px-1 animate-pulse">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="p-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
-                                                                <Calendar size={13} />
-                                                            </div>
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Events</span>
+                                                            <div className="w-5 h-5 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400" />
+                                                            <div className="w-24 h-3 bg-white/10 rounded" />
                                                         </div>
-                                                        <button
-                                                            onClick={() => navigate('/profile')}
-                                                            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
-                                                        >
-                                                            View all
-                                                            <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
-                                                        </button>
+                                                        <div className="w-12 h-3 bg-white/10 rounded" />
                                                     </div>
 
-                                                    {/* Event cards — horizontal scroll */}
                                                     <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                                                        {upcomingEvents.map((event, idx) => {
-                                                            // colour accent
-                                                            let accent = 'hover:border-padel-green/40 hover:shadow-[0_0_15px_rgba(46,213,115,0.1)]';
-                                                            let dateCls = 'text-padel-green';
-                                                            let glowBg = 'from-padel-green/10 to-transparent';
-                                                            let ringCls = 'border-padel-green/30 text-padel-green';
-
-                                                            if (event.sapa_status === 'Major') {
-                                                                accent = 'hover:border-red-500/40 hover:shadow-[0_0_15px_rgba(239,68,68,0.1)]';
-                                                                dateCls = 'text-red-400';
-                                                                glowBg = 'from-red-500/10 to-transparent';
-                                                                ringCls = 'border-red-500/30 text-red-400';
-                                                            } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                accent = 'hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.1)]';
-                                                                dateCls = 'text-amber-400';
-                                                                glowBg = 'from-amber-500/10 to-transparent';
-                                                                ringCls = 'border-amber-500/30 text-amber-400';
-                                                            } else if (event.sapa_status === 'Gold') {
-                                                                accent = 'hover:border-yellow-500/40 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)]';
-                                                                dateCls = 'text-yellow-400';
-                                                                glowBg = 'from-yellow-500/10 to-transparent';
-                                                                ringCls = 'border-yellow-500/30 text-yellow-400';
-                                                            }
-
-                                                            return (
-                                                                <motion.button
-                                                                    key={event.id}
-                                                                    initial={{ opacity: 0, y: 15 }}
-                                                                    animate={{ opacity: 1, y: 0 }}
-                                                                    transition={{ delay: 1.2 + idx * 0.08, type: 'spring', stiffness: 100 }}
-                                                                    onClick={() => {
-                                                                        if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
-                                                                        else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                                    }}
-                                                                    className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border border-white/10 ${accent} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
-                                                                >
-                                                                    {/* Subtle status top gradient bar */}
-                                                                    <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
-
-                                                                    <div className="flex justify-between items-start mb-2">
-                                                                        <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
-                                                                            {event.sapa_status || 'SAPA'}
-                                                                        </span>
-
-                                                                        {/* Paid Stamp / Icon */}
-                                                                        {event.isPaid ? (
-                                                                            <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
-                                                                                <CheckCircle2 size={8} className="shrink-0" /> Paid
-                                                                            </span>
-                                                                        ) : (
-                                                                            <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
-                                                                        )}
-                                                                    </div>
-
-                                                                    <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-8">
-                                                                        {event.event_name}
-                                                                    </p>
-
-                                                                    <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
-                                                                        <span className={`text-[8px] font-bold ${dateCls} flex items-center gap-1`}>
-                                                                            <Calendar size={10} className="shrink-0" />
-                                                                            {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                        </span>
-                                                                    </div>
-                                                                </motion.button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Right Side: My Next Match */}
-                                            {nextMatch && (
-                                                <div className={`order-1 lg:order-2 ${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
-                                                    {/* Header row */}
-                                                    <div className="flex items-center justify-between mb-3.5 px-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="p-1 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.15)]">
-                                                                <Trophy size={13} />
-                                                            </div>
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Match</span>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => navigate('/profile?tab=matches')}
-                                                            className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
-                                                        >
-                                                            View Matches
-                                                            <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
-                                                        </button>
-                                                    </div>
-
-                                                    {/* Match Card */}
-                                                    {(() => {
-                                                        const info = nextMatch.Info || {};
-
-                                                        // Parse partners and names
-                                                        const team1P1 = info.Challenger?.Name || 'TBD';
-                                                        const team1P2 = info.Challenger1?.Name;
-                                                        const team2P1 = info.Challenged?.Name || 'TBD';
-                                                        const team2P2 = info.Challenged1?.Name;
-
-                                                        return (
+                                                        {[1, 2, 3].map((item) => (
                                                             <div
-                                                                onClick={() => navigate('/profile?tab=matches')}
-                                                                className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+                                                                key={item}
+                                                                className="relative flex-shrink-0 w-52 md:w-64 h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 text-left animate-pulse flex flex-col justify-between overflow-hidden shadow-lg"
                                                             >
-                                                                {/* Soft background glow */}
-                                                                <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
 
-                                                                {/* Top Bar: Event Name and Date */}
-                                                                <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
-                                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
-                                                                        <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate">
-                                                                            {info.EventName || 'Next Match'}
-                                                                        </span>
-                                                                    </div>
-                                                                    {info.Date && (
-                                                                        <span className="text-[8px] font-bold text-white/50 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
-                                                                            {info.Date}
-                                                                        </span>
-                                                                    )}
+                                                                <div className="flex justify-between items-start mb-2">
+                                                                    <span className="w-12 h-3.5 bg-purple-500/10 border border-purple-500/20 rounded" />
+                                                                    <span className="w-6 h-3 bg-white/10 rounded" />
                                                                 </div>
 
-                                                                {/* Centered Matchup Section */}
-                                                                <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
-                                                                    {/* Team 1 (Challengers) */}
-                                                                    <div className="flex-1 flex flex-col items-end text-right min-w-0">
-                                                                        <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                            {team1P1}
-                                                                        </span>
-                                                                        {team1P2 && (
-                                                                            <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                {team1P2}
+                                                                <div className="space-y-1.5 mb-3.5">
+                                                                    <div className="w-full h-3 bg-white/10 rounded" />
+                                                                    <div className="w-2/3 h-3 bg-white/10 rounded" />
+                                                                </div>
+
+                                                                <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
+                                                                    <div className="w-20 h-2.5 bg-purple-500/10 rounded" />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* Right Side Skeleton: My Next Match */}
+                                                <div className="order-1 lg:order-2 lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6">
+                                                    <div className="flex items-center justify-between mb-3.5 px-1 animate-pulse">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-5 h-5 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400" />
+                                                            <div className="w-24 h-3 bg-white/10 rounded" />
+                                                        </div>
+                                                        <div className="w-16 h-3 bg-white/10 rounded" />
+                                                    </div>
+
+                                                    <div className="w-full h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 animate-pulse flex flex-col justify-between relative overflow-hidden shadow-lg">
+                                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
+
+                                                        <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
+                                                            <div className="w-24 h-2.5 bg-orange-500/10 rounded" />
+                                                            <div className="w-10 h-2.5 bg-white/10 rounded" />
+                                                        </div>
+
+                                                        <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5">
+                                                            <div className="flex-1 flex flex-col items-end space-y-1">
+                                                                <div className="w-16 h-2.5 bg-white/10 rounded" />
+                                                                <div className="w-10 h-2 bg-white/5 rounded" />
+                                                            </div>
+                                                            <div className="w-7 h-7 rounded-full bg-orange-500/15 border border-orange-500/20 flex items-center justify-center" />
+                                                            <div className="flex-1 flex flex-col items-start space-y-1">
+                                                                <div className="w-16 h-2.5 bg-white/10 rounded" />
+                                                                <div className="w-10 h-2 bg-white/5 rounded" />
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                                                            <div className="w-24 h-2.5 bg-white/10 rounded" />
+                                                            <div className="w-10 h-2.5 bg-orange-500/10 rounded" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            // ── Actual Data ──
+                                            <>
+                                                {/* Left Side: Upcoming Events */}
+                                                {upcomingEvents.length > 0 && (
+                                                    <div className={`order-2 lg:order-1 ${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
+                                                        {/* Header row */}
+                                                        <div className="flex items-center justify-between mb-3.5 px-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="p-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
+                                                                    <Calendar size={13} />
+                                                                </div>
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Events</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => navigate('/profile')}
+                                                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
+                                                            >
+                                                                View all
+                                                                <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Event cards — horizontal scroll */}
+                                                        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                                                            {upcomingEvents.map((event, idx) => {
+                                                                // colour accent
+                                                                let accent = 'hover:border-padel-green/40 hover:shadow-[0_0_15px_rgba(46,213,115,0.1)]';
+                                                                let dateCls = 'text-padel-green';
+                                                                let glowBg = 'from-padel-green/10 to-transparent';
+                                                                let ringCls = 'border-padel-green/30 text-padel-green';
+
+                                                                if (event.sapa_status === 'Major') {
+                                                                    accent = 'hover:border-red-500/40 hover:shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+                                                                    dateCls = 'text-red-400';
+                                                                    glowBg = 'from-red-500/10 to-transparent';
+                                                                    ringCls = 'border-red-500/30 text-red-400';
+                                                                } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                                    accent = 'hover:border-amber-500/40 hover:shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+                                                                    dateCls = 'text-amber-400';
+                                                                    glowBg = 'from-amber-500/10 to-transparent';
+                                                                    ringCls = 'border-amber-500/30 text-amber-400';
+                                                                } else if (event.sapa_status === 'Gold') {
+                                                                    accent = 'hover:border-yellow-500/40 hover:shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                                                    dateCls = 'text-yellow-400';
+                                                                    glowBg = 'from-yellow-500/10 to-transparent';
+                                                                    ringCls = 'border-yellow-500/30 text-yellow-400';
+                                                                }
+
+                                                                return (
+                                                                    <motion.button
+                                                                        key={event.id}
+                                                                        initial={{ opacity: 0, y: 15 }}
+                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                        transition={{ delay: 1.2 + idx * 0.08, type: 'spring', stiffness: 100 }}
+                                                                        onClick={() => {
+                                                                            if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                            else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                                        }}
+                                                                        className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border border-white/10 ${accent} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02] shadow-lg`}
+                                                                    >
+                                                                        {/* Subtle status top gradient bar */}
+                                                                        <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
+
+                                                                        <div className="flex justify-between items-start mb-2">
+                                                                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
+                                                                                {event.sapa_status || 'SAPA'}
+                                                                            </span>
+
+                                                                            {/* Paid Stamp / Icon */}
+                                                                            {event.isPaid ? (
+                                                                                <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
+                                                                                    <CheckCircle2 size={8} className="shrink-0" /> Paid
+                                                                                </span>
+                                                                            ) : (
+                                                                                <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+                                                                            )}
+                                                                        </div>
+
+                                                                        <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-8">
+                                                                            {event.event_name}
+                                                                        </p>
+
+                                                                        <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
+                                                                            <span className={`text-[8px] font-bold ${dateCls} flex items-center gap-1`}>
+                                                                                <Calendar size={10} className="shrink-0" />
+                                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                            </span>
+                                                                        </div>
+                                                                    </motion.button>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Right Side: My Next Match */}
+                                                {nextMatch && (
+                                                    <div className={`order-1 lg:order-2 ${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
+                                                        {/* Header row */}
+                                                        <div className="flex items-center justify-between mb-3.5 px-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="p-1 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.15)]">
+                                                                    <Trophy size={13} />
+                                                                </div>
+                                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Match</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => navigate('/profile?tab=matches')}
+                                                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
+                                                            >
+                                                                View Matches
+                                                                <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Match Card */}
+                                                        {(() => {
+                                                            const info = nextMatch.Info || {};
+
+                                                            // Parse partners and names
+                                                            const team1P1 = info.Challenger?.Name || 'TBD';
+                                                            const team1P2 = info.Challenger1?.Name;
+                                                            const team2P1 = info.Challenged?.Name || 'TBD';
+                                                            const team2P2 = info.Challenged1?.Name;
+
+                                                            return (
+                                                                <div
+                                                                    onClick={() => navigate('/profile?tab=matches')}
+                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+                                                                >
+                                                                    {/* Soft background glow */}
+                                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
+                                                                    {/* Top Bar: Event Name and Date */}
+                                                                    <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
+                                                                        <div className="flex items-center gap-1.5 min-w-0">
+                                                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
+                                                                            <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate">
+                                                                                {info.EventName || 'Next Match'}
+                                                                            </span>
+                                                                        </div>
+                                                                        {info.Date && (
+                                                                            <span className="text-[8px] font-bold text-white/50 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                                                                                {info.Date}
                                                                             </span>
                                                                         )}
                                                                     </div>
 
-                                                                    {/* VS Badge */}
-                                                                    <div className="relative shrink-0 flex items-center justify-center">
-                                                                        <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
-                                                                            <span className="text-[8px] font-black text-black tracking-widest font-sans scale-90">VS</span>
+                                                                    {/* Centered Matchup Section */}
+                                                                    <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
+                                                                        {/* Team 1 (Challengers) */}
+                                                                        <div className="flex-1 flex flex-col items-end text-right min-w-0">
+                                                                            <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                {team1P1}
+                                                                            </span>
+                                                                            {team1P2 && (
+                                                                                <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                    {team1P2}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
+
+                                                                        {/* VS Badge */}
+                                                                        <div className="relative shrink-0 flex items-center justify-center">
+                                                                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
+                                                                                <span className="text-[8px] font-black text-black tracking-widest font-sans scale-90">VS</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* Team 2 (Challenged) */}
+                                                                        <div className="flex-1 flex flex-col items-start text-left min-w-0">
+                                                                            <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                {team2P1}
+                                                                            </span>
+                                                                            {team2P2 && (
+                                                                                <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                    {team2P2}
+                                                                                </span>
+                                                                            )}
                                                                         </div>
                                                                     </div>
 
-                                                                    {/* Team 2 (Challenged) */}
-                                                                    <div className="flex-1 flex flex-col items-start text-left min-w-0">
-                                                                        <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                            {team2P1}
-                                                                        </span>
-                                                                        {team2P2 && (
-                                                                            <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                {team2P2}
+                                                                    {/* Bottom Bar: Location and Court */}
+                                                                    <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                                                                        <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
+                                                                            <MapPin size={10} className="text-padel-green shrink-0" />
+                                                                            <span className="text-[8px] font-bold text-white/50 truncate uppercase tracking-wider">
+                                                                                {info.Location || info.Venue || 'Location TBD'}
+                                                                            </span>
+                                                                        </div>
+                                                                        {info.Court && (
+                                                                            <span className="text-[7px] font-black bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
+                                                                                {info.Court}
                                                                             </span>
                                                                         )}
                                                                     </div>
                                                                 </div>
+                                                            );
+                                                        })()}
+                                                    </div>
+                                                )}
+                                            </>
+                                        )}
 
-                                                                {/* Bottom Bar: Location and Court */}
-                                                                <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                                    <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
-                                                                        <MapPin size={10} className="text-padel-green shrink-0" />
-                                                                        <span className="text-[8px] font-bold text-white/50 truncate uppercase tracking-wider">
-                                                                            {info.Location || info.Venue || 'Location TBD'}
-                                                                        </span>
-                                                                    </div>
-                                                                    {info.Court && (
-                                                                        <span className="text-[7px] font-black bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
-                                                                            {info.Court}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
-
+                                    </div>
                                 </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
             </div>
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
