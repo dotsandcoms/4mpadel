@@ -379,7 +379,7 @@ const PlayerProfile = () => {
                 if (allFiltered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees, event_name');
 
                     // Fetch user's paid registrations
                     const { data: paidRegs } = await supabase
@@ -423,6 +423,7 @@ const PlayerProfile = () => {
                                 e.sapa_status = match.sapa_status;
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
+                                e.event_name = match.event_name || e.event_name;
                                 e.isPaid = paidEventIds.has(match.id);
                             }
                         });
@@ -1204,6 +1205,17 @@ const PlayerProfile = () => {
 
                                     {/* Secondary view tabs inside Tournaments */}
                                     <div className="flex gap-1 bg-white/[0.03] border border-white/10 p-1 rounded-xl w-fit">
+                                        {pendingPaymentEvents.length > 0 && (
+                                            <button
+                                                onClick={() => setEventViewTab('pending')}
+                                                className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${currentTab === 'pending'
+                                                    ? 'bg-amber-500 text-black shadow-md'
+                                                    : 'text-amber-500 hover:text-amber-400'
+                                                    }`}
+                                            >
+                                                Pending Payments ({pendingPaymentEvents.length})
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => setEventViewTab('upcoming')}
                                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${currentTab === 'upcoming'
@@ -1247,41 +1259,65 @@ const PlayerProfile = () => {
                                                     badgeColor = 'bg-white/5 border border-white/10 text-gray-400';
                                                 }
 
+                                                const hasPending = pendingPayments?.some(p => p.id === event.db_id);
+                                                const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0);
+                                                const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
+
                                                 return (
-                                                    <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-4 shadow-lg backdrop-blur-xl relative overflow-hidden group">
-                                                        <div className="min-w-0 space-y-1">
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className={`text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${badgeColor}`}>
-                                                                    {status}
-                                                                </span>
-                                                                {event.isPaid && (
-                                                                    <span className="text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-padel-green">
-                                                                        Paid
+                                                    <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg backdrop-blur-xl relative overflow-hidden group">
+                                                        <div className="flex items-center justify-between gap-4">
+                                                            <div className="min-w-0 space-y-1">
+                                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                                    <span className={`text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded ${badgeColor}`}>
+                                                                        {status}
                                                                     </span>
-                                                                )}
+                                                                    {event.isPaid && (
+                                                                        <span className="text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-padel-green">
+                                                                            Paid
+                                                                        </span>
+                                                                    )}
+                                                                    {hasPending && !event.isPaid && (
+                                                                        <span className="text-[7.5px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-500">
+                                                                            Pending
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <h5 className="font-extrabold text-xs text-white uppercase tracking-tight truncate leading-tight group-hover:text-padel-green transition-colors">{event.name || event.event_name}</h5>
+                                                                <div className="flex items-center gap-1 text-[8px] text-gray-500 font-bold uppercase tracking-wider">
+                                                                    <MapPin size={9} className="text-gray-600 shrink-0" />
+                                                                    <span className="truncate">{event.venue || 'Club Arena'}</span>
+                                                                </div>
                                                             </div>
-                                                        <h5 className="font-extrabold text-xs text-white uppercase tracking-tight truncate leading-tight group-hover:text-padel-green transition-colors">{event.name}</h5>
-                                                        <div className="flex items-center gap-1 text-[8px] text-gray-500 font-bold uppercase tracking-wider">
-                                                            <MapPin size={9} className="text-gray-600" />
-                                                            <span>{event.venue || 'Club Arena'}</span>
+                                                            <div className="text-right shrink-0 flex items-center gap-3">
+                                                                <div>
+                                                                    <span className="text-[9px] font-black text-padel-green uppercase tracking-widest block leading-none">
+                                                                        {new Date(event.start_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                                                                    </span>
+                                                                    <span className="text-[8px] text-gray-500 font-bold mt-1 block">R {event.entry_fee || '450'}</span>
+                                                                </div>
+                                                                <a
+                                                                    href={event.slug ? `/calendar/${event.slug}` : '#'}
+                                                                    className="p-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 hover:text-padel-green active:scale-90 transition-all flex items-center justify-center shrink-0"
+                                                                >
+                                                                    <ExternalLink size={10} />
+                                                                </a>
+                                                            </div>
                                                         </div>
+                                                        
+                                                        {needsPayment && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    navigate(`/calendar/${event.slug || event.db_id}?register=true`);
+                                                                }}
+                                                                className="w-full bg-padel-green text-black font-black uppercase tracking-widest text-[9px] py-2.5 rounded-xl hover:bg-white active:scale-95 transition-all shadow-md flex items-center justify-center gap-1.5 mt-1"
+                                                            >
+                                                                <CreditCard size={12} />
+                                                                Pay Event Fee
+                                                            </button>
+                                                        )}
                                                     </div>
-                                                    <div className="text-right shrink-0 flex items-center gap-3">
-                                                        <div>
-                                                            <span className="text-[9px] font-black text-padel-green uppercase tracking-widest block leading-none">
-                                                                {new Date(event.start_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
-                                                            </span>
-                                                            <span className="text-[8px] text-gray-500 font-bold mt-1 block">R {event.entry_fee || '450'}</span>
-                                                        </div>
-                                                        <a
-                                                            href={event.slug ? `/calendar/${event.slug}` : '#'}
-                                                            className="p-2 bg-white/5 border border-white/10 text-white rounded-lg hover:bg-white/10 hover:text-padel-green active:scale-90 transition-all flex items-center justify-center shrink-0"
-                                                        >
-                                                            <ExternalLink size={10} />
-                                                        </a>
-                                                    </div>
-                                                </div>
-                                            ); })}
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="text-center py-10 text-xs text-gray-500 font-black uppercase bg-slate-900/30 border border-white/5 rounded-2xl relative overflow-hidden">
