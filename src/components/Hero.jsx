@@ -276,46 +276,50 @@ const Hero = () => {
                     <div className="absolute inset-0 bg-gradient-to-r from-[#060913]/90 via-transparent to-[#060913]/90 z-10" />
 
                     {/* Floating Orbs (Ambient for Mobile) */}
-                    <motion.div
-                        animate={{
-                            scale: [1, 1.5, 1],
-                            opacity: [0.3, 0.7, 0.3],
-                            x: [0, 300, -150, 0],
-                            y: [0, -200, 150, 0]
-                        }}
-                        transition={{
-                            duration: 8,
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                        }}
-                        className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
-                    />
+                    {false && (
+                        <>
+                            <motion.div
+                                animate={{
+                                    scale: [1, 1.5, 1],
+                                    opacity: [0.3, 0.7, 0.3],
+                                    x: [0, 300, -150, 0],
+                                    y: [0, -200, 150, 0]
+                                }}
+                                transition={{
+                                    duration: 8,
+                                    repeat: Infinity,
+                                    ease: "easeInOut"
+                                }}
+                                className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
+                            />
 
-                    {/* Mouse Follow Orb (Desktop only) */}
-                    <motion.div
-                        style={{
-                            x: smoothMouseX,
-                            y: smoothMouseY,
-                            left: -200,
-                            top: -200,
-                        }}
-                        className="absolute hidden lg:block w-[400px] h-[400px] bg-padel-green/60 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
-                    />
-                    <motion.div
-                        animate={{
-                            scale: [1, 1.8, 1],
-                            opacity: [0.2, 0.6, 0.2],
-                            x: [0, -300, 200, 0],
-                            y: [0, 250, -150, 0]
-                        }}
-                        transition={{
-                            duration: 10,
-                            repeat: Infinity,
-                            ease: "easeInOut",
-                            delay: 1
-                        }}
-                        className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
-                    />
+                            {/* Mouse Follow Orb (Desktop only) */}
+                            <motion.div
+                                style={{
+                                    x: smoothMouseX,
+                                    y: smoothMouseY,
+                                    left: -200,
+                                    top: -200,
+                                }}
+                                className="absolute hidden lg:block w-[400px] h-[400px] bg-padel-green/60 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
+                            />
+                            <motion.div
+                                animate={{
+                                    scale: [1, 1.8, 1],
+                                    opacity: [0.2, 0.6, 0.2],
+                                    x: [0, -300, 200, 0],
+                                    y: [0, 250, -150, 0]
+                                }}
+                                transition={{
+                                    duration: 10,
+                                    repeat: Infinity,
+                                    ease: "easeInOut",
+                                    delay: 1
+                                }}
+                                className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
+                            />
+                        </>
+                    )}
 
                     <img
                         src={heroBg}
