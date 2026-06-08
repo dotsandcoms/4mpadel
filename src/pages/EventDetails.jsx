@@ -1854,7 +1854,7 @@ const EventDetails = () => {
     const isRegistrationAllowed = !isEventPassed && !isLive;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
-    const showReadyToCompete = isRegistrationAllowed || needsPayment;
+    const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
 
     const readyToCompeteBlock = showReadyToCompete && (
         <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
