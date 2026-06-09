@@ -816,10 +816,10 @@ const EventDetails = () => {
                             // If event is passed, use cache only if it's from after our latest logic fix
                             useCache = isCacheValid;
                         } else {
-                            // If event is live, use cache only if it's less than 1 hour old AND from after our fix
+                            // If event is live, use cache only if it's less than 2 minutes old AND from after our fix
                             const now = new Date();
                             const diffHrs = Math.abs(now - lastSynced) / 36e5;
-                            if (diffHrs < 1 && isCacheValid) {
+                            if (diffHrs < (2 / 60) && isCacheValid) {
                                 useCache = true;
                             }
                         }
@@ -2787,14 +2787,14 @@ const EventDetails = () => {
                             onClick={() => setIsModalOpen(false)}
                         />
                         <motion.div
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                            className="fixed inset-0 z-[1100] flex items-center justify-center pointer-events-none p-6 md:p-8"
+                            initial={{ opacity: 0, y: 100 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 100 }}
+                            className="fixed inset-0 z-[1100] flex items-end sm:items-center justify-center pointer-events-none sm:p-6 md:p-8"
                         >
-                            <div className="bg-[#0F172A] w-full max-w-xl rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[92vh] border border-white/10 overflow-hidden mt-8 md:mt-0">
+                            <div className="bg-[#0F172A] w-[95vw] md:w-[90vw] max-w-5xl rounded-t-3xl sm:rounded-3xl shadow-2xl pointer-events-auto flex flex-col max-h-[90vh] sm:max-h-[92vh] border border-white/10 overflow-hidden">
                                 {/* Modal Header */}
-                                <div className="bg-slate-900 px-6 py-4 flex justify-between items-center">
+                                <div className="bg-black/20 backdrop-blur-xl px-6 py-4 flex justify-between items-center border-b border-white/5 sticky top-0 z-10">
                                     <h3 className="text-white font-bold text-lg">
                                         {regStep === 1 
                                             ? (calculateTotalAmount() > 0 
@@ -2802,20 +2802,21 @@ const EventDetails = () => {
                                                 : (isRegistered ? 'Registered' : `Registration for ${event?.event_name || 'Event'}`))
                                             : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white">
-                                        <X className="w-6 h-6" />
+                                    <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-full p-2 transition-colors">
+                                        <X className="w-5 h-5" />
                                     </button>
                                 </div>
 
                                 {/* Modal Content */}
                                 <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
                                     {regStep === 1 ? (
-                                        <>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <div className="grid grid-cols-2 gap-4 md:gap-6">
+                                            <div className="col-span-1 space-y-4">
+                                                <div className="grid grid-cols-1 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
                                                     <div className="relative group">
-                                                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green group-focus-within:text-white transition-colors" size={16} />
+                                                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-padel-green transition-colors" size={16} />
                                                         <input
                                                             type="text"
                                                             name="full_name"
@@ -2864,9 +2865,9 @@ const EventDetails = () => {
                                                         />
                                                     </div>
                                                 </div>
-                                            </div>
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between ml-3 mb-1">
+                                                </div>
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between ml-3 mb-1">
                                                     <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
                                                     {registeredDivisions.length > 0 && (
                                                         <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
@@ -2882,7 +2883,6 @@ const EventDetails = () => {
                                                     </div>
                                                 ) : availableDivisions.length > 0 ? (
                                                     <div className="relative">
-                                                        {/* The Select Box */}
                                                         <div 
                                                             onClick={() => setIsDivisionsDropdownOpen(!isDivisionsDropdownOpen)}
                                                             className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-h-[50px] flex flex-wrap items-center gap-2 cursor-pointer transition-all hover:border-padel-green/50"
@@ -2944,7 +2944,7 @@ const EventDetails = () => {
                                                                                     <div className="flex items-center gap-3">
                                                                                         <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-all ${
                                                                                             alreadyPaid ? 'bg-padel-green border-padel-green' :
-                                                                                            isSelected ? 'bg-padel-green border-padel-green' : 'border-white/30'
+                                                                                            isSelected ? 'bg-padel-green border-padel-green' : 'border-white/20'
                                                                                         }`}>
                                                                                             {(isSelected || alreadyPaid) && <CheckCircle size={10} className={isSelected && !alreadyPaid ? 'text-black' : 'text-white'} />}
                                                                                         </div>
@@ -2973,14 +2973,14 @@ const EventDetails = () => {
                                             </div>
 
                                             <div className="space-y-3">
-                                                <div className="hidden items-center justify-between bg-slate-900/80 p-5 rounded-2xl border border-white/5 shadow-2xl group">
+                                                <div className="hidden items-center justify-between bg-[#0F172A] p-5 rounded-2xl border border-white/10 shadow-sm group">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-blue-400/10 rounded-xl flex items-center justify-center text-blue-400 group-hover:bg-blue-400 group-hover:text-black transition-all duration-500">
+                                                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-500">
                                                             <Users size={20} />
                                                         </div>
                                                         <div>
                                                             <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
-                                                            <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
+                                                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
                                                         </div>
                                                     </div>
                                                     <button
@@ -2995,11 +2995,11 @@ const EventDetails = () => {
                                                                 setFormData(prev => ({ ...prev, partner_name: '' }));
                                                             }
                                                         }}
-                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-blue-400' : 'bg-white/10'}`}
+                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-blue-400' : 'bg-white/20'}`}
                                                     >
                                                         <span
                                                             aria-hidden="true"
-                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
                                                         />
                                                     </button>
                                                 </div>
@@ -3015,14 +3015,14 @@ const EventDetails = () => {
                                                             <div className="space-y-1.5">
                                                                 <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
                                                                 <div className="relative group">
-                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-400" size={16} />
+                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
                                                                     <input
                                                                         type="text"
                                                                         name="partner_name"
                                                                         value={formData.partner_name}
                                                                         onChange={handleInputChange}
                                                                         autoComplete="off"
-                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-blue-400 focus:ring-1 focus:ring-blue-400/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all font-bold placeholder:text-gray-600`}
                                                                         placeholder="Type 2+ characters to search..."
                                                                     />
                                                                     {isLookingUpPartner && (
@@ -3044,7 +3044,7 @@ const EventDetails = () => {
                                                                                 initial={{ opacity: 0, y: -5 }}
                                                                                 animate={{ opacity: 1, y: 0 }}
                                                                                 exit={{ opacity: 0, y: -5 }}
-                                                                                className="absolute top-full left-0 right-0 mt-1 bg-white rounded-xl border border-gray-100 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                                className="absolute top-full left-0 right-0 mt-1 bg-[#0F172A] rounded-xl border border-white/5 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
                                                                             >
                                                                                 {partnerSearchResults.map((player) => (
                                                                                     <button
@@ -3058,8 +3058,8 @@ const EventDetails = () => {
                                                                                                 <User size={12} />
                                                                                             </div>
                                                                                             <div>
-                                                                                                <p className="text-xs font-bold text-slate-900">{player.name}</p>
-                                                                                                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
+                                                                                                <p className="text-xs font-bold text-white">{player.name}</p>
+                                                                                                <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
                                                                                             </div>
                                                                                         </div>
                                                                                         <CheckCircle className="w-3 h-3 text-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
@@ -3081,15 +3081,15 @@ const EventDetails = () => {
                                                                     <motion.div
                                                                         initial={{ opacity: 0, y: 5 }}
                                                                         animate={{ opacity: 1, y: 0 }}
-                                                                        className="bg-blue-400/5 border border-blue-400/10 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-400/10 transition-colors"
+                                                                        className="bg-blue-50 border border-blue-100 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-100 transition-colors"
                                                                     >
                                                                         <div className="flex items-center gap-3">
-                                                                            <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-400 shadow-sm">
+                                                                            <div className="w-10 h-10 bg-[#0F172A] rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
                                                                                 <CreditCard className="w-5 h-5" />
                                                                             </div>
                                                                             <div>
                                                                                 <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
-                                                                                <p className="text-[8px] text-white/40 font-bold uppercase tracking-widest mt-0.5">
+                                                                                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
                                                                                     Multi-Division Fee Auto-Calculated
                                                                                 </p>
                                                                             </div>
@@ -3101,7 +3101,7 @@ const EventDetails = () => {
                                                                         >
                                                                             <span
                                                                                 aria-hidden="true"
-                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
                                                                             />
                                                                         </button>
                                                                     </motion.div>
@@ -3114,28 +3114,28 @@ const EventDetails = () => {
                                                                                 exit={{ opacity: 0, height: 0, marginTop: 0 }}
                                                                                 className="overflow-hidden"
                                                                             >
-                                                                                <div className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group">
+                                                                                <div className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group">
                                                                                     <div className="flex items-center gap-2">
-                                                                                        <div className="w-8 h-8 bg-blue-400/10 rounded-lg flex items-center justify-center text-blue-400">
+                                                                                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
                                                                                             <CreditCard size={16} />
                                                                                         </div>
                                                                                         <div>
                                                                                             <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
-                                                                                            <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                                                    <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => setPartnerLicenseChoice('temporary')}
-                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                         >
                                                                                             Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                                         </button>
                                                                                         <button
                                                                                             type="button"
                                                                                             onClick={() => setPartnerLicenseChoice('full')}
-                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                         >
                                                                                             Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                                                         </button>
@@ -3154,41 +3154,42 @@ const EventDetails = () => {
                                                     <motion.div
                                                         initial={{ opacity: 0, y: 5 }}
                                                         animate={{ opacity: 1, y: 0 }}
-                                                        className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/10 shadow-inner group mt-3"
+                                                        className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group mt-3"
                                                     >
                                                         <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 bg-blue-400/10 rounded-lg flex items-center justify-center text-blue-400">
+                                                            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
                                                                 <CreditCard size={16} />
                                                             </div>
                                                             <div>
                                                                 <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
-                                                                <p className="text-[9px] text-white/30 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
                                                             </div>
                                                         </div>
-                                                        <div className="flex bg-slate-800 rounded-full p-1 border border-white/5">
+                                                        <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setLicenseChoice('temporary')}
-                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                             >
                                                                 Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                             </button>
                                                             <button
                                                                 type="button"
                                                                 onClick={() => setLicenseChoice('full')}
-                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-white text-black shadow-md' : 'text-gray-400 hover:text-white'}`}
+                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                             >
                                                                 Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                             </button>
                                                         </div>
                                                     </motion.div>
                                                 )}
+                                                </div>
                                             </div>
 
-                                            <div className="pt-3 border-t border-white/10">
-                                                <div className="bg-slate-900/50 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/5 shadow-2xl">
+                                            <div className="col-span-1">
+                                                <div className="bg-white/5 rounded-[1.5rem] p-4 text-white overflow-hidden relative group border border-white/10 shadow-md h-full flex flex-col justify-between">
                                                     {/* Decorative Background Glow */}
-                                                    <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/5 rounded-full blur-3xl -mr-24 -mt-24 group-hover:bg-padel-green/10 transition-colors duration-1000" />
+                                                    <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/10 rounded-full blur-3xl -mr-24 -mt-24 group-hover:bg-padel-green/20 transition-colors duration-1000" />
 
                                                     <div className="relative z-10 space-y-4">
                                                         {/* Itemized list */}
@@ -3201,7 +3202,7 @@ const EventDetails = () => {
                                                                         const pState = divisionPartners[div] || {};
                                                                         const pProf = pState.partnerProfile;
                                                                         return (
-                                                                            <div key={`div-${div}`} className="flex flex-col gap-2 bg-white/[0.03] p-3 rounded-xl border border-white/10 shadow-inner">
+                                                                            <div key={`div-${div}`} className="flex flex-col gap-2 bg-[#0F172A] p-3 rounded-xl border border-white/10 shadow-sm">
                                                                                 <div className="flex justify-between items-center">
                                                                                     <div className="flex items-center gap-3">
                                                                                         <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center border border-padel-green/30 text-padel-green font-black text-[9px] uppercase">
@@ -3212,7 +3213,7 @@ const EventDetails = () => {
                                                                                             <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">Selected Category</p>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
+                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R{getEntryFeeForCategory(div)}</span>
                                                                                 </div>
                                                                                 <div className="mt-2 pt-2 border-t border-white/5 space-y-3">
                                                                                     {!pState.hasPartner ? (
@@ -3224,7 +3225,7 @@ const EventDetails = () => {
                                                                                                     [div]: { ...prev[div], hasPartner: true }
                                                                                                 }));
                                                                                             }}
-                                                                                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-white/20 text-gray-400 hover:text-white hover:border-padel-green/50 hover:bg-padel-green/5 transition-all text-xs font-bold tracking-wider"
+                                                                                            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-dashed border-white/20 text-gray-400 hover:text-padel-green hover:border-padel-green/50 hover:bg-padel-green/5 transition-all text-xs font-bold tracking-wider"
                                                                                         >
                                                                                             <UserPlus size={14} /> Add a Partner
                                                                                         </button>
@@ -3246,34 +3247,34 @@ const EventDetails = () => {
                                                                                                 </button>
                                                                                             </div>
                                                                                             <div className="relative">
-                                                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                                                                                 <input
-                                                                                                    type="text"
-                                                                                                    value={pState.partnerName || ''}
-                                                                                                    onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
-                                                                                                    autoComplete="off"
-                                                                                                    className={`w-full bg-black/40 border ${
-                                                                                                        pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
-                                                                                                    } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
-                                                                                                    placeholder={`Search partner for ${div}...`}
-                                                                                                />
+                                                                                                        type="text"
+                                                                                                        value={pState.partnerName || ''}
+                                                                                                        onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
+                                                                                                        autoComplete="off"
+                                                                                                        className={`w-full bg-white/5 border ${
+                                                                                                            pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
+                                                                                                        } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
+                                                                                                        placeholder={`Search partner for ${div}...`}
+                                                                                                    />
                                                                                             {pState.isLookingUpPartner && (
                                                                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2">
                                                                                                     <Loader className="w-3 h-3 animate-spin text-padel-green" />
                                                                                                 </div>
                                                                                             )}
                                                                                             {pState.partnerSearchResults?.length > 0 && (
-                                                                                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[1150]">
+                                                                                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-[1150]">
                                                                                                     <div className="max-h-48 overflow-y-auto p-1.5 custom-scrollbar space-y-1">
                                                                                                         {pState.partnerSearchResults.map(player => (
                                                                                                             <button
                                                                                                                 key={player.id}
                                                                                                                 onClick={() => handleSelectPartnerForDivision(div, player)}
-                                                                                                                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-white/5 transition-colors group text-left"
+                                                                                                                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors group text-left"
                                                                                                             >
                                                                                                                 <div>
                                                                                                                     <p className="text-white font-bold text-xs group-hover:text-padel-green transition-colors">{player.name}</p>
-                                                                                                                    <p className="text-gray-400 text-[10px] mt-0.5 line-clamp-1">{player.email}</p>
+                                                                                                                    <p className="text-gray-500 text-[10px] mt-0.5 line-clamp-1">{player.email}</p>
                                                                                                                 </div>
                                                                                                             </button>
                                                                                                         ))}
@@ -3295,7 +3296,7 @@ const EventDetails = () => {
                                                                                                 </div>
                                                                                                 <button
                                                                                                     onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerProfile: null, partnerName: '' } }))}
-                                                                                                    className="p-1.5 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+                                                                                                    className="p-1.5 rounded-full hover:bg-slate-200 text-gray-500 hover:text-white transition-colors"
                                                                                                 >
                                                                                                     <X className="w-3 h-3" />
                                                                                                 </button>
@@ -3304,35 +3305,35 @@ const EventDetails = () => {
                                                                                                 <>
                                                                                                     <div className="flex items-center justify-between pt-2 border-t border-white/5">
                                                                                                         <div className="flex items-center gap-2">
-                                                                                                            <CreditCard className="w-3 h-3 text-white/50" />
-                                                                                                            <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner entry fee?</span>
+                                                                                                            <CreditCard className="w-3 h-3 text-gray-400" />
+                                                                                                            <span className="font-bold text-gray-300 text-[10px] uppercase">Pay for partner entry fee?</span>
                                                                                                         </div>
                                                                                                         <button
                                                                                                             type="button"
                                                                                                             onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartner: !pState.payForPartner } }))}
-                                                                                                            className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-slate-700'}`}
+                                                                                                            className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartner ? 'bg-blue-400' : 'bg-gray-300'}`}
                                                                                                         >
-                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0F172A] shadow transition ${pState.payForPartner ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                                                         </button>
                                                                                                     </div>
                                                                                                     {pState.payForPartner && !pProf.paid_registration && (
                                                                                                         <>
                                                                                                             <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
-                                                                                                                <span className="text-[9px] font-bold text-white uppercase">Pay for partner's license?</span>
+                                                                                                                <span className="text-[9px] font-bold text-gray-300 uppercase">Pay for partner's license?</span>
                                                                                                                 <button
                                                                                                                     type="button"
                                                                                                                     onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartnerLicense: !pState.payForPartnerLicense } }))}
-                                                                                                                    className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartnerLicense ? 'bg-blue-400' : 'bg-slate-700'}`}
+                                                                                                                    className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartnerLicense ? 'bg-blue-400' : 'bg-gray-300'}`}
                                                                                                                 >
-                                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-[#0F172A] shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
                                                                                                                 </button>
                                                                                                             </div>
                                                                                                             {pState.payForPartnerLicense && (
                                                                                                                 <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
-                                                                                                                    <span className="text-[9px] font-bold text-white/60 uppercase">License Choice</span>
-                                                                                                                    <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
-                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
-                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                                                    <span className="text-[9px] font-bold text-gray-400 uppercase">License Choice</span>
+                                                                                                                    <div className="flex bg-white/10 rounded-full p-0.5 border border-white/10">
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-white' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
                                                                                                                     </div>
                                                                                                                 </div>
                                                                                                             )}
@@ -3347,18 +3348,18 @@ const EventDetails = () => {
                                                                         );
                                                                     })}
                                                                     {selectedDivisions.length === 0 && (
-                                                                        <div className="flex justify-between items-start gap-4 opacity-30 p-3">
+                                                                        <div className="flex justify-between items-start gap-4 opacity-50 p-3">
                                                                             <div className="space-y-0.5">
-                                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-white/90">{formData.full_name || 'You'}</p>
-                                                                                <p className="text-[9px] font-medium text-white/40 uppercase tracking-wider">No Category Selected</p>
+                                                                                <p className="text-[10px] font-bold uppercase tracking-widest text-white">{formData.full_name || 'You'}</p>
+                                                                                <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">No Category Selected</p>
                                                                             </div>
-                                                                            <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5">R0</span>
+                                                                            <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R0</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
 
                                                                 {playerProfileData && !playerProfileData.paid_registration && (
-                                                                    <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20">
+                                                                    <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20 mt-2">
                                                                         <span className="text-[8px] font-black uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
                                                                         <span className="text-[10px] font-black text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                     </div>
@@ -3373,17 +3374,17 @@ const EventDetails = () => {
                                                                             if (!pState.partnerProfile) return null;
                                                                             return (
                                                                                 <React.Fragment key={`summary-partner-${div}`}>
-                                                                                    <div className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
+                                                                                    <div className="flex justify-between items-start gap-4 bg-white/5 p-2.5 rounded-xl border border-white/5">
                                                                                         <div className="space-y-0.5">
-                                                                                            <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{pState.partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
-                                                                                            <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
+                                                                                            <p className="text-[9px] font-bold uppercase tracking-widest text-white">{pState.partnerProfile.name} <span className="text-gray-500">(Partner)</span></p>
+                                                                                            <p className="text-[8px] font-black text-blue-500 uppercase tracking-wider italic">{div}</p>
                                                                                         </div>
-                                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
+                                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
                                                                                     </div>
                                                                                     {pState.payForPartner && !pState.partnerProfile.paid_registration && pState.payForPartnerLicense && (
                                                                                         <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
-                                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                            <span className="text-[10px] font-black text-blue-400">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-500">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                            <span className="text-[10px] font-black text-blue-500">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                                         </div>
                                                                                     )}
                                                                                 </React.Fragment>
@@ -3391,39 +3392,20 @@ const EventDetails = () => {
                                                                         })}
                                                                     </div>
                                                                 )}
-                                                                {false && (
-                                                                    <div className="space-y-2 pt-1">
-                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
-                                                                        {selectedDivisions.map(div => (
-                                                                            <div key={`par-${div}`} className="flex justify-between items-start gap-4 bg-white/[0.03] p-2.5 rounded-xl border border-white/5">
-                                                                                <div className="space-y-0.5">
-                                                                                    <p className="text-[9px] font-bold uppercase tracking-widest text-white/90">{partnerProfile.name} <span className="opacity-50">(Partner)</span></p>
-                                                                                    <p className="text-[8px] font-black text-blue-400 uppercase tracking-wider italic">{div}</p>
-                                                                                </div>
-                                                                                <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{getEntryFeeForCategory(div)}</span>
-                                                                            </div>
-                                                                        ))}
-                                                                        {payForPartner && !partnerProfile.paid_registration && (
-                                                                            <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
-                                                                                <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                <span className="text-[10px] font-black text-blue-400">R{partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                )}
+
                                                             </div>
                                                         </div>
                                                     </div>
 
                                                     {/* Bottom Action Area */}
-                                                    <div className="pt-4 border-t border-white/10 mt-1">
+                                                    <div className="pt-4 border-t border-white/10 mt-auto">
                                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
                                                             <div className="space-y-0.5">
                                                                 <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
                                                                 <div className="space-y-1">
                                                                     <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
                                                                     {event?.allow_payments && (
-                                                                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-white/20 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-gray-400 whitespace-nowrap">SECURE PAYSTACK</p>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -3443,7 +3425,7 @@ const EventDetails = () => {
                                                                         type="button"
                                                                         onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
                                                                         disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
-                                                                        className={`h-16 md:h-14 px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.15em] text-[11px] flex-1 md:flex-none group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-gray-700/50 text-white/50 border border-white/10' : 'bg-padel-green text-black hover:bg-white hover:scale-[1.03] active:scale-95 shadow-2xl shadow-padel-green/30'}`}
+                                                                        className={`w-full md:w-auto min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.2em] text-[13px] group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
                                                                     >
                                                                         <span>
                                                                             {isConfirmedWithoutChanges 
@@ -3459,7 +3441,7 @@ const EventDetails = () => {
                                                     </div>
                                                 </div>
                                             </div>
-                                        </>
+                                        </div>
                                     ) : (
                                         <>
                                             {/* Ambient Glows */}
@@ -3488,7 +3470,7 @@ const EventDetails = () => {
                                                 {!isPaid && calculateTotalAmount() > 0 && (
                                                     <button
                                                         onClick={handlePayNow}
-                                                        className="w-full h-16 bg-blue-500 hover:bg-blue-400 text-white font-black uppercase tracking-widest text-[11px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-2xl shadow-blue-500/30 hover:scale-[1.03] active:scale-95"
+                                                        className="w-full min-h-[72px] md:min-h-[64px] bg-blue-500 hover:bg-blue-600 text-white font-black uppercase tracking-widest text-[13px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-xl shadow-blue-500/20 hover:scale-[1.03] active:scale-95"
                                                     >
                                                         <CreditCard className="w-5 h-5" />
                                                         <span>Pay R{calculateTotalAmount()} Now</span>

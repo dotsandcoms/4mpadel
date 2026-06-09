@@ -684,7 +684,7 @@ export const useRankedin = () => {
     const getTournamentParticipants = useCallback(async (tournamentId, classId) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersForClassAsync?tournamentId=${tournamentId}&tournamentClassId=${classId}&language=en`;
-            const data = await fetchWithCache(url);
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
             
             if (data.Teams && data.Teams.length > 0) {
                 return data.Teams.map(team => ({ Participant: team }));
@@ -699,7 +699,7 @@ export const useRankedin = () => {
     const getTournamentPlayerTabs = useCallback(async (tournamentId) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersTabAsync?id=${tournamentId}&language=en`;
-            const data = await fetchWithCache(url);
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
             return data || [];
         } catch (err) {
             console.error('Error fetching tournament player tabs:', err);
