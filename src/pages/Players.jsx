@@ -215,7 +215,7 @@ const Players = () => {
                 onClick={() => setShowFilters(false)}
                 className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
               />
-              
+
               {/* Drawer */}
               <motion.div
                 initial={{ y: '100%' }}
@@ -230,7 +230,7 @@ const Players = () => {
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                
+
                 <div className="space-y-4">
                   {/* Category */}
                   <div className="space-y-2">
@@ -280,17 +280,17 @@ const Players = () => {
                 </div>
 
                 <div className="pt-2 flex gap-3">
-                  <button 
+                  <button
                     onClick={() => {
                       setSelectedCategory('All');
                       setSelectedClub('All');
-                    }} 
+                    }}
                     className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
                   >
                     Clear
                   </button>
-                  <button 
-                    onClick={() => setShowFilters(false)} 
+                  <button
+                    onClick={() => setShowFilters(false)}
                     className="flex-1 bg-padel-green hover:bg-[#beff00] text-black font-bold py-3.5 rounded-xl transition-colors text-sm"
                   >
                     Show Results
@@ -303,7 +303,10 @@ const Players = () => {
 
         {/* Players Grid */}
         <section className="container mx-auto px-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
+          <div className="mb-4 text-gray-400 text-xs sm:text-sm font-black uppercase tracking-widest">
+            {filteredPlayers.length} PLAYERS FOUND
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4 md:gap-6">
             {filteredPlayers.length > 0 ? (
               filteredPlayers.map((player, index) => (
                 <motion.div
@@ -316,7 +319,7 @@ const Players = () => {
                   className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
                 >
                   {/* Photo Section */}
-                  <div className="aspect-[4/5] bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
+                  <div className="aspect-square sm:aspect-[4/5] bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
                     {player.image_url ? (
                       <motion.img
                         layoutId={`image-${player.id}`}
@@ -329,7 +332,7 @@ const Players = () => {
                         layoutId={`image-${player.id}`}
                         className="w-full h-full flex items-center justify-center text-white/5"
                       >
-                        <svg className="w-16 h-16 sm:w-20 sm:h-20" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-12 h-12 sm:w-20 sm:h-20" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                       </motion.div>
@@ -337,70 +340,70 @@ const Players = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/20 to-black/25" />
 
                     {/* Category Overlay Capsule */}
-                    <motion.div layoutId={`category-${player.id}`} className="absolute top-3 right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-2 py-1 rounded-lg text-[8px] sm:text-[9px] uppercase tracking-widest z-10 shadow-lg">
+                    <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md sm:rounded-lg text-[6px] sm:text-[9px] uppercase tracking-widest z-10 shadow-lg">
                       {player.category || 'Open'}
                     </motion.div>
 
                     {/* Rank Overlay Capsule */}
-                    <motion.div layoutId={`level-${player.id}`} className="absolute top-3 left-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex flex-col items-center justify-center text-[9px] sm:text-[10px] z-10 shadow-lg">
-                      <span className="text-[6px] sm:text-[7px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
-                      <span className="text-[9px] sm:text-[10px] font-black">
+                    <motion.div layoutId={`level-${player.id}`} className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-7 h-7 sm:w-10 sm:h-10 rounded-md sm:rounded-lg flex flex-col items-center justify-center text-[7px] sm:text-[10px] z-10 shadow-lg">
+                      <span className="text-[5px] sm:text-[7px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
+                      <span className="text-[7px] sm:text-[10px] font-black">
                         {(!player.rank_label || player.rank_label === 'Unranked') ? '-' : `#${player.rank_label}`}
                       </span>
                     </motion.div>
 
                     {/* Pro Overlay Button */}
                     <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
-                      <span className="bg-padel-green text-black px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                      <span className="bg-padel-green text-black px-2 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-xl font-black text-[6px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                         Pro Card
-                        <ArrowUpRight size={11} />
+                        <ArrowUpRight size={10} />
                       </span>
                     </div>
                   </div>
 
                   {/* Player Content Details Section */}
-                  <div className="p-3 sm:p-4 relative flex-1 flex flex-col justify-between bg-[#0a0f1d]/85">
+                  <div className="p-2 sm:p-4 relative flex-1 flex flex-col justify-between bg-[#0a0f1d]/85">
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
 
                     <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className="text-sm sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-2 group-hover:text-padel-green transition-colors line-clamp-1">
+                      <motion.h3 layoutId={`name-${player.id}`} className="text-[10px] sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 group-hover:text-padel-green transition-colors line-clamp-1">
                         {player.name}
                       </motion.h3>
 
                       {/* Info Badges & Social Row */}
-                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[9px] sm:text-[10px] text-gray-300 font-semibold mb-2">
-                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-1.5 py-0.5 rounded-md">
-                          <MapPin className="w-2.5 h-2.5 text-padel-green" />
-                          <span className="line-clamp-1 max-w-[60px]">{player.nationality}</span>
+                      <div className="flex flex-wrap items-center gap-x-1 sm:gap-x-1.5 gap-y-1 text-[7px] sm:text-[10px] text-gray-300 font-semibold mb-1.5 sm:mb-2">
+                        <div className="flex items-center gap-0.5 sm:gap-1 bg-white/5 border border-white/5 px-1 sm:px-1.5 py-0.5 rounded-sm sm:rounded-md">
+                          <MapPin className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-padel-green" />
+                          <span className="line-clamp-1 max-w-[50px] sm:max-w-[60px]">{player.nationality}</span>
                         </div>
-                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-1.5 py-0.5 rounded-md">
-                          <Trophy className="w-2.5 h-2.5 text-padel-green" />
-                          <span className="truncate max-w-[70px]">{player.home_club || 'No Club'}</span>
+                        <div className="flex items-center gap-0.5 sm:gap-1 bg-white/5 border border-white/5 px-1 sm:px-1.5 py-0.5 rounded-sm sm:rounded-md">
+                          <Trophy className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-padel-green" />
+                          <span className="truncate max-w-[50px] sm:max-w-[70px]">{player.home_club || 'No Club'}</span>
                         </div>
                         {player.instagram_link && (
                           <a
                             href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="bg-white/5 border border-white/5 hover:bg-padel-green hover:text-black p-1 rounded-md transition-colors shrink-0"
+                            className="bg-white/5 border border-white/5 hover:bg-padel-green hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Instagram className="w-3 h-3" />
+                            <Instagram className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                           </a>
                         )}
                         {player.hasGallery && (
                           <div
-                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-1 rounded-md transition-colors cursor-pointer shrink-0"
+                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors cursor-pointer shrink-0"
                             title="Player Photo Gallery Available"
                           >
-                            <Image className="w-3 h-3" />
+                            <Image className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                           </div>
                         )}
                       </div>
                     </div>
 
                     {player.bio && (
-                      <p className="text-[9px] sm:text-[10px] text-gray-400 line-clamp-2 italic font-medium leading-relaxed border-t border-white/5 pt-2 mt-auto">
+                      <p className="text-[7px] sm:text-[10px] text-gray-400 line-clamp-2 italic font-medium leading-relaxed border-t border-white/5 pt-1.5 sm:pt-2 mt-auto">
                         "{player.bio}"
                       </p>
                     )}
