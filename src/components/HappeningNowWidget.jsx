@@ -6,6 +6,7 @@ import { Calendar, MapPin, PlayCircle, ExternalLink, Activity } from 'lucide-rea
 
 const HappeningNowWidget = () => {
     const [liveEvents, setLiveEvents] = useState([]);
+    const [isLive, setIsLive] = useState(true);
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
@@ -19,17 +20,24 @@ const HappeningNowWidget = () => {
                 const yesterday = new Date(today);
                 yesterday.setDate(yesterday.getDate() - 1);
 
+                const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+                endOfMonth.setHours(23, 59, 59, 999);
+
                 const { data, error } = await supabase
                     .from('calendar')
                     .select('*')
                     .neq('is_visible', false)
                     .gte('start_date', yesterday.toISOString())
+                    .lte('start_date', endOfMonth.toISOString())
                     .order('start_date', { ascending: true });
 
                 if (error) throw error;
 
-                const happeningNow = (data || []).filter(e => {
-                    if (!e.start_date) return false;
+                const happeningNow = [];
+                const upcomingThisMonth = [];
+
+                (data || []).forEach(e => {
+                    if (!e.start_date) return;
                     const start = new Date(e.start_date);
                     start.setHours(0, 0, 0, 0);
 
@@ -39,10 +47,22 @@ const HappeningNowWidget = () => {
                     }
                     end.setHours(23, 59, 59, 999);
 
-                    return today.getTime() >= start.getTime() && today.getTime() <= end.getTime();
+                    if (today.getTime() >= start.getTime() && today.getTime() <= end.getTime()) {
+                        happeningNow.push(e);
+                    } else if (start.getTime() > today.getTime() && start.getTime() <= endOfMonth.getTime()) {
+                        upcomingThisMonth.push(e);
+                    }
                 });
 
-                setLiveEvents(happeningNow);
+                if (happeningNow.length > 0) {
+                    setLiveEvents(happeningNow);
+                    setIsLive(true);
+                } else if (upcomingThisMonth.length > 0) {
+                    setLiveEvents(upcomingThisMonth);
+                    setIsLive(false);
+                } else {
+                    setLiveEvents([]);
+                }
             } catch (err) {
                 console.error('HappeningNowWidget error:', err);
             } finally {
@@ -75,7 +95,7 @@ const HappeningNowWidget = () => {
                                 </div>
                                 <div>
                                     <h2 className="font-black text-white text-md md:text-base uppercase tracking-wider flex items-center gap-2 leading-none mb-0.5">
-                                        Happening Now!
+                                        {isLive ? 'Happening Now!' : 'Happening Next'}
                                     </h2>
                                 </div>
                             </div>
@@ -139,13 +159,17 @@ const HappeningNowWidget = () => {
                                                     <h3 className={`text-xs sm:text-sm font-bold text-white leading-tight truncate transition-colors group-hover:${iconColor}`}>
                                                         {event.event_name}
                                                     </h3>
+                                                    {isLive && (
                                                     <span className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-0.5">
                                                         <span className="w-1 h-1 bg-white rounded-full"></span> LIVE
                                                     </span>
+                                                    )}
                                                 </div>
                                                 <div className="flex items-center gap-1 text-gray-400 mb-1">
                                                     <Calendar size={10} className={`${iconColor} shrink-0`} />
-                                                    <span className="text-[9px] sm:text-[10px] font-semibold text-white/90 leading-none">Today</span>
+                                                    <span className="text-[9px] sm:text-[10px] font-semibold text-white/90 leading-none">
+                                                        {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                                    </span>
                                                 </div>
                                                 <div className="flex items-center gap-1 text-gray-400 truncate min-w-0">
                                                     <MapPin size={10} className={`${iconColor} shrink-0`} />
