@@ -410,7 +410,7 @@ const Hero = () => {
                 </motion.div>
 
                 {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
-                <div className="relative z-30 px-4 pb-28 lg:pb-5 mt-8 lg:mt-auto w-full lg:px-8 flex flex-col gap-4 container mx-auto">
+                <div className="relative z-30 px-4 pb-36 lg:pb-5 mt-8 lg:mt-auto w-full lg:px-8 flex flex-col gap-4 container mx-auto">
                     {/* Happening Now Widget — Global live events */}
                     <HappeningNowWidget />
 
