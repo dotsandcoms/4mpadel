@@ -19,14 +19,7 @@ import {
 
 const STAT_COLORS = { 'padel-green': '#beff00', green: '#22c55e', amber: '#f59e0b', slate: '#64748b', purple: '#a855f7' };
 
-const EVENT_CATEGORIES = [
-    "Men's Open (Pro/Elite)",
-    "Men's Advanced",
-    "Men's Intermediate",
-    "Ladies Open (Pro/Elite)",
-    "Ladies Advanced",
-    "Ladies Intermediate"
-];
+
 
 const StatCard = ({ title, value, subtext, icon: Icon, color = 'padel-green', delay = 0 }) => {
     const c = STAT_COLORS[color] || STAT_COLORS['padel-green'];
@@ -1465,39 +1458,7 @@ const CalendarManager = () => {
                                         />
                                     </div>
 
-                                    {/* Category Pricing Overrides */}
-                                    <div className="bg-black/40 p-6 rounded-2xl border border-white/5 space-y-4">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="text-sm font-black text-white uppercase tracking-widest">Category Pricing Overrides</h4>
-                                            <span className="text-[10px] text-gray-500 font-bold uppercase italic">Leave blank to use base fee</span>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {EVENT_CATEGORIES.map(cat => (
-                                                <div key={cat} className="space-y-1">
-                                                    <label className="block text-[10px] font-bold text-gray-500 uppercase truncate">{cat}</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600 text-xs font-bold">R</span>
-                                                        <input 
-                                                            type="number"
-                                                            value={formData.category_fees?.[cat] || ''}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                setFormData(prev => ({
-                                                                    ...prev,
-                                                                    category_fees: {
-                                                                        ...prev.category_fees,
-                                                                        [cat]: val === '' ? undefined : Number(val)
-                                                                    }
-                                                                }));
-                                                            }}
-                                                            placeholder={formData.entry_fee || '0'}
-                                                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-8 pr-4 py-3 text-white focus:border-padel-green outline-none text-sm font-black"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
+
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>

@@ -22,14 +22,7 @@ const isTestMode = PAYSTACK_PUBLIC_KEY.startsWith('pk_test');
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
 
-const EVENT_CATEGORIES = [
-    "Men's Open (Pro/Elite)",
-    "Men's Advanced",
-    "Men's Intermediate",
-    "Ladies Open (Pro/Elite)",
-    "Ladies Advanced",
-    "Ladies Intermediate"
-];
+
 
 // Simple CountUp animation component
 const CountUp = ({ end, duration = 1.5 }) => {
@@ -284,10 +277,13 @@ const EventDetails = () => {
     const [isDivisionsDropdownOpen, setIsDivisionsDropdownOpen] = useState(false);
 
     const availableDivisions = useMemo(() => {
+        if (playerDivisions && playerDivisions.length > 0) {
+            return playerDivisions.map(d => d.Name);
+        }
         if (event?.allowed_divisions?.length) return event.allowed_divisions;
-        if (event?.category_fees) return Object.keys(event.category_fees);
+        if (event?.category_fees && Object.keys(event.category_fees).length > 0) return Object.keys(event.category_fees);
         return [];
-    }, [event]);
+    }, [event, playerDivisions]);
 
     const [formData, setFormData] = useState({
         full_name: '',
