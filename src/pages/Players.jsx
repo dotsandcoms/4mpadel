@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import Navbar from '../components/Navbar';
-import { Search, Filter, MapPin, Trophy, Instagram, ArrowUpRight, Zap, Image } from 'lucide-react';
+import { Search, Filter, MapPin, Trophy, Instagram, ArrowUpRight, Zap, Image, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import heroBg from '../assets/hero_bg.png';
 import PlayerModal from '../components/PlayerModal';
@@ -17,6 +17,7 @@ const Players = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [userEmail, setUserEmail] = useState(null);
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -158,81 +159,151 @@ const Players = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3 }}
-              className="text-gray-500 text-xs max-w-2xl mx-auto mt-3.5 uppercase tracking-widest font-black"
+              className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mx-auto mt-4 font-medium tracking-wide"
             >
-              *Only players holding a valid Player’s License are listed
+              *Only players holding a valid Player's License are listed
             </motion.p>
           </div>
         </section>
 
         {/* Search & Command Deck */}
-        <section className="container mx-auto px-6 -mt-12 relative z-20 mb-16">
+        <section className="container mx-auto px-6 -mt-12 relative z-20 mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-white/[0.03] border border-white/10 backdrop-blur-2xl p-6 rounded-3xl flex flex-col md:flex-row gap-4 items-center justify-between shadow-2xl"
+            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
           >
             {/* Search Input Container */}
-            <div className="relative w-full md:w-96">
-              <Search className="absolute left-4.5 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
               <input
                 type="text"
                 placeholder="Search pro players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
               />
             </div>
 
-            {/* Glass Dropdown Selectors */}
-            <div className="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
-              <div className="relative min-w-[190px]">
-                <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-450 w-4 h-4" />
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-10 pr-8 text-white appearance-none cursor-pointer hover:border-white/30 focus:outline-none focus:border-padel-green transition-colors font-semibold"
-                >
-                  {categories.map(cat => (
-                    <option key={cat} value={cat} className="bg-[#0a0f1d] text-white font-semibold">
-                      {cat === 'All' ? 'All Categories' : cat}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-450" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-
-              <div className="relative min-w-[190px]">
-                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-450 w-4 h-4" />
-                <select
-                  value={selectedClub}
-                  onChange={(e) => setSelectedClub(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-10 pr-8 text-white appearance-none cursor-pointer hover:border-white/30 focus:outline-none focus:border-padel-green transition-colors font-semibold"
-                >
-                  {clubs.map(club => (
-                    <option key={club} value={club} className="bg-[#0a0f1d] text-white font-semibold">
-                      {club === 'All' ? 'All Clubs' : club}
-                    </option>
-                  ))}
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                  <svg className="w-4 h-4 text-gray-455" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-            </div>
+            {/* Filters Button */}
+            <button
+              onClick={() => setShowFilters(true)}
+              className="relative flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-3.5 text-white transition-all font-semibold text-sm md:text-base shrink-0 group"
+            >
+              <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
+              <span className="hidden sm:block">Filters</span>
+              {/* Active filters badge */}
+              {(selectedCategory !== 'All' || selectedClub !== 'All') && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 md:w-5 md:h-5 bg-padel-green text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg">
+                  {(selectedCategory !== 'All' ? 1 : 0) + (selectedClub !== 'All' ? 1 : 0)}
+                </span>
+              )}
+            </button>
           </motion.div>
         </section>
 
+        {/* Filters Drawer/Bottom Sheet */}
+        <AnimatePresence>
+          {showFilters && (
+            <>
+              {/* Backdrop */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowFilters(false)}
+                className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
+              />
+              
+              {/* Drawer */}
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+              >
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white">Filters</h3>
+                  <button onClick={() => setShowFilters(false)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {/* Category */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-300">Category</label>
+                    <div className="relative">
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-4 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                      >
+                        {categories.map(cat => (
+                          <option key={cat} value={cat} className="bg-[#0a0f1d] text-white">
+                            {cat === 'All' ? 'All Categories' : cat}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Club */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-300">Club</label>
+                    <div className="relative">
+                      <select
+                        value={selectedClub}
+                        onChange={(e) => setSelectedClub(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-4 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                      >
+                        {clubs.map(club => (
+                          <option key={club} value={club} className="bg-[#0a0f1d] text-white">
+                            {club === 'All' ? 'All Clubs' : club}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                        <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex gap-3">
+                  <button 
+                    onClick={() => {
+                      setSelectedCategory('All');
+                      setSelectedClub('All');
+                    }} 
+                    className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
+                  >
+                    Clear
+                  </button>
+                  <button 
+                    onClick={() => setShowFilters(false)} 
+                    className="flex-1 bg-padel-green hover:bg-[#beff00] text-black font-bold py-3.5 rounded-xl transition-colors text-sm"
+                  >
+                    Show Results
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
+
         {/* Players Grid */}
         <section className="container mx-auto px-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4 md:gap-6">
             {filteredPlayers.length > 0 ? (
               filteredPlayers.map((player, index) => (
                 <motion.div
@@ -242,7 +313,7 @@ const Players = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min(index * 0.05, 0.5) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
+                  className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
                 >
                   {/* Photo Section */}
                   <div className="aspect-[4/5] bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
@@ -258,7 +329,7 @@ const Players = () => {
                         layoutId={`image-${player.id}`}
                         className="w-full h-full flex items-center justify-center text-white/5"
                       >
-                        <svg className="w-28 h-28" fill="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-16 h-16 sm:w-20 sm:h-20" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
                       </motion.div>
@@ -266,70 +337,70 @@ const Players = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/20 to-black/25" />
 
                     {/* Category Overlay Capsule */}
-                    <motion.div layoutId={`category-${player.id}`} className="absolute top-5 right-5 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-3.5 py-1.5 rounded-xl text-[9px] uppercase tracking-widest z-10 shadow-lg">
+                    <motion.div layoutId={`category-${player.id}`} className="absolute top-3 right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-2 py-1 rounded-lg text-[8px] sm:text-[9px] uppercase tracking-widest z-10 shadow-lg">
                       {player.category || 'Open'}
                     </motion.div>
 
                     {/* Rank Overlay Capsule */}
-                    <motion.div layoutId={`level-${player.id}`} className="absolute top-5 left-5 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-12 h-12 rounded-xl flex flex-col items-center justify-center text-[10px] z-10 shadow-lg">
-                      <span className="text-[7px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
-                      <span className="text-xs font-black">
+                    <motion.div layoutId={`level-${player.id}`} className="absolute top-3 left-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-9 h-9 sm:w-10 sm:h-10 rounded-lg flex flex-col items-center justify-center text-[9px] sm:text-[10px] z-10 shadow-lg">
+                      <span className="text-[6px] sm:text-[7px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
+                      <span className="text-[9px] sm:text-[10px] font-black">
                         {(!player.rank_label || player.rank_label === 'Unranked') ? '-' : `#${player.rank_label}`}
                       </span>
                     </motion.div>
 
                     {/* Pro Overlay Button */}
                     <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
-                      <span className="bg-padel-green text-black px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-1.5 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                        View Pro Card
-                        <ArrowUpRight size={13} />
+                      <span className="bg-padel-green text-black px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl font-black text-[9px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                        Pro Card
+                        <ArrowUpRight size={11} />
                       </span>
                     </div>
                   </div>
 
                   {/* Player Content Details Section */}
-                  <div className="p-6 relative flex-1 flex flex-col justify-between bg-[#0a0f1d]/85">
+                  <div className="p-3 sm:p-4 relative flex-1 flex flex-col justify-between bg-[#0a0f1d]/85">
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
 
                     <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className="text-xl font-black text-white leading-none uppercase tracking-tighter mb-3.5 group-hover:text-padel-green transition-colors">
+                      <motion.h3 layoutId={`name-${player.id}`} className="text-sm sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-2 group-hover:text-padel-green transition-colors line-clamp-1">
                         {player.name}
                       </motion.h3>
 
                       {/* Info Badges & Social Row */}
-                      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[11px] text-gray-300 font-semibold mb-4">
-                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-2.5 py-1 rounded-lg">
-                          <MapPin className="w-3 h-3 text-padel-green" />
-                          <span>{player.nationality}</span>
+                      <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[9px] sm:text-[10px] text-gray-300 font-semibold mb-2">
+                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-1.5 py-0.5 rounded-md">
+                          <MapPin className="w-2.5 h-2.5 text-padel-green" />
+                          <span className="line-clamp-1 max-w-[60px]">{player.nationality}</span>
                         </div>
-                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-2.5 py-1 rounded-lg">
-                          <Trophy className="w-3 h-3 text-padel-green" />
-                          <span className="truncate max-w-[90px]">{player.home_club || 'No Club'}</span>
+                        <div className="flex items-center gap-1 bg-white/5 border border-white/5 px-1.5 py-0.5 rounded-md">
+                          <Trophy className="w-2.5 h-2.5 text-padel-green" />
+                          <span className="truncate max-w-[70px]">{player.home_club || 'No Club'}</span>
                         </div>
                         {player.instagram_link && (
                           <a
                             href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="bg-white/5 border border-white/5 hover:bg-padel-green hover:text-black p-1.5 rounded-lg transition-colors"
+                            className="bg-white/5 border border-white/5 hover:bg-padel-green hover:text-black p-1 rounded-md transition-colors shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Instagram className="w-3.5 h-3.5" />
+                            <Instagram className="w-3 h-3" />
                           </a>
                         )}
                         {player.hasGallery && (
                           <div
-                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-1.5 rounded-lg transition-colors cursor-pointer"
+                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-1 rounded-md transition-colors cursor-pointer shrink-0"
                             title="Player Photo Gallery Available"
                           >
-                            <Image className="w-3.5 h-3.5" />
+                            <Image className="w-3 h-3" />
                           </div>
                         )}
                       </div>
                     </div>
 
                     {player.bio && (
-                      <p className="text-xs text-gray-400 line-clamp-2 italic font-medium leading-relaxed border-t border-white/5 pt-3.5 mt-auto">
+                      <p className="text-[9px] sm:text-[10px] text-gray-400 line-clamp-2 italic font-medium leading-relaxed border-t border-white/5 pt-2 mt-auto">
                         "{player.bio}"
                       </p>
                     )}
