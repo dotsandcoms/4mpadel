@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, FileText, User, Users, UserPlus, Trophy, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -213,6 +213,7 @@ const EventDetails = () => {
 
     // New State for Tabs & Enhanced Data
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
+    const [isMobilePlayerInfoOpen, setIsMobilePlayerInfoOpen] = useState(false);
     const [tournamentClasses, setTournamentClasses] = useState([]);
     const [upcomingMatches, setUpcomingMatches] = useState([]);
     const [fetchingRankedinData, setFetchingRankedinData] = useState(false);
@@ -1738,7 +1739,7 @@ const EventDetails = () => {
 
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division];
-                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration) {
+                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense) {
                     const isFull = partnerState.partnerLicenseChoice === 'full';
                     const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
                     const existingLicensePayment = paymentsToInsert.find(p => p.player_id === partnerState.partnerProfile.id && (p.payment_type === 'full_license' || p.payment_type === 'temp_license'));
@@ -1762,6 +1763,50 @@ const EventDetails = () => {
             const { error: payError } = await supabase.from('payments').insert(paymentsToInsert);
             if (payError) {
                 console.error("Payment Record Error:", payError);
+            }
+
+            // Apply licenses to players if paid
+            const licensesToGrant = [];
+            
+            // Player License
+            if (playerProfileData && !playerProfileData.paid_registration) {
+                licensesToGrant.push({
+                    playerId: playerId,
+                    isFull: licenseChoice === 'full',
+                    amount: licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE
+                });
+            }
+
+            // Partner Licenses
+            selectedDivisions.forEach(division => {
+                const partnerState = divisionPartners[division];
+                if (partnerState?.payForPartner && partnerState?.partnerProfile && !partnerState.partnerProfile.paid_registration && partnerState.payForPartnerLicense) {
+                    if (!licensesToGrant.some(l => l.playerId === partnerState.partnerProfile.id)) {
+                        licensesToGrant.push({
+                            playerId: partnerState.partnerProfile.id,
+                            isFull: partnerState.partnerLicenseChoice === 'full',
+                            amount: partnerState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE
+                        });
+                    }
+                }
+            });
+
+            for (const license of licensesToGrant) {
+                if (!license.playerId) continue;
+                if (license.isFull) {
+                    await supabase.from('players').update({
+                        paid_registration: true,
+                        license_type: 'Full',
+                        payment_reference: paystackRef
+                    }).eq('id', license.playerId);
+                } else {
+                    await supabase.from('temporary_licenses').insert({
+                        player_id: license.playerId,
+                        event_id: event.id,
+                        event_name: event.event_name,
+                        event_date: event.start_date
+                    });
+                }
             }
 
             // Sync emails and participants
@@ -2810,9 +2855,25 @@ const EventDetails = () => {
                                 {/* Modal Content */}
                                 <div className="p-4 md:p-6 overflow-y-auto flex-1 custom-scrollbar">
                                     {regStep === 1 ? (
-                                        <div className="grid grid-cols-2 gap-4 md:gap-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                             <div className="col-span-1 space-y-4">
-                                                <div className="grid grid-cols-1 gap-3">
+                                                <div className="md:hidden">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setIsMobilePlayerInfoOpen(!isMobilePlayerInfoOpen)}
+                                                        className="w-full bg-[#0F172A] shadow-sm border border-white/10 rounded-xl p-4 flex items-center justify-between transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg bg-padel-green/20 flex items-center justify-center">
+                                                                <User className="w-4 h-4 text-padel-green" />
+                                                            </div>
+                                                            <span className="text-[11px] font-black uppercase tracking-widest text-white">Player Information</span>
+                                                        </div>
+                                                        {isMobilePlayerInfoOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
+                                                    </button>
+                                                </div>
+                                                <div className={`space-y-4 ${isMobilePlayerInfoOpen ? 'block' : 'hidden md:block'}`}>
+                                                    <div className="grid grid-cols-1 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
                                                     <div className="relative group">
@@ -3183,6 +3244,7 @@ const EventDetails = () => {
                                                         </div>
                                                     </motion.div>
                                                 )}
+                                                </div>
                                                 </div>
                                             </div>
 
