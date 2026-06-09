@@ -64,7 +64,7 @@ const FeaturedEventCard = ({ event, index }) => {
         >
             <Link
                 to={detailsPath}
-                className={`group relative flex flex-row items-stretch h-full bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+                className={`group relative flex flex-row items-stretch h-full min-h-[220px] sm:min-h-[240px] bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
                 <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
@@ -79,7 +79,7 @@ const FeaturedEventCard = ({ event, index }) => {
                             <img
                                 src={event.custom_image_url || event.image_url || event.posterUrl}
                                 alt={event.event_name || event.eventName}
-                                className="relative z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                className="absolute inset-0 z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                             />
                         </>
                     ) : (
