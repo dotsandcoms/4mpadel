@@ -2798,7 +2798,7 @@ const EventDetails = () => {
                                     <h3 className="text-white font-bold text-lg">
                                         {regStep === 1 
                                             ? (calculateTotalAmount() > 0 
-                                                ? 'Payment' 
+                                                ? `Payment for ${event?.event_name || 'Event'}` 
                                                 : (isRegistered ? 'Registered' : `Registration for ${event?.event_name || 'Event'}`))
                                             : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
