@@ -201,6 +201,28 @@ const Players = () => {
               )}
             </button>
           </motion.div>
+
+          {/* Quick Category Filters */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="flex overflow-x-auto md:justify-center gap-2 pb-2 mt-4 hide-scrollbar"
+          >
+            {['All', 'Open', 'Men\'s Open (Pro/Elite)', 'Ladies Open (Pro/Elite)', 'Men\'s Advanced'].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all uppercase tracking-widest border ${
+                  selectedCategory === cat 
+                    ? 'bg-padel-green text-black border-padel-green' 
+                    : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20 hover:text-white'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </motion.div>
         </section>
 
         {/* Filters Drawer/Bottom Sheet */}
