@@ -337,7 +337,7 @@ const Hero = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 0.8 }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] font-bold uppercase tracking-widest mb-6 max-w-fit"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-xs font-bold uppercase tracking-widest mb-6 max-w-fit"
                     >
                         <Trophy className="w-3.5 h-3.5" />
                         <span>The Home of 4M Padel</span>
@@ -348,7 +348,7 @@ const Hero = () => {
                             initial={{ y: 100 }}
                             animate={{ y: 0 }}
                             transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-                            className="text-[9.5vw] sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
+                            className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal"
                         >
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-white via-gray-300 to-gray-500">FOR THE PLAYERS.</span>
                         </motion.h1>
@@ -358,7 +358,7 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-400 text-[3vw] sm:text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-nowrap lg:whitespace-normal tracking-tight sm:tracking-normal"
+                        className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal"
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
@@ -515,14 +515,14 @@ const Hero = () => {
                                                                 <div className="p-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
                                                                     <Calendar size={13} />
                                                                 </div>
-                                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Events</span>
+                                                                <span className="text-sm sm:text-base font-bold uppercase tracking-widest text-white/95">My Next Events</span>
                                                             </div>
                                                             <button
                                                                 onClick={() => navigate('/profile')}
-                                                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
+                                                                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
                                                             >
                                                                 View all
-                                                                <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                                                             </button>
                                                         </div>
 
@@ -584,27 +584,27 @@ const Hero = () => {
                                                                         <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
 
                                                                         <div className="flex justify-between items-start mb-2">
-                                                                            <span className={`text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
+                                                                            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
                                                                                 {event.sapa_status || 'SAPA'}
                                                                             </span>
 
                                                                             {/* Paid Stamp / Icon */}
                                                                             {event.isPaid ? (
-                                                                                <span className="flex items-center gap-1 text-[8px] font-black uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
-                                                                                    <CheckCircle2 size={8} className="shrink-0" /> Paid
+                                                                                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
+                                                                                    <CheckCircle2 size={10} className="shrink-0" /> Paid
                                                                                 </span>
                                                                             ) : (
                                                                                 <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
                                                                             )}
                                                                         </div>
 
-                                                                        <p className="text-[11px] font-black text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-8">
+                                                                        <p className="text-sm font-semibold text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-10">
                                                                             {event.event_name}
                                                                         </p>
 
                                                                         <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
-                                                                            <span className={`text-[8px] font-bold ${dateCls} flex items-center gap-1`}>
-                                                                                <Calendar size={10} className="shrink-0" />
+                                                                            <span className={`text-xs font-medium ${dateCls} flex items-center gap-1.5`}>
+                                                                                <Calendar size={12} className="shrink-0" />
                                                                                 {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                                                                             </span>
                                                                         </div>
@@ -624,14 +624,14 @@ const Hero = () => {
                                                                 <div className="p-1 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.15)]">
                                                                     <Trophy size={13} />
                                                                 </div>
-                                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/90">My Next Match</span>
+                                                                <span className="text-sm sm:text-base font-bold uppercase tracking-widest text-white/95">My Next Match</span>
                                                             </div>
                                                             <button
                                                                 onClick={() => navigate('/profile?tab=matches')}
-                                                                className="flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
+                                                                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
                                                             >
                                                                 View Matches
-                                                                <ChevronRight size={11} className="group-hover:translate-x-0.5 transition-transform" />
+                                                                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
                                                             </button>
                                                         </div>
 
@@ -657,12 +657,12 @@ const Hero = () => {
                                                                     <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
                                                                         <div className="flex items-center gap-1.5 min-w-0">
                                                                             <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
-                                                                            <span className="text-[8px] font-black text-orange-400 uppercase tracking-widest truncate">
+                                                                            <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
                                                                                 {info.EventName || 'Next Match'}
                                                                             </span>
                                                                         </div>
                                                                         {info.Date && (
-                                                                            <span className="text-[8px] font-bold text-white/50 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                                                                            <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
                                                                                 {info.Date}
                                                                             </span>
                                                                         )}
@@ -672,11 +672,11 @@ const Hero = () => {
                                                                     <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
                                                                         {/* Team 1 (Challengers) */}
                                                                         <div className="flex-1 flex flex-col items-end text-right min-w-0">
-                                                                            <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
                                                                                 {team1P1}
                                                                             </span>
                                                                             {team1P2 && (
-                                                                                <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
                                                                                     {team1P2}
                                                                                 </span>
                                                                             )}
@@ -685,17 +685,17 @@ const Hero = () => {
                                                                         {/* VS Badge */}
                                                                         <div className="relative shrink-0 flex items-center justify-center">
                                                                             <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
-                                                                                <span className="text-[8px] font-black text-black tracking-widest font-sans scale-90">VS</span>
+                                                                                <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
                                                                             </div>
                                                                         </div>
 
                                                                         {/* Team 2 (Challenged) */}
                                                                         <div className="flex-1 flex flex-col items-start text-left min-w-0">
-                                                                            <span className="text-[11px] font-black text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
                                                                                 {team2P1}
                                                                             </span>
                                                                             {team2P2 && (
-                                                                                <span className="text-[8px] font-semibold text-white/60 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
                                                                                     {team2P2}
                                                                                 </span>
                                                                             )}
@@ -705,13 +705,13 @@ const Hero = () => {
                                                                     {/* Bottom Bar: Location and Court */}
                                                                     <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
                                                                         <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
-                                                                            <MapPin size={10} className="text-padel-green shrink-0" />
-                                                                            <span className="text-[8px] font-bold text-white/50 truncate uppercase tracking-wider">
+                                                                            <MapPin size={12} className="text-padel-green shrink-0" />
+                                                                            <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
                                                                                 {info.Location || info.Venue || 'Location TBD'}
                                                                             </span>
                                                                         </div>
                                                                         {info.Court && (
-                                                                            <span className="text-[7px] font-black bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
+                                                                            <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
                                                                                 {info.Court}
                                                                             </span>
                                                                         )}

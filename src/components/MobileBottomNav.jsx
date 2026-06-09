@@ -43,10 +43,10 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[999] md:hidden flex justify-center">
       {/* iOS Liquid Glass Container */}
-      <div className="relative w-full max-w-[390px] bg-slate-950/85 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 flex items-center justify-around shadow-[0_15px_40px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.15)] ring-1 ring-black/20">
+      <div className="relative w-full max-w-[390px] bg-slate-950/90 backdrop-blur-xl border border-white/5 rounded-2xl p-1 flex items-center justify-around shadow-[0_10px_30px_rgba(0,0,0,0.8),inset_0_1px_0_rgba(255,255,255,0.1)] ring-1 ring-black/20">
         
         {/* Subtle glass reflection highlight across the top half of the bar */}
-        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/10 to-transparent rounded-t-2xl pointer-events-none" />
+        <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/[0.08] to-transparent rounded-t-2xl pointer-events-none" />
 
         {navItems.map((item) => {
           const isActive = getIsActive(item.path);
@@ -56,49 +56,51 @@ const MobileBottomNav = ({ session, authLoading, onRestrictedNav }) => {
             <button
               key={item.name}
               onClick={() => handleNavClick(item.path)}
-              className="relative flex flex-col items-center justify-center py-1.5 px-2 rounded-xl flex-1 cursor-pointer select-none active:scale-95 transition-transform outline-none group"
+              className="relative flex flex-col items-center justify-center py-1.5 px-1 rounded-xl flex-1 cursor-pointer select-none active:scale-95 transition-transform outline-none group"
             >
-              {/* Liquid Active Bubble Background */}
-              {isActive && (
-                <motion.div
-                  layoutId="liquid-pill"
-                  className="absolute inset-0 bg-[#CCFF00] rounded-xl shadow-[0_6px_15px_rgba(204,255,0,0.3)] -z-10"
-                  transition={{
-                    type: 'spring',
-                    stiffness: 380,
-                    damping: 26,
-                    mass: 0.8
-                  }}
-                />
-              )}
+              <div className="relative flex flex-col items-center justify-center">
+                {/* Liquid Active Bubble Background (only around icon now) */}
+                {isActive && (
+                  <motion.div
+                    layoutId="liquid-pill"
+                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-[#CCFF00]/15 rounded-full -z-10"
+                    transition={{
+                      type: 'spring',
+                      stiffness: 380,
+                      damping: 26,
+                      mass: 0.8
+                    }}
+                  />
+                )}
 
-              {/* Icon Container with Micro-animation on Active */}
-              <motion.div
-                animate={isActive ? { 
-                  y: -1,
-                  scale: [1, 1.12, 1],
-                  filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.15))'
-                } : { 
-                  y: 0, 
-                  scale: 1 
-                }}
-                transition={{ 
-                  type: 'spring', 
-                  stiffness: 400, 
-                  damping: 15 
-                }}
-                className={`relative z-10 transition-colors duration-300 ${
-                  isActive ? 'text-black font-extrabold' : 'text-gray-300 group-hover:text-white'
-                }`}
-              >
-                <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
-              </motion.div>
+                {/* Icon Container with Micro-animation on Active */}
+                <motion.div
+                  animate={isActive ? { 
+                    y: -1,
+                    scale: [1, 1.1, 1],
+                    filter: 'drop-shadow(0 2px 6px rgba(204,255,0,0.3))'
+                  } : { 
+                    y: 0, 
+                    scale: 1 
+                  }}
+                  transition={{ 
+                    type: 'spring', 
+                    stiffness: 400, 
+                    damping: 15 
+                  }}
+                  className={`relative z-10 transition-colors duration-300 ${
+                    isActive ? 'text-[#CCFF00]' : 'text-gray-500 group-hover:text-gray-300'
+                  }`}
+                >
+                  <Icon className="w-5 h-5" strokeWidth={isActive ? 2.5 : 2} />
+                </motion.div>
+              </div>
 
               {/* Label - visible on active, or subtle slide in */}
               <motion.span
                 layout
-                className={`text-[8px] font-black uppercase tracking-wider mt-0.5 z-10 transition-colors duration-300 ${
-                  isActive ? 'text-black' : 'text-gray-300/80 group-hover:text-white'
+                className={`text-[9px] font-medium tracking-wide mt-1 z-10 transition-colors duration-300 ${
+                  isActive ? 'text-[#CCFF00]' : 'text-gray-500 group-hover:text-gray-300'
                 }`}
               >
                 {item.name}

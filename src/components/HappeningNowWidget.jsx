@@ -103,7 +103,7 @@ const HappeningNowWidget = () => {
                                     <span className="text-base relative z-10 leading-none">🎾</span>
                                 </div>
                                 <div>
-                                    <h2 className="font-black text-white text-md md:text-base uppercase tracking-wider flex items-center gap-2 leading-none mb-0.5">
+                                    <h2 className="font-bold text-white/95 text-base md:text-xl uppercase tracking-wider flex items-center gap-2 leading-none mb-0.5">
                                         {isLive ? 'Happening Now!' : 'Happening Next'}
                                     </h2>
                                 </div>
@@ -165,24 +165,24 @@ const HappeningNowWidget = () => {
                                         <div className="flex flex-col justify-between flex-1 py-0.5 min-w-0">
                                             <div className="min-w-0">
                                                 <div className="flex justify-between items-start mb-1 gap-2">
-                                                    <h3 className={`text-xs sm:text-sm font-bold text-white leading-tight truncate transition-colors group-hover:${iconColor}`}>
+                                                    <h3 className={`text-sm sm:text-base font-semibold text-white/95 leading-tight truncate transition-colors group-hover:${iconColor}`}>
                                                         {event.event_name}
                                                     </h3>
                                                     {isLive && (
-                                                    <span className="bg-red-600 text-white text-[7px] font-black uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-0.5">
-                                                        <span className="w-1 h-1 bg-white rounded-full"></span> LIVE
+                                                    <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-0.5">
+                                                        <span className="w-1.5 h-1.5 bg-white rounded-full"></span> LIVE
                                                     </span>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-1 text-gray-400 mb-1">
-                                                    <Calendar size={10} className={`${iconColor} shrink-0`} />
-                                                    <span className="text-[9px] sm:text-[10px] font-semibold text-white/90 leading-none">
+                                                    <Calendar size={12} className={`${iconColor} shrink-0`} />
+                                                    <span className="text-xs font-medium text-white/80 leading-none">
                                                         {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1 text-gray-400 truncate min-w-0">
-                                                    <MapPin size={10} className={`${iconColor} shrink-0`} />
-                                                    <span className="text-[9px] sm:text-[10px] truncate font-medium text-gray-400 leading-none" title={event.venue || event.city}>
+                                                    <MapPin size={12} className={`${iconColor} shrink-0`} />
+                                                    <span className="text-xs truncate font-medium text-gray-300 leading-none" title={event.venue || event.city}>
                                                         {event.venue || 'TBD'} {event.city ? `(${event.city})` : ''}
                                                     </span>
                                                 </div>
@@ -190,8 +190,8 @@ const HappeningNowWidget = () => {
 
                                             {/* Action Buttons */}
                                             <div className="mt-2 flex gap-1.5">
-                                                <button className={`flex-1 rounded-lg border transition-all font-black text-white text-[8px] sm:text-[9px] uppercase tracking-widest flex items-center justify-center gap-1 py-1 shadow-sm ${btnBg}`}>
-                                                    <PlayCircle size={10} />
+                                                <button className={`flex-1 rounded-lg border transition-all font-bold text-white text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 py-1.5 shadow-sm ${btnBg}`}>
+                                                    <PlayCircle size={12} />
                                                     View
                                                 </button>
                                             </div>
