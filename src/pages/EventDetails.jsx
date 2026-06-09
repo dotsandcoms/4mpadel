@@ -1174,7 +1174,7 @@ const EventDetails = () => {
             const pState = divisionPartners[div];
             if (pState && pState.partnerProfile && pState.payForPartner) {
                 partnerTotal += getEntryFeeForCategory(div);
-                if (!pState.partnerProfile.paid_registration) {
+                if (!pState.partnerProfile.paid_registration && pState.payForPartnerLicense) {
                     partnerTotal += pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
                 }
             }
@@ -3305,7 +3305,7 @@ const EventDetails = () => {
                                                                                                     <div className="flex items-center justify-between pt-2 border-t border-white/5">
                                                                                                         <div className="flex items-center gap-2">
                                                                                                             <CreditCard className="w-3 h-3 text-white/50" />
-                                                                                                            <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner?</span>
+                                                                                                            <span className="font-bold text-white/80 text-[10px] uppercase">Pay for partner entry fee?</span>
                                                                                                         </div>
                                                                                                         <button
                                                                                                             type="button"
@@ -3316,13 +3316,27 @@ const EventDetails = () => {
                                                                                                         </button>
                                                                                                     </div>
                                                                                                     {pState.payForPartner && !pProf.paid_registration && (
-                                                                                                        <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
-                                                                                                            <span className="text-[9px] font-bold text-white uppercase">License Choice</span>
-                                                                                                            <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
-                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
-                                                                                                                <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                                        <>
+                                                                                                            <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                                <span className="text-[9px] font-bold text-white uppercase">Pay for partner's license?</span>
+                                                                                                                <button
+                                                                                                                    type="button"
+                                                                                                                    onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], payForPartnerLicense: !pState.payForPartnerLicense } }))}
+                                                                                                                    className={`relative inline-flex h-5 w-9 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${pState.payForPartnerLicense ? 'bg-blue-400' : 'bg-slate-700'}`}
+                                                                                                                >
+                                                                                                                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition ${pState.payForPartnerLicense ? 'translate-x-4' : 'translate-x-0'}`} />
+                                                                                                                </button>
                                                                                                             </div>
-                                                                                                        </div>
+                                                                                                            {pState.payForPartnerLicense && (
+                                                                                                                <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
+                                                                                                                    <span className="text-[9px] font-bold text-white/60 uppercase">License Choice</span>
+                                                                                                                    <div className="flex bg-slate-800 rounded-full p-0.5 border border-white/5">
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-black' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-white text-black' : 'text-gray-400'}`}>Full</button>
+                                                                                                                    </div>
+                                                                                                                </div>
+                                                                                                            )}
+                                                                                                        </>
                                                                                                     )}
                                                                                                 </>
                                                                                             )}
@@ -3366,7 +3380,7 @@ const EventDetails = () => {
                                                                                         </div>
                                                                                         <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
                                                                                     </div>
-                                                                                    {pState.payForPartner && !pState.partnerProfile.paid_registration && (
+                                                                                    {pState.payForPartner && !pState.partnerProfile.paid_registration && pState.payForPartnerLicense && (
                                                                                         <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
                                                                                             <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-400">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
                                                                                             <span className="text-[10px] font-black text-blue-400">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
