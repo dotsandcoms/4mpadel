@@ -129,7 +129,7 @@ const Players = () => {
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
         {/* Hero Section */}
-        <section className="relative h-[45vh] min-h-[420px] flex items-center justify-center overflow-hidden">
+        <section className="hidden md:flex relative h-[45vh] min-h-[420px] items-center justify-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img
               src={heroBg}
@@ -167,7 +167,7 @@ const Players = () => {
         </section>
 
         {/* Search & Command Deck */}
-        <section className="container mx-auto px-6 -mt-12 relative z-20 mb-12">
+        <section className="container mx-auto px-6 pt-28 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -306,7 +306,7 @@ const Players = () => {
           <div className="mb-4 text-gray-400 text-xs sm:text-sm font-black uppercase tracking-widest">
             {filteredPlayers.length} PLAYERS FOUND
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2 sm:gap-4 md:gap-6">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4 md:gap-6">
             {filteredPlayers.length > 0 ? (
               filteredPlayers.map((player, index) => (
                 <motion.div
@@ -319,7 +319,7 @@ const Players = () => {
                   className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
                 >
                   {/* Photo Section */}
-                  <div className="aspect-square sm:aspect-[4/5] bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
+                  <div className="aspect-square bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
                     {player.image_url ? (
                       <motion.img
                         layoutId={`image-${player.id}`}
@@ -340,7 +340,7 @@ const Players = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/20 to-black/25" />
 
                     {/* Category Overlay Capsule */}
-                    <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-2 sm:py-1 rounded-md sm:rounded-lg text-[6px] sm:text-[9px] uppercase tracking-widest z-10 shadow-lg">
+                    <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-1.5 sm:py-0.5 rounded-md sm:rounded-md text-[6px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg">
                       {player.category || 'Open'}
                     </motion.div>
 
