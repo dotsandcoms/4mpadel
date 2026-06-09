@@ -1847,6 +1847,18 @@ const EventDetails = () => {
         </div>
     );
 
+    const handleRankedinRedirect = () => {
+        const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
+        if (event?.rankedin_url) {
+            window.open(event.rankedin_url, '_blank');
+        } else if (rId) {
+            const slug = event?.slug ? `/${event.slug}` : '';
+            window.open(`https://www.rankedin.com/en/tournament/${rId}${slug}`, '_blank');
+        } else {
+            alert('RankedIn registration link is not available for this event.');
+        }
+    };
+
     const isRegistrationAllowed = !isEventPassed && !isLive;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
@@ -1860,7 +1872,7 @@ const EventDetails = () => {
                 {needsRegistration && (
                     <button
                         type="button"
-                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                        onClick={handleRankedinRedirect}
                         className="w-full block text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                         style={{ color: '#0F172A' }}
                     >
@@ -1878,7 +1890,7 @@ const EventDetails = () => {
                 )}
                 {(!needsRegistration && !needsPayment && isRegistrationAllowed) && (
                     <button
-                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                        onClick={handleRankedinRedirect}
                         className="w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all bg-green-500 text-white hover:bg-green-600"
                     >
                         Add Division
@@ -2043,7 +2055,7 @@ const EventDetails = () => {
                                     if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
                                         return (
                                             <button 
-                                                onClick={() => { if (!isLive) { setRegStep(1); setIsModalOpen(true); } }}
+                                                onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
                                                 className={`flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`} 
                                                 style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30', color: theme.fill }}
                                             >
@@ -2057,7 +2069,7 @@ const EventDetails = () => {
                                             {!isRegistered && !isLive && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                    onClick={handleRankedinRedirect}
                                                     className="flex-1 sm:flex-none text-center text-[10px] font-black uppercase tracking-widest px-6 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                                                     style={{ color: '#0F172A' }}
                                                 >
