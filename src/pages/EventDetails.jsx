@@ -2883,7 +2883,7 @@ const EventDetails = () => {
                                                             name="full_name"
                                                             value={formData.full_name}
                                                             onChange={handleInputChange}
-                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
                                                             placeholder="Player Full Name"
                                                             required
                                                         />
@@ -2899,7 +2899,7 @@ const EventDetails = () => {
                                                             name="email"
                                                             value={formData.email}
                                                             onChange={handleInputChange}
-                                                            className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                            className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
                                                             placeholder="email@example.com"
                                                             required
                                                         />
@@ -2921,7 +2921,7 @@ const EventDetails = () => {
                                                             name="phone"
                                                             value={formData.phone}
                                                             onChange={handleInputChange}
-                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-sm text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
                                                             placeholder="+27 00 000 0000"
                                                         />
                                                     </div>
@@ -3083,7 +3083,7 @@ const EventDetails = () => {
                                                                         value={formData.partner_name}
                                                                         onChange={handleInputChange}
                                                                         autoComplete="off"
-                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-base text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all font-bold placeholder:text-gray-600`}
                                                                         placeholder="Type 2+ characters to search..."
                                                                     />
                                                                     {isLookingUpPartner && (
