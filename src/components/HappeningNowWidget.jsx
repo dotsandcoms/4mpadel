@@ -54,6 +54,15 @@ const HappeningNowWidget = () => {
                     }
                 });
 
+                const sortByFeatured = (a, b) => {
+                    if (a.featured_event && !b.featured_event) return -1;
+                    if (!a.featured_event && b.featured_event) return 1;
+                    return 0;
+                };
+
+                happeningNow.sort(sortByFeatured);
+                upcomingThisMonth.sort(sortByFeatured);
+
                 if (happeningNow.length > 0) {
                     setLiveEvents(happeningNow);
                     setIsLive(true);
