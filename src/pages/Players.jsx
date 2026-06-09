@@ -209,7 +209,7 @@ const Players = () => {
             transition={{ delay: 0.5 }}
             className="flex overflow-x-auto md:justify-center gap-2 pb-2 mt-4 hide-scrollbar"
           >
-            {['All', 'Open', 'Men\'s Open (Pro/Elite)', 'Ladies Open (Pro/Elite)', 'Men\'s Advanced'].map((cat) => (
+            {categories.map((cat) => (
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
@@ -362,9 +362,11 @@ const Players = () => {
                     <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/20 to-black/25" />
 
                     {/* Category Overlay Capsule */}
-                    <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-1.5 sm:py-0.5 rounded-md sm:rounded-md text-[6px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg">
-                      {player.category || 'Open'}
-                    </motion.div>
+                    {player.category && (
+                      <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-1.5 sm:py-0.5 rounded-md sm:rounded-md text-[6px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg">
+                        {player.category}
+                      </motion.div>
+                    )}
 
                     {/* Rank Overlay Capsule */}
                     <motion.div layoutId={`level-${player.id}`} className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-7 h-7 sm:w-10 sm:h-10 rounded-md sm:rounded-lg flex flex-col items-center justify-center text-[7px] sm:text-[10px] z-10 shadow-lg">
