@@ -3317,7 +3317,7 @@ const EventDetails = () => {
                                                                                                         autoComplete="off"
                                                                                                         className={`w-full bg-white/5 border ${
                                                                                                             pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
-                                                                                                        } rounded-lg pl-10 pr-10 py-2.5 text-xs text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
+                                                                                                        } rounded-lg pl-10 pr-10 py-2.5 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
                                                                                                         placeholder={`Search partner for ${div}...`}
                                                                                                     />
                                                                                             {pState.isLookingUpPartner && (
