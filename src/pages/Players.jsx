@@ -173,7 +173,7 @@ const Players = () => {
         </section>
 
         {/* Search & Command Deck */}
-        <section className="container mx-auto px-6 pt-28 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+        <section className="container mx-auto px-6 pt-20 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -188,7 +188,7 @@ const Players = () => {
                 placeholder="Search pro players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-sm md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
               />
             </div>
 

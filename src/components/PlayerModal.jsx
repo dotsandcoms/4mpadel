@@ -58,6 +58,11 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
     }
 
     let safeRankings = Array.isArray(player.rankings) ? player.rankings : [];
+    safeRankings = safeRankings.filter(r => {
+        const org = r.org?.toUpperCase() || '';
+        return org.includes('SAPA') || org.includes('BROLL') || org.includes('SA GRAND');
+    });
+    
     if (hideSapaRankings) {
         safeRankings = safeRankings.filter(r => !r.org?.toUpperCase().includes('SAPA'));
     }
