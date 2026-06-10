@@ -75,7 +75,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         .select('id, event_name, start_date')
                         .gte('start_date', new Date().toISOString())
                         .order('start_date', { ascending: true });
-                    
+
                     if (!error && events) {
                         setUpcomingEvents(events);
                     }
@@ -121,17 +121,17 @@ const AuthModal = ({ isOpen, onClose }) => {
             setTimeout(() => {
                 setMessage(null);
                 onClose();
-                
-                 // Determine redirect path based on where the user logged in from
-                 const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
-                 if (isAdminContext) {
-                     navigate('/admin');
-                 } else if (location.pathname === '/' || location.pathname === '/login') {
-                     navigate('/');
-                 } else {
-                     // Stay on the current page
-                     navigate(location.pathname + location.search, { replace: true });
-                 }
+
+                // Determine redirect path based on where the user logged in from
+                const isAdminContext = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
+                if (isAdminContext) {
+                    navigate('/admin');
+                } else if (location.pathname === '/' || location.pathname === '/login') {
+                    navigate('/');
+                } else {
+                    // Stay on the current page
+                    navigate(location.pathname + location.search, { replace: true });
+                }
             }, 2500);
         }
     };
@@ -211,9 +211,9 @@ const AuthModal = ({ isOpen, onClose }) => {
             if (!/[@#$%^&*\-+=|<>?/,.'~]/.test(password)) passwordErrors.push("one special character (@#$%^&*-+-=)");
 
             if (passwordErrors.length > 0) {
-                setMessage({ 
-                    type: 'error', 
-                    text: `Password must contain: ${passwordErrors.join(', ')}.` 
+                setMessage({
+                    type: 'error',
+                    text: `Password must contain: ${passwordErrors.join(', ')}.`
                 });
                 return;
             }
@@ -233,13 +233,13 @@ const AuthModal = ({ isOpen, onClose }) => {
                 .select('email')
                 .ilike('email', email)
                 .maybeSingle();
-                
+
             if (existingPlayer) {
                 setLoading(false);
                 setMessage({ type: 'error', text: 'This email is already registered. Please sign in or reset your password.' });
                 return;
             }
-            
+
             setLoading(false);
             setStep(2);
             return;
@@ -305,7 +305,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                     const { data: { publicUrl } } = supabase.storage
                         .from('profile-pics')
                         .getPublicUrl(filePath);
-                    
+
                     uploadedImageUrl = publicUrl;
                 } catch (error) {
                     console.error('Error uploading image:', error);
@@ -347,10 +347,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setLoading(false);
             } else {
                 console.log(`Initializing Paystack for ${formatCurrency(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE)} Registration...`);
-                handlePaystackPayment({ 
+                handlePaystackPayment({
                     onSuccess: async (reference) => {
                         console.log('Payment successful. Reference:', reference);
-                        
+
                         const { error: updateError } = await supabase.rpc('mark_player_paid', {
                             p_license_type: paymentOption === 'temporary' ? 'temporary' : 'full',
                         });
@@ -378,11 +378,11 @@ const AuthModal = ({ isOpen, onClose }) => {
 
                         showMessage('Payment and Registration successful! Welcome to 4m Padel.', 'success');
                         setLoading(false);
-                    }, 
+                    },
                     onClose: () => {
                         showMessage('Registration successful, but payment was cancelled. You can pay later from your profile.', 'error');
                         setLoading(false);
-                    } 
+                    }
                 });
             }
         }
@@ -476,7 +476,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
                                                     <input
                                                         type="text"
-                                                        placeholder="Name"
+                                                        placeholder="First Name"
                                                         value={firstName}
                                                         onChange={(e) => setFirstName(e.target.value)}
                                                         className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-white focus:outline-none focus:border-padel-green transition-all text-sm"
@@ -635,10 +635,10 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                     </div>
                                                     <label className="absolute -bottom-1 -right-1 bg-padel-green text-black p-2 rounded-full cursor-pointer hover:bg-white transition-all shadow-lg">
                                                         <Upload size={14} />
-                                                        <input 
-                                                            type="file" 
-                                                            className="hidden" 
-                                                            accept="image/*" 
+                                                        <input
+                                                            type="file"
+                                                            className="hidden"
+                                                            accept="image/*"
                                                             onChange={handleImageChange}
                                                         />
                                                     </label>
