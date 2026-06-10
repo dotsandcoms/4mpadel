@@ -161,7 +161,7 @@ const HappeningNowWidget = () => {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
                                         }}
-                                        className={`relative flex-none w-[260px] sm:w-[300px] snap-start bg-white/[0.03] border rounded-[1rem] p-3 transition-all duration-300 group cursor-pointer flex gap-3 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
+                                        className={`relative flex-none w-[240px] sm:w-[270px] snap-start bg-white/[0.03] border rounded-[1rem] p-3 transition-all duration-300 group cursor-pointer flex gap-3 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
                                     >
                                         <div className={`absolute inset-0 bg-gradient-to-r ${isLive ? 'from-red-500/5' : 'from-white/5'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
 
