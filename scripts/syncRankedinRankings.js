@@ -27,6 +27,34 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     },
 });
 
+
+async function getValidAgeGroups(rankingId, type) {
+    const validGroups = [];
+    // Checking a broad range of standard Rankedin ageGroups (1-100)
+    // Run in batches to avoid overwhelming the API
+    const checks = Array.from({length: 100}, (_, i) => i + 1);
+    
+    for (let i = 0; i < checks.length; i += 10) {
+        const batch = checks.slice(i, i + 10);
+        await Promise.all(batch.map(async (ageGroup) => {
+            const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${type}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=1`;
+            try {
+                const res = await fetch(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.Payload && data.Payload.length > 0) {
+                        validGroups.push(ageGroup);
+                    }
+                }
+            } catch (e) {
+                // ignore
+            }
+        }));
+    }
+    return validGroups.sort((a,b)=>a-b);
+}
+
+
 async function syncCategory(rankingId, type, ageGroup, categoryName) {
     console.log(`\n--- Syncing ${categoryName} (Ranking ID: ${rankingId}) ---`);
     const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${rankingId}&rankingType=${type}&ageGroup=${ageGroup}&weekFromNow=0&language=en&skip=0&take=1000`;
@@ -89,7 +117,7 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
                     .eq('approved', true);
 
                 if (nameMatches && nameMatches.length > 0) {
-                    playerToUpdate = nameMatches.find(ep => ep.name.toLowerCase() === name.toLowerCase()) || nameMatches[0];
+                    playerToUpdate = nameMatches.find(ep => ep.name.replace(/\s+/g, ' ').trim().toLowerCase() === name.replace(/\s+/g, ' ').trim().toLowerCase()) || nameMatches[0];
                 }
             }
 
@@ -149,21 +177,36 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
     }
 }
 
+
 async function run() {
-    console.log("Starting Rankedin Sync for all featured rankings...");
-    // 15809: SAPA
-    await syncCategory(15809, 3, 82, "SAPA Men's Open");
-    await syncCategory(15809, 4, 83, "SAPA Women's Open");
+    console.log("Starting Rankedin Sync for all featured rankings and all categories...");
+    
+    const rankingsToSync = [
+        { id: 15809, name: 'SAPA' },
+        { id: 16317, name: 'Broll Pro Tour' },
+        { id: 16482, name: 'SA Grand Tour' }
+    ];
 
-    // 16317: Broll Pro Tour
-    await syncCategory(16317, 3, 82, "Broll Men's Open");
-    await syncCategory(16317, 4, 83, "Broll Women's Open");
+    for (const ranking of rankingsToSync) {
+        console.log(`\n=== Discovering Categories for ${ranking.name} ===`);
+        // Type 3 = Men, Type 4 = Women
+        const menAgeGroups = await getValidAgeGroups(ranking.id, 3);
+        console.log(`Found Men's Age Groups: ${menAgeGroups.join(', ')}`);
+        
+        for (const ageGroup of menAgeGroups) {
+            await syncCategory(ranking.id, 3, ageGroup, `${ranking.name} Men's (Category ID ${ageGroup})`);
+        }
 
-    // 16482: SA Grand Tour
-    await syncCategory(16482, 3, 82, "SA Grand Tour Men's Open");
-    await syncCategory(16482, 4, 83, "SA Grand Tour Women's Open");
+        const womenAgeGroups = await getValidAgeGroups(ranking.id, 4);
+        console.log(`Found Women's Age Groups: ${womenAgeGroups.join(', ')}`);
+        
+        for (const ageGroup of womenAgeGroups) {
+            await syncCategory(ranking.id, 4, ageGroup, `${ranking.name} Women's (Category ID ${ageGroup})`);
+        }
+    }
 
     console.log("\nAll sync tasks finished.");
 }
+
 
 run();
