@@ -344,8 +344,10 @@ const Players = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min((index % 24) * 0.03, 0.2) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
+                  className="group relative bg-[#0a0f1d]/60 border border-white/10 md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
                 >
+                  {/* Invisible Click Catch-all for Mobile */}
+                  <div className="absolute inset-0 z-[5]" />
                   {/* Photo Section */}
                   <div className="aspect-square bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
                     {player.image_url ? (
@@ -355,7 +357,7 @@ const Players = () => {
                         alt={player.name}
                         loading="lazy"
                         decoding="async"
-                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                        className="w-full h-full object-cover transition-transform duration-700 md:group-hover:scale-105"
                       />
                     ) : (
                       <motion.div
@@ -385,8 +387,8 @@ const Players = () => {
                     </motion.div>
 
                     {/* Pro Overlay Button */}
-                    <div className="absolute inset-0 bg-black/45 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center">
-                      <span className="bg-padel-green text-black px-2 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-xl font-black text-[6px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+                    <div className="absolute inset-0 bg-black/45 opacity-0 md:group-hover:opacity-100 transition-all duration-300 flex items-center justify-center pointer-events-none">
+                      <span className="bg-padel-green text-black px-2 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-xl font-black text-[6px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 md:group-hover:translate-y-0 transition-transform duration-300">
                         Pro Card
                         <ArrowUpRight size={10} />
                       </span>
@@ -398,7 +400,7 @@ const Players = () => {
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
 
                     <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className="text-[10px] sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 group-hover:text-padel-green transition-colors line-clamp-1">
+                      <motion.h3 layoutId={`name-${player.id}`} className="text-[10px] sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10">
                         {player.name}
                       </motion.h3>
 
@@ -417,7 +419,7 @@ const Players = () => {
                             href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="bg-white/5 border border-white/5 hover:bg-padel-green hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0"
+                            className="bg-white/5 border border-white/5 md:hover:bg-padel-green md:hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0 relative z-20"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <Instagram className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
@@ -425,7 +427,7 @@ const Players = () => {
                         )}
                         {player.hasGallery && (
                           <div
-                            className="bg-white/5 border border-white/5 text-padel-green hover:bg-padel-green hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors cursor-pointer shrink-0"
+                            className="bg-white/5 border border-white/5 text-padel-green md:hover:bg-padel-green md:hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0 relative z-20"
                             title="Player Photo Gallery Available"
                           >
                             <Image className="w-2.5 h-2.5 sm:w-3 sm:h-3" />

@@ -109,7 +109,7 @@ const featuredDataTemplate = [
     },
     {
         id: 'recent-results',
-        title: 'Recent Featured Tournaments',
+        title: 'Recent Featured Results',
         highlight: 'Results',
         description: 'Relive the highlights and unbelievable moments from last weekend\'s finals. Upsets, brilliant plays, and unmatched sportsmanship on display.',
         cardLabel: 'Tournament Champions',
@@ -562,8 +562,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             <div
                 ref={scrollRef}
                 className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide w-full ${isSlider
-                        ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8'
-                        : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0'
+                    ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8'
+                    : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0'
                     }`}
             >
                 {items?.map((t, i) => (
@@ -599,8 +599,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         onClick={() => canScrollLeft && scroll('left')}
                         disabled={!canScrollLeft}
                         className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollLeft
-                                ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
-                                : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                            ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
                             }`}
                     >
                         <ChevronLeft className="w-5 h-5" />
@@ -609,8 +609,8 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         onClick={() => canScrollRight && scroll('right')}
                         disabled={!canScrollRight}
                         className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollRight
-                                ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
-                                : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                            ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
                             }`}
                     >
                         <ChevronRight className="w-5 h-5" />
