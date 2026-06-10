@@ -98,8 +98,8 @@ const HappeningNowWidget = () => {
                         {/* Header */}
                         <div className="relative z-10 flex items-center justify-between mb-4">
                             <div className="flex items-center gap-2.5">
-                                <div className="relative flex items-center justify-center w-7 h-7 rounded-lg bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.4)]">
-                                    <span className="absolute inline-flex w-full h-full rounded-lg bg-red-500 opacity-40 animate-ping"></span>
+                                <div className={`relative flex items-center justify-center w-7 h-7 rounded-lg ${isLive ? 'bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'bg-white/10'}`}>
+                                    {isLive && <span className="absolute inline-flex w-full h-full rounded-lg bg-red-500 opacity-40 animate-ping"></span>}
                                     <span className="text-base relative z-10 leading-none">🎾</span>
                                 </div>
                                 <div>
@@ -152,14 +152,18 @@ const HappeningNowWidget = () => {
                                         key={event.id}
                                         onClick={() => {
                                             if (event.slug || event.id) {
-                                                navigate(`/draws/${event.slug || event.id}`);
+                                                if (isLive) {
+                                                    navigate(`/draws/${event.slug || event.id}`);
+                                                } else {
+                                                    navigate(`/calendar/${event.slug || event.id}`);
+                                                }
                                             } else if (event.rankedin_url) {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
                                         }}
                                         className={`relative flex-none w-[260px] sm:w-[300px] snap-start bg-white/[0.03] border rounded-[1rem] p-3 transition-all duration-300 group cursor-pointer flex gap-3 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
                                     >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-red-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+                                        <div className={`absolute inset-0 bg-gradient-to-r ${isLive ? 'from-red-500/5' : 'from-white/5'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
 
                                         {/* Event Info */}
                                         <div className="flex flex-col justify-between flex-1 py-0.5 min-w-0">
