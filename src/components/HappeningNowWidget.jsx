@@ -117,33 +117,33 @@ const HappeningNowWidget = () => {
                                 
                                 let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
                                 let hoverBorderCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
-                                let btnBg = 'bg-padel-green/10 hover:bg-padel-green group-hover:bg-padel-green text-white hover:text-black group-hover:text-black border-padel-green/20 hover:border-padel-green';
+                                let btnBg = 'bg-padel-green text-black hover:bg-padel-green/90 group-hover:bg-padel-green/90 border-transparent';
                                 let iconColor = 'text-padel-green';
 
                                 if (event.sapa_status === 'Major' || event.event_name?.includes('Major')) {
                                     borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
                                     hoverBorderCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
-                                    btnBg = 'bg-red-500/10 hover:bg-red-500 group-hover:bg-red-500 text-white hover:text-white group-hover:text-white border-red-500/20 hover:border-red-500';
+                                    btnBg = 'bg-red-600 text-white hover:bg-red-500 group-hover:bg-red-500 border-transparent';
                                     iconColor = 'text-red-400';
                                 } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold' || event.event_name?.includes('Super Gold') || event.event_name?.includes('S Gold')) {
                                     borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
                                     hoverBorderCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
-                                    btnBg = 'bg-amber-500/10 hover:bg-amber-500 group-hover:bg-amber-500 text-white hover:text-black group-hover:text-black border-amber-500/20 hover:border-amber-500';
+                                    btnBg = 'bg-amber-500 text-black hover:bg-amber-400 group-hover:bg-amber-400 border-transparent';
                                     iconColor = 'text-amber-400';
                                 } else if (event.sapa_status === 'Gold' || event.event_name?.includes('Gold')) {
                                     borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
                                     hoverBorderCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
-                                    btnBg = 'bg-yellow-500/10 hover:bg-yellow-400 group-hover:bg-yellow-400 text-white hover:text-black group-hover:text-black border-yellow-500/20 hover:border-yellow-400';
+                                    btnBg = 'bg-yellow-500 text-black hover:bg-yellow-400 group-hover:bg-yellow-400 border-transparent';
                                     iconColor = 'text-yellow-400';
                                 } else if (event.sapa_status === 'Silver' || event.event_name?.includes('Silver')) {
                                     borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
                                     hoverBorderCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
-                                    btnBg = 'bg-gray-400/10 hover:bg-gray-300 group-hover:bg-gray-300 text-white hover:text-black group-hover:text-black border-gray-400/20 hover:border-gray-300';
+                                    btnBg = 'bg-gray-300 text-black hover:bg-gray-200 group-hover:bg-gray-200 border-transparent';
                                     iconColor = 'text-gray-300';
                                 } else if (event.sapa_status === 'Bronze' || event.event_name?.includes('Bronze')) {
                                     borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
                                     hoverBorderCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
-                                    btnBg = 'bg-orange-600/10 hover:bg-orange-500 group-hover:bg-orange-500 text-white hover:text-white group-hover:text-white border-orange-600/20 hover:border-orange-500';
+                                    btnBg = 'bg-orange-600 text-white hover:bg-orange-500 group-hover:bg-orange-500 border-transparent';
                                     iconColor = 'text-orange-400';
                                 }
 
@@ -194,7 +194,7 @@ const HappeningNowWidget = () => {
 
                                             {/* Action Buttons */}
                                             <div className="mt-2 flex gap-1.5">
-                                                <button className={`flex-1 rounded-lg border transition-all font-bold text-white text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 py-1.5 shadow-sm ${btnBg}`}>
+                                                <button className={`flex-1 rounded-lg border transition-all font-bold text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 py-1.5 shadow-sm ${btnBg}`}>
                                                     <PlayCircle size={12} />
                                                     View
                                                 </button>
