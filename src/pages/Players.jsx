@@ -18,6 +18,7 @@ const Players = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [userEmail, setUserEmail] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(24);
 
   useEffect(() => {
     const fetchPlayers = async () => {
@@ -99,6 +100,11 @@ const Players = () => {
       return matchesSearch && matchesCategory && matchesClub;
     });
   }, [players, searchTerm, selectedCategory, selectedClub]);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setVisibleCount(24);
+  }, [searchTerm, selectedCategory, selectedClub]);
 
   const handleSetSelectedPlayer = (player) => {
     setSelectedPlayer(player);
@@ -330,13 +336,13 @@ const Players = () => {
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4 md:gap-6">
             {filteredPlayers.length > 0 ? (
-              filteredPlayers.map((player, index) => (
+              filteredPlayers.slice(0, visibleCount).map((player, index) => (
                 <motion.div
                   layoutId={`card-${player.id}`}
                   key={player.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(index * 0.05, 0.5) }}
+                  transition={{ delay: Math.min((index % 24) * 0.03, 0.2) }}
                   onClick={() => handleSetSelectedPlayer(player)}
                   className="group relative bg-[#0a0f1d]/60 border border-white/10 hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between"
                 >
@@ -347,6 +353,8 @@ const Players = () => {
                         layoutId={`image-${player.id}`}
                         src={player.image_url}
                         alt={player.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       />
                     ) : (
@@ -447,6 +455,21 @@ const Players = () => {
               </div>
             )}
           </div>
+          
+          {/* Load More Button */}
+          {visibleCount < filteredPlayers.length && (
+            <div className="mt-8 flex justify-center pb-8">
+              <button
+                onClick={() => setVisibleCount(prev => prev + 24)}
+                className="bg-white/5 border border-white/10 hover:bg-white/10 hover:border-padel-green text-white font-bold py-3 px-8 rounded-xl transition-all uppercase tracking-widest text-xs shadow-lg group flex items-center gap-2"
+              >
+                Load More Players
+                <svg className="w-4 h-4 text-gray-400 group-hover:text-padel-green transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+            </div>
+          )}
         </section>
 
         {/* Player Modal Overlay container */}
