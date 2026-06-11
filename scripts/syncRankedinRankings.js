@@ -110,11 +110,18 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
 
             // 2. Fallback to Name matching if no ID match found
             if (!playerToUpdate) {
-                const { data: nameMatches } = await supabase
+                const nameParts = name.split(/\s+/).filter(Boolean);
+                let query = supabase
                     .from('players')
                     .select('id, name, preferred_ranking, rankedin_id')
-                    .ilike('name', `%${name}%`)
                     .eq('approved', true);
+                
+                // Add an ilike for each part of the name
+                nameParts.forEach(part => {
+                    query = query.ilike('name', "%" + part + "%");
+                });
+
+                const { data: nameMatches } = await query;
 
                 if (nameMatches && nameMatches.length > 0) {
                     playerToUpdate = nameMatches.find(ep => ep.name.replace(/\s+/g, ' ').trim().toLowerCase() === name.replace(/\s+/g, ' ').trim().toLowerCase()) || nameMatches[0];
