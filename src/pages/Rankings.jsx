@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight, X, MapPin, Download, Share2, Instagram } from 'lucide-react';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
-import PlayerModal from '../components/PlayerModal';
+import RankingDetailsModal from '../components/RankingDetailsModal';
 import sapaLogo from '../assets/sapa-logo.svg';
 import brollLogo from '../assets/BrollLogo.png';
 
@@ -11,6 +11,24 @@ const ORG_LABELS = {
   15809: 'SAPA',
   16317: 'Broll Pro Tour',
   16482: 'SA Grand Tour'
+};
+
+const ORG_CATEGORIES = {
+  15809: [ // SAPA
+    { id: 'men', label: 'Men', rankingType: 3, ageGroup: 82 },
+    { id: 'ladies', label: 'Women', rankingType: 4, ageGroup: 83 }
+  ],
+  16317: [ // Broll Pro Tour
+    { id: 'men', label: 'Men', rankingType: 3, ageGroup: 82 },
+    { id: 'ladies', label: 'Women', rankingType: 4, ageGroup: 83 }
+  ],
+  16482: [ // SA Grand Tour
+    { id: 'mo35', label: 'Men Over 35', rankingType: 3, ageGroup: 2 },
+    { id: 'mo40', label: 'Men Over 40', rankingType: 3, ageGroup: 3 },
+    { id: 'mo45', label: 'Men Over 45', rankingType: 3, ageGroup: 4 },
+    { id: 'mo50', label: 'Men Over 50', rankingType: 3, ageGroup: 5 },
+    { id: 'mo55', label: 'Men Over 55', rankingType: 3, ageGroup: 6 }
+  ]
 };
 
 const ORG_LOGOS = {
@@ -312,28 +330,33 @@ const FullRankingsTable = ({
   setSelectedPlayer,
   getInitials,
   selectedOrgId,
-  setSelectedOrgId
+  setSelectedOrgId,
+  categories
 }) => {
   return (
     <div className="max-w-6xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
       <div className="mb-10 flex flex-col items-center text-center">
-        {ORG_LOGOS[selectedOrgId] && (
-          <motion.div
-            key={selectedOrgId}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="mb-4 bg-white/5 border border-white/10 rounded-2xl p-3.5 backdrop-blur-sm h-16 w-36 flex items-center justify-center shadow-lg shadow-black/20"
-          >
-            <img
-              src={ORG_LOGOS[selectedOrgId]}
-              alt={`${ORG_LABELS[selectedOrgId]} Logo`}
-              className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
-            />
-          </motion.div>
-        )}
-        <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase mb-3">Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings</h2>
-        <p className="text-gray-400 text-sm max-w-xl mx-auto">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
+        <div className="flex flex-row items-center justify-center flex-nowrap gap-4 md:gap-5 mb-3">
+          {ORG_LOGOS[selectedOrgId] && (
+            <motion.div
+              key={selectedOrgId}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="bg-white/5 border border-white/10 rounded-2xl p-2.5 backdrop-blur-sm h-12 w-28 md:h-16 md:w-36 flex items-center justify-center shadow-lg shadow-black/20 shrink-0"
+            >
+              <img
+                src={ORG_LOGOS[selectedOrgId]}
+                alt={`${ORG_LABELS[selectedOrgId]} Logo`}
+                className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
+              />
+            </motion.div>
+          )}
+          <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase text-center lg:text-left">
+            Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings
+          </h2>
+        </div>
+        <p className="text-gray-400 text-sm max-w-xl mx-auto mt-1">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
       </div>
 
       {/* Controls Box */}
@@ -341,13 +364,13 @@ const FullRankingsTable = ({
         <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
 
           {/* Internal Table Tabs with custom sliding background pill */}
-          <div className="relative flex p-1 bg-black/40 rounded-xl w-full sm:w-auto border border-white/5">
-            {['men', 'ladies'].map((tabKey) => {
-              const isSelected = activeTab === tabKey;
+          <div className={`relative flex p-1 bg-black/40 rounded-xl w-full sm:w-auto border border-white/5 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}>
+            {categories.map((cat) => {
+              const isSelected = activeTab === cat.id;
               return (
                 <button
-                  key={tabKey}
-                  onClick={() => setActiveTab(tabKey)}
+                  key={cat.id}
+                  onClick={() => setActiveTab(cat.id)}
                   className="relative flex-1 sm:flex-none py-2 px-6 rounded-lg font-black text-xs uppercase tracking-widest transition-all duration-300 z-10"
                   style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
                 >
@@ -359,7 +382,7 @@ const FullRankingsTable = ({
                       style={{ zIndex: -1 }}
                     />
                   )}
-                  {tabKey === 'men' ? 'Men' : 'Women'}
+                  {cat.label}
                 </button>
               );
             })}
@@ -391,6 +414,98 @@ const FullRankingsTable = ({
 
       {/* Table / List Area */}
       <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
+          {/* Top 3 Podium (Only on page 1 without search) */}
+          {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
+            <div className="flex items-end justify-center gap-4 sm:gap-8 md:gap-16 px-4 md:px-12 pt-8 md:pt-12 pb-10 bg-[#0A0F1D] md:bg-transparent border-b border-white/5">
+              {/* Rank 2 */}
+              <div
+                className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+                onClick={() => setSelectedPlayer(paginatedData[1])}
+              >
+                <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                  <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
+                  <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
+                    {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
+                      <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[1].name)}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-center w-full">
+                  <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[1].name}</h4>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[1].points.toLocaleString()}</p>
+                    <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[1].change > 0 ? 'text-padel-green' : paginatedData[1].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {paginatedData[1].change > 0 && `▲ ${paginatedData[1].change}`}
+                      {paginatedData[1].change < 0 && `▼ ${Math.abs(paginatedData[1].change)}`}
+                      {paginatedData[1].change === 0 && `-`}
+                    </span>
+                  </div>
+                  <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
+                </div>
+              </div>
+
+              {/* Rank 1 */}
+              <div
+                className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
+                onClick={() => setSelectedPlayer(paginatedData[0])}
+              >
+                <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
+                  <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-padel-green text-black flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(190,255,0,0.5)]">1</div>
+                  <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-padel-green shadow-lg shadow-padel-green/20 bg-[#1E293B]">
+                    {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
+                      <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(paginatedData[0].name)}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-center w-full">
+                  <h4 className="text-[11px] sm:text-sm md:text-xl font-black text-white leading-tight uppercase line-clamp-2 min-h-[26px] sm:min-h-[32px]">{paginatedData[0].name}</h4>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <p className="text-xs sm:text-sm md:text-lg font-bold text-padel-green">{paginatedData[0].points.toLocaleString()}</p>
+                    <span className={`text-[9px] sm:text-[10px] md:text-sm font-black ${paginatedData[0].change > 0 ? 'text-padel-green' : paginatedData[0].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {paginatedData[0].change > 0 && `▲ ${paginatedData[0].change}`}
+                      {paginatedData[0].change < 0 && `▼ ${Math.abs(paginatedData[0].change)}`}
+                      {paginatedData[0].change === 0 && `-`}
+                    </span>
+                  </div>
+                  <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
+                </div>
+              </div>
+
+              {/* Rank 3 */}
+              <div
+                className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+                onClick={() => setSelectedPlayer(paginatedData[2])}
+              >
+                <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                  <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
+                  <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
+                    {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
+                      <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[2].name)}</div>
+                    )}
+                  </div>
+                </div>
+                <div className="text-center w-full">
+                  <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[2].name}</h4>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[2].points.toLocaleString()}</p>
+                    <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[2].change > 0 ? 'text-padel-green' : paginatedData[2].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {paginatedData[2].change > 0 && `▲ ${paginatedData[2].change}`}
+                      {paginatedData[2].change < 0 && `▼ ${Math.abs(paginatedData[2].change)}`}
+                      {paginatedData[2].change === 0 && `-`}
+                    </span>
+                  </div>
+                  <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
+                </div>
+              </div>
+            </div>
+          )}
+
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse min-w-full">
@@ -399,11 +514,12 @@ const FullRankingsTable = ({
                 <th className="py-4 px-6 font-black text-gray-400 uppercase tracking-widest text-xs w-24">Pos</th>
                 <th className="py-4 px-6 font-black text-gray-400 uppercase tracking-widest text-xs">Player</th>
                 <th className="py-4 px-6 font-black text-gray-400 uppercase tracking-widest text-xs text-right">Points</th>
+                <th className="py-4 px-6 font-black text-gray-400 uppercase tracking-widest text-xs text-center">Change</th>
               </tr>
             </thead>
             <tbody>
               {paginatedData.length > 0 ? (
-                paginatedData.map((player) => (
+                (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(3) : paginatedData).map((player) => (
                   <tr key={player.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group">
                     <td className="py-4 px-6 text-xl font-black text-gray-500 group-hover:text-padel-green transition-colors">
                       #{player.rawRank}
@@ -411,11 +527,7 @@ const FullRankingsTable = ({
                     <td className="py-4 px-6">
                       <div
                         onClick={() => {
-                          if (player.hasLocalProfile && player.playerRecord) {
-                            setSelectedPlayer(player.playerRecord);
-                          } else {
-                            window.open(player.rankedinProfile, '_blank');
-                          }
+                          setSelectedPlayer(player);
                         }}
                         className="flex items-center gap-3.5 group/link cursor-pointer"
                       >
@@ -448,6 +560,13 @@ const FullRankingsTable = ({
                         {player.points.toLocaleString()}
                       </span>
                     </td>
+                    <td className="py-4 px-6 text-center">
+                      <span className={`inline-flex items-center gap-1 text-sm font-black ${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                        {player.change > 0 && <span>▲ {player.change}</span>}
+                        {player.change < 0 && <span>▼ {Math.abs(player.change)}</span>}
+                        {player.change === 0 && <span>-</span>}
+                      </span>
+                    </td>
                   </tr>
                 ))
               ) : (
@@ -462,78 +581,51 @@ const FullRankingsTable = ({
         </div>
 
         {/* Mobile App-like Card List View */}
-        <div className="block md:hidden p-4 space-y-3">
-          {paginatedData.length > 0 ? (
-            paginatedData.map((player) => (
-              <div
-                key={player.id}
-                onClick={() => {
-                  if (player.hasLocalProfile && player.playerRecord) {
-                    setSelectedPlayer(player.playerRecord);
-                  } else {
-                    window.open(player.rankedinProfile, '_blank');
-                  }
-                }}
-                className="bg-white/[0.02] border border-white/10 hover:border-padel-green/30 rounded-2xl p-3.5 flex items-center justify-between gap-3 active:bg-white/[0.06] transition-all cursor-pointer relative overflow-hidden group"
-              >
-                {/* Ranking circle badge */}
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs flex-shrink-0 border ${player.rawRank === 1
-                    ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
-                    : player.rawRank === 2
-                      ? 'bg-slate-300/20 text-slate-300 border-slate-300/30'
-                      : player.rawRank === 3
-                        ? 'bg-amber-700/20 text-amber-600 border-amber-700/30'
-                        : 'bg-black/40 text-gray-400 border-white/5'
-                    }`}>
-                    #{player.rawRank}
-                  </div>
+        <div className="block md:hidden bg-[#0A0F1D]">
 
-                  {/* Avatar */}
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
-                    {!imageErrors[player.id] ? (
-                      <img
-                        src={player.image}
-                        alt={player.name}
-                        className={`w-full h-full object-cover transition-all ${player.hasLocalProfile ? '' : 'filter grayscale'}`}
-                        onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))}
-                      />
-                    ) : (
-                      <span className="text-xs font-black text-gray-400">{getInitials(player.name)}</span>
-                    )}
-                  </div>
+          {/* List Header */}
+          <div className="grid grid-cols-[10%_45%_25%_20%] gap-2 px-4 py-3 text-[9px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5 border-t">
+            <div className="text-center">#</div>
+            <div>Player</div>
+            <div className="text-right">Points</div>
+            <div className="text-center">Change</div>
+          </div>
 
-                  {/* Name and Tag */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-bold text-white group-hover:text-padel-green transition-colors truncate">
-                        {player.name}
-                      </span>
-                      {player.hasLocalProfile && (
-                        <span className="inline-block px-1 py-0.5 rounded bg-padel-green/10 text-padel-green text-[7px] font-black uppercase tracking-widest border border-padel-green/20 flex-shrink-0">
-                          4M
-                        </span>
+          <div className="flex flex-col">
+            {paginatedData.length > 0 ? (
+              (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(3) : paginatedData).map((player) => (
+                <div
+                  key={player.id}
+                  onClick={() => setSelectedPlayer(player)}
+                  className="grid grid-cols-[10%_45%_25%_20%] gap-2 px-4 py-3 items-center border-b border-white/5 hover:bg-white/[0.03] transition-colors cursor-pointer"
+                >
+                  <div className="text-sm font-black text-gray-300 text-center">{player.rawRank}</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
+                      {!imageErrors[player.id] ? (
+                        <img src={player.image} alt={player.name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))} />
+                      ) : (
+                        <span className="text-[8px] sm:text-[10px] font-black text-gray-400">{getInitials(player.name)}</span>
                       )}
                     </div>
-                    <span className="text-[9px] text-gray-500 uppercase tracking-widest font-black block leading-none">
-                      {player.hasLocalProfile ? 'View 4M Profile' : 'View RankedIn'}
+                    <span className="text-xs sm:text-sm font-bold text-white truncate">{player.name}</span>
+                  </div>
+                  <div className="text-xs sm:text-sm font-bold text-gray-300 text-right">{player.points.toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm font-black text-center">
+                    <span className={`${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {player.change > 0 && `▲ ${player.change}`}
+                      {player.change < 0 && `▼ ${Math.abs(player.change)}`}
+                      {player.change === 0 && `-`}
                     </span>
                   </div>
                 </div>
-
-                {/* Points Pill */}
-                <div className="flex-shrink-0">
-                  <span className="inline-block bg-padel-green/10 border border-padel-green/20 px-2.5 py-1.5 rounded-xl text-xs font-black text-padel-green group-hover:bg-padel-green/20 group-hover:border-padel-green/45 transition-colors">
-                    {player.points.toLocaleString()}
-                  </span>
-                </div>
+              ))
+            ) : (
+              <div className="py-12 text-center text-gray-500 font-medium text-xs">
+                No players found matching "{searchTerm}"
               </div>
-            ))
-          ) : (
-            <div className="py-12 text-center text-gray-500 font-medium text-xs">
-              No players found matching "{searchTerm}"
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Pagination Controls */}
@@ -592,8 +684,7 @@ const FullRankingsTable = ({
 
 const Rankings = () => {
   const { getOrganisationRankings } = useRankedin();
-  const [mensDataRaw, setMensDataRaw] = useState([]);
-  const [ladiesDataRaw, setLadiesDataRaw] = useState([]);
+  const [rankingsDataRaw, setRankingsDataRaw] = useState({});
   const [rankingsLoading, setRankingsLoading] = useState(true);
   const [imageErrors, setImageErrors] = useState({});
   const [localProfileMap, setLocalProfileMap] = useState({});
@@ -610,19 +701,39 @@ const Rankings = () => {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [userEmail, setUserEmail] = useState(null);
 
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    if (window.innerWidth < 768 && filterRef.current) {
+      setTimeout(() => {
+        const yOffset = -20;
+        const y = filterRef.current.getBoundingClientRect().top + window.scrollY + yOffset;
+        window.scrollTo({ top: y, behavior: 'smooth' });
+      }, 500);
+    }
+  }, []);
+
   useEffect(() => {
     const fetchRankings = async () => {
       setRankingsLoading(true);
       try {
-        const [mensData, ladiesData, { data: { session } }] = await Promise.all([
-          getOrganisationRankings(3, 82, 1000, selectedOrgId),
-          getOrganisationRankings(4, 83, 1000, selectedOrgId),
-          supabase.auth.getSession()
-        ]);
-        setMensDataRaw(mensData || []);
-        setLadiesDataRaw(ladiesData || []);
-        if (session?.user?.email) {
-          setUserEmail(session.user.email);
+        const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
+        
+        const promises = categories.map(cat => getOrganisationRankings(cat.rankingType, cat.ageGroup, 1000, selectedOrgId));
+        promises.push(supabase.auth.getSession());
+        
+        const results = await Promise.all(promises);
+        const sessionResult = results.pop();
+        
+        const newData = {};
+        categories.forEach((cat, index) => {
+            newData[cat.id] = results[index] || [];
+        });
+        
+        setRankingsDataRaw(newData);
+        
+        if (sessionResult.data?.session?.user?.email) {
+          setUserEmail(sessionResult.data.session.user.email);
         }
       } catch (err) {
         console.error('Error fetching rankings:', err);
@@ -632,6 +743,14 @@ const Rankings = () => {
     };
     fetchRankings();
   }, [getOrganisationRankings, selectedOrgId]);
+
+  // Update active internal tab when org changes
+  useEffect(() => {
+    const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
+    if (!categories.find(c => c.id === activeTab)) {
+      setActiveTab(categories[0].id);
+    }
+  }, [selectedOrgId, activeTab]);
 
   // Fetch local player profiles once rankings load
   useEffect(() => {
@@ -680,6 +799,7 @@ const Rankings = () => {
         name: item.Name,
         rawRank: item.Standing,
         rank: `Rank #${item.Standing}`,
+        change: item.StandingDiff || 0,
         image: localImage || null,
         hasLocalProfile: !!playerRecord,
         playerRecord: playerRecord || null,
@@ -689,8 +809,14 @@ const Rankings = () => {
     });
   };
 
-  const mensRankings = useMemo(() => formatRankings(mensDataRaw, localProfileMap), [mensDataRaw, localProfileMap]);
-  const ladiesRankings = useMemo(() => formatRankings(ladiesDataRaw, localProfileMap), [ladiesDataRaw, localProfileMap]);
+  const formattedRankings = useMemo(() => {
+    const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
+    const formatted = {};
+    categories.forEach(cat => {
+      formatted[cat.id] = formatRankings(rankingsDataRaw[cat.id], localProfileMap);
+    });
+    return formatted;
+  }, [rankingsDataRaw, localProfileMap, selectedOrgId]);
 
   // Reset page when searching or switching tabs
   useEffect(() => {
@@ -776,12 +902,15 @@ const Rankings = () => {
   ];
 
   // Search logic computation
-  const currentData = activeTab === 'men' ? mensRankings : ladiesRankings;
   const filteredData = useMemo(() => {
-    return currentData.filter(player =>
-      player.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }, [currentData, searchTerm]);
+    let data = formattedRankings[activeTab] || [];
+    if (searchTerm) {
+      data = data.filter(item => 
+        item.name?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    return data;
+  }, [formattedRankings, activeTab, searchTerm]);
 
   const totalPages = Math.max(1, Math.ceil(filteredData.length / itemsPerPage));
   const paginatedData = useMemo(() => {
@@ -817,7 +946,7 @@ const Rankings = () => {
             animate={{ opacity: 1, y: 0 }}
             className="text-4xl md:text-6xl font-black text-white tracking-tighter mb-4 uppercase"
           >
-            How the <span className="text-padel-green">Rankings</span> Work
+            Player <span className="text-padel-green">Rankings</span>
           </motion.h1>
 
           <motion.p
@@ -826,12 +955,12 @@ const Rankings = () => {
             transition={{ delay: 0.08 }}
             className="text-base md:text-lg text-gray-400 max-w-xl mx-auto leading-relaxed"
           >
-            4M Padel hosts various different ranking lists. Select from the dropdown below to view the different available ranking lists.
+            4M Padel hosts various ranking lists. Browse rankings below.
           </motion.p>
         </div>
 
         {/* Organization Filter Header */}
-        <div className="flex justify-center mb-12 relative z-20">
+        <div ref={filterRef} className="flex justify-center mb-12 relative z-20">
           <div className="bg-white/5 border border-white/10 rounded-3xl p-4 flex items-center justify-center backdrop-blur-md shadow-xl transition-all duration-300 w-full sm:w-auto">
             <div className="flex flex-col xs:flex-row items-center gap-3 w-full sm:w-auto">
               <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">Select Organisation:</span>
@@ -926,7 +1055,7 @@ const Rankings = () => {
           >
             {!rankingsLoading && (
               <div className="relative pt-2">
-                <div className="w-full px-6 md:px-12 mb-10 flex flex-col items-center gap-4 text-center">
+                <div className="w-full px-6 md:px-12 mb-10 hidden md:flex flex-col items-center gap-4 text-center">
                   <div>
                     <h2 className="text-3xl font-black text-white mb-1 uppercase tracking-tighter">
                       <span className="text-padel-green">
@@ -937,11 +1066,21 @@ const Rankings = () => {
                     <p className="text-gray-400 text-sm">Live rankings of the current top performers across {selectedOrgId === 15809 ? "South Africa" : (ORG_LABELS[selectedOrgId] || "South Africa")}.</p>
                   </div>
                 </div>
-                <RankingSlider title="Men's Open Top 10" playersData={mensRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
-                <RankingSlider title="Ladies Open Top 10" playersData={ladiesRankings.slice(0, 10)} onPlayerClick={setSelectedPlayer} />
+                <div className="hidden md:block">
+                  {(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).map(cat => (
+                    (formattedRankings[cat.id] && formattedRankings[cat.id].length > 0) ? (
+                      <RankingSlider 
+                        key={cat.id} 
+                        title={`${cat.label} Top 10`} 
+                        playersData={formattedRankings[cat.id]?.slice(0, 10) || []} 
+                        onPlayerClick={setSelectedPlayer} 
+                      />
+                    ) : null
+                  ))}
+                </div>
 
                 {/* Full Ranking Table added under Leaderboards */}
-                <div className="mt-16">
+                <div className="mt-4 md:mt-16">
                   <FullRankingsTable
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
@@ -959,6 +1098,7 @@ const Rankings = () => {
                     getInitials={getInitials}
                     selectedOrgId={selectedOrgId}
                     setSelectedOrgId={setSelectedOrgId}
+                    categories={ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]}
                   />
                 </div>
               </div>
@@ -992,6 +1132,7 @@ const Rankings = () => {
               getInitials={getInitials}
               selectedOrgId={selectedOrgId}
               setSelectedOrgId={setSelectedOrgId}
+              categories={ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]}
             />
           </motion.div>
         )}
@@ -1000,10 +1141,11 @@ const Rankings = () => {
       {/* Player Modal */}
       <AnimatePresence>
         {selectedPlayer && (
-          <PlayerModal
+          <RankingDetailsModal
             player={selectedPlayer}
+            playerRecord={selectedPlayer.playerRecord || { name: selectedPlayer.name, id: selectedPlayer.id }}
+            selectedOrgId={selectedOrgId}
             onClose={() => setSelectedPlayer(null)}
-            userEmail={userEmail}
           />
         )}
       </AnimatePresence>
