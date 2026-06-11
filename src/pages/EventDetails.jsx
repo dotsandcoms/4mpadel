@@ -217,13 +217,14 @@ const EventDetails = () => {
     const [tournamentClasses, setTournamentClasses] = useState([]);
     const [upcomingMatches, setUpcomingMatches] = useState([]);
     const [fetchingRankedinData, setFetchingRankedinData] = useState(false);
+    const [isRankedinRegistrationClosed, setIsRankedinRegistrationClosed] = useState(false);
 
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const [participants, setParticipants] = useState({});
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
-    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs } = useRankedin();
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo } = useRankedin();
 
     const totalPlayersCount = useMemo(() => {
         if (!participants || Object.keys(participants).length === 0) return event?.registered_players || 0;
@@ -795,6 +796,23 @@ const EventDetails = () => {
             if (rId) {
                 setFetchingRankedinData(true);
                 try {
+                    // Check registration status from Rankedin API
+                    if (isEventPassed) {
+                        setIsRankedinRegistrationClosed(true);
+                    } else {
+                        const info = await getTournamentInfo(rId);
+                        console.log("Rankedin Info Fetched:", info);
+                        if (info && info.TournamentSidebarModel && info.TournamentSidebarModel.ClosingDate) {
+                            const closingDate = new Date(info.TournamentSidebarModel.ClosingDate);
+                            const now = new Date();
+                            const isClosed = closingDate < now;
+                            console.log(`Rankedin Closing Date: ${closingDate}, Now: ${now}, IsClosed: ${isClosed}`);
+                            setIsRankedinRegistrationClosed(isClosed);
+                        } else {
+                            console.log("Missing ClosingDate in Rankedin Info.");
+                        }
+                    }
+
                     // 1. Check DB Cache first
                     const { data: cacheRow, error: cacheError } = await supabase
                         .from('rankedin_results_cache')
@@ -1904,7 +1922,7 @@ const EventDetails = () => {
         }
     };
 
-    const isRegistrationAllowed = !isEventPassed && !isLive;
+    const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
     const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
@@ -2111,7 +2129,7 @@ const EventDetails = () => {
                                     }
                                     return (
                                         <>
-                                            {!isRegistered && !isLive && (
+                                            {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
                                                 <button
                                                     type="button"
                                                     onClick={handleRankedinRedirect}
@@ -2161,7 +2179,7 @@ const EventDetails = () => {
                                 { label: 'City', value: event.city || 'TBC', icon: Globe, color: theme.fill },
                                 { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard, color: theme.fill },
                                 { label: 'Organiser', value: event.organizer_name || '4M Padel', icon: User, color: theme.fill },
-                                { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : 'Upcoming', icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : theme.fill },
+                                { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : (isRankedinRegistrationClosed ? 'Registration Closed' : 'Upcoming'), icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : (isRankedinRegistrationClosed ? '#F59E0B' : theme.fill) },
                             ].map(({ label, value, icon: Icon, color }) => (
                                 <div key={label} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100/60 flex flex-col justify-center min-h-[58px]">
                                     <div className="flex items-center gap-1.5 mb-1.5 text-gray-400">

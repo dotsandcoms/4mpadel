@@ -284,6 +284,16 @@ export const useRankedin = () => {
         }
     }, []);
 
+    const getTournamentInfo = useCallback(async (tournamentId) => {
+        try {
+            const data = await fetchWithCache(`${API_BASE}/tournament/GetInfoAsync?id=${tournamentId}`, {}, 1000 * 60 * 5); // 5 minutes cache
+            return data;
+        } catch (err) {
+            console.error('Error fetching tournament info:', err);
+            return null;
+        }
+    }, []);
+
     /**
      * Fetches the latest rankings for a specific type and age group.
      * @param {number} rankingType 3 (Men), 4 (Women), 5 (Mixed)
@@ -865,6 +875,7 @@ export const useRankedin = () => {
         getTournamentClasses,
         getDrawsForClass,
         getTournamentDetails,
+        getTournamentInfo,
         getOrganisationRankings,
         getPlayerEventsAsync,
         getTournamentWinners,
