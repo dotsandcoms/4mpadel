@@ -2181,7 +2181,7 @@ const EventDetails = () => {
                         {[
                             { id: 'overview', label: 'Info', icon: FileText },
                             { id: 'players', label: 'Players', icon: Users },
-                            { id: 'results', label: 'Results', icon: Trophy },
+                            { id: 'results', label: hasDraw && !hasResults ? 'Draws' : 'Results', icon: hasDraw && !hasResults ? GitBranch : Trophy },
                             { id: 'media', label: 'Media', icon: ImageIcon },
                         ].map(({ id, label, icon: Icon }) => {
                             const active = activeTab === id;

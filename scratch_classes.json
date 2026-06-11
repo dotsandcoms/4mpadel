@@ -1,0 +1,30 @@
+[
+  {
+    "Id": 160956,
+    "Name": "Men's Open",
+    "ShowDraws": true,
+    "TournamentDraws": [
+      {
+        "Id": 608851,
+        "Name": "Elimination",
+        "Strength": 0,
+        "Stage": 0
+      }
+    ],
+    "IsPublished": true
+  },
+  {
+    "Id": 160957,
+    "Name": "Ladies Open",
+    "ShowDraws": true,
+    "TournamentDraws": [
+      {
+        "Id": 608818,
+        "Name": "Elimination",
+        "Strength": 0,
+        "Stage": 0
+      }
+    ],
+    "IsPublished": true
+  }
+]

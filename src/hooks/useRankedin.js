@@ -219,7 +219,9 @@ export const useRankedin = () => {
         setError(null);
         try {
             const data = await fetchWithCache(
-                `${API_BASE}/tournament/GetClassesAndDrawNamesAsync/?tournamentId=${tournamentId}`
+                `${API_BASE}/tournament/GetClassesAndDrawNamesAsync/?tournamentId=${tournamentId}`,
+                {},
+                1000 * 60 * 2 // 2 minutes cache
             );
             return data || [];
         } catch (err) {
@@ -243,7 +245,9 @@ export const useRankedin = () => {
         setError(null);
         try {
             const data = await fetchWithCache(
-                `${API_BASE}/tournament/GetDrawsForStageAndStrengthAsync?tournamentClassId=${tournamentClassId}&drawStrength=${drawStrength}&drawStage=${drawStage}&isReadonly=true&language=en`
+                `${API_BASE}/tournament/GetDrawsForStageAndStrengthAsync?tournamentClassId=${tournamentClassId}&drawStrength=${drawStrength}&drawStage=${drawStage}&isReadonly=true&language=en`,
+                {},
+                1000 * 60 * 2 // 2 minutes cache
             );
             // Return the raw data array so KnockoutBracket can parse BaseType (RoundRobin or Elimination)
             return data;
@@ -373,7 +377,7 @@ export const useRankedin = () => {
             if (drawStrength !== undefined) url += `&drawStrength=${drawStrength}`;
             if (isFinished !== undefined) url += `&isFinished=${isFinished}`;
 
-            const data = await fetchWithCache(url);
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
             return data.Matches || [];
         } catch (err) {
             console.error('Error fetching tournament matches:', err);
