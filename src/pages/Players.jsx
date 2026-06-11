@@ -356,7 +356,7 @@ const Players = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min((index % 24) * 0.03, 0.2) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className={`group relative bg-[#0a0f1d]/60 border md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between ${player.isTop10 ? 'border-[#FFD700] shadow-[0_0_15px_rgba(255,215,0,0.2)] animate-[pulse_3s_infinite]' : 'border-white/10'}`}
+                  className={`group relative bg-[#0a0f1d]/60 border md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between ${player.isTop10 ? 'border-[#FFD700]' : 'border-white/10'}`}
                 >
                   {/* Invisible Click Catch-all for Mobile */}
                   <div className="absolute inset-0 z-[5]" />

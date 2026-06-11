@@ -39,12 +39,8 @@ async function fetchWithRetry(url, options = {}, retries = 3) {
 
 async function getAnonToken() {
     console.log("Fetching anonymous token from Rankedin...");
-    const res = await fetchWithRetry(`${API_BASE}/auth/anonymous`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ "Language": "en" })
-    });
-    return res.Token;
+    const res = await fetchWithRetry(`${API_BASE}/player/getlayoutinfoasync?language=en`);
+    return res.AnonymousToken;
 }
 
 async function run() {
@@ -60,18 +56,27 @@ async function run() {
         console.log(`Found ${players.length} players with a Rankedin ID.`);
 
         const token = await getAnonToken();
-        const headers = { 'Authorization': `Bearer ${token}` };
+        const headers = token ? { 'x-anonymous-token': token, 'Accept': 'application/json' } : { 'Accept': 'application/json' };
 
         for (let i = 0; i < players.length; i++) {
             const player = players[i];
             console.log(`[${i+1}/${players.length}] Syncing matches for ${player.name} (${player.rankedin_id})...`);
 
             try {
-                const upcomingRaw = await fetchWithRetry(`${API_BASE}/users/${player.rankedin_id}/matches/upcoming?limit=20&language=en`, { headers });
-                const historyRaw = await fetchWithRetry(`${API_BASE}/users/${player.rankedin_id}/matches/history?limit=30&language=en`, { headers });
+                // Step 1: Get internal PlayerId
+                const profileData = await fetchWithRetry(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${player.rankedin_id}&language=en`);
+                const internalId = profileData.Id || profileData.Header?.PlayerId;
 
-                const upcoming = upcomingRaw?.payload || [];
-                const history = historyRaw?.payload || [];
+                if (!internalId) {
+                    throw new Error("Could not extract internal PlayerId");
+                }
+
+                // Step 2: Fetch Matches
+                const upcomingRaw = await fetchWithRetry(`${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=false&skip=0&take=20&language=en`, { headers });
+                const historyRaw = await fetchWithRetry(`${API_BASE}/player/GetPlayerMatchesAsync?playerid=${internalId}&takehistory=true&skip=0&take=30&language=en`, { headers });
+
+                const upcoming = upcomingRaw?.Payload || [];
+                const history = historyRaw?.Payload || [];
 
                 const { error: upsertError } = await supabase
                     .from('player_matches')
