@@ -537,6 +537,29 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
+            // Step 0: Check custom player_matches cache
+            try {
+                const { data: cacheRow } = await supabase
+                    .from('player_matches')
+                    .select('*')
+                    .eq('rankedin_id', rankedinId)
+                    .maybeSingle();
+
+                if (cacheRow) {
+                    const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
+                    // 24 hours = 86400000 ms
+                    if (ageMs < 86400000) {
+                        const cachedData = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
+                        // Return if it's not null (meaning it has been populated at least once)
+                        if (cachedData !== null) {
+                            return cachedData;
+                        }
+                    }
+                }
+            } catch (cacheErr) {
+                console.warn("player_matches cache read error:", cacheErr);
+            }
+
             // Step 1: Get internal PlayerId
             const profileData = await fetchWithCache(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${rankedinId}&language=en`, { signal });
             const internalId = profileData.Id || profileData.Header?.PlayerId;
@@ -558,7 +581,7 @@ export const useRankedin = () => {
                 }
             );
 
-            const payload = data.Payload || [];
+            let payload = data.Payload || [];
 
             // If we're fetching history and only got placeholders, use the tournament fallback
             const isPlaceholder = payload.length > 0 && payload.every(m => m.Info?.EventName === 'EventName');
@@ -668,8 +691,24 @@ export const useRankedin = () => {
 
                 const results = await Promise.all(matchPromises);
                 historyMatches.push(...results.flat());
-                return historyMatches;
+                payload = historyMatches;
             }
+
+            // Step 4: Save result to player_matches
+            const updateData = takeHistory 
+                ? { past_matches: payload } 
+                : { upcoming_matches: payload };
+            
+            supabase
+                .from('player_matches')
+                .upsert({ 
+                    rankedin_id: rankedinId, 
+                    ...updateData,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'rankedin_id' })
+                .then(({ error }) => {
+                    if (error) console.error("player_matches write error:", error);
+                });
 
             return payload;
         } catch (err) {

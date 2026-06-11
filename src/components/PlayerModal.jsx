@@ -1,4 +1,5 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
+import { useRankedin } from '../hooks/useRankedin';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trophy, MapPin, Instagram, Download, Share2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as htmlToImage from 'html-to-image';
@@ -12,10 +13,53 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
     const [lightboxImageIdx, setLightboxImageIdx] = useState(0);
     const [activeTab, setActiveTab] = useState('info');
 
+    const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
+    const [loadingMatches, setLoadingMatches] = useState(false);
+    const [matchViewTab, setMatchViewTab] = useState('upcoming');
+    const { getPlayerMatches } = useRankedin();
+
+    useEffect(() => {
+        if (player?.rankedin_id && activeTab === 'matches' && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0 && !loadingMatches) {
+            const fetchMatches = async () => {
+                setLoadingMatches(true);
+                try {
+                    const parseDate = (dateStr) => {
+                        if (!dateStr) return new Date(0);
+                        if (dateStr.includes('T') || dateStr.includes('-')) return new Date(dateStr);
+                        const [datePart, timePart] = dateStr.split(' ');
+                        const [day, month, year] = datePart.split('/');
+                        return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
+                    };
+
+                    const [upcoming, history] = await Promise.all([
+                        getPlayerMatches(player.rankedin_id, false),
+                        getPlayerMatches(player.rankedin_id, true)
+                    ]);
+
+                    const filterValid = (matches) => (matches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
+                    const validUpcoming = filterValid(upcoming);
+                    const validHistory = filterValid(history);
+
+                    const sorter = (a, b) => parseDate(b.Info?.Date) - parseDate(a.Info?.Date);
+                    validUpcoming.sort(sorter);
+                    validHistory.sort(sorter);
+
+                    setMatchHistory({ upcoming: validUpcoming, history: validHistory });
+                } catch (err) {
+                    console.error("Match fetch error:", err);
+                } finally {
+                    setLoadingMatches(false);
+                }
+            };
+            fetchMatches();
+        }
+    }, [player?.rankedin_id, activeTab, getPlayerMatches]);
+
     const tabs = [
         { id: 'info', label: 'Info' },
         { id: 'form', label: 'Form' },
         { id: 'rankings', label: 'Rankings' },
+        { id: 'matches', label: 'Matches' },
         { id: 'sponsors', label: 'Sponsors' },
     ];
 
@@ -125,7 +169,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                 <motion.div
                     layoutId={`card-${player.id}`}
                     ref={cardRef}
-                    className="w-full max-w-lg md:max-w-4xl bg-[#0a0f1d] border border-white/10 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] overflow-y-auto md:overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] md:max-h-[85vh] flex flex-col my-auto"
+                    className="w-full min-w-0 max-w-lg md:max-w-4xl bg-[#0a0f1d] border border-white/10 backdrop-blur-2xl rounded-[2rem] md:rounded-[2.5rem] overflow-y-auto md:overflow-hidden shadow-2xl pointer-events-auto relative max-h-[90vh] md:max-h-[85vh] flex flex-col my-auto"
                 >
                     {/* Floating Close Button */}
                     <button
@@ -139,7 +183,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                     <div className="absolute top-0 right-0 w-72 h-72 bg-padel-green/5 rounded-full blur-[100px] pointer-events-none" />
                     <div className="absolute bottom-0 left-0 w-72 h-72 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-                    <div className="flex flex-col md:flex-row h-auto md:h-full overflow-visible md:overflow-hidden">
+                    <div className="flex flex-col md:flex-row h-auto md:h-full overflow-visible md:overflow-hidden min-w-0 w-full">
                         
                         {/* LEFT COLUMN: Player Identity & Hero Media Viewport */}
                         <div className="w-full md:w-[40%] flex flex-col border-b md:border-b-0 md:border-r border-white/5 shrink-0 bg-black/30">
@@ -233,7 +277,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                         </div>
 
                         {/* RIGHT COLUMN: Spacious & Structured Information Pane */}
-                        <div className="flex-1 p-6 md:p-10 flex flex-col h-auto md:h-auto min-h-0 bg-[#0a0f1d]/50 backdrop-blur-md">
+                        <div className="flex-1 min-w-0 p-6 pt-20 md:p-10 md:pt-20 flex flex-col h-auto md:h-auto min-h-0 bg-[#0a0f1d]/50 backdrop-blur-md">
                             
                             {/* Tabs Header */}
                             <div className="flex gap-2 border-b border-white/5 pb-4 mb-6 overflow-x-auto hide-scrollbar shrink-0">
@@ -253,7 +297,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                             </div>
 
                             {/* Tab Content */}
-                            <div className="flex-1 overflow-visible md:overflow-y-auto nice-scrollbar pr-0 md:pr-2 space-y-6 md:space-y-8 relative">
+                            <div className="flex-1 overflow-visible md:overflow-y-auto nice-scrollbar pr-0 md:pr-2 space-y-6 md:space-y-8 relative h-[450px] md:h-[500px] min-w-0 w-full">
                                 
                                 <div className={`${activeTab === 'info' ? 'block animate-in fade-in duration-300' : 'hidden'} space-y-6 md:space-y-8`}>
                                         {/* Tactile Information Panel Grid */}
@@ -449,6 +493,77 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                                 No official sponsors listed.
                                             </div>
                                         )}
+                                </div>
+
+                                <div className={`${activeTab === 'matches' ? 'block animate-in fade-in duration-300' : 'hidden'} space-y-6 md:space-y-8`}>
+                                    {!player.rankedin_id ? (
+                                        <div className="text-center py-8 text-gray-500 text-sm font-bold bg-white/5 border border-white/10 rounded-2xl">
+                                            No Rankedin profile linked to view matches.
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="flex gap-2 sm:gap-3 md:gap-4 mb-4 border-b border-white/10 pb-4">
+                                                <button
+                                                    onClick={() => setMatchViewTab('upcoming')}
+                                                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'upcoming' ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                                                >
+                                                    Upcoming ({matchHistory.upcoming.length})
+                                                </button>
+                                                <button
+                                                    onClick={() => setMatchViewTab('past')}
+                                                    className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${matchViewTab === 'past' ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                                                >
+                                                    Past ({matchHistory.history.length})
+                                                </button>
+                                            </div>
+
+                                            {loadingMatches ? (
+                                                <div className="flex justify-center py-8">
+                                                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-padel-green"></div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-2">
+                                                    {(matchViewTab === 'upcoming' ? matchHistory.upcoming : matchHistory.history).length > 0 ? (
+                                                        (matchViewTab === 'upcoming' ? matchHistory.upcoming : matchHistory.history).map((match, idx) => {
+                                                            const info = match.Info || {};
+                                                            return (
+                                                                <div key={idx} className="bg-white/5 border border-white/10 rounded-2xl p-4">
+                                                                    <div className="flex justify-between items-start mb-2">
+                                                                        <div className="text-[10px] text-gray-400 font-bold uppercase">{info.Date}</div>
+                                                                        <div className="text-[10px] font-black text-padel-green uppercase tracking-widest text-right truncate max-w-[120px] sm:max-w-[150px]">{info.EventName}</div>
+                                                                    </div>
+                                                                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 md:gap-3 items-center w-full min-w-0">
+                                                                        <div className={`text-xs font-bold min-w-0 ${info.Challenger?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
+                                                                            <div className="truncate w-full">{info.Challenger?.Name}</div>
+                                                                            <div className="truncate w-full">{info.Challenger1?.Name}</div>
+                                                                        </div>
+                                                                        <div className="text-[10px] font-black bg-black/40 px-2 py-1 rounded border border-white/5 shrink-0">VS</div>
+                                                                        <div className={`text-xs font-bold text-right min-w-0 ${info.Challenged?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
+                                                                            <div className="truncate w-full">{info.Challenged?.Name}</div>
+                                                                            <div className="truncate w-full">{info.Challenged1?.Name}</div>
+                                                                        </div>
+                                                                    </div>
+                                                                    {matchViewTab === 'past' && match.Score?.Score && match.Score.Score.length > 0 && (
+                                                                        <div className="mt-3 pt-3 border-t border-white/5 flex justify-center gap-2">
+                                                                            {match.Score.Score.map((set, sIdx) => (
+                                                                                <div key={sIdx} className="text-[11px] font-black bg-white/10 px-2 py-0.5 rounded text-white border border-white/10">
+                                                                                    {set.Score1}-{set.Score2}
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })
+                                                    ) : (
+                                                        <div className="text-center py-8 text-gray-500 text-sm font-bold bg-white/5 border border-white/10 rounded-2xl">
+                                                            No {matchViewTab} matches found.
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
