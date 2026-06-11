@@ -12,7 +12,15 @@ if (!hasValidConfig) {
 
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key-must-set-env'
+  supabaseAnonKey || 'placeholder-key-must-set-env',
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined
+    }
+  }
 )
 
 export const isSupabaseConfigured = () => hasValidConfig
