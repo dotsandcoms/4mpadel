@@ -336,7 +336,7 @@ const FullRankingsTable = ({
   return (
     <div className="max-w-6xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
-      <div className="mb-10 flex flex-col items-center text-center">
+      <div className="hidden md:flex mb-10 flex-col items-center text-center">
         <div className="flex flex-row items-center justify-center flex-nowrap gap-4 md:gap-5 mb-3">
           {ORG_LOGOS[selectedOrgId] && (
             <motion.div
@@ -414,97 +414,97 @@ const FullRankingsTable = ({
 
       {/* Table / List Area */}
       <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
-          {/* Top 3 Podium (Only on page 1 without search) */}
-          {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
-            <div className="flex items-end justify-center gap-4 sm:gap-8 md:gap-16 px-4 md:px-12 pt-8 md:pt-12 pb-10 bg-[#0A0F1D] md:bg-transparent border-b border-white/5">
-              {/* Rank 2 */}
-              <div
-                className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
-                onClick={() => setSelectedPlayer(paginatedData[1])}
-              >
-                <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
-                  <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
-                  <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
-                    {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
-                      <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[1].name)}</div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-center w-full">
-                  <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[1].name}</h4>
-                  <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[1].points.toLocaleString()}</p>
-                    <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[1].change > 0 ? 'text-padel-green' : paginatedData[1].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                      {paginatedData[1].change > 0 && `▲ ${paginatedData[1].change}`}
-                      {paginatedData[1].change < 0 && `▼ ${Math.abs(paginatedData[1].change)}`}
-                      {paginatedData[1].change === 0 && `-`}
-                    </span>
-                  </div>
-                  <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
+        {/* Top 3 Podium (Only on page 1 without search) */}
+        {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
+          <div className="flex items-end justify-center gap-4 sm:gap-8 md:gap-16 px-4 md:px-12 pt-8 md:pt-12 pb-10 bg-[#0A0F1D] md:bg-transparent border-b border-white/5">
+            {/* Rank 2 */}
+            <div
+              className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+              onClick={() => setSelectedPlayer(paginatedData[1])}
+            >
+              <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
+                <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
+                  {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
+                    <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[1].name)}</div>
+                  )}
                 </div>
               </div>
-
-              {/* Rank 1 */}
-              <div
-                className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
-                onClick={() => setSelectedPlayer(paginatedData[0])}
-              >
-                <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
-                  <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-padel-green text-black flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(190,255,0,0.5)]">1</div>
-                  <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-padel-green shadow-lg shadow-padel-green/20 bg-[#1E293B]">
-                    {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
-                      <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(paginatedData[0].name)}</div>
-                    )}
-                  </div>
+              <div className="text-center w-full">
+                <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[1].name}</h4>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[1].points.toLocaleString()}</p>
+                  <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[1].change > 0 ? 'text-padel-green' : paginatedData[1].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {paginatedData[1].change > 0 && `▲ ${paginatedData[1].change}`}
+                    {paginatedData[1].change < 0 && `▼ ${Math.abs(paginatedData[1].change)}`}
+                    {paginatedData[1].change === 0 && `-`}
+                  </span>
                 </div>
-                <div className="text-center w-full">
-                  <h4 className="text-[11px] sm:text-sm md:text-xl font-black text-white leading-tight uppercase line-clamp-2 min-h-[26px] sm:min-h-[32px]">{paginatedData[0].name}</h4>
-                  <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <p className="text-xs sm:text-sm md:text-lg font-bold text-padel-green">{paginatedData[0].points.toLocaleString()}</p>
-                    <span className={`text-[9px] sm:text-[10px] md:text-sm font-black ${paginatedData[0].change > 0 ? 'text-padel-green' : paginatedData[0].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                      {paginatedData[0].change > 0 && `▲ ${paginatedData[0].change}`}
-                      {paginatedData[0].change < 0 && `▼ ${Math.abs(paginatedData[0].change)}`}
-                      {paginatedData[0].change === 0 && `-`}
-                    </span>
-                  </div>
-                  <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
-                </div>
-              </div>
-
-              {/* Rank 3 */}
-              <div
-                className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
-                onClick={() => setSelectedPlayer(paginatedData[2])}
-              >
-                <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
-                  <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
-                  <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
-                    {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
-                      <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[2].name)}</div>
-                    )}
-                  </div>
-                </div>
-                <div className="text-center w-full">
-                  <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[2].name}</h4>
-                  <div className="flex items-center justify-center gap-1.5 mt-1">
-                    <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[2].points.toLocaleString()}</p>
-                    <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[2].change > 0 ? 'text-padel-green' : paginatedData[2].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                      {paginatedData[2].change > 0 && `▲ ${paginatedData[2].change}`}
-                      {paginatedData[2].change < 0 && `▼ ${Math.abs(paginatedData[2].change)}`}
-                      {paginatedData[2].change === 0 && `-`}
-                    </span>
-                  </div>
-                  <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
-                </div>
+                <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
               </div>
             </div>
-          )}
+
+            {/* Rank 1 */}
+            <div
+              className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
+              onClick={() => setSelectedPlayer(paginatedData[0])}
+            >
+              <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
+                <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-padel-green text-black flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(190,255,0,0.5)]">1</div>
+                <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-padel-green shadow-lg shadow-padel-green/20 bg-[#1E293B]">
+                  {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
+                    <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(paginatedData[0].name)}</div>
+                  )}
+                </div>
+              </div>
+              <div className="text-center w-full">
+                <h4 className="text-[11px] sm:text-sm md:text-xl font-black text-white leading-tight uppercase line-clamp-2 min-h-[26px] sm:min-h-[32px]">{paginatedData[0].name}</h4>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <p className="text-xs sm:text-sm md:text-lg font-bold text-padel-green">{paginatedData[0].points.toLocaleString()}</p>
+                  <span className={`text-[9px] sm:text-[10px] md:text-sm font-black ${paginatedData[0].change > 0 ? 'text-padel-green' : paginatedData[0].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {paginatedData[0].change > 0 && `▲ ${paginatedData[0].change}`}
+                    {paginatedData[0].change < 0 && `▼ ${Math.abs(paginatedData[0].change)}`}
+                    {paginatedData[0].change === 0 && `-`}
+                  </span>
+                </div>
+                <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
+              </div>
+            </div>
+
+            {/* Rank 3 */}
+            <div
+              className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+              onClick={() => setSelectedPlayer(paginatedData[2])}
+            >
+              <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
+                <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
+                  {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
+                    <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[2].name)}</div>
+                  )}
+                </div>
+              </div>
+              <div className="text-center w-full">
+                <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[2].name}</h4>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[2].points.toLocaleString()}</p>
+                  <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[2].change > 0 ? 'text-padel-green' : paginatedData[2].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {paginatedData[2].change > 0 && `▲ ${paginatedData[2].change}`}
+                    {paginatedData[2].change < 0 && `▼ ${Math.abs(paginatedData[2].change)}`}
+                    {paginatedData[2].change === 0 && `-`}
+                  </span>
+                </div>
+                <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
@@ -692,7 +692,7 @@ const Rankings = () => {
   const [selectedOrgId, setSelectedOrgId] = useState(15809); // 15809 = SAPA, 16317 = Broll Pro Tour, 16482 = SA Grand Tour
 
   // Search & Pagination State
-  const [activeMainTab, setActiveMainTab] = useState('leaderboards'); // 'overview', 'leaderboards', 'rankings'
+  const [activeMainTab, setActiveMainTab] = useState('rankings'); // 'overview', 'leaderboards', 'rankings'
   const [activeTab, setActiveTab] = useState('men');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -718,20 +718,20 @@ const Rankings = () => {
       setRankingsLoading(true);
       try {
         const categories = ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809];
-        
+
         const promises = categories.map(cat => getOrganisationRankings(cat.rankingType, cat.ageGroup, 1000, selectedOrgId));
         promises.push(supabase.auth.getSession());
-        
+
         const results = await Promise.all(promises);
         const sessionResult = results.pop();
-        
+
         const newData = {};
         categories.forEach((cat, index) => {
-            newData[cat.id] = results[index] || [];
+          newData[cat.id] = results[index] || [];
         });
-        
+
         setRankingsDataRaw(newData);
-        
+
         if (sessionResult.data?.session?.user?.email) {
           setUserEmail(sessionResult.data.session.user.email);
         }
@@ -905,7 +905,7 @@ const Rankings = () => {
   const filteredData = useMemo(() => {
     let data = formattedRankings[activeTab] || [];
     if (searchTerm) {
-      data = data.filter(item => 
+      data = data.filter(item =>
         item.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -955,26 +955,36 @@ const Rankings = () => {
             transition={{ delay: 0.08 }}
             className="text-base md:text-lg text-gray-400 max-w-xl mx-auto leading-relaxed"
           >
-            4M Padel hosts various ranking lists. Browse rankings below.
+            Browse ranking lists below
           </motion.p>
         </div>
 
         {/* Organization Filter Header */}
-        <div ref={filterRef} className="flex justify-center mb-12 relative z-20">
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-4 flex items-center justify-center backdrop-blur-md shadow-xl transition-all duration-300 w-full sm:w-auto">
-            <div className="flex flex-col xs:flex-row items-center gap-3 w-full sm:w-auto">
-              <span className="text-[9px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">Select Organisation:</span>
-              <div className="relative w-full xs:w-56">
+        <div ref={filterRef} className="flex justify-center mb-12 relative z-20 px-4">
+          <div className="bg-[#1E293B]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-2 flex items-center shadow-2xl w-full max-w-lg mx-auto ring-1 ring-white/5 relative overflow-hidden">
+            {/* Subtle glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-padel-green/5 to-transparent pointer-events-none" />
+            
+            <div className="flex flex-col sm:flex-row items-center w-full bg-black/40 rounded-3xl p-1.5 border border-white/5 relative z-10">
+              <div className="w-full sm:w-auto px-5 py-3 flex items-center justify-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center border border-white/5">
+                  <Trophy className="w-3 h-3 text-padel-green" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">Organisation</span>
+              </div>
+              
+              <div className="relative w-full sm:flex-1 h-full mt-1 sm:mt-0">
                 <select
                   value={selectedOrgId}
                   onChange={(e) => setSelectedOrgId(Number(e.target.value))}
-                  className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-4.5 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-padel-green/50 appearance-none font-bold uppercase text-[10px] tracking-widest cursor-pointer transition-all"
+                  className="w-full h-full min-h-[48px] bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/30 text-white rounded-[1.25rem] px-12 focus:outline-none focus:ring-2 focus:ring-padel-green appearance-none font-black uppercase text-[10px] sm:text-[11px] tracking-widest cursor-pointer transition-all duration-300 shadow-[0_0_15px_rgba(190,255,0,0.05)] text-center"
+                  style={{ textAlignLast: 'center' }}
                 >
-                  <option value={15809} className="bg-[#0F172A] text-white">SAPA Ranking</option>
-                  <option value={16317} className="bg-[#0F172A] text-white">Broll Pro Tour</option>
-                  <option value={16482} className="bg-[#0F172A] text-white">SA Grand Tour</option>
+                  <option value={15809} className="bg-[#0F172A] text-white py-2">Official SAPA Ranking</option>
+                  <option value={16317} className="bg-[#0F172A] text-white py-2">Broll Pro Tour</option>
+                  <option value={16482} className="bg-[#0F172A] text-white py-2">SA Grand Tour</option>
                 </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none">
                   <ChevronDown className="w-4 h-4 text-padel-green" />
                 </div>
               </div>
@@ -986,7 +996,7 @@ const Rankings = () => {
         <div className="relative flex items-center gap-1 mb-12 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto overflow-hidden">
           {[
             { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5" /> },
-            { id: 'leaderboards', label: 'Leaderboards', icon: <Trophy className="w-3.5 h-3.5" /> },
+            // { id: 'leaderboards', label: 'Leaderboards', icon: <Trophy className="w-3.5 h-3.5" />, hideOnMobile: true },
             { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5" /> }
           ].map((tab) => {
             const isActive = activeMainTab === tab.id;
@@ -994,7 +1004,7 @@ const Rankings = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveMainTab(tab.id)}
-                className="relative flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10"
+                className={`relative flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10 ${tab.hideOnMobile ? 'hidden md:flex' : ''}`}
                 style={{ color: isActive ? '#000000' : '#9CA3AF' }}
               >
                 {isActive && (
@@ -1069,11 +1079,11 @@ const Rankings = () => {
                 <div className="hidden md:block">
                   {(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).map(cat => (
                     (formattedRankings[cat.id] && formattedRankings[cat.id].length > 0) ? (
-                      <RankingSlider 
-                        key={cat.id} 
-                        title={`${cat.label} Top 10`} 
-                        playersData={formattedRankings[cat.id]?.slice(0, 10) || []} 
-                        onPlayerClick={setSelectedPlayer} 
+                      <RankingSlider
+                        key={cat.id}
+                        title={`${cat.label} Top 10`}
+                        playersData={formattedRankings[cat.id]?.slice(0, 10) || []}
+                        onPlayerClick={setSelectedPlayer}
                       />
                     ) : null
                   ))}
