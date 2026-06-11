@@ -136,12 +136,105 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     .from('calendar')
                     .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed')
                     .order('start_date', { ascending: false });
-                setEvents(eData || []);
 
                 const { data: pData } = await supabase
                     .from('players')
                     .select('id, name, email, contact_number, license_type, paid_registration');
                 setSystemProfiles(pData || []);
+
+                const { data: tempLicData } = await supabase
+                    .from('temporary_licenses')
+                    .select('event_id, player_id');
+                const tempLicenses = tempLicData || [];
+
+                const playerLicenses = {};
+                (pData || []).forEach(p => {
+                    playerLicenses[p.id] = p.license_type === 'full' ? 'full' : 'none';
+                });
+
+                // Fetch basic global stats for "at a glance" view
+                let allParts = [];
+                let from = 0;
+                const step = 1000;
+                while(true) {
+                    const { data } = await supabase
+                        .from('tournament_participants')
+                        .select('event_id, class_name, is_paid, profile_id, full_name')
+                        .range(from, from + step - 1);
+                    if (!data || data.length === 0) break;
+                    allParts.push(...data);
+                    if (data.length < step) break;
+                    from += step;
+                }
+
+                // Aggregate stats
+                const statsByEvent = {};
+                allParts.forEach(p => {
+                    if (!statsByEvent[p.event_id]) {
+                        statsByEvent[p.event_id] = { 
+                            entries: 0, billed: 0, collected: 0, paidCount: 0,
+                            uniqueProfiles: new Set(),
+                            licenses: { full: 0, temp: 0, none: 0 }
+                        };
+                    }
+                    
+                    const eventStats = statsByEvent[p.event_id];
+                    eventStats.entries += 1;
+                    if (p.is_paid) eventStats.paidCount += 1;
+
+                    const profileKey = p.profile_id || (p.full_name || '').toLowerCase().trim();
+                    if (profileKey && !eventStats.uniqueProfiles.has(profileKey)) {
+                        eventStats.uniqueProfiles.add(profileKey);
+                        
+                        let lic = 'none';
+                        if (p.profile_id) {
+                            if (playerLicenses[p.profile_id] === 'full') {
+                                lic = 'full';
+                            } else {
+                                const hasTemp = tempLicenses.some(t => t.event_id === p.event_id && t.player_id === p.profile_id);
+                                if (hasTemp) lic = 'temp';
+                            }
+                        }
+                        eventStats.licenses[lic]++;
+                    }
+                });
+
+                const eventsWithStats = (eData || []).map(event => {
+                    const stats = statsByEvent[event.id] || { 
+                        entries: 0, billed: 0, collected: 0, paidCount: 0,
+                        uniqueProfiles: new Set(),
+                        licenses: { full: 0, temp: 0, none: 0 }
+                    };
+                    
+                    let exactBilled = 0;
+                    let exactCollected = 0;
+                    
+                    if (stats.entries > 0) {
+                        const eventParts = allParts.filter(p => p.event_id === event.id);
+                        eventParts.forEach(p => {
+                            const divFee = event.category_fees?.[p.class_name] || event.entry_fee || 0;
+                            exactBilled += Number(divFee);
+                            if (p.is_paid) exactCollected += Number(divFee);
+                        });
+                    }
+
+                    return {
+                        ...event,
+                        stats: {
+                            entries: stats.entries,
+                            billed: exactBilled,
+                            collected: exactCollected,
+                            outstanding: exactBilled - exactCollected,
+                            paidCount: stats.paidCount,
+                            uniquePlayersCount: stats.uniqueProfiles.size,
+                            licenses: stats.licenses
+                        }
+                    };
+                });
+
+                setEvents(eventsWithStats);
+            } catch (err) {
+                console.error("Fetch initial error", err);
             } finally {
                 setLoading(prev => ({ ...prev, events: false }));
             }
@@ -843,11 +936,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 <div className="bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
                     <div className="max-h-[320px] overflow-y-auto no-scrollbar">
                         <table className="w-full text-left border-collapse">
-                            <thead className="sticky top-0 bg-[#1E293B] text-[10px] font-black uppercase text-gray-500 border-b border-white/5">
+                            <thead className="sticky top-0 bg-[#1E293B] text-[10px] font-black uppercase text-gray-500 border-b border-white/5 z-10">
                                 <tr>
                                     <th className="px-6 py-3">Event Date</th>
                                     <th className="px-6 py-3">Tournament Name</th>
-                                    <th className="px-6 py-3">Rankedin ID</th>
+                                    <th className="px-6 py-3">Entries</th>
+                                    <th className="px-6 py-3">Finances (Collected/Billed)</th>
+                                    <th className="px-6 py-3">License Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
@@ -887,7 +982,41 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <span className="text-[10px] font-mono text-gray-600 bg-white/5 px-2 py-0.5 rounded uppercase">{rId || 'NO ID'}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-white font-black text-[11px]">{e.stats?.entries || 0}</span>
+                                                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
+                                                        {(e.stats?.outstanding > 0) && (
+                                                            <span className="text-[8px] text-red-400 font-bold uppercase tracking-widest">R{e.stats.outstanding.toLocaleString()} Out</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {e.stats?.uniquePlayersCount > 0 ? (
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="flex flex-col items-center min-w-[32px]">
+                                                                <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
+                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Full</span>
+                                                                <div className="w-full h-0.5 bg-[#BFFF00] rounded-full mt-0.5" />
+                                                            </div>
+                                                            <div className="flex flex-col items-center min-w-[32px]">
+                                                                <span className="text-[#0ea5e9] font-black text-sm">{e.stats.licenses?.temp || 0}</span>
+                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Temp</span>
+                                                                <div className="w-full h-0.5 bg-[#0ea5e9] rounded-full mt-0.5" />
+                                                            </div>
+                                                            <div className="flex flex-col items-center min-w-[32px]">
+                                                                <span className="text-[#ff6b6b] font-black text-sm">{e.stats.licenses?.none || 0}</span>
+                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">None</span>
+                                                                <div className="w-full h-0.5 bg-[#ff6b6b]/30 rounded-full mt-0.5" />
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );

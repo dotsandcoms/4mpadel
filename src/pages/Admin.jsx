@@ -25,6 +25,7 @@ const Admin = () => {
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
     const [player, setPlayer] = useState(null);
     const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
 
@@ -257,12 +258,14 @@ const Admin = () => {
                 onLogout={handleLogout}
                 isOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
+                isDesktopCollapsed={isDesktopCollapsed}
+                setIsDesktopCollapsed={setIsDesktopCollapsed}
                 permissions={permissions}
                 player={player}
                 session={session}
             />
 
-            <main className="flex-1 lg:ml-64 p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]">
+            <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]`}>
                 <div className="max-w-7xl mx-auto">
                     {/* Desktop Header Actions */}
                     <div className="hidden lg:flex justify-end mb-8 gap-4 items-center">
