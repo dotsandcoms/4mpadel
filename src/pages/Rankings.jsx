@@ -942,18 +942,18 @@ const Rankings = () => {
           </motion.div>
 
           <motion.h1
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-4xl md:text-6xl font-black text-white tracking-tighter mb-4 uppercase"
+            className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
           >
-            Player <span className="text-padel-green">Rankings</span>
+            Player <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Rankings</span>
           </motion.h1>
 
           <motion.p
-            initial={{ opacity: 0, y: 15 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.08 }}
-            className="text-base md:text-lg text-gray-400 max-w-xl mx-auto leading-relaxed"
+            transition={{ delay: 0.2 }}
+            className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
           >
             Browse ranking lists below
           </motion.p>

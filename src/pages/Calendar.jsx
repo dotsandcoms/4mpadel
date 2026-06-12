@@ -189,7 +189,7 @@ const FeaturedCarousel = ({ events }) => {
     return (
         <div className="mb-12 relative">
             <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-6 sm:gap-0">
-                <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
+                <div className="flex flex-row items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center shrink-0">
                         <Trophy className="w-6 h-6 text-padel-green" />
                     </div>
@@ -803,8 +803,8 @@ const Calendar = () => {
                         animate={{ opacity: 1, y: 0 }}
                         className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4 md:mb-6"
                     >
-                        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter uppercase m-0 leading-none text-center">
-                            Tournament <span className="text-padel-green">Calendar</span>
+                        <h1 className="text-5xl md:text-8xl font-black font-display text-white tracking-tighter uppercase m-0 leading-none text-center mb-6">
+                            Tournament <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Calendar</span>
                         </h1>
                     </motion.div>
 
@@ -812,7 +812,7 @@ const Calendar = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-xl text-gray-400 max-w-2xl mx-auto"
+                        className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
                     >
                         Explore the 2026/2027 season events. Find tournaments near you, plan your schedule, and compete for crucial ranking points.
                     </motion.p>

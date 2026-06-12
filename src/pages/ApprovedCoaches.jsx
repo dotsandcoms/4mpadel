@@ -176,18 +176,18 @@ const ApprovedCoaches = () => {
                     </motion.div>
 
                     <motion.h1
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-6 uppercase"
+                        className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
                     >
-                        Approved <span className="text-padel-green">Coaches</span>
+                        Approved <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Coaches</span>
                     </motion.h1>
 
                     <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-xl text-gray-400 max-w-3xl mx-auto"
+                        transition={{ delay: 0.2 }}
+                        className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
                     >
                         Train with the best in the country. Our certified coaches are vetted by 4M to ensure the highest quality of instruction across South Africa.
                     </motion.p>

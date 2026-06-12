@@ -72,12 +72,12 @@ const Contact = () => {
                         Get In Touch
                     </motion.span>
                     <motion.h1
-                        initial={{ opacity: 0, y: 20 }}
+                        initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
-                        className="text-5xl md:text-7xl font-black italic tracking-tighter uppercase"
+                        className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter"
                     >
-                        Contact <span className="text-padel-green">Us</span>
+                        Contact <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Us</span>
                     </motion.h1>
                 </div>
             </section>

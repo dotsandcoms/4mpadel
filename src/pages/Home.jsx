@@ -49,8 +49,8 @@ const Home = () => {
                                 <h2 className="text-6xl md:text-9xl font-bold text-white/5 absolute -top-20 -left-10 select-none z-0">
                                     4M PADEL
                                 </h2>
-                                <h2 className="text-4xl md:text-5xl font-bold relative z-10 mb-6 font-display">
-                                    Play Padel - Experience the energy of the <span className="text-padel-green">fastest-growing</span> sport. <br />
+                                <h2 className="text-5xl md:text-8xl font-black font-display relative z-10 mb-6 tracking-tighter uppercase leading-[0.9]">
+                                    Play Padel - Experience the energy of the <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">fastest-growing</span> sport. <br />
                                 </h2>
                                 <p className="text-gray-400 text-lg leading-relaxed mb-8">
                                     Welcome to 4M Padel - The home of padel in South Africa.

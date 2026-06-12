@@ -62,18 +62,18 @@ const Gallery = () => {
                         </motion.div>
                         
                         <motion.h1 
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            className="text-5xl sm:text-7xl md:text-8xl font-black text-white tracking-tighter uppercase mb-6 leading-[0.8] drop-shadow-2xl"
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
                         >
-                            Our <span className="text-padel-green">Gallery</span>
+                            Our <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Gallery</span>
                         </motion.h1>
                         
                         <motion.p 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.2 }}
-                            className="text-lg md:text-2xl text-gray-400 max-w-3xl font-medium leading-relaxed px-4"
+                            className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
                         >
                             Capturing the intensity, the passion, and the legendary moments on the 4M courts.
                         </motion.p>
