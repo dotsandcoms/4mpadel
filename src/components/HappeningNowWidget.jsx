@@ -183,7 +183,7 @@ const HappeningNowWidget = () => {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
                                         }}
-                                        className={`relative flex-none w-[280px] sm:w-[300px] snap-start bg-[#1E2530]/50 border rounded-2xl p-5 transition-all duration-300 group cursor-pointer flex flex-col gap-4 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
+                                        className={`relative flex-none w-[280px] sm:w-[290px] snap-start bg-[#1E2530]/50 border rounded-2xl p-4 transition-all duration-300 group cursor-pointer flex flex-col gap-2.5 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
                                     >
                                         {/* Optional background ball image */}
                                         <div className="absolute -right-6 top-1/4 w-32 h-32 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500 mix-blend-screen">
@@ -193,30 +193,30 @@ const HappeningNowWidget = () => {
                                         {/* Badges Row */}
                                         <div className="flex justify-between items-start z-10">
                                             {statusLabel && (
-                                                <div className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${statusBg}`}>
+                                                <div className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${statusBg}`}>
                                                     {statusLabel}
                                                 </div>
                                             )}
                                         </div>
 
                                         {/* Title */}
-                                        <div className="z-10 mt-1">
-                                            <h3 className="text-lg sm:text-xl font-bold text-white leading-tight transition-colors group-hover:text-padel-green line-clamp-2">
+                                        <div className="z-10">
+                                            <h3 className="text-base sm:text-lg font-bold text-white leading-tight transition-colors group-hover:text-padel-green line-clamp-2">
                                                 {event.event_name}
                                             </h3>
                                         </div>
 
                                         {/* Event Details */}
-                                        <div className="flex flex-col gap-2.5 mt-auto z-10 mb-2">
+                                        <div className="flex flex-col gap-1.5 mt-auto z-10 mb-1">
                                             <div className="flex items-center gap-2 text-gray-400">
-                                                <Calendar size={16} className={`${iconColor} shrink-0`} />
-                                                <span className="text-sm font-medium text-white/90">
+                                                <Calendar size={14} className={`${iconColor} shrink-0`} />
+                                                <span className="text-xs font-medium text-white/90">
                                                     {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
                                                 </span>
                                             </div>
                                             <div className="flex items-start gap-2 text-gray-400">
-                                                <MapPin size={16} className={`${iconColor} shrink-0 mt-0.5`} />
-                                                <span className="text-sm font-medium text-gray-300 leading-snug line-clamp-2">
+                                                <MapPin size={14} className={`${iconColor} shrink-0 mt-0.5`} />
+                                                <span className="text-xs font-medium text-gray-300 leading-tight line-clamp-2">
                                                     {event.venue || 'TBD'} {event.city ? `, ${event.city}` : ''}
                                                 </span>
                                             </div>
@@ -224,8 +224,8 @@ const HappeningNowWidget = () => {
 
                                         {/* Action Button */}
                                         <div className="mt-1 z-10">
-                                            <button className={`w-full rounded-xl transition-all font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 py-3 shadow-sm ${btnBg}`}>
-                                                <PlayCircle size={16} />
+                                            <button className={`w-full rounded-xl transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 py-2 shadow-sm ${btnBg}`}>
+                                                <PlayCircle size={14} />
                                                 View
                                             </button>
                                         </div>
