@@ -55,6 +55,7 @@ const PlayerProfile = () => {
     const [matchViewTab, setMatchViewTab] = useState('upcoming'); // 'upcoming' | 'past'
     const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
+    const [hasFetchedMatches, setHasFetchedMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
     const { pendingPayments } = usePendingPayments(player?.email, player?.rankedin_id);
     const { clubs } = useClubs();
@@ -438,7 +439,7 @@ const PlayerProfile = () => {
     }, [player, player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 
     useEffect(() => {
-        if (player?.rankedin_id && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0) {
+        if (player?.rankedin_id && !hasFetchedMatches && !loadingMatches) {
             const fetchMatches = async () => {
                 setLoadingMatches(true);
                 try {
@@ -481,11 +482,12 @@ const PlayerProfile = () => {
                     console.error("Match fetch error:", err);
                 } finally {
                     setLoadingMatches(false);
+                    setHasFetchedMatches(true);
                 }
             };
             fetchMatches();
         }
-    }, [player?.rankedin_id, getPlayerMatches, matchHistory.upcoming.length, matchHistory.history.length]);
+    }, [player?.rankedin_id, getPlayerMatches, hasFetchedMatches, loadingMatches]);
 
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;
@@ -922,12 +924,12 @@ const PlayerProfile = () => {
 
                     {/* Avatar & Player Info card overlap - shifted up to where the title used to be */}
                     <div className="px-5 -mt-14 relative z-20 space-y-4 pb-6">
-                        <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-start gap-4">
+                        <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-center gap-4 sm:gap-6">
                             {/* Avatar Column */}
                             <div className="relative group shrink-0">
                                 <div
                                     onClick={() => document.getElementById('imageUploadMobile').click()}
-                                    className="w-22 h-22 rounded-full bg-slate-900 border-4 border-slate-950 shadow-xl overflow-hidden cursor-pointer relative transition-transform duration-300 hover:scale-105"
+                                    className="w-22 h-22 sm:w-28 sm:h-28 rounded-full bg-slate-900 border-4 border-slate-950 shadow-xl overflow-hidden cursor-pointer relative transition-transform duration-300 hover:scale-105"
                                 >
                                     {formData.image_url ? (
                                         <img src={formData.image_url} alt="Profile" className="w-full h-full object-cover" />
@@ -937,11 +939,11 @@ const PlayerProfile = () => {
                                         </div>
                                     )}
                                     <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
-                                        <Edit3 size={12} className="text-padel-green" />
+                                        <Edit3 size={14} className="text-padel-green" />
                                     </div>
                                     {uploadingImage && (
                                         <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded-full">
-                                            <div className="w-5 h-5 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
+                                            <div className="w-6 h-6 border-2 border-padel-green border-t-transparent rounded-full animate-spin" />
                                         </div>
                                     )}
                                 </div>
@@ -955,17 +957,17 @@ const PlayerProfile = () => {
                                 />
                                 <button
                                     onClick={() => setIsEditProfileModalOpen(true)}
-                                    className="absolute bottom-0 right-0 bg-[#CCFF00] hover:bg-white text-black p-1.5 rounded-full border border-black shadow-lg cursor-pointer flex items-center justify-center z-10 transition-colors"
+                                    className="absolute bottom-0 right-0 bg-[#CCFF00] hover:bg-white text-black p-2 rounded-full border border-black shadow-lg cursor-pointer flex items-center justify-center z-10 transition-colors"
                                 >
-                                    <Edit3 size={10} />
+                                    <Edit3 size={12} />
                                 </button>
                             </div>
 
                             {/* Player Info Details */}
-                            <div className="flex-1 min-w-0 pt-1 space-y-2">
-                                <div className="flex items-center gap-1.5 flex-wrap">
+                            <div className="flex-1 w-full min-w-0 space-y-2">
+                                <div className="flex items-center justify-start w-full flex-wrap">
                                     {player.license_type && (
-                                        <span className={`border rounded-full px-2 py-0.5 text-[8px] font-black uppercase tracking-wider flex items-center gap-1 ${player.license_type === 'full'
+                                        <span className={`border rounded-full px-2 py-0.5 text-[8px] sm:text-[9px] font-black uppercase tracking-wider flex items-center gap-1 ${player.license_type === 'full'
                                             ? 'bg-padel-green/10 border-padel-green/30 text-padel-green'
                                             : player.license_type === 'temporary'
                                                 ? 'bg-blue-500/10 border-blue-500/30 text-blue-400'
@@ -978,33 +980,33 @@ const PlayerProfile = () => {
                                         </span>
                                     )}
                                 </div>
-                                <h3 className="text-base font-extrabold text-white leading-tight uppercase flex items-center gap-1">
+                                <h3 className="text-xl sm:text-2xl font-extrabold text-white leading-tight uppercase flex items-center justify-start text-left gap-1 w-full break-words">
                                     {player.name}
                                 </h3>
 
                                 {/* Followers & Matches Stats row */}
-                                <div className="flex items-center gap-4 text-xs font-bold text-gray-400 py-1">
-                                    <div className="flex flex-col">
-                                        <span className="text-yellow-500 font-extrabold">
+                                <div className="flex items-center justify-between w-full text-sm font-bold text-gray-400 py-1 px-1 sm:px-2">
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-yellow-500 font-extrabold text-base sm:text-lg leading-none">
                                             {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '#22'}
                                         </span>
-                                        <span className="text-[7.5px] uppercase tracking-widest text-gray-500 font-black">Rank</span>
+                                        <span className="text-[8px] sm:text-[9px] uppercase tracking-widest text-gray-500 font-black mt-0.5">Rank</span>
                                     </div>
-                                    <div className="border-l border-white/10 h-6 shrink-0" />
-                                    <div className="flex flex-col">
-                                        <span className="text-padel-green font-extrabold">
+                                    <div className="border-l border-white/10 h-8 shrink-0" />
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-padel-green font-extrabold text-base sm:text-lg leading-none">
                                             {player.points !== undefined && player.points !== null ? player.points : '1268'}
                                         </span>
-                                        <span className="text-[7.5px] uppercase tracking-widest text-gray-500 font-black">Points</span>
+                                        <span className="text-[8px] sm:text-[9px] uppercase tracking-widest text-gray-500 font-black mt-0.5">Points</span>
                                     </div>
-                                    <div className="border-l border-white/10 h-6 shrink-0" />
-                                    <div className="flex flex-col">
-                                        <span className="text-white font-extrabold">
+                                    <div className="border-l border-white/10 h-8 shrink-0" />
+                                    <div className="flex flex-col items-center">
+                                        <span className="text-white font-extrabold text-base sm:text-lg leading-none">
                                             {loadingMatches && totalPlayedMatches === 0 && matchHistory.upcoming.length === 0
                                                 ? '—'
                                                 : matchHistory.history.length + matchHistory.upcoming.length}
                                         </span>
-                                        <span className="text-[7.5px] uppercase tracking-widest text-gray-500 font-black">Matches</span>
+                                        <span className="text-[8px] sm:text-[9px] uppercase tracking-widest text-gray-500 font-black mt-0.5">Matches</span>
                                     </div>
                                 </div>
 
