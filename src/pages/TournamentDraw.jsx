@@ -438,66 +438,66 @@ const TournamentDraw = () => {
                                                         className="group bg-[#131C2F]/40 hover:bg-[#131C2F] border border-white/5 rounded-3xl p-6 lg:px-6 lg:py-2.5 transition-all duration-300 shadow-lg"
                                                     >
                                                         {/* Mobile View */}
-                                                        <div className="flex flex-col lg:hidden gap-5">
-                                                            <div className="flex justify-between items-center bg-white/5 p-3.5 rounded-2xl border border-white/5">
-                                                                <div className="flex flex-col flex-1 min-w-0 pr-2">
-                                                                    <span className={`text-sm font-bold truncate ${p1Wins ? 'text-white' : 'text-gray-400'}`}>
-                                                                        {m.Challenger?.Name}
-                                                                    </span>
-                                                                    {m.Challenger?.Player2Name && (
-                                                                        <span className={`text-sm font-bold truncate -mt-0.5 ${p1Wins ? 'text-white' : 'text-gray-400'}`}>
-                                                                            {m.Challenger.Player2Name}
-                                                                        </span>
-                                                                    )}
+                                                        <div className="flex flex-col lg:hidden">
+                                                            {/* Header */}
+                                                            <div className="flex justify-between items-start pb-3 mb-3 border-b border-white/5">
+                                                                <div className="flex flex-col flex-1 pr-2">
+                                                                    <span className="text-[10px] text-padel-green font-bold uppercase tracking-widest leading-none mb-1.5">{m.TournamentClassName}</span>
+                                                                    <span className="text-[9px] text-gray-500 font-medium leading-none">{m.Date ? new Date(m.Date).toLocaleDateString('en-GB') : 'TBD'} • {m.TournamentDrawName || m.Draw}{m.Court ? ` • ${m.Court}` : ''}</span>
                                                                 </div>
-                                                                <span className={`text-xl font-black w-12 h-12 flex items-center justify-center rounded-xl bg-slate-900 border border-white/10 ${p1Wins ? 'text-padel-green ring-1 ring-padel-green/30' : 'text-gray-600'}`}>
-                                                                    {score?.FirstParticipantScore ?? '-'}
-                                                                </span>
-                                                            </div>
-                                                            <div className="flex justify-center -my-3 relative z-10">
-                                                                {isWalkover ? (
-                                                                    <span className="bg-orange-500 text-[10px] font-bold text-white px-3 py-1 rounded-full border border-white/5 uppercase tracking-widest shadow-lg">Walkover</span>
-                                                                ) : (
-                                                                    <span className="bg-slate-900 text-[10px] font-black text-gray-700 px-3 py-1 rounded-full border border-white/5 italic">vs</span>
+                                                                {isWalkover && (
+                                                                     <span className="bg-orange-500 text-[9px] font-bold text-white px-2 py-0.5 rounded-full uppercase tracking-widest shadow-lg shrink-0">Walkover</span>
                                                                 )}
                                                             </div>
-                                                            <div className="flex justify-between items-center bg-white/5 p-3.5 rounded-2xl border border-white/5">
-                                                                <div className="flex flex-col flex-1 min-w-0 pr-2">
-                                                                    <span className={`text-sm font-bold truncate ${p2Wins ? 'text-white' : 'text-gray-400'}`}>
-                                                                        {m.Challenged?.Name}
-                                                                    </span>
-                                                                    {m.Challenged?.Player2Name && (
-                                                                        <span className={`text-sm font-bold truncate -mt-0.5 ${p2Wins ? 'text-white' : 'text-gray-400'}`}>
-                                                                            {m.Challenged.Player2Name}
+                                                            
+                                                            {/* Players and Scores */}
+                                                            <div className="flex flex-col gap-3">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex flex-col flex-1 min-w-0 pr-3 border-l-2 border-transparent pl-2">
+                                                                        <span className={`text-sm font-bold truncate leading-tight ${p1Wins ? 'text-white' : 'text-gray-400'}`}>
+                                                                            {m.Challenger?.Name}
                                                                         </span>
-                                                                    )}
+                                                                        {m.Challenger?.Player2Name && (
+                                                                            <span className={`text-sm font-bold truncate leading-tight ${p1Wins ? 'text-white' : 'text-gray-400'}`}>
+                                                                                {m.Challenger.Player2Name}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className={`text-lg font-black w-8 text-right shrink-0 ${p1Wins ? 'text-padel-green drop-shadow-[0_0_8px_rgba(154,233,0,0.5)]' : 'text-gray-500'}`}>
+                                                                        {score?.FirstParticipantScore ?? '-'}
+                                                                    </span>
                                                                 </div>
-                                                                <span className={`text-xl font-black w-12 h-12 flex items-center justify-center rounded-xl bg-slate-900 border border-white/10 ${p2Wins ? 'text-padel-green ring-1 ring-padel-green/30' : 'text-gray-600'}`}>
-                                                                    {score?.SecondParticipantScore ?? '-'}
-                                                                </span>
+                                                                
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex flex-col flex-1 min-w-0 pr-3 border-l-2 border-transparent pl-2">
+                                                                        <span className={`text-sm font-bold truncate leading-tight ${p2Wins ? 'text-white' : 'text-gray-400'}`}>
+                                                                            {m.Challenged?.Name}
+                                                                        </span>
+                                                                        {m.Challenged?.Player2Name && (
+                                                                            <span className={`text-sm font-bold truncate leading-tight ${p2Wins ? 'text-white' : 'text-gray-400'}`}>
+                                                                                {m.Challenged.Player2Name}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <span className={`text-lg font-black w-8 text-right shrink-0 ${p2Wins ? 'text-padel-green drop-shadow-[0_0_8px_rgba(154,233,0,0.5)]' : 'text-gray-500'}`}>
+                                                                        {score?.SecondParticipantScore ?? '-'}
+                                                                    </span>
+                                                                </div>
                                                             </div>
+
+                                                            {/* Detailed Sets */}
                                                             {score?.DetailedScoring && score.DetailedScoring.length > 0 && (
-                                                                <div className="flex justify-center gap-4 py-2 bg-white/[0.02] rounded-2xl border border-white/5">
+                                                                <div className="flex gap-3 pt-3 mt-3 border-t border-white/5 overflow-x-auto no-scrollbar justify-start">
                                                                     {score.DetailedScoring.map((s, i) => (
-                                                                        <div key={i} className="flex flex-col items-center">
-                                                                            <span className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-0.5 whitespace-nowrap">Set {i + 1}</span>
-                                                                            <span className="text-[12px] text-padel-green font-black tracking-widest">
+                                                                        <div key={i} className="flex flex-col items-center shrink-0">
+                                                                            <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest mb-0.5">Set {i + 1}</span>
+                                                                            <span className="text-[11px] text-gray-400 font-bold tracking-wider">
                                                                                 {s.FirstParticipantScore}-{s.SecondParticipantScore}
                                                                             </span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
-                                                                <div className="flex flex-col p-2 bg-white/[0.02] rounded-xl text-left">
-                                                                    <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest mb-1">Details</span>
-                                                                    <span className="text-[10px] text-gray-300 font-bold truncate">{m.TournamentClassName}</span>
-                                                                </div>
-                                                                <div className="flex flex-col p-2 bg-white/[0.02] rounded-xl text-left text-right">
-                                                                    <span className="text-[8px] text-gray-500 font-black uppercase tracking-widest mb-1">Schedule</span>
-                                                                    <span className="text-[10px] text-gray-300 font-bold">{m.Date ? new Date(m.Date).toLocaleDateString('en-GB') : 'TBD'}</span>
-                                                                </div>
-                                                            </div>
                                                         </div>
 
                                                         {/* Desktop View */}
@@ -514,7 +514,7 @@ const TournamentDraw = () => {
                                                                 </div>
                                                                 <div className="col-span-2 flex flex-col items-start gap-0.5 border-l border-white/5 pl-4 overflow-hidden">
                                                                     <span className="text-[10px] font-black text-padel-green truncate w-full uppercase tracking-tighter">{m.TournamentClassName}</span>
-                                                                    <span className="text-[9px] text-gray-500 font-bold">{m.TournamentDrawName || m.Draw}</span>
+                                                                    <span className="text-[9px] text-gray-500 font-bold">{m.TournamentDrawName || m.Draw}{m.Court ? ` • ${m.Court}` : ''}</span>
                                                                 </div>
                                                             </div>
                                                             <div className="col-span-1 flex items-center justify-end">
