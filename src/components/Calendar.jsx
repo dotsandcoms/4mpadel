@@ -5,6 +5,7 @@ import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight, GitBranch, 
 import { Link, useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import tournamentBg from '../assets/tournament_bg.png';
+import { getEventImage } from '../utils/imageUtils';
 
 const extractRankedinId = (url) => {
     if (!url) return null;
@@ -87,11 +88,11 @@ const CalendarEventItem = ({ event, index }) => {
                     <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
                         {/* Poster Image Box */}
                         <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-32 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group flex items-center justify-center">
-                            {(event.custom_image_url || event.image_url) ? (
+                            {getEventImage(event) ? (
                                 <img
-                                    src={event.custom_image_url || event.image_url}
+                                    src={getEventImage(event)}
                                     alt={event.event_name}
-                                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
+                                    className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-110"
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center">

@@ -21,6 +21,7 @@ const isTestMode = PAYSTACK_PUBLIC_KEY.startsWith('pk_test');
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
+import { getEventImage } from '../utils/imageUtils';
 
 
 
@@ -1969,7 +1970,7 @@ const EventDetails = () => {
                 <title>{`${event.event_name} | 4M Padel`}</title>
                 <meta property="og:title" content={`${event.event_name} | 4M Padel`} />
                 <meta property="og:description" content={`${event.event_dates || ''} at ${event.venue || ''}. View draws, results, and registration info on 4M Padel.`} />
-                <meta property="og:image" content={event.custom_image_url || event.image_url || tournamentHero} />
+                <meta property="og:image" content={getEventImage(event)} />
                 <meta property="og:type" content="article" />
             </Helmet>
 
@@ -2042,9 +2043,9 @@ const EventDetails = () => {
                 <div className="relative w-full h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden bg-[#0F172A]">
                     {/* Full width foreground flyer image (un-cropped, cover stretched) */}
                     <img
-                        src={event.custom_image_url || event.image_url || tournamentHero}
+                        src={getEventImage(event)}
                         alt={event.event_name}
-                        className="w-full h-full object-cover object-top animate-fade-in z-0"
+                        className="w-full h-full object-cover object-center animate-fade-in z-0"
                     />
 
                     {/* Gradient overlay for blending and text readability */}

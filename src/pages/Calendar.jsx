@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Search, Filter, ChevronLeft, ChevronRight, LayoutGrid, List, X, Users, Check, ChevronDown, Layers, User, PlayCircle, Video, Trophy, Shield } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { getEventImage } from '../utils/imageUtils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 
@@ -68,16 +69,16 @@ const FeaturedEventCard = ({ event, index }) => {
             >
                 {/* Poster Image Container */}
                 <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
-                    {event.custom_image_url || event.image_url || event.posterUrl ? (
+                    {getEventImage(event) ? (
                         <>
                             <img
-                                src={event.custom_image_url || event.image_url || event.posterUrl}
+                                src={getEventImage(event)}
                                 alt=""
                                 className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125"
                                 aria-hidden="true"
                             />
                             <img
-                                src={event.custom_image_url || event.image_url || event.posterUrl}
+                                src={getEventImage(event)}
                                 alt={event.event_name || event.eventName}
                                 className="absolute inset-0 z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                             />
@@ -298,11 +299,11 @@ const CalendarEventItem = ({ event, index }) => {
                     <div className="flex flex-row md:items-center gap-5 sm:gap-6 w-full min-w-0">
                         {/* Poster Image Box */}
                         <div className="flex-shrink-0 w-[100px] sm:w-[130px] md:w-32 aspect-[3/4] rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group shadow-2xl">
-                            {event.custom_image_url || event.image_url || event.posterUrl ? (
+                            {getEventImage(event) ? (
                                 <img
-                                    src={event.custom_image_url || event.image_url || event.posterUrl}
+                                    src={getEventImage(event)}
                                     alt={event.event_name || event.eventName}
-                                    className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110"
+                                    className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-110"
                                 />
                             ) : (
                                 <div className="w-full h-full flex flex-col items-center justify-center">
@@ -591,7 +592,7 @@ const Calendar = () => {
                     id: localEvent.id,
                     image_url: localEvent.image_url,
                     custom_image_url: localEvent.custom_image_url,
-                    posterUrl: localEvent.custom_image_url || localEvent.image_url || localEvent.posterUrl,
+                    posterUrl: getEventImage(localEvent),
                     venue: localEvent.venue || localEvent.clubName,
                     sapa_status: localEvent.sapa_status || pe.sapa_status,
                     is_league: localEvent.is_league ?? pe.is_league,

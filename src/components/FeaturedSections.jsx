@@ -5,6 +5,7 @@ import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
+import { getEventImage } from '../utils/imageUtils';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
@@ -577,7 +578,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                             title={t.event_name || t.eventName}
                             label={t.sapa_status || t.sapaStatus || 'Tournament'}
                             date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
-                            image={t.image_url || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                            image={getEventImage(t) || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
                             linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
                             drawPath={t.event_name ? ((t.rankedin_id || extractRankedinId(t.rankedin_url)) ? `/draws/${t.slug || t.rankedin_id || extractRankedinId(t.rankedin_url)}` : null) : null}
                             buttonLabel={t.event_name ? "VIEW DETAILS" : "VIEW RESULTS"}
@@ -790,7 +791,7 @@ const FeaturedSections = () => {
                         eventName: t.event_name,
                         city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
-                        image: t.custom_image_url || t.image_url || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
+                        image: getEventImage(t) || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
                         customLink: `/draws/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
@@ -836,7 +837,7 @@ const FeaturedSections = () => {
                                     cardTitle: singleEvent.event_name,
                                     cardLabel: singleEvent.sapa_status || 'Major Event',
                                     date: formatTournamentDate(singleEvent.start_date, singleEvent.end_date),
-                                    image: singleEvent.image_url || newData[featuredIndex].image,
+                                    image: getEventImage(singleEvent) || newData[featuredIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     rankedin_url: singleEvent.rankedin_url,
                                     registeredPlayers: singleEvent.registered_players,
@@ -882,7 +883,7 @@ const FeaturedSections = () => {
                                     cardLabel: singleEvent.sapa_status || 'Live Event',
                                     highlight: singleEvent.live_youtube_url ? 'Streaming Now' : 'Starting Soon',
                                     date: formatTournamentDate(singleEvent.start_date, singleEvent.end_date),
-                                    image: singleEvent.custom_image_url || singleEvent.image_url || newData[liveIndex].image,
+                                    image: getEventImage(singleEvent) || newData[liveIndex].image,
                                     linkPath: `/calendar/${singleEvent.slug || singleEvent.id}`,
                                     youtubeUrl: singleEvent.live_youtube_url,
                                     livePlayers: singleEvent.live_players,
