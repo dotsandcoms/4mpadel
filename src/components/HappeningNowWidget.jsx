@@ -94,57 +94,79 @@ const HappeningNowWidget = () => {
                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     className="relative z-40 w-full"
                 >
-                    <div className="bg-white/5 backdrop-blur-xl border-t border-l border-white/20 border-r border-b border-padel-green/20 rounded-3xl p-4 md:p-5 relative overflow-hidden shadow-2xl w-full">
+                    <div className="bg-[#12161E] border border-white/10 rounded-2xl p-4 md:p-6 relative overflow-hidden shadow-2xl w-full">
                         {/* Header */}
-                        <div className="relative z-10 flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2.5">
-                                <div className={`relative flex items-center justify-center w-7 h-7 rounded-lg ${isLive ? 'bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 'bg-white/10'}`}>
-                                    {isLive && <span className="absolute inline-flex w-full h-full rounded-lg bg-red-500 opacity-40 animate-ping"></span>}
-                                    <span className="text-base relative z-10 leading-none">🎾</span>
+                        <div className="relative z-10 flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-3 flex-wrap">
+                                <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-white/10">
+                                    <span className="text-lg relative z-10 leading-none">🎾</span>
                                 </div>
-                                <div>
-                                    <h2 className="font-bold text-white/95 text-base md:text-xl uppercase tracking-wider flex items-center gap-2 leading-none mb-0.5">
+                                <div className="flex items-center gap-3">
+                                    <h2 className="font-black text-white text-lg md:text-xl uppercase tracking-wider flex items-center gap-2 leading-none mt-1">
                                         {isLive ? 'Happening Now!' : 'Happening Next'}
                                     </h2>
+                                    {isLive && (
+                                        <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-1">
+                                            <span className="w-1.5 h-1.5 bg-white rounded-full"></span> LIVE
+                                        </span>
+                                    )}
                                 </div>
                             </div>
+                            <button 
+                                onClick={() => navigate('/calendar')}
+                                className="text-padel-green text-[10px] sm:text-xs font-black uppercase tracking-widest hover:text-padel-green/80 transition-colors flex items-center gap-1"
+                            >
+                                View All <span className="text-sm font-bold leading-none">&gt;</span>
+                            </button>
                         </div>
 
                         {/* Events List */}
-                        <div className="relative z-10 flex overflow-x-auto snap-x snap-mandatory gap-3 pb-1 hide-scrollbar scroll-smooth">
+                        <div className="relative z-10 flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 hide-scrollbar scroll-smooth">
                             {liveEvents.map(event => {
                                 const poster = event.custom_image_url || event.image_url || event.poster_url;
                                 
-                                let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
-                                let hoverBorderCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
+                                let borderCls = 'border-padel-green/50';
+                                let hoverBorderCls = 'hover:border-padel-green hover:shadow-[0_0_20px_rgba(46,213,115,0.15)]';
                                 let btnBg = 'bg-padel-green text-black hover:bg-padel-green/90 group-hover:bg-padel-green/90 border-transparent';
                                 let iconColor = 'text-padel-green';
+                                let statusLabel = null;
+                                let statusBg = 'bg-white/10 text-white';
 
                                 if (event.sapa_status === 'Major' || event.event_name?.includes('Major')) {
-                                    borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
-                                    hoverBorderCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
+                                    borderCls = 'border-red-500/50';
+                                    hoverBorderCls = 'hover:border-red-500 hover:shadow-[0_0_20px_rgba(239,68,68,0.15)]';
                                     btnBg = 'bg-red-600 text-white hover:bg-red-500 group-hover:bg-red-500 border-transparent';
                                     iconColor = 'text-red-400';
+                                    statusLabel = 'MAJOR';
+                                    statusBg = 'bg-red-500/20 text-red-500';
                                 } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold' || event.event_name?.includes('Super Gold') || event.event_name?.includes('S Gold')) {
-                                    borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
-                                    hoverBorderCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
+                                    borderCls = 'border-amber-500/50';
+                                    hoverBorderCls = 'hover:border-amber-500 hover:shadow-[0_0_20px_rgba(245,158,11,0.15)]';
                                     btnBg = 'bg-amber-500 text-black hover:bg-amber-400 group-hover:bg-amber-400 border-transparent';
                                     iconColor = 'text-amber-400';
+                                    statusLabel = 'SUPER GOLD';
+                                    statusBg = 'bg-amber-500/20 text-amber-500';
                                 } else if (event.sapa_status === 'Gold' || event.event_name?.includes('Gold')) {
-                                    borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
-                                    hoverBorderCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
+                                    borderCls = 'border-yellow-500/50';
+                                    hoverBorderCls = 'hover:border-yellow-400 hover:shadow-[0_0_20px_rgba(234,179,8,0.15)]';
                                     btnBg = 'bg-yellow-500 text-black hover:bg-yellow-400 group-hover:bg-yellow-400 border-transparent';
                                     iconColor = 'text-yellow-400';
+                                    statusLabel = 'GOLD';
+                                    statusBg = 'bg-[#1A1A14] text-[#BEFF00]'; // Using the specific padel green / yellow color for Gold
                                 } else if (event.sapa_status === 'Silver' || event.event_name?.includes('Silver')) {
-                                    borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
-                                    hoverBorderCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
+                                    borderCls = 'border-gray-400/50';
+                                    hoverBorderCls = 'hover:border-gray-300 hover:shadow-[0_0_20px_rgba(156,163,175,0.15)]';
                                     btnBg = 'bg-gray-300 text-black hover:bg-gray-200 group-hover:bg-gray-200 border-transparent';
                                     iconColor = 'text-gray-300';
+                                    statusLabel = 'SILVER';
+                                    statusBg = 'bg-gray-400/20 text-gray-300';
                                 } else if (event.sapa_status === 'Bronze' || event.event_name?.includes('Bronze')) {
-                                    borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
-                                    hoverBorderCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
+                                    borderCls = 'border-orange-600/50';
+                                    hoverBorderCls = 'hover:border-orange-500 hover:shadow-[0_0_20px_rgba(234,88,12,0.15)]';
                                     btnBg = 'bg-orange-600 text-white hover:bg-orange-500 group-hover:bg-orange-500 border-transparent';
                                     iconColor = 'text-orange-400';
+                                    statusLabel = 'BRONZE';
+                                    statusBg = 'bg-orange-600/20 text-orange-500';
                                 }
 
                                 return (
@@ -161,44 +183,51 @@ const HappeningNowWidget = () => {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
                                         }}
-                                        className={`relative flex-none w-[240px] sm:w-[270px] snap-start bg-white/[0.03] border rounded-[1rem] p-3 transition-all duration-300 group cursor-pointer flex gap-3 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
+                                        className={`relative flex-none w-[280px] sm:w-[300px] snap-start bg-[#1E2530]/50 border rounded-2xl p-5 transition-all duration-300 group cursor-pointer flex flex-col gap-4 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
                                     >
-                                        <div className={`absolute inset-0 bg-gradient-to-r ${isLive ? 'from-red-500/5' : 'from-white/5'} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none`} />
+                                        {/* Optional background ball image */}
+                                        <div className="absolute -right-6 top-1/4 w-32 h-32 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500 mix-blend-screen">
+                                            {poster ? <img src={poster} alt="" className="w-full h-full object-cover rounded-full blur-sm" /> : <div className="w-full h-full rounded-full bg-padel-green blur-2xl"></div>}
+                                        </div>
 
-                                        {/* Event Info */}
-                                        <div className="flex flex-col justify-between flex-1 py-0.5 min-w-0">
-                                            <div className="min-w-0">
-                                                <div className="flex justify-between items-start mb-1 gap-2">
-                                                    <h3 className={`text-sm sm:text-base font-semibold text-white/95 leading-tight truncate transition-colors group-hover:${iconColor}`}>
-                                                        {event.event_name}
-                                                    </h3>
-                                                    {isLive && (
-                                                    <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-1.5 py-[1px] rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-0.5">
-                                                        <span className="w-1.5 h-1.5 bg-white rounded-full"></span> LIVE
-                                                    </span>
-                                                    )}
+                                        {/* Badges Row */}
+                                        <div className="flex justify-between items-start z-10">
+                                            {statusLabel && (
+                                                <div className={`px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${statusBg}`}>
+                                                    {statusLabel}
                                                 </div>
-                                                <div className="flex items-center gap-1 text-gray-400 mb-1">
-                                                    <Calendar size={12} className={`${iconColor} shrink-0`} />
-                                                    <span className="text-xs font-medium text-white/80 leading-none">
-                                                        {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1 text-gray-400 truncate min-w-0">
-                                                    <MapPin size={12} className={`${iconColor} shrink-0`} />
-                                                    <span className="text-xs truncate font-medium text-gray-300 leading-none" title={event.venue || event.city}>
-                                                        {event.venue || 'TBD'} {event.city ? `(${event.city})` : ''}
-                                                    </span>
-                                                </div>
-                                            </div>
+                                            )}
+                                        </div>
 
-                                            {/* Action Buttons */}
-                                            <div className="mt-2 flex gap-1.5">
-                                                <button className={`flex-1 rounded-lg border transition-all font-bold text-[10px] sm:text-xs uppercase tracking-widest flex items-center justify-center gap-1.5 py-1.5 shadow-sm ${btnBg}`}>
-                                                    <PlayCircle size={12} />
-                                                    View
-                                                </button>
+                                        {/* Title */}
+                                        <div className="z-10 mt-1">
+                                            <h3 className="text-lg sm:text-xl font-bold text-white leading-tight transition-colors group-hover:text-padel-green line-clamp-2">
+                                                {event.event_name}
+                                            </h3>
+                                        </div>
+
+                                        {/* Event Details */}
+                                        <div className="flex flex-col gap-2.5 mt-auto z-10 mb-2">
+                                            <div className="flex items-center gap-2 text-gray-400">
+                                                <Calendar size={16} className={`${iconColor} shrink-0`} />
+                                                <span className="text-sm font-medium text-white/90">
+                                                    {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                                </span>
                                             </div>
+                                            <div className="flex items-start gap-2 text-gray-400">
+                                                <MapPin size={16} className={`${iconColor} shrink-0 mt-0.5`} />
+                                                <span className="text-sm font-medium text-gray-300 leading-snug line-clamp-2">
+                                                    {event.venue || 'TBD'} {event.city ? `, ${event.city}` : ''}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Action Button */}
+                                        <div className="mt-1 z-10">
+                                            <button className={`w-full rounded-xl transition-all font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 py-3 shadow-sm ${btnBg}`}>
+                                                <PlayCircle size={16} />
+                                                View
+                                            </button>
                                         </div>
                                     </div>
                                 );
