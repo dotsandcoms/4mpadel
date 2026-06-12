@@ -196,6 +196,19 @@ const TournamentDraw = () => {
         const isPlayed = m.MatchResult?.IsPlayed;
         const score = m.MatchResult?.Score;
         
+        const hasWinnerWithoutPlay = !isPlayed && typeof m.MatchResult?.IsFirstParticipantWinner === 'boolean';
+        const isCancelled = m.Cancellation !== null && m.Cancellation !== undefined;
+        
+        if (hasWinnerWithoutPlay || isCancelled) {
+            return (
+                <div className="flex flex-col items-end transition-opacity">
+                    <span className="px-2.5 py-0.5 rounded-full bg-orange-500 text-white text-[10px] font-bold tracking-wide">
+                        Walkover
+                    </span>
+                </div>
+            );
+        }
+        
         if (!isPlayed || !score) {
             return (
                 <div className="flex flex-col items-end opacity-50 group-hover:opacity-100 transition-opacity">
