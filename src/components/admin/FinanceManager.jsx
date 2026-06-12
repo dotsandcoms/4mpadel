@@ -267,9 +267,9 @@ const FinanceManager = () => {
 
                 // Filter own registrations by division if specified in payment metadata
                 if (enrichedDivision && allParticipants.length > 0) {
-                    const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z]/g, '');
+                    const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z0-9]/g, '');
                     allParticipants = allParticipants.filter(p => {
-                        const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z]/g, '');
+                        const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
                         return normalizedDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedDiv);
                     });
                 } else if (!enrichedDivision && allParticipants.length > 0) {
@@ -282,9 +282,9 @@ const FinanceManager = () => {
                         .eq('payment_status', 'paid');
                     
                     if (intentData && intentData.length > 0) {
-                        const intendedDivisions = intentData.map(d => d.division.toLowerCase().replace(/[^a-z]/g, ''));
+                        const intendedDivisions = intentData.map(d => d.division.toLowerCase().replace(/[^a-z0-9]/g, ''));
                         allParticipants = allParticipants.filter(p => {
-                            const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z]/g, '');
+                            const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
                             return intendedDivisions.some(target => normalizedDiv.includes(target) || target.includes(normalizedDiv));
                         });
                     }
@@ -301,9 +301,9 @@ const FinanceManager = () => {
                     // Also filter regData (partners) by division if specified
                     let filteredRegData = regData;
                     if (enrichedDivision) {
-                        const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z]/g, '');
+                        const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z0-9]/g, '');
                         filteredRegData = regData.filter(reg => {
-                            const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z]/g, '');
+                            const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z0-9]/g, '');
                             return normalizedRegDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedRegDiv);
                         });
                     }
@@ -320,8 +320,8 @@ const FinanceManager = () => {
                             if (partners) {
                                 partners.forEach(partner => {
                                     // Verify it's the same or similar division to avoid matching the same person in a different category
-                                    const normalizedDbDiv = partner.class_name.toLowerCase().replace(/[^a-z]/g, '');
-                                    const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z]/g, '');
+                                    const normalizedDbDiv = partner.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
+                                    const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z0-9]/g, '');
                                     
                                     if (normalizedDbDiv.includes(normalizedRegDiv) || normalizedRegDiv.includes(normalizedDbDiv)) {
                                         if (!allParticipants.some(p => p.id === partner.id)) {
