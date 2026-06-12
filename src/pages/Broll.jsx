@@ -5,6 +5,7 @@ import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, User
 import { supabase } from '../supabaseClient';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
+import { getEventImage } from '../utils/imageUtils';
 import brollLogo from '../assets/BrollLogo.png';
 import PlayerModal from '../components/PlayerModal';
 import * as htmlToImage from 'html-to-image';
@@ -738,8 +739,8 @@ const Broll = () => {
                                                 >
                                                     <div className="flex flex-row">
                                                         <div className="w-[110px] sm:w-[140px] lg:w-1/5 aspect-[3/4] lg:aspect-auto relative overflow-hidden bg-slate-100 flex-shrink-0">
-                                                            {event.image_url || event.posterUrl ? (
-                                                                <img src={event.image_url || event.posterUrl} alt={event.event_name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                                            {getEventImage(event) ? (
+                                                                <img src={getEventImage(event)} alt={event.event_name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
                                                             ) : (
                                                                 <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50">
                                                                     <CalendarIcon className="w-8 h-8 text-slate-200 mb-1" />
