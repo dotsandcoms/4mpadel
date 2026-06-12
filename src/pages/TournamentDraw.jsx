@@ -445,9 +445,14 @@ const TournamentDraw = () => {
                                                                     <span className="text-[10px] text-padel-green font-bold uppercase tracking-widest leading-none mb-1.5">{m.TournamentClassName}</span>
                                                                     <span className="text-[9px] text-gray-500 font-medium leading-none">{m.Date ? new Date(m.Date).toLocaleDateString('en-GB') : 'TBD'} • {m.TournamentDrawName || m.Draw}{m.Court ? ` • ${m.Court}` : ''}</span>
                                                                 </div>
-                                                                {isWalkover && (
+                                                                {isWalkover ? (
                                                                      <span className="bg-orange-500 text-[9px] font-bold text-white px-2 py-0.5 rounded-full uppercase tracking-widest shadow-lg shrink-0">Walkover</span>
-                                                                )}
+                                                                ) : (!isPlayed && !score?.FirstParticipantScore && !score?.SecondParticipantScore) ? (
+                                                                    <div className="flex flex-col items-end shrink-0">
+                                                                        <span className="text-[10px] font-black text-amber-500 uppercase tracking-widest leading-none mb-1">Scheduled</span>
+                                                                        {!m.Court && <span className="text-[8px] text-gray-500 font-bold uppercase leading-none">No Court</span>}
+                                                                    </div>
+                                                                ) : null}
                                                             </div>
                                                             
                                                             {/* Players and Scores */}
