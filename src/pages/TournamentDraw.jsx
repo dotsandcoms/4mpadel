@@ -7,6 +7,7 @@ import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import KnockoutBracket from '../components/KnockoutBracket';
+import { getEventImage } from '../utils/imageUtils';
 
 const TournamentDraw = () => {
     const { id: idOrSlug } = useParams();
@@ -21,6 +22,7 @@ const TournamentDraw = () => {
     const [selectedDrawId, setSelectedDrawId] = useState('');
     const [drawData, setDrawData] = useState(null);
     const [tournamentDetails, setTournamentDetails] = useState(null);
+    const [dbEvent, setDbEvent] = useState(null);
 
     // New State for Results & Matches
     const isMobile = typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
@@ -33,37 +35,52 @@ const TournamentDraw = () => {
     // Resolve slug to RankedIn ID if necessary
     useEffect(() => {
         const resolveId = async () => {
+            let rId = null;
+            let calendarData = null;
+
             if (/^\d+$/.test(idOrSlug)) {
-                setResolvedId(idOrSlug);
-                setLookupLoading(false);
-                return;
+                rId = idOrSlug;
+                try {
+                    const { data } = await supabase
+                        .from('calendar')
+                        .select('*')
+                        .ilike('rankedin_url', `%tournament/${idOrSlug}%`)
+                        .maybeSingle();
+                    if (data) calendarData = data;
+                } catch (e) {
+                    console.error('Error fetching calendar for rankedin ID:', e);
+                }
+            } else {
+                try {
+                    const { data, error: sbError } = await supabase
+                        .from('calendar')
+                        .select('*')
+                        .eq('slug', idOrSlug)
+                        .single();
+
+                    if (!sbError && data) {
+                        calendarData = data;
+                        if (data.rankedin_url) {
+                            const match = data.rankedin_url.match(/tournament\/(\d+)/i);
+                            if (match) rId = match[1];
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error resolving slug:', err);
+                }
             }
 
-            try {
-                const { data, error: sbError } = await supabase
-                    .from('calendar')
-                    .select('rankedin_url')
-                    .eq('slug', idOrSlug)
-                    .single();
-
-                if (sbError) throw sbError;
-
-                let rId = null;
-                if (data.rankedin_url) {
-                    const match = data.rankedin_url.match(/tournament\/(\d+)/i);
-                    if (match) rId = match[1];
-                }
-
-                if (rId) {
-                    setResolvedId(rId);
-                } else {
-                    console.error('Could not find RankedIn ID for slug:', idOrSlug);
-                }
-            } catch (err) {
-                console.error('Error resolving slug:', err);
-            } finally {
-                setLookupLoading(false);
+            if (calendarData) {
+                setDbEvent(calendarData);
             }
+
+            if (rId) {
+                setResolvedId(rId);
+            } else {
+                console.error('Could not find RankedIn ID for slug:', idOrSlug);
+            }
+            
+            setLookupLoading(false);
         };
         resolveId();
     }, [idOrSlug]);
@@ -237,7 +254,7 @@ const TournamentDraw = () => {
                 {/* Hero */}
                 <div className="relative h-[20vh] md:h-[30vh] min-h-[250px] w-full overflow-hidden bg-slate-900 flex items-center justify-center">
                     <img
-                        src={`https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${resolvedId}.png`}
+                        src={(dbEvent && getEventImage(dbEvent)) ? getEventImage(dbEvent) : `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${resolvedId}.png`}
                         alt="Tournament Hero"
                         className="absolute inset-0 w-full h-full object-cover opacity-60 contrast-125 saturate-50"
                         onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1554068865-c7211fa4d4ab?q=80&w=1470&auto=format&fit=crop'; }}
