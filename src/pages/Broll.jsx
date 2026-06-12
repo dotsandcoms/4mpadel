@@ -7,7 +7,7 @@ import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { getEventImage } from '../utils/imageUtils';
 import brollLogo from '../assets/BrollLogo.png';
-import PlayerModal from '../components/PlayerModal';
+import RankingDetailsModal from '../components/RankingDetailsModal';
 import * as htmlToImage from 'html-to-image';
 
 const Broll = () => {
@@ -466,6 +466,101 @@ const Broll = () => {
                                             </div>
 
                                             <div className="bg-white/5 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
+                                                {/* Top 3 Podium (Only on page 1 without search) */}
+                                                {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
+                                                <div className="flex items-end justify-center gap-4 sm:gap-8 md:gap-16 px-4 md:px-12 pt-8 md:pt-12 pb-10 border-b border-white/5">
+                                                    {/* Rank 2 */}
+                                                    <div
+                                                    className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+                                                    onClick={() => {
+                                                        if (paginatedData[1].hasLocalProfile && paginatedData[1].playerRecord) {
+                                                            setSelectedPlayer(paginatedData[1].playerRecord);
+                                                        } else {
+                                                            window.open(paginatedData[1].rankedinProfile, '_blank');
+                                                        }
+                                                    }}
+                                                    >
+                                                    <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                                                        <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
+                                                        {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
+                                                            <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-xs font-black text-slate-400 bg-black/40">{getInitials(paginatedData[1].name)}</div>
+                                                        )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center w-full">
+                                                        <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[1].name}</h4>
+                                                        <div className="flex items-center justify-center gap-1.5 mt-1">
+                                                        <p className="text-[10px] sm:text-xs md:text-base font-bold text-slate-400">{paginatedData[1].points.toLocaleString()}</p>
+                                                        </div>
+                                                        <p className="text-[8px] font-black text-slate-500 tracking-widest mt-0.5 uppercase">Points</p>
+                                                    </div>
+                                                    </div>
+
+                                                    {/* Rank 1 */}
+                                                    <div
+                                                    className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
+                                                    onClick={() => {
+                                                        if (paginatedData[0].hasLocalProfile && paginatedData[0].playerRecord) {
+                                                            setSelectedPlayer(paginatedData[0].playerRecord);
+                                                        } else {
+                                                            window.open(paginatedData[0].rankedinProfile, '_blank');
+                                                        }
+                                                    }}
+                                                    >
+                                                    <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
+                                                        <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-[#F40020] text-white flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(244,0,32,0.5)]">1</div>
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-[#F40020] shadow-lg shadow-[#F40020]/20 bg-[#1E293B]">
+                                                        {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
+                                                            <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-sm font-black text-slate-400 bg-black/40">{getInitials(paginatedData[0].name)}</div>
+                                                        )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center w-full">
+                                                        <h4 className="text-[11px] sm:text-sm md:text-xl font-black text-white leading-tight uppercase line-clamp-2 min-h-[26px] sm:min-h-[32px]">{paginatedData[0].name}</h4>
+                                                        <div className="flex items-center justify-center gap-1.5 mt-1">
+                                                        <p className="text-xs sm:text-sm md:text-lg font-bold text-[#F40020]">{paginatedData[0].points.toLocaleString()}</p>
+                                                        </div>
+                                                        <p className="text-[8px] font-black text-slate-500 tracking-widest mt-0.5 uppercase">Points</p>
+                                                    </div>
+                                                    </div>
+
+                                                    {/* Rank 3 */}
+                                                    <div
+                                                    className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
+                                                    onClick={() => {
+                                                        if (paginatedData[2].hasLocalProfile && paginatedData[2].playerRecord) {
+                                                            setSelectedPlayer(paginatedData[2].playerRecord);
+                                                        } else {
+                                                            window.open(paginatedData[2].rankedinProfile, '_blank');
+                                                        }
+                                                    }}
+                                                    >
+                                                    <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
+                                                        <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
+                                                        <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
+                                                        {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
+                                                            <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
+                                                        ) : (
+                                                            <div className="w-full h-full flex items-center justify-center text-xs font-black text-slate-400 bg-black/40">{getInitials(paginatedData[2].name)}</div>
+                                                        )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-center w-full">
+                                                        <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[2].name}</h4>
+                                                        <div className="flex items-center justify-center gap-1.5 mt-1">
+                                                        <p className="text-[10px] sm:text-xs md:text-base font-bold text-slate-400">{paginatedData[2].points.toLocaleString()}</p>
+                                                        </div>
+                                                        <p className="text-[8px] font-black text-slate-500 tracking-widest mt-0.5 uppercase">Points</p>
+                                                    </div>
+                                                    </div>
+                                                </div>
+                                                )}
+
                                                 <div className="overflow-x-auto">
                                                     <table className="w-full text-left border-collapse min-w-full md:min-w-[600px]">
                                                         <thead>
@@ -477,7 +572,7 @@ const Broll = () => {
                                                         </thead>
                                                         <tbody>
                                                             {paginatedData.length > 0 ? (
-                                                                paginatedData.map((player) => (
+                                                                (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(3) : paginatedData).map((player) => (
                                                                     <tr key={player.id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
                                                                         <td className="py-3 px-3 md:py-4 md:px-6 text-xl md:text-2xl font-black text-slate-500 group-hover:text-[#F40020] transition-colors text-center md:text-left">
                                                                             {player.rawRank}
@@ -836,11 +931,11 @@ const Broll = () => {
             {/* Player Modal */}
             <AnimatePresence>
                 {selectedPlayer && (
-                    <PlayerModal
+                    <RankingDetailsModal
                         player={selectedPlayer}
+                        playerRecord={selectedPlayer}
+                        selectedOrgId={16317}
                         onClose={() => setSelectedPlayer(null)}
-                        userEmail={userEmail}
-                        hideSapaRankings={true}
                     />
                 )}
             </AnimatePresence>
