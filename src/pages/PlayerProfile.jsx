@@ -448,11 +448,13 @@ const PlayerProfile = () => {
                         if (!dateStr) return new Date(0);
                         // Handle ISO format (2026-03-13T10:00:00)
                         if (dateStr.includes('T') || dateStr.includes('-')) {
-                            return new Date(dateStr);
+                            const d = new Date(dateStr);
+                            return d.getFullYear() <= 1 ? new Date() : d;
                         }
                         // Handle Rankedin custom format (DD/MM/YYYY HH:MM)
                         const [datePart, timePart] = dateStr.split(' ');
                         const [day, month, year] = datePart.split('/');
+                        if (year === '1' || parseInt(year) <= 1) return new Date();
                         return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
                     };
 
@@ -814,15 +816,22 @@ const PlayerProfile = () => {
     const lossesCount = totalPlayedMatches - winsCount;
     const winRatio = totalPlayedMatches > 0 ? ((winsCount / totalPlayedMatches) * 100).toFixed(1) : "0.0";
     
-    // Extract the Last 5 Matches (chronological: index 4 to index 0)
-    const recentCompleted = completedMatches.slice(0, 5).reverse();
-    const lastFiveForm = recentCompleted.map((match) => {
-        const info = match.Info || {};
-        const isWinner = info.IsWinner !== undefined
-            ? info.IsWinner
-            : info.Challenger?.IsWinner;
-        return isWinner ? 'W' : 'L';
-    });
+    // Extract the Last 5 Matches form
+    let lastFiveForm = [];
+    if (player?.match_form) {
+        // Use the scraped match_form from Rankedin to ensure 1:1 parity
+        lastFiveForm = player.match_form.split(/[\s/]+/).filter(f => f === 'W' || f === 'L');
+    } else {
+        // Fallback to dynamic calculation
+        const recentCompleted = completedMatches.slice(0, 5).reverse();
+        lastFiveForm = recentCompleted.map((match) => {
+            const info = match.Info || {};
+            const isWinner = info.IsWinner !== undefined
+                ? info.IsWinner
+                : info.Challenger?.IsWinner;
+            return isWinner ? 'W' : 'L';
+        });
+    }
 
     if (!player) {
         return (
@@ -1374,6 +1383,10 @@ const PlayerProfile = () => {
                                                 const date = info.Date;
                                                 const isWinner = info.IsWinner !== undefined ? info.IsWinner : info.Challenger?.IsWinner;
                                                 const hasResult = match.Score?.Score && match.Score.Score.length > 0;
+                                                
+                                                const team1Won = info.Challenger?.IsWinner !== undefined ? info.Challenger?.IsWinner : (hasResult && (match.Score.Score.filter(s => s.Score1 > s.Score2).length > match.Score.Score.filter(s => s.Score2 > s.Score1).length));
+                                                const team2Won = info.Challenged?.IsWinner !== undefined ? info.Challenged?.IsWinner : (hasResult && (match.Score.Score.filter(s => s.Score2 > s.Score1).length > match.Score.Score.filter(s => s.Score1 > s.Score2).length));
+
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 space-y-3.5 shadow-lg backdrop-blur-xl group">
@@ -1392,7 +1405,7 @@ const PlayerProfile = () => {
                                                         <div className="flex justify-between items-center gap-4">
                                                             <div className="flex-1 min-w-0 space-y-2">
                                                                 {/* Team 1 */}
-                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
+                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && team1Won ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
                                                                     }`}>
                                                                     <div className="min-w-0 flex-1">
                                                                         <p className="text-[7px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 1</p>
@@ -1401,13 +1414,13 @@ const PlayerProfile = () => {
                                                                             {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                         </p>
                                                                     </div>
-                                                                    {hasResult && isWinner && (
+                                                                    {hasResult && team1Won && (
                                                                         <Trophy size={11} className="text-padel-green shrink-0 animate-pulse mt-3" />
                                                                     )}
                                                                 </div>
 
                                                                 {/* Team 2 */}
-                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && !isWinner ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
+                                                                <div className={`p-2.5 rounded-xl border flex items-start justify-between gap-2 ${hasResult && team2Won ? 'bg-padel-green/[0.05] border-padel-green/30' : 'bg-white/[0.02] border-white/5'
                                                                     }`}>
                                                                     <div className="min-w-0 flex-1">
                                                                         <p className="text-[7px] font-black text-gray-500 uppercase tracking-widest mb-1">Team 2</p>
@@ -1416,7 +1429,7 @@ const PlayerProfile = () => {
                                                                             {info.Challenged1?.Name && ` & ${info.Challenged1.Name}`}
                                                                         </p>
                                                                     </div>
-                                                                    {hasResult && !isWinner && (
+                                                                    {hasResult && team2Won && (
                                                                         <Trophy size={11} className="text-padel-green shrink-0 animate-pulse mt-3" />
                                                                     )}
                                                                 </div>
