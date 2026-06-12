@@ -411,8 +411,13 @@ const TournamentDraw = () => {
                                             </div>
 
                                             {filteredMatches.map((m, idx) => {
+                                                const isPlayed = m.MatchResult?.IsPlayed;
                                                 const score = m.MatchResult?.Score;
                                                 const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
+                                                const hasWinnerWithoutPlay = !isPlayed && typeof m.MatchResult?.IsFirstParticipantWinner === 'boolean';
+                                                const isCancelled = m.Cancellation !== null && m.Cancellation !== undefined;
+                                                const isWalkover = hasWinnerWithoutPlay || isCancelled;
+                                                
                                                 let p1Wins = false;
                                                 let p2Wins = false;
 
@@ -450,7 +455,11 @@ const TournamentDraw = () => {
                                                                 </span>
                                                             </div>
                                                             <div className="flex justify-center -my-3 relative z-10">
-                                                                <span className="bg-slate-900 text-[10px] font-black text-gray-700 px-3 py-1 rounded-full border border-white/5 italic">vs</span>
+                                                                {isWalkover ? (
+                                                                    <span className="bg-orange-500 text-[10px] font-bold text-white px-3 py-1 rounded-full border border-white/5 uppercase tracking-widest shadow-lg">Walkover</span>
+                                                                ) : (
+                                                                    <span className="bg-slate-900 text-[10px] font-black text-gray-700 px-3 py-1 rounded-full border border-white/5 italic">vs</span>
+                                                                )}
                                                             </div>
                                                             <div className="flex justify-between items-center bg-white/5 p-3.5 rounded-2xl border border-white/5">
                                                                 <div className="flex flex-col flex-1 min-w-0 pr-2">
