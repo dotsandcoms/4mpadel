@@ -30,7 +30,9 @@ const GalleryManager = ({ permissions }) => {
         slug: '',
         photographer_name: '',
         photographer_instagram: '',
-        album_date: ''
+        album_date: '',
+        is_featured: false,
+        parent_album_id: ''
     });
 
     // Images State (when selectedAlbum is set)
@@ -116,7 +118,9 @@ const GalleryManager = ({ permissions }) => {
             slug: '',
             photographer_name: '',
             photographer_instagram: '',
-            album_date: ''
+            album_date: '',
+            is_featured: false,
+            parent_album_id: ''
         });
         setEditingAlbum(null);
         setIsAlbumModalOpen(false);
@@ -134,7 +138,9 @@ const GalleryManager = ({ permissions }) => {
             slug: album.slug || '',
             photographer_name: album.photographer_name || '',
             photographer_instagram: album.photographer_instagram || '',
-            album_date: album.album_date ? album.album_date.substring(0, 10) : ''
+            album_date: album.album_date ? album.album_date.substring(0, 10) : '',
+            is_featured: album.is_featured || false,
+            parent_album_id: album.parent_album_id || ''
         });
         setIsAlbumModalOpen(true);
     };
@@ -146,7 +152,8 @@ const GalleryManager = ({ permissions }) => {
             const submissionData = {
                 ...albumFormData,
                 event_id: albumFormData.event_id === '' ? null : albumFormData.event_id,
-                album_date: albumFormData.album_date === '' ? null : albumFormData.album_date
+                album_date: albumFormData.album_date === '' ? null : albumFormData.album_date,
+                parent_album_id: albumFormData.parent_album_id === '' ? null : albumFormData.parent_album_id
             };
 
             if (editingAlbum) {
@@ -467,6 +474,12 @@ const GalleryManager = ({ permissions }) => {
         ? albums.filter(album => allowedAlbums.includes(album.id))
         : albums;
 
+    const sortedDisplayedAlbums = [...displayedAlbums].sort((a, b) => {
+        if (a.is_featured && !b.is_featured) return -1;
+        if (!a.is_featured && b.is_featured) return 1;
+        return 0; // maintain original created_at desc order for the rest
+    });
+
     if (selectedAlbum) {
         return (
             <div className="space-y-6 relative">
@@ -659,7 +672,7 @@ const GalleryManager = ({ permissions }) => {
                 </div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {displayedAlbums.map((album) => (
+                    {sortedDisplayedAlbums.map((album) => (
                         <motion.div
                             key={album.id}
                             initial={{ opacity: 0, scale: 0.95 }}
@@ -683,7 +696,17 @@ const GalleryManager = ({ permissions }) => {
                             </div>
                             <div className="p-5 flex-1 flex flex-col">
                                 <div className="flex justify-between items-start mb-2">
-                                    <h3 className="text-xl font-bold text-white line-clamp-1">{album.title}</h3>
+                                    <div className="flex flex-col gap-1 pr-2">
+                                        <h3 className="text-xl font-bold text-white line-clamp-1">{album.title}</h3>
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            {album.is_featured && (
+                                                <span className="px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400 text-[9px] font-black uppercase tracking-widest border border-yellow-500/30">Featured</span>
+                                            )}
+                                            {album.parent_album_id && (
+                                                <span className="px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[9px] font-black uppercase tracking-widest border border-blue-500/20">Sub-album</span>
+                                            )}
+                                        </div>
+                                    </div>
                                     <div className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter ${album.is_active ? 'bg-green-500/20 text-green-400' : 'bg-gray-500/20 text-gray-400'}`}>
                                         {album.is_active ? 'Active' : 'Hidden'}
                                     </div>
@@ -825,7 +848,7 @@ const GalleryManager = ({ permissions }) => {
                                         </div>
                                         <div>
                                             <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Status</label>
-                                            <div className="flex items-center h-[50px]">
+                                            <div className="flex flex-col gap-3">
                                                 <label className="flex items-center cursor-pointer gap-3">
                                                     <div className="relative">
                                                         <input
@@ -840,8 +863,39 @@ const GalleryManager = ({ permissions }) => {
                                                     </div>
                                                     <span className="text-sm font-bold text-white">{albumFormData.is_active ? 'Active' : 'Hidden'}</span>
                                                 </label>
+                                                
+                                                <label className="flex items-center cursor-pointer gap-3">
+                                                    <div className="relative">
+                                                        <input
+                                                            type="checkbox"
+                                                            name="is_featured"
+                                                            checked={albumFormData.is_featured}
+                                                            onChange={handleAlbumInputChange}
+                                                            className="sr-only"
+                                                        />
+                                                        <div className={`block w-10 h-6 rounded-full transition-colors ${albumFormData.is_featured ? 'bg-yellow-500' : 'bg-gray-600'}`}></div>
+                                                        <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${albumFormData.is_featured ? 'translate-x-4' : ''}`}></div>
+                                                    </div>
+                                                    <span className="text-sm font-bold text-white">Featured Album</span>
+                                                </label>
                                             </div>
                                         </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Parent Album (Optional)</label>
+                                        <select
+                                            name="parent_album_id"
+                                            value={albumFormData.parent_album_id || ''}
+                                            onChange={handleAlbumInputChange}
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none transition-colors appearance-none"
+                                        >
+                                            <option value="">-- Top Level Album --</option>
+                                            {albums.filter(a => !editingAlbum || a.id !== editingAlbum.id).map(a => (
+                                                <option key={a.id} value={a.id}>
+                                                    {a.title} {a.album_date ? `(${a.album_date.substring(0, 10)})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wider">Link to Event (Optional)</label>
@@ -898,19 +952,7 @@ const GalleryManager = ({ permissions }) => {
                                         />
                                         <p className="text-[10px] text-gray-500 mt-1 uppercase font-bold tracking-widest leading-none">Overrides linked event video if set</p>
                                     </div>
-                                    <div className="flex items-center gap-3 bg-black/40 border border-white/10 p-4 rounded-lg">
-                                        <input
-                                            type="checkbox"
-                                            id="is_active"
-                                            name="is_active"
-                                            checked={albumFormData.is_active}
-                                            onChange={handleAlbumInputChange}
-                                            className="w-5 h-5 rounded border-gray-600 text-padel-green focus:ring-padel-green focus:ring-offset-gray-900 bg-gray-700"
-                                        />
-                                        <label htmlFor="is_active" className="text-sm font-medium text-white cursor-pointer">
-                                            Active (Visible to public)
-                                        </label>
-                                    </div>
+
                                     <div className="mt-4 pt-4 border-t border-white/10">
                                         <p className="text-sm text-gray-400">Note: Upon bulk uploading images later, the first image will automatically be set as the cover image if one doesn't exist.</p>
                                     </div>

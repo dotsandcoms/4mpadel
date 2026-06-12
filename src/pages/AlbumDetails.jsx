@@ -10,6 +10,7 @@ import AuthModal from '../components/AuthModal';
 const AlbumDetails = () => {
     const { slug } = useParams();
     const [album, setAlbum] = useState(null);
+    const [childAlbums, setChildAlbums] = useState([]);
     const [images, setImages] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedImageIndex, setSelectedImageIndex] = useState(null);
@@ -53,6 +54,17 @@ const AlbumDetails = () => {
 
                 if (albumError) throw albumError;
                 setAlbum(albumData);
+
+                // Fetch Child Albums
+                const { data: childrenData, error: childrenError } = await supabase
+                    .from('albums')
+                    .select('*')
+                    .eq('parent_album_id', albumData.id)
+                    .order('created_at', { ascending: true });
+                    
+                if (!childrenError) {
+                    setChildAlbums(childrenData || []);
+                }
 
                 // Fetch Images
                 const { data: imagesData, error: imagesError } = await supabase
@@ -280,6 +292,36 @@ const AlbumDetails = () => {
                                 <p className="text-gray-400 text-sm sm:text-lg md:text-xl max-w-3xl font-medium leading-relaxed opacity-60 border-l-[3px] border-padel-green/30 pl-6 md:pl-8 mt-5 md:mt-8 mx-auto">
                                     {album.description}
                                 </p>
+                            )}
+
+                            {childAlbums.length > 0 && (
+                                <div className="mt-8 flex flex-col items-center w-full max-w-5xl mx-auto">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-padel-green" />
+                                        <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">Explore Event Days</p>
+                                        <div className="w-1.5 h-1.5 rounded-full bg-padel-green" />
+                                    </div>
+                                    <div className="flex flex-wrap justify-center gap-3 md:gap-4">
+                                        {childAlbums.map((child) => (
+                                            <Link
+                                                key={child.id}
+                                                to={`/gallery/${child.slug || child.id}`}
+                                                className="group relative overflow-hidden rounded-xl bg-white/5 border border-white/10 hover:border-padel-green/50 hover:bg-white/10 transition-all duration-300 backdrop-blur-xl w-32 sm:w-48 h-20 sm:h-28 flex flex-col items-center justify-center text-center p-2"
+                                            >
+                                                {child.cover_image_url && (
+                                                    <>
+                                                        <img src={child.cover_image_url} alt={child.title} className="absolute inset-0 w-full h-full object-cover opacity-20 group-hover:opacity-40 transition-opacity duration-500 blur-[2px] group-hover:blur-0" />
+                                                        <div className="absolute inset-0 bg-black/60 group-hover:bg-black/40 transition-colors" />
+                                                    </>
+                                                )}
+                                                <h4 className="relative z-10 text-white font-bold text-sm sm:text-lg leading-tight uppercase tracking-wide group-hover:text-padel-green transition-colors">{child.title}</h4>
+                                                {child.album_date && (
+                                                    <p className="relative z-10 text-gray-400 text-[8px] sm:text-[10px] mt-1 font-black uppercase tracking-widest">{new Date(child.album_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
+                                                )}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
 
                             {/* Rankings-style Tab Navigation */}
