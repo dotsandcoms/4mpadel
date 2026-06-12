@@ -1146,48 +1146,52 @@ const PlayerProfile = () => {
                         </div>
 
                         {/* Mobile Horizontally Scrollable Tabs */}
-                        <div className="flex gap-1.5 bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 p-1 rounded-2xl overflow-x-auto no-scrollbar scrollbar-none">
-                            {[
-                                { id: 'events', label: 'My Events' },
-                                { id: 'matches', label: 'My Matches' },
-                                { id: 'rankings', label: 'My Rankings' },
-                                { id: 'payments', label: 'Payments' },
-                                { id: 'profile', label: 'My Profile' },
-                            ].map((tab) => {
-                                const isSelected = activeTab === tab.id;
-                                let activeStyles = '';
-                                let inactiveStyles = '';
+                        <div className="relative">
+                            <div className="flex gap-1.5 bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 p-1 rounded-2xl overflow-x-auto no-scrollbar scrollbar-none pr-8">
+                                {[
+                                    { id: 'events', label: 'My Events' },
+                                    { id: 'matches', label: 'My Matches' },
+                                    { id: 'rankings', label: 'My Rankings' },
+                                    { id: 'payments', label: 'Payments' },
+                                    { id: 'profile', label: 'My Profile' },
+                                ].map((tab) => {
+                                    const isSelected = activeTab === tab.id;
+                                    let activeStyles = '';
+                                    let inactiveStyles = '';
 
-                                if (tab.id === 'events') {
-                                    activeStyles = 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20';
-                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-purple-500/10';
-                                } else if (tab.id === 'matches') {
-                                    activeStyles = 'bg-orange-500 border border-orange-500 text-white shadow-lg shadow-orange-500/20';
-                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-orange-500/10';
-                                } else if (tab.id === 'rankings') {
-                                    activeStyles = 'bg-yellow-500 border border-yellow-500 text-black shadow-lg shadow-yellow-500/20';
-                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-yellow-500/10';
-                                } else if (tab.id === 'payments') {
-                                    activeStyles = 'bg-blue-500 border border-blue-500 text-white shadow-lg shadow-blue-500/20';
-                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-blue-500/10';
-                                } else {
-                                    activeStyles = 'bg-padel-green border border-padel-green text-black shadow-lg shadow-padel-green/20';
-                                    inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-padel-green/10';
-                                }
+                                    if (tab.id === 'events') {
+                                        activeStyles = 'bg-purple-500 border border-purple-500 text-white shadow-lg shadow-purple-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-purple-500/10';
+                                    } else if (tab.id === 'matches') {
+                                        activeStyles = 'bg-orange-500 border border-orange-500 text-white shadow-lg shadow-orange-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-orange-500/10';
+                                    } else if (tab.id === 'rankings') {
+                                        activeStyles = 'bg-yellow-500 border border-yellow-500 text-black shadow-lg shadow-yellow-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-yellow-500/10';
+                                    } else if (tab.id === 'payments') {
+                                        activeStyles = 'bg-blue-500 border border-blue-500 text-white shadow-lg shadow-blue-500/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-blue-500/10';
+                                    } else {
+                                        activeStyles = 'bg-padel-green border border-padel-green text-black shadow-lg shadow-padel-green/20';
+                                        inactiveStyles = 'text-white/70 border border-transparent hover:text-white hover:bg-padel-green/10';
+                                    }
 
-                                return (
-                                    <button
-                                        key={tab.id}
-                                        onClick={() => setActiveTab(tab.id)}
-                                        className={`flex-1 min-w-[90px] whitespace-nowrap text-center py-2 px-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isSelected
-                                            ? activeStyles + ' font-extrabold'
-                                            : inactiveStyles
-                                            }`}
-                                    >
-                                        {tab.label}
-                                    </button>
-                                );
-                            })}
+                                    return (
+                                        <button
+                                            key={tab.id}
+                                            onClick={() => setActiveTab(tab.id)}
+                                            className={`flex-shrink-0 whitespace-nowrap text-center py-2 px-3 sm:px-4 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${isSelected
+                                                ? activeStyles + ' font-extrabold'
+                                                : inactiveStyles
+                                                }`}
+                                        >
+                                            {tab.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                            {/* Visual hint for scrolling */}
+                            <div className="absolute right-0 top-0 bottom-0 w-12 bg-gradient-to-l from-[#0F172A] to-transparent pointer-events-none rounded-r-2xl" />
                         </div>
 
                         {/* Mobile Tab Contents Grid rendering directly underneath */}
