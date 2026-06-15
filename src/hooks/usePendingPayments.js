@@ -46,14 +46,14 @@ export const usePendingPayments = (email, rankedinId) => {
                     if (upcomingREvents.length > 0) {
                         const { data: dbEvents } = await supabase
                             .from('calendar')
-                            .select('id, event_name, start_date, slug, rankedin_url, entry_fee, category_fees');
+                            .select('id, event_name, start_date, slug, rankedin_url, entry_fee, category_fees, allow_payments');
                         
                         if (dbEvents) {
                             upcomingREvents.forEach(re => {
                                 const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${re.id}/`));
                                 if (match) {
                                     const hasFee = match.entry_fee > 0 || (match.category_fees && Object.keys(match.category_fees).length > 0);
-                                    if (hasFee) {
+                                    if (hasFee && match.allow_payments) {
                                         const division = (re.class_name || 'N/A').trim();
                                         unpaidEvents.set(`${match.id}_${division}`, {
                                             id: match.id,
@@ -75,7 +75,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     .select(`
                         event_id,
                         class_name,
-                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug)
+                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments)
                     `)
                     .or(profileId ? `email.ilike.${email},profile_id.eq.${profileId}` : `email.ilike.${email}`)
                     .neq('is_paid', true) // Include false and null
@@ -87,7 +87,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     .select(`
                         event_id,
                         division,
-                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug)
+                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments)
                     `)
                     .ilike('email', email)
                     .in('payment_status', ['pending', 'failed'])
@@ -100,10 +100,10 @@ export const usePendingPayments = (email, rankedinId) => {
                     if (!record.calendar) return;
                     const cal = record.calendar;
                     
-                    // Check if event has a fee
+                    // Check if event has a fee AND allows payments
                     const hasFee = cal.entry_fee > 0 || (cal.category_fees && Object.keys(cal.category_fees).length > 0);
                     
-                    if (hasFee) {
+                    if (hasFee && cal.allow_payments) {
                         const division = (record.class_name || record.division || 'N/A').trim();
                         unpaidEvents.set(`${cal.id}_${division}`, {
                             id: cal.id,
