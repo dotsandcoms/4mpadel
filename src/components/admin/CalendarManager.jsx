@@ -128,7 +128,8 @@ const CalendarManager = () => {
         category_fees: {},
         is_visible: true,
         finance_managed: false,
-        allow_payments: false
+        allow_payments: false,
+        points: '1000'
     });
 
     useEffect(() => {
@@ -426,7 +427,8 @@ const CalendarManager = () => {
             category_fees: {},
             is_visible: true,
             finance_managed: false,
-            allow_payments: false
+            allow_payments: false,
+            points: '1000'
         });
     }
 
@@ -529,7 +531,8 @@ const CalendarManager = () => {
             category_fees: event.category_fees || {},
             is_visible: event.is_visible !== false, // Default to true if undefined
             finance_managed: event.finance_managed || false,
-            allow_payments: event.allow_payments || false
+            allow_payments: event.allow_payments || false,
+            points: event.points || '1000'
         });
         setIsModalOpen(true);
     };
@@ -1442,6 +1445,18 @@ const CalendarManager = () => {
                                             name="registered_players"
                                             value={formData.registered_players}
                                             onChange={handleInputChange}
+                                            className="w-full max-w-[200px] bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Event Points</label>
+                                        <input
+                                            type="number"
+                                            name="points"
+                                            value={formData.points}
+                                            onChange={handleInputChange}
+                                            placeholder="1000"
                                             className="w-full max-w-[200px] bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                         />
                                     </div>
