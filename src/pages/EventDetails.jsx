@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { usePaystackPayment } from 'react-paystack';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -214,6 +214,7 @@ const EventDetails = () => {
 
     // New State for Tabs & Enhanced Data
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
+    const [expandedOverviewCard, setExpandedOverviewCard] = useState(null);
     const [isMobilePlayerInfoOpen, setIsMobilePlayerInfoOpen] = useState(false);
     const [tournamentClasses, setTournamentClasses] = useState([]);
     const [upcomingMatches, setUpcomingMatches] = useState([]);
@@ -530,7 +531,7 @@ const EventDetails = () => {
             // 1b. Check legacy event_registrations table
             let legacyOr = [`email.ilike.${userEmail}`];
             if (userName) legacyOr.push(`partner_name.ilike.%${userName}%`);
-            
+
             const { data: legacyRegs } = await supabase
                 .from('event_registrations')
                 .select('division, payment_status, partner_name, full_name, email')
@@ -579,7 +580,7 @@ const EventDetails = () => {
                     await Promise.all(divisions.map(async (cls) => {
                         const teams = await getTournamentParticipants(rId, cls.Id);
                         const divName = (cls.Name || '').trim();
-                        
+
                         const isMatch = teams.some(t => {
                             const p = t.Participant || t;
                             const players = p.Players || [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
@@ -679,7 +680,7 @@ const EventDetails = () => {
                             .eq('player_id', data.id)
                             .eq('event_id', event.id)
                             .maybeSingle();
-                        
+
                         if (!tempLic) {
                             // No temporary license for this event, override paid_registration to false
                             data.paid_registration = false;
@@ -956,7 +957,7 @@ const EventDetails = () => {
                             div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
                             divisions.push(div);
                         }
-                        
+
                         if (!participantsMap[div.Id]) {
                             participantsMap[div.Id] = [];
                         }
@@ -991,67 +992,67 @@ const EventDetails = () => {
                 setPlayerDivisions(divisions);
                 setParticipants(prev => ({ ...prev, ...participantsMap }));
 
-                    // Gather all player names and Rankedin IDs for bulk database query
-                    const names = new Set();
-                    const rankedInIds = new Set();
+                // Gather all player names and Rankedin IDs for bulk database query
+                const names = new Set();
+                const rankedInIds = new Set();
 
-                    Object.values(participantsMap).forEach(classParticipants => {
-                        if (!classParticipants) return;
-                        classParticipants.forEach(item => {
-                            const p = item.Participant || {};
-                            if (p.Players && p.Players.length > 0) {
-                                p.Players.forEach(player => {
-                                    if (player.Name) names.add(player.Name);
-                                    if (player.RankedinId) rankedInIds.add(player.RankedinId.toString());
-                                    if (player.Id) rankedInIds.add(player.Id.toString());
-                                });
+                Object.values(participantsMap).forEach(classParticipants => {
+                    if (!classParticipants) return;
+                    classParticipants.forEach(item => {
+                        const p = item.Participant || {};
+                        if (p.Players && p.Players.length > 0) {
+                            p.Players.forEach(player => {
+                                if (player.Name) names.add(player.Name);
+                                if (player.RankedinId) rankedInIds.add(player.RankedinId.toString());
+                                if (player.Id) rankedInIds.add(player.Id.toString());
+                            });
+                        }
+                        if (p.FirstPlayer) {
+                            if (p.FirstPlayer.Name) names.add(p.FirstPlayer.Name);
+                            if (p.FirstPlayer.RankedinId) rankedInIds.add(p.FirstPlayer.RankedinId.toString());
+                            if (p.FirstPlayer.Id) rankedInIds.add(p.FirstPlayer.Id.toString());
+                        }
+                        if (p.SecondPlayer) {
+                            if (p.SecondPlayer.Name) names.add(p.SecondPlayer.Name);
+                            if (p.SecondPlayer.RankedinId) rankedInIds.add(p.SecondPlayer.RankedinId.toString());
+                            if (p.SecondPlayer.Id) rankedInIds.add(p.SecondPlayer.Id.toString());
+                        }
+                    });
+                });
+
+                const namesArray = Array.from(names);
+                const idsArray = Array.from(rankedInIds);
+
+                if (namesArray.length > 0 || idsArray.length > 0) {
+                    // Query the Supabase players table for profile photos
+                    const query = supabase.from('players').select('name, image_url, rankedin_id');
+
+                    const filters = [];
+                    if (namesArray.length > 0) {
+                        filters.push(`name.in.(${namesArray.map(n => `"${n.replace(/"/g, '""')}"`).join(',')})`);
+                    }
+                    if (idsArray.length > 0) {
+                        filters.push(`rankedin_id.in.(${idsArray.join(',')})`);
+                    }
+
+                    const { data: dbPlayers, error } = await query.or(filters.join(','));
+
+                    if (!error && dbPlayers) {
+                        const playerMap = {};
+                        dbPlayers.forEach(player => {
+                            if (!player.image_url) return;
+                            if (player.rankedin_id) {
+                                playerMap[player.rankedin_id.toString()] = player.image_url;
                             }
-                            if (p.FirstPlayer) {
-                                if (p.FirstPlayer.Name) names.add(p.FirstPlayer.Name);
-                                if (p.FirstPlayer.RankedinId) rankedInIds.add(p.FirstPlayer.RankedinId.toString());
-                                if (p.FirstPlayer.Id) rankedInIds.add(p.FirstPlayer.Id.toString());
-                            }
-                            if (p.SecondPlayer) {
-                                if (p.SecondPlayer.Name) names.add(p.SecondPlayer.Name);
-                                if (p.SecondPlayer.RankedinId) rankedInIds.add(p.SecondPlayer.RankedinId.toString());
-                                if (p.SecondPlayer.Id) rankedInIds.add(p.SecondPlayer.Id.toString());
+                            if (player.name) {
+                                const key = player.name.toLowerCase().trim();
+                                playerMap[key] = player.image_url;
+                                playerMap[player.name.toLowerCase()] = player.image_url;
                             }
                         });
-                    });
-
-                    const namesArray = Array.from(names);
-                    const idsArray = Array.from(rankedInIds);
-
-                    if (namesArray.length > 0 || idsArray.length > 0) {
-                        // Query the Supabase players table for profile photos
-                        const query = supabase.from('players').select('name, image_url, rankedin_id');
-
-                        const filters = [];
-                        if (namesArray.length > 0) {
-                            filters.push(`name.in.(${namesArray.map(n => `"${n.replace(/"/g, '""')}"`).join(',')})`);
-                        }
-                        if (idsArray.length > 0) {
-                            filters.push(`rankedin_id.in.(${idsArray.join(',')})`);
-                        }
-
-                        const { data: dbPlayers, error } = await query.or(filters.join(','));
-
-                        if (!error && dbPlayers) {
-                            const playerMap = {};
-                            dbPlayers.forEach(player => {
-                                if (!player.image_url) return;
-                                if (player.rankedin_id) {
-                                    playerMap[player.rankedin_id.toString()] = player.image_url;
-                                }
-                                if (player.name) {
-                                    const key = player.name.toLowerCase().trim();
-                                    playerMap[key] = player.image_url;
-                                    playerMap[player.name.toLowerCase()] = player.image_url;
-                                }
-                            });
-                            setFourMPlayers(playerMap);
-                        }
+                        setFourMPlayers(playerMap);
                     }
+                }
             } catch (err) {
                 console.error("Error fetching participants:", err);
             } finally {
@@ -1189,7 +1190,7 @@ const EventDetails = () => {
         selectedDivisions.forEach(div => {
             // Add base entry fee
             entryFeesTotal += getEntryFeeForCategory(div);
-            
+
             // Add partner costs for this division
             const pState = divisionPartners[div];
             if (pState && pState.partnerProfile && pState.payForPartner) {
@@ -1281,7 +1282,7 @@ const EventDetails = () => {
                         }
                         return player;
                     }).filter(p => p.id !== playerProfileData?.id);
-                    
+
                     setDivisionPartners(prev => ({
                         ...prev,
                         [division]: {
@@ -1322,8 +1323,8 @@ const EventDetails = () => {
             }
         }));
     };
-    
-    const handleSelectPartner = (player) => {};
+
+    const handleSelectPartner = (player) => { };
 
     const finalizeRegistrationEmailsAndSync = async (isPaidStatus) => {
         // 1. Send Emails
@@ -1332,7 +1333,7 @@ const EventDetails = () => {
             const partnerName = part.partnerProfile ? part.partnerProfile.name : part.partnerName || 'TBD';
             const entryFee = getEntryFeeForCategory(division);
             const partnerEntryFee = (part.hasPartner && part.payForPartner && part.partnerProfile) ? entryFee : 0;
-            
+
             try {
                 sendEmail(formData.email.trim(), 'event_entry', {
                     playerName: formData.full_name,
@@ -1360,7 +1361,7 @@ const EventDetails = () => {
         const insertParticipant = async (pEmail, pName, targetDivs) => {
             let pId = null;
             let finalEmail = pEmail;
-            
+
             if (pEmail) {
                 const { data: pData } = await supabase.from('players').select('id, email').ilike('email', pEmail).maybeSingle();
                 if (pData) {
@@ -1440,7 +1441,7 @@ const EventDetails = () => {
             const registrationsToUpsert = [];
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division] || {};
-                
+
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
@@ -1466,7 +1467,7 @@ const EventDetails = () => {
             });
 
             const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
-            
+
             // Avoid constraint issues by manually deleting pending entries first
             for (const reg of uniqueRegistrations) {
                 await supabase.from('event_registrations')
@@ -1649,7 +1650,7 @@ const EventDetails = () => {
             const registrationsToUpsert = [];
             selectedDivisions.forEach(division => {
                 const partnerState = divisionPartners[division] || {};
-                
+
                 registrationsToUpsert.push({
                     event_id: event.id,
                     full_name: formData.full_name,
@@ -1675,7 +1676,7 @@ const EventDetails = () => {
             });
 
             const uniqueRegistrations = Array.from(new Map(registrationsToUpsert.map(r => [`${r.email.toLowerCase()}_${r.division}`, r])).values());
-            
+
             // Clear previous entries to avoid constraint clashes
             for (const reg of uniqueRegistrations) {
                 await supabase.from('event_registrations')
@@ -1762,7 +1763,7 @@ const EventDetails = () => {
                     const isFull = partnerState.partnerLicenseChoice === 'full';
                     const licenseAmount = isFull ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE;
                     const existingLicensePayment = paymentsToInsert.find(p => p.player_id === partnerState.partnerProfile.id && (p.payment_type === 'full_license' || p.payment_type === 'temp_license'));
-                    
+
                     if (!existingLicensePayment) {
                         paymentsToInsert.push({
                             player_id: partnerState.partnerProfile.id,
@@ -1778,7 +1779,7 @@ const EventDetails = () => {
                     }
                 }
             });
-            
+
             const { error: payError } = await supabase.from('payments').insert(paymentsToInsert);
             if (payError) {
                 console.error("Payment Record Error:", payError);
@@ -1786,7 +1787,7 @@ const EventDetails = () => {
 
             // Apply licenses to players if paid
             const licensesToGrant = [];
-            
+
             // Player License
             if (playerProfileData && !playerProfileData.paid_registration) {
                 licensesToGrant.push({
@@ -1858,59 +1859,6 @@ const EventDetails = () => {
         );
     }
 
-    const registrationBlock = (isRegistered || isPaid) && (
-        <div className="bg-[#0F172A] rounded-2xl shadow-lg overflow-hidden p-5 border border-white/5 space-y-5">
-            {isRegistered && (
-                <div className="flex flex-col items-center text-center pb-4 border-b border-white/10">
-                    <div className="w-12 h-12 rounded-full bg-[#A3E635]/10 border border-[#A3E635]/25 flex items-center justify-center mb-2.5 relative">
-                        <div className="absolute inset-0 rounded-full bg-[#A3E635]/10 filter blur-md animate-pulse" />
-                        <CheckCircle className="w-6 h-6 text-[#A3E635] relative z-10" />
-                    </div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-[#A3E635] mb-1">Registered on {event?.rankedin_id ? 'RankedIn' : '4M Padel'}</p>
-                    <p className="text-white text-xs font-semibold leading-relaxed max-w-[240px]">You're on the player list! Good luck on the court.</p>
-                </div>
-            )}
-            <div>
-                <p className="text-[9px] font-black uppercase tracking-widest mb-3" style={{ color: theme.fill }}>Your Registration</p>
-                <div className="space-y-1">
-                    {registeredDivisions.length > 0 ? (
-                        registeredDivisions.map((div, i) => (
-                            <div key={i} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
-                                <span className="text-xs font-bold text-white">{div}</span>
-                                {paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()) ? (
-                                    <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: theme.fill + '20', borderColor: theme.fill + '30', color: theme.fill }}>Paid</span>
-                                ) : (
-                                    <button
-                                        onClick={() => { setSelectedDivisions([div]); setRegStep(1); setIsModalOpen(true); }}
-                                        className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
-                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                    >
-                                        Registered
-                                    </button>
-                                )}
-                            </div>
-                        ))
-                    ) : (
-                        <div className="flex items-center justify-between py-2">
-                            <span className="text-xs font-bold text-white">Main Event Entry</span>
-                            {isPaid ? (
-                                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold" style={{ backgroundColor: theme.fill + '20', borderColor: theme.fill + '30', color: theme.fill }}>Paid</span>
-                            ) : (
-                                <button
-                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                    className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full font-bold ${theme.primary}`}
-                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                >
-                                    Registered
-                                </button>
-                            )}
-                        </div>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-
     const handleRankedinRedirect = () => {
         const rId = event?.rankedin_id || extractRankedinId(event?.rankedin_url);
         if (event?.rankedin_url) {
@@ -1922,6 +1870,34 @@ const EventDetails = () => {
             alert('RankedIn registration link is not available for this event.');
         }
     };
+
+    const registrationBlock = (isRegistered || isPaid) && (
+        <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-5 border border-green-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0">
+                    <Check className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-0.5">YOU ARE REGISTERED FOR</p>
+                    <p className="text-lg font-black text-[#0F172A] leading-tight mb-1">
+                        {registeredDivisions.length > 0 ? registeredDivisions.join(' & ') : 'Main Event'}
+                    </p>
+                    <div className="inline-flex items-center">
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-700">
+                            {isPaid ? 'Paid & Confirmed' : 'Registered'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <button
+                onClick={handleRankedinRedirect}
+                className="hidden sm:flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap"
+            >
+                <span className="text-lg leading-none">+</span> Add Division
+            </button>
+        </div>
+    );
 
     const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
@@ -1977,79 +1953,47 @@ const EventDetails = () => {
             {/* ===== MAIN PAGE ===== */}
             <div className="min-h-screen bg-gray-50 font-sans relative">
 
-                {/* Floating nav bar (Placed outside Hero to prevent overflow cutting by Hero's overflow-hidden) */}
-                <div className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4 pt-safe pt-24 md:pt-28">
-                    <Link
-                        to="/calendar"
-                        className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                    </Link>
-
-                    {/* Add to Calendar Button */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                            className="h-9 px-4 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center gap-2 text-white hover:bg-white/40 transition-all shadow-lg text-[10px] font-black uppercase tracking-widest"
-                            title="Add to Calendar / Share"
+                {/* Floating nav bar */}
+                <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center px-4 pt-safe pt-24 md:pt-28 pointer-events-none">
+                    <div className="w-full max-w-7xl flex items-center justify-between">
+                        <Link
+                            to="/calendar"
+                            className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
                         >
-                            <CalendarIcon className="w-3.5 h-3.5 text-white" />
-                            <span>Add to Calendar</span>
-                        </button>
-                        <AnimatePresence>
-                            {isCalendarMenuOpen && (
-                                <motion.div
-                                    initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                    className="absolute top-11 right-0 left-auto w-56 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50 animate-scale-up"
-                                >
-                                    <div className="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                                        <p className="text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md inline-block" style={{ backgroundColor: theme.fill + '20', color: theme.fill }}>Add to Calendar</p>
-                                    </div>
-                                    {[
-                                        { label: 'Google Calendar', color: '#4285F4', fn: handleGoogleCalendar },
-                                        { label: 'Apple Calendar', color: '#999', fn: handleAppleCalendar },
-                                        { label: 'Outlook / Other', color: '#0078D4', fn: handleOutlookCalendar },
-                                    ].map(({ label, color, fn }) => (
-                                        <button
-                                            key={label}
-                                            onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
-                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors text-left"
-                                        >
-                                            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-                                            {label}
-                                        </button>
-                                    ))}
-                                    <div className="border-t border-gray-100 p-2 bg-gray-50/20">
-                                        <button
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(window.location.href);
-                                                toast.success('Link copied!');
-                                                setIsCalendarMenuOpen(false);
-                                            }}
-                                            className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-800 hover:bg-gray-50 transition-colors rounded-xl text-left"
-                                        >
-                                            <Share2 className="w-4 h-4 text-gray-400" /> Copy Link
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
+                            <ArrowLeft className="w-5 h-5" />
+                        </Link>
+
+                        <div className="flex items-center gap-2 pointer-events-auto">
+                            <button
+                                onClick={() => {
+                                    navigator.clipboard.writeText(window.location.href);
+                                    toast.success('Link copied!');
+                                }}
+                                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
+                            >
+                                <Share2 className="w-4 h-4" />
+                            </button>
+                            <button
+                                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
+                            >
+                                <Heart className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
                 {/* ── HERO ── */}
-                <div className="relative w-full h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden bg-[#0F172A]">
-                    {/* Full width foreground flyer image (un-cropped, cover stretched) */}
-                    <img
-                        src={getEventImage(event)}
-                        alt={event.event_name}
-                        className="w-full h-full object-cover object-center animate-fade-in z-0"
-                    />
-
-                    {/* Gradient overlay for blending and text readability */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/10 to-[#0F172A] z-10" />
+                <div className="relative w-full bg-[#0F172A]">
+                    {/* Full width foreground flyer image */}
+                    <div className="absolute inset-0 z-0 h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden">
+                        <img
+                            src={getEventImage(event)}
+                            alt={event.event_name}
+                            className="w-full h-full object-cover object-center animate-fade-in"
+                        />
+                        {/* Gradient overlay for blending and text readability (fading to blue) */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0F172A]/60 to-[#0F172A]" />
+                    </div>
 
                     {/* Live badge */}
                     {isLive && (
@@ -2060,161 +2004,227 @@ const EventDetails = () => {
                         </div>
                     )}
 
-                    {/* Hero text overlay */}
-                    <div className="absolute bottom-0 left-0 right-0 z-20 pb-8 md:pb-10 bg-gradient-to-t from-[#0F172A] via-[#0F172A]/75 to-transparent pt-12">
+                    {/* Hero text overlay & Action Buttons */}
+                    <div className="relative z-50 pt-[55vw] sm:pt-[350px] pb-8">
                         <div className="max-w-5xl mx-auto px-5 w-full flex flex-col md:items-center md:text-center">
                             {event.sapa_status && event.sapa_status !== 'None' && (
-                                <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-3 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
+                                <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
                                     {event.sapa_status}
                                 </span>
                             )}
-                            <h1 className="text-2xl md:text-4xl font-black text-white leading-tight uppercase tracking-tight mb-2 drop-shadow-lg w-full">
+                            <h1 className="text-3xl md:text-5xl font-black text-white leading-tight mb-5 drop-shadow-lg w-full md:text-center text-left">
                                 {event.event_name}
                             </h1>
-                            <div className="flex flex-wrap gap-3 items-center md:justify-center">
-                                <span className="flex items-center gap-1.5 text-white/80 text-xs font-bold">
-                                    <CalendarIcon className="w-3.5 h-3.5" style={{ color: theme.fill }} />
-                                    {event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
-                                </span>
-                                {event.city && (
-                                    <span className="flex items-center gap-1.5 text-white/80 text-xs font-bold">
-                                        <MapPin className="w-3.5 h-3.5" style={{ color: theme.fill }} />
-                                        {event.venue ? `${event.venue}, ` : ''}{event.city}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                {/* ── REGISTRATION / ACTION BAR ── */}
-                {/* Sits right below the hero, navy strip */}
-                <div className="bg-[#0F172A] px-5 py-4 border-b border-white/5">
-                    <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                        {/* Player count pill */}
-                        <div className="flex items-center gap-3">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center border" style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30' }}>
-                                <Users className="w-4 h-4" style={{ color: theme.fill }} />
-                            </div>
-                            <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Registered</p>
-                                <p className="text-base font-black text-white leading-none">{totalPlayersCount} <span className="text-xs text-gray-500 font-bold">players</span></p>
-                            </div>
-                            {event.entry_fee > 0 && (
-                                <>
-                                    <div className="w-px h-8 bg-white/10 mx-2" />
-                                    <div>
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Entry Fee</p>
-                                        <p className="text-base font-black leading-none" style={{ color: theme.fill }}>R{event.entry_fee}</p>
+                            <div className="flex flex-col gap-3 mb-8 md:items-center w-full">
+                                <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                    <CalendarIcon className="w-5 h-5 text-white/70" />
+                                    <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                </div>
+                                {(event.city || event.venue) && (
+                                    <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                        <MapPin className="w-5 h-5 text-white/70" />
+                                        <span>{event.venue ? `${event.venue}, ` : ''}{event.city}</span>
                                     </div>
-                                </>
-                            )}
-                        </div>
+                                )}
+                                <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                    <Users className="w-5 h-5 text-white/70" />
+                                    <span>{totalPlayersCount} Players Registered</span>
+                                </div>
+                            </div>
 
-                        {/* Primary CTAs */}
-                        <div className="flex items-center gap-2.5 w-full sm:w-auto">
-                            {(() => {
-                                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                if (!isEventPassed) {
-                                    if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
+                            {/* Action Buttons Row */}
+                            <div className="flex items-center gap-3 w-full sm:w-auto relative">
+                                {(() => {
+                                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                    if (!isEventPassed) {
+                                        if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
+                                            return (
+                                                <button
+                                                    onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
+                                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                    style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                >
+                                                    <CheckCircle className="w-4 h-4" />
+                                                    <span className="text-[11px] font-black uppercase tracking-widest">{isLive ? 'Registered' : 'Registered'}</span>
+                                                </button>
+                                            );
+                                        }
                                         return (
-                                            <button 
-                                                onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                className={`flex items-center gap-2 px-5 py-3 rounded-xl w-full sm:w-auto justify-center border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`} 
-                                                style={{ backgroundColor: theme.fill + '15', borderColor: theme.fill + '30', color: theme.fill }}
+                                            <>
+                                                {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleRankedinRedirect}
+                                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                    >
+                                                        Register Now <ArrowRight className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                                    <button
+                                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                    >
+                                                        <CreditCard className="w-4 h-4" />
+                                                        Pay Fee
+                                                    </button>
+                                                )}
+                                            </>
+                                        );
+                                    } else if ((hasResults || hasDraw) && (rId || event.slug)) {
+                                        return (
+                                            <Link
+                                                to={`/draws/${event.slug || rId}`}
+                                                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                             >
-                                                <CheckCircle className="w-4 h-4" />
-                                                <span className="text-[10px] font-black uppercase tracking-widest">{isLive ? 'Paid & Registered' : 'Paid & Registered (Add Div)'}</span>
-                                            </button>
+                                                <GitBranch className="w-4 h-4" />
+                                                Draws & Results
+                                            </Link>
                                         );
                                     }
-                                    return (
-                                        <>
-                                            {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleRankedinRedirect}
-                                                    className="flex-1 sm:flex-none text-center text-[10px] font-black uppercase tracking-widest px-6 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
-                                                    style={{ color: '#0F172A' }}
-                                                >
-                                                    Register Now
-                                                </button>
-                                            )}
-                                            {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
-                                                <button
-                                                    onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                >
-                                                    <CreditCard className="w-4 h-4" />
-                                                    Pay Entry Fee
-                                                </button>
-                                            )}
-                                        </>
-                                    );
-                                } else if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                    return (
-                                        <Link
-                                            to={`/draws/${event.slug || rId}`}
-                                            className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest px-6 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                    return null;
+                                })()}
+
+                                {/* Add to Calendar Menu Toggle */}
+                                <button
+                                    onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
+                                >
+                                    <CalendarIcon className="w-4 h-4" />
+                                    <span className="text-[11px] font-black uppercase tracking-widest">Add to Calendar</span>
+                                </button>
+                                <AnimatePresence>
+                                    {isCalendarMenuOpen && (
+                                        <motion.div
+                                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                                            className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-50 animate-scale-up"
                                         >
-                                            <GitBranch className="w-4 h-4" />
-                                            View Draws & Results
-                                        </Link>
-                                    );
-                                }
-                                return null;
-                            })()}
+                                            {[
+                                                {
+                                                    label: 'Google Calendar', fn: handleGoogleCalendar, icon: (
+                                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0">
+                                                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.16v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.16C1.43 8.55 1 10.22 1 12s.43 3.45 1.16 4.93l3.68-2.84z" fill="#FBBC05" />
+                                                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.16 7.07l3.68 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                                                        </svg>
+                                                    )
+                                                },
+                                                {
+                                                    label: 'Apple Calendar', fn: handleAppleCalendar, icon: (
+                                                        <svg viewBox="0 0 384 512" className="w-3.5 h-3.5 flex-shrink-0" fill="#94a3b8">
+                                                            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+                                                        </svg>
+                                                    )
+                                                },
+                                                {
+                                                    label: 'Outlook / Other', fn: handleOutlookCalendar, icon: (
+                                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-[#0078D4]" fill="currentColor">
+                                                            <path d="M1 4.5l8.7-2.6v19.4L1 18.5V4.5z" />
+                                                            <path d="M10.4 2.8h12v18.4h-12V2.8zM14 9c0-.9.7-1.6 1.6-1.6h.8c.9 0 1.6.7 1.6 1.6v6c0 .9-.7 1.6-1.6 1.6h-.8c-.9 0-1.6-.7-1.6-1.6V9z" />
+                                                        </svg>
+                                                    )
+                                                },
+                                            ].map(({ label, icon, fn }) => (
+                                                <button
+                                                    key={label}
+                                                    onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
+                                                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-white hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
+                                                >
+                                                    {icon}
+                                                    {label}
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                {/* ── EVENT DETAILS QUICK SPECS (shown prominently at top of page) ── */}
-                <div className="bg-white border-b border-gray-100 py-4 shadow-sm relative z-30">
-                    <div className="max-w-5xl mx-auto px-5">
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                            {[
-                                { label: 'Date', value: event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC'), icon: CalendarIcon, color: theme.fill },
-                                { label: 'Venue', value: event.venue || 'TBC', icon: MapPin, color: theme.fill },
-                                { label: 'City', value: event.city || 'TBC', icon: Globe, color: theme.fill },
-                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard, color: theme.fill },
-                                { label: 'Organiser', value: event.organizer_name || '4M Padel', icon: User, color: theme.fill },
-                                { label: 'Status', value: isLive ? 'Live Now' : isEventPassed ? 'Completed' : (isRankedinRegistrationClosed ? 'Registration Closed' : 'Upcoming'), icon: AlertCircle, color: isLive ? '#EF4444' : isEventPassed ? '#94A3B8' : (isRankedinRegistrationClosed ? '#F59E0B' : theme.fill) },
-                            ].map(({ label, value, icon: Icon, color }) => (
-                                <div key={label} className="bg-gray-50/50 rounded-xl p-3 border border-gray-100/60 flex flex-col justify-center min-h-[58px]">
-                                    <div className="flex items-center gap-1.5 mb-1.5 text-gray-400">
-                                        <Icon className="w-3.5 h-3.5" style={{ color }} />
-                                        <span className="text-[8px] font-black uppercase tracking-widest">{label}</span>
+                {/* ── WHITE BACKGROUND AREA ── */}
+                <div className="bg-white -mt-6 relative z-30 pt-6 px-4">
+                    <div className="max-w-5xl mx-auto">
+
+                        {/* Quick Stats Card */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 flex divide-x divide-gray-100">
+                            {/* Status block (Custom Style) */}
+                            {(() => {
+                                const computedStatus = (() => {
+                                    if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
+                                    if (isEventPassed) return 'Completed';
+                                    if (isRankedinRegistrationClosed) return 'Registration Closed';
+                                    return 'Registration Open';
+                                })();
+                                return (
+                                    <div className={`flex-1 py-4 flex flex-col items-center justify-center text-center ${theme.accentBg.split(' ')[0]}`}>
+                                        <div className={`flex items-center justify-center gap-1.5 ${theme.accentText} font-semibold text-[10px] tracking-widest uppercase mb-1`}>
+                                            <AlertCircle className="w-3.5 h-3.5" />
+                                            STATUS
+                                        </div>
+                                        <div className="text-[15px] font-medium text-[#0F172A] leading-tight px-2">
+                                            {computedStatus}
+                                        </div>
                                     </div>
-                                    <p className="text-xs font-bold text-[#0F172A] leading-none truncate" title={value}>{value}</p>
+                                );
+                            })()}
+                            {[
+                                { label: 'Players', value: totalPlayersCount, icon: Users },
+                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard },
+                                { label: 'Divisions', value: playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0), icon: Trophy },
+                                { label: 'Points', value: event.points || '1000', icon: Trophy }
+                            ].map(({ label, value, icon: Icon }, idx) => (
+                                <div key={idx} className="flex-1 py-4 flex flex-col items-center justify-center text-center">
+                                    <div className="w-6 h-6 rounded-full flex items-center justify-center mb-1">
+                                        <Icon className={`w-4 h-4 ${theme.accentText}`} />
+                                    </div>
+                                    <p className="text-lg font-black text-[#0F172A] leading-tight">{value}</p>
+                                    <p className="text-[10px] text-gray-500 font-medium">{label}</p>
                                 </div>
                             ))}
                         </div>
+
+                        {/* Registration Status (If any) */}
+                        {registrationBlock && (
+                            <div className="mb-6">
+                                {registrationBlock}
+                            </div>
+                        )}
+                        {readyToCompeteBlock && !registrationBlock && (
+                            <div className="mb-6">
+                                {readyToCompeteBlock}
+                            </div>
+                        )}
+
                     </div>
                 </div>
 
                 {/* ── TAB BAR ── */}
-                <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
-                    <div className="max-w-5xl mx-auto px-4 flex gap-0 overflow-x-auto no-scrollbar">
+                <div className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm px-4">
+                    <div className="max-w-5xl mx-auto flex justify-between w-full overflow-x-auto no-scrollbar">
                         {[
-                            { id: 'overview', label: 'Info', icon: FileText },
-                            { id: 'players', label: 'Players', icon: Users },
-                            { id: 'results', label: hasDraw && !hasResults ? 'Draws' : 'Results', icon: hasDraw && !hasResults ? GitBranch : Trophy },
-                            { id: 'media', label: 'Media', icon: ImageIcon },
-                        ].map(({ id, label, icon: Icon }) => {
-                            const active = activeTab === id;
+                            { id: 'overview', label: 'Overview' },
+                            { id: 'players', label: 'Players' },
+                            { id: 'draws', label: 'Draws' },
+                            { id: 'results', label: 'Results' },
+                            { id: 'media', label: 'Media' },
+                        ].map(({ id, label }) => {
+                            const active = activeTab === id || (id === 'draws' && activeTab === 'results' && hasDraw && !hasResults); // Handling logic
                             return (
                                 <button
                                     key={id}
-                                    onClick={() => setActiveTab(id)}
-                                    className={`flex items-center gap-2 px-5 py-4 text-[11px] font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${active
-                                        ? 'text-[#0F172A]'
+                                    onClick={() => setActiveTab(id === 'draws' && hasDraw && !hasResults ? 'results' : id)}
+                                    className={`flex-1 py-4 text-[15px] font-bold border-b-2 transition-all whitespace-nowrap text-center ${active
+                                        ? 'text-[#0F172A] border-[#0F172A]'
                                         : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
                                         }`}
-                                    style={{ borderBottomColor: active ? theme.fill : 'transparent' }}
                                 >
-                                    <Icon className={`w-4 h-4 ${active ? 'text-[#0F172A]' : ''}`} />
                                     {label}
                                 </button>
                             );
@@ -2235,256 +2245,360 @@ const EventDetails = () => {
 
                             {/* ══ OVERVIEW TAB ══ */}
                             {activeTab === 'overview' && (
-                                <div className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-6">
+                                    <div className="flex flex-col md:flex-row gap-6">
 
-                                    {/* Registration & Compete Blocks at the top */}
-                                    {(registrationBlock || readyToCompeteBlock) && (
-                                        <div className="space-y-5">
-                                            {registrationBlock}
-                                            {readyToCompeteBlock}
+                                        {/* Left Column: Event Information */}
+                                        <div className="flex-1 space-y-6">
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="px-6 py-5 border-b border-gray-50">
+                                                    <h2 className="font-bold text-[#0F172A] text-lg">Event Information</h2>
+                                                </div>
+                                                <div className="divide-y divide-gray-50">
+                                                    {(() => {
+                                                        const computedStatus = (() => {
+                                                            if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
+                                                            if (isEventPassed) return 'Completed';
+                                                            if (isRankedinRegistrationClosed) return 'Registration Closed';
+                                                            return 'Registration Open';
+                                                        })();
+
+                                                        return [
+                                                            { label: 'Venue', value: event.venue || 'Virgin Active Padel Club', icon: MapPin },
+                                                            { label: 'Organiser', value: event.organizer_name || 'VAPC', icon: User },
+                                                            { label: 'Tournament Tier', value: event.sapa_status || 'Gold 1000', icon: Award, valueColor: theme.accentText },
+                                                            { label: 'Status', value: computedStatus, icon: Clock }
+                                                        ].map((item, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                <div className="flex items-center gap-4">
+                                                                    <item.icon className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
+                                                                    <span className="text-[14px] text-gray-700 font-medium">{item.label}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className={`text-[14px] font-medium text-right max-w-[150px] truncate ${item.valueColor || 'text-[#0F172A]'}`}>{item.value}</span>
+                                                                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                                                                </div>
+                                                            </div>
+                                                        ));
+                                                    })()}
+                                                </div>
+                                            </div>
                                         </div>
-                                    )}
 
-                                    {/* Event Info */}
-                                    <div className="space-y-5">
+                                        {/* Right Column: Top Seeds & Divisions */}
+                                        <div className="flex-1 space-y-6">
 
-                                        {/* Event Description */}
-                                        {event.description && (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                                <div
-                                                    onClick={() => toggleSection('about')}
-                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                            <FileText className="w-4 h-4 text-[#0F172A]" />
-                                                        </div>
-                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">About This Event</h2>
-                                                    </div>
-                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.about ? '-rotate-90' : ''}`} />
+                                            {/* Top Seeds */}
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
+                                                    <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
+                                                    <Link to="/rankings" className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                        View Rankings <ChevronRight className="w-4 h-4" />
+                                                    </Link>
                                                 </div>
-                                                <AnimatePresence initial={false}>
-                                                    {!collapsedSections.about && (
-                                                        <motion.div
-                                                            initial={{ height: 0, opacity: 0 }}
-                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                            exit={{ height: 0, opacity: 0 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="overflow-hidden"
-                                                        >
-                                                            <div className="px-6 py-5">
-                                                                <div
-                                                                    className="text-slate-600 leading-relaxed text-sm prose max-w-none"
-                                                                    dangerouslySetInnerHTML={{ __html: event.description }}
-                                                                />
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        )}
+                                                <div className="divide-y divide-gray-50 px-6">
+                                                    {(() => {
+                                                        let seedList = [];
 
-                                        {/* Location & Map */}
-                                        {(event.address || event.venue) && (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                                <div
-                                                    onClick={() => toggleSection('location')}
-                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                            <MapPin className="w-4 h-4 text-[#0F172A]" />
-                                                        </div>
-                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Location</h2>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <a
-                                                            href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
-                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        >
-                                                            Directions
-                                                        </a>
-                                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.location ? '-rotate-90' : ''}`} />
-                                                    </div>
-                                                </div>
-                                                <AnimatePresence initial={false}>
-                                                    {!collapsedSections.location && (
-                                                        <motion.div
-                                                            initial={{ height: 0, opacity: 0 }}
-                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                            exit={{ height: 0, opacity: 0 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="overflow-hidden"
-                                                        >
-                                                            <div className="px-6 py-3 bg-gray-50/30 flex justify-between items-center border-b border-gray-100">
-                                                                <p className="text-sm font-bold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
-                                                                <a
-                                                                    href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
-                                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                                >
-                                                                    Directions
-                                                                </a>
-                                                            </div>
-                                                            <div className="h-[220px] w-full relative">
-                                                                <iframe
-                                                                    width="100%"
-                                                                    height="100%"
-                                                                    frameBorder="0"
-                                                                    scrolling="no"
-                                                                    marginHeight="0"
-                                                                    marginWidth="0"
-                                                                    src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
-                                                                    className="w-full h-full"
-                                                                    title="Event Location"
-                                                                />
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        )}
+                                                        const mensOpenDivs = playerDivisions.filter(d => {
+                                                            const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
+                                                            return name.includes('mens open');
+                                                        });
 
-                                        {/* Sponsors */}
-                                        {event.sponsor_logos && event.sponsor_logos.length > 0 && (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                                <div
-                                                    onClick={() => toggleSection('sponsors')}
-                                                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                            <ImageIcon className="w-4 h-4 text-[#0F172A]" />
-                                                        </div>
-                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Sponsors</h2>
-                                                    </div>
-                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.sponsors ? '-rotate-90' : ''}`} />
-                                                </div>
-                                                <AnimatePresence initial={false}>
-                                                    {!collapsedSections.sponsors && (
-                                                        <motion.div
-                                                            initial={{ height: 0, opacity: 0 }}
-                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                            exit={{ height: 0, opacity: 0 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="overflow-hidden"
-                                                        >
-                                                            <div className="px-6 py-5 grid grid-cols-3 md:grid-cols-4 gap-4">
-                                                                {event.sponsor_logos.map((logo, i) => (
-                                                                    <div key={i} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
-                                                                        <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
-                                                                    </div>
-                                                                ))}
+                                                        const divParticipantsToProcess = mensOpenDivs.length > 0
+                                                            ? mensOpenDivs.map(d => participants[d.Id]).filter(Boolean)
+                                                            : [];
+
+                                                        const seenNames = new Set();
+
+                                                        divParticipantsToProcess.forEach(divParticipants => {
+                                                            divParticipants.forEach(item => {
+                                                                const p = item.Participant || {};
+
+                                                                let individualPlayers = [];
+                                                                if (p.Players && p.Players.length > 0) {
+                                                                    individualPlayers = p.Players;
+                                                                } else if (p.FirstPlayer || p.SecondPlayer) {
+                                                                    if (p.FirstPlayer) individualPlayers.push(p.FirstPlayer);
+                                                                    if (p.SecondPlayer) individualPlayers.push(p.SecondPlayer);
+                                                                } else if (p.Name) {
+                                                                    individualPlayers.push(p);
+                                                                }
+
+                                                                individualPlayers.forEach(player => {
+                                                                    if (player && player.Name && !seenNames.has(player.Name)) {
+                                                                        seenNames.add(player.Name);
+                                                                        const seedVal = p.Seed ? parseInt(p.Seed) : Infinity;
+                                                                        const rankVal = item.Ranking ? parseInt(item.Ranking) : Infinity;
+                                                                        const country = player.Country?.ISOCode || 'za';
+                                                                        seedList.push({ name: player.Name, seed: seedVal, rank: rankVal, country });
+                                                                    }
+                                                                });
+                                                            });
+                                                        });
+
+                                                        if (seedList.length === 0) {
+                                                            return (
+                                                                <div className="py-8 text-center text-gray-400 text-sm">
+                                                                    No ranked players registered yet
+                                                                </div>
+                                                            );
+                                                        }
+
+                                                        seedList.sort((a, b) => {
+                                                            if (a.seed !== Infinity || b.seed !== Infinity) return a.seed - b.seed;
+                                                            return a.rank - b.rank;
+                                                        });
+
+                                                        return seedList.slice(0, 4).map((seed, idx) => (
+                                                            <div key={idx} className="flex items-center justify-between py-4">
+                                                                <div className="flex items-center gap-4">
+                                                                    <span className="font-black text-yellow-500 w-4">{idx + 1}</span>
+                                                                    <span className="font-medium text-[#0F172A] text-[14px] max-w-[160px] truncate" title={seed.name}>{seed.name}</span>
+                                                                </div>
+                                                                {seed.country && (
+                                                                    <img src={`https://flagcdn.com/w40/${seed.country.toLowerCase()}.png`} alt={seed.country} className="w-6 h-auto rounded-sm border border-gray-200" />
+                                                                )}
                                                             </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
+                                                        ));
+                                                    })()}
+                                                </div>
                                             </div>
-                                        )}
+
+                                        </div>
                                     </div>
-
-                                    {/* Weather & Organiser */}
-                                    <div className="space-y-5">
-
-                                        {/* Weather Card */}
-                                        {weather && (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                                <div
-                                                    onClick={() => toggleSection('weather')}
-                                                    className="flex items-center justify-between px-5 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                            <Cloud className="w-4 h-4 text-[#0F172A]" />
-                                                        </div>
-                                                        <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Weather Forecast</h2>
-                                                    </div>
-                                                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.weather ? '-rotate-90' : ''}`} slopes="" />
-                                                </div>
-                                                <AnimatePresence initial={false}>
-                                                    {!collapsedSections.weather && (
-                                                        <motion.div
-                                                            initial={{ height: 0, opacity: 0 }}
-                                                            animate={{ height: 'auto', opacity: 1 }}
-                                                            exit={{ height: 0, opacity: 0 }}
-                                                            transition={{ duration: 0.2 }}
-                                                            className="overflow-hidden"
-                                                        >
-                                                            <div className="px-5 py-4 flex items-center gap-4">
-                                                                <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: theme.fill + '15' }}>
-                                                                    <Cloud className="w-7 h-7 text-[#0F172A]" />
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-2xl font-black text-[#0F172A]">{Math.round(weather.temp)}°C</p>
-                                                                    <p className="text-xs font-bold text-gray-500 capitalize">{weather.condition}</p>
-                                                                    {weather.humidity && <p className="text-[10px] text-gray-400 font-bold mt-0.5">Humidity: {weather.humidity}%</p>}
-                                                                </div>
+                                    <div className="w-full space-y-6">
+                                        {/* Divisions */}
+                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
+                                                <h2 className="font-bold text-[#0F172A] text-lg">Divisions</h2>
+                                                <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                    View All Divisions <ChevronRight className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <div className="divide-y divide-gray-50">
+                                                {playerDivisions.length > 0 ? playerDivisions.map((cls, idx) => {
+                                                    const clsParticipants = participants[cls.Id] || [];
+                                                    return (
+                                                        <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                                                            <div className="flex items-center gap-4">
+                                                                <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
+                                                                <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
                                                             </div>
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-                                            </div>
-                                        )}
-
-                                        {/* Organiser Card */}
-                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
-                                            <div
-                                                onClick={() => toggleSection('organiser')}
-                                                className="flex items-center justify-between px-5 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
-                                            >
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
-                                                        <User className="w-4 h-4 text-[#0F172A]" />
-                                                    </div>
-                                                    <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Organiser</h2>
-                                                </div>
-                                                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.organiser ? '-rotate-90' : ''}`} />
-                                            </div>
-                                            <AnimatePresence initial={false}>
-                                                {!collapsedSections.organiser && (
-                                                    <motion.div
-                                                        initial={{ height: 0, opacity: 0 }}
-                                                        animate={{ height: 'auto', opacity: 1 }}
-                                                        exit={{ height: 0, opacity: 0 }}
-                                                        transition={{ duration: 0.2 }}
-                                                        className="overflow-hidden"
-                                                    >
-                                                        <div className="px-5 py-4 space-y-3">
                                                             <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 rounded-full bg-[#0F172A] flex items-center justify-center font-black text-sm" style={{ color: theme.fill }}>
-                                                                    {(event.organizer_name || '4M').charAt(0)}
-                                                                </div>
-                                                                <p className="font-bold text-[#0F172A] text-sm">{event.organizer_name || '4M Padel'}</p>
+                                                                <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
+                                                                <ChevronRight className="w-4 h-4 text-gray-300" />
                                                             </div>
-                                                            {event.organizer_phone && (
-                                                                <a href={`tel:${event.organizer_phone}`} className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
-                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Phone className="w-3.5 h-3.5" /></div>
-                                                                    {event.organizer_phone}
-                                                                </a>
-                                                            )}
-                                                            {event.organizer_email && (
-                                                                <a href={`mailto:${event.organizer_email}`} className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
-                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Mail className="w-3.5 h-3.5" /></div>
-                                                                    <span className="truncate">{event.organizer_email}</span>
-                                                                </a>
-                                                            )}
-                                                            {event.organizer_website && (
-                                                                <a href={`https://${event.organizer_website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-slate-600 hover:text-[#0F172A] transition-colors">
-                                                                    <div className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center"><Globe className="w-3.5 h-3.5" /></div>
-                                                                    <span className="truncate">{event.organizer_website}</span>
-                                                                </a>
-                                                            )}
                                                         </div>
-                                                    </motion.div>
+                                                    );
+                                                }) : (
+                                                    /* Fallback layout for empty states matching design */
+                                                    [
+                                                        { name: "Men's Open", teams: 24 },
+                                                        { name: "Men's Intermediate", teams: 16 },
+                                                        { name: "Ladies Intermediate", teams: 12 },
+                                                        { name: "Men's 40+", teams: 10 }
+                                                    ].map((div, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                                                            <div className="flex items-center gap-4">
+                                                                <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
+                                                                <span className="font-medium text-[#0F172A] text-[15px]">{div.name}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[13px] text-gray-500 font-medium">{div.teams} Teams</span>
+                                                                <ChevronRight className="w-4 h-4 text-gray-300" />
+                                                            </div>
+                                                        </div>
+                                                    ))
                                                 )}
-                                            </AnimatePresence>
+                                            </div>
                                         </div>
+
+                                        {/* Event Info */}
+                                        <div className="space-y-5">
+
+                                            {/* Event Description */}
+                                            {event.description && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                    <div
+                                                        onClick={() => toggleSection('about')}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                                <FileText className="w-4 h-4 text-[#0F172A]" />
+                                                            </div>
+                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">About This Event</h2>
+                                                        </div>
+                                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.about ? '-rotate-90' : ''}`} />
+                                                    </div>
+                                                    <AnimatePresence initial={false}>
+                                                        {!collapsedSections.about && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                <div className="px-6 py-5">
+                                                                    <div
+                                                                        className="text-slate-600 leading-relaxed text-sm prose max-w-none"
+                                                                        dangerouslySetInnerHTML={{ __html: event.description }}
+                                                                    />
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            )}
+
+                                            {/* Location & Map */}
+                                            {(event.address || event.venue) && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                    <div
+                                                        onClick={() => toggleSection('location')}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                                <MapPin className="w-4 h-4 text-[#0F172A]" />
+                                                            </div>
+                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Location</h2>
+                                                        </div>
+                                                        <div className="flex items-center gap-3">
+                                                            <a
+                                                                href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                onClick={(e) => e.stopPropagation()}
+                                                            >
+                                                                Directions
+                                                            </a>
+                                                            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.location ? '-rotate-90' : ''}`} />
+                                                        </div>
+                                                    </div>
+                                                    <AnimatePresence initial={false}>
+                                                        {!collapsedSections.location && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                <div className="px-6 py-3 bg-gray-50/30 flex justify-between items-center border-b border-gray-100">
+                                                                    <p className="text-sm font-bold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
+                                                                    <a
+                                                                        href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
+                                                                        target="_blank"
+                                                                        rel="noopener noreferrer"
+                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
+                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                    >
+                                                                        Directions
+                                                                    </a>
+                                                                </div>
+                                                                <div className="h-[220px] w-full relative">
+                                                                    <iframe
+                                                                        width="100%"
+                                                                        height="100%"
+                                                                        frameBorder="0"
+                                                                        scrolling="no"
+                                                                        marginHeight="0"
+                                                                        marginWidth="0"
+                                                                        src={`https://maps.google.com/maps?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}&t=&z=15&ie=UTF8&iwloc=&output=embed`}
+                                                                        className="w-full h-full"
+                                                                        title="Event Location"
+                                                                    />
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            )}
+
+                                            {/* Sponsors */}
+                                            {event.sponsor_logos && event.sponsor_logos.length > 0 && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                    <div
+                                                        onClick={() => toggleSection('sponsors')}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                                <ImageIcon className="w-4 h-4 text-[#0F172A]" />
+                                                            </div>
+                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Sponsors</h2>
+                                                        </div>
+                                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.sponsors ? '-rotate-90' : ''}`} />
+                                                    </div>
+                                                    <AnimatePresence initial={false}>
+                                                        {!collapsedSections.sponsors && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                <div className="px-6 py-5 grid grid-cols-3 md:grid-cols-4 gap-4">
+                                                                    {event.sponsor_logos.map((logo, i) => (
+                                                                        <div key={i} className="aspect-[3/2] bg-gray-50 rounded-xl flex items-center justify-center p-3 border border-gray-100 hover:scale-[1.03] transition-transform">
+                                                                            <img src={logo} alt={`Sponsor ${i + 1}`} className="max-w-full max-h-full object-contain" />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            )}
+
+                                            {/* Weather Forecast */}
+                                            {weather && (
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                    <div
+                                                        onClick={() => toggleSection('weather')}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                                <Cloud className="w-4 h-4 text-[#0F172A]" />
+                                                            </div>
+                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Weather Forecast</h2>
+                                                        </div>
+                                                        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.weather ? '-rotate-90' : ''}`} />
+                                                    </div>
+                                                    <AnimatePresence initial={false}>
+                                                        {!collapsedSections.weather && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                <div className="px-6 py-5 flex items-center gap-4">
+                                                                    <div className="w-14 h-14 rounded-xl flex items-center justify-center" style={{ backgroundColor: theme.fill + '15' }}>
+                                                                        <Cloud className="w-7 h-7 text-[#0F172A]" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-2xl font-black text-[#0F172A]">{Math.round(weather.temp)}°C</p>
+                                                                        <p className="text-xs font-bold text-gray-500 capitalize">{weather.condition}</p>
+                                                                        {weather.humidity && <p className="text-[10px] text-gray-400 font-bold mt-0.5">Humidity: {weather.humidity}%</p>}
+                                                                    </div>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
+                                                </div>
+                                            )}
+                                        </div>
+
+
                                     </div>
                                 </div>
                             )}
@@ -2503,7 +2617,7 @@ const EventDetails = () => {
                                             const isExpanded = !!expandedDivisions[cls.Id];
                                             return (
                                                 <div key={cls.Id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                                    <div 
+                                                    <div
                                                         onClick={() => toggleDivision(cls.Id)}
                                                         className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
                                                     >
@@ -2635,36 +2749,39 @@ const EventDetails = () => {
                                 </div>
                             )}
 
-                            {/* ══ RESULTS & DRAWS TAB ══ */}
+                            {/* ══ DRAWS TAB ══ */}
+                            {activeTab === 'draws' && (
+                                <div className="space-y-6">
+                                    {hasDraw || hasResults ? (
+                                        <Link
+                                            to={`/draws/${event.slug || event.rankedin_id || extractRankedinId(event.rankedin_url)}`}
+                                            className="flex items-center justify-between p-6 bg-[#0F172A] rounded-2xl shadow-lg hover:bg-[#0F172A]/90 transition-all group"
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 rounded-xl bg-[#CCFF00]/10 flex items-center justify-center">
+                                                    <GitBranch className="w-6 h-6 text-[#CCFF00]" />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-base font-black text-white uppercase tracking-tight">Tournament Draws</h3>
+                                                    <p className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest mt-0.5">View Live Brackets & Match Results</p>
+                                                </div>
+                                            </div>
+                                            <ArrowRight className="w-5 h-5 text-[#CCFF00] group-hover:translate-x-1 transition-transform" />
+                                        </Link>
+                                    ) : (
+                                        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
+                                            <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
+                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">Draws Coming Soon</h3>
+                                            <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* ══ RESULTS TAB ══ */}
                             {activeTab === 'results' && (
                                 <div className="space-y-6">
-                                    {/* Draws link */}
-                                    {(() => {
-                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                        if (hasDraw || hasResults) {
-                                            return (
-                                                <Link
-                                                    to={`/draws/${event.slug || rId}`}
-                                                    className="flex items-center justify-between p-6 bg-[#0F172A] rounded-2xl shadow-lg hover:bg-[#0F172A]/90 transition-all group"
-                                                >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl bg-[#CCFF00]/10 flex items-center justify-center">
-                                                            <GitBranch className="w-6 h-6 text-[#CCFF00]" />
-                                                        </div>
-                                                        <div>
-                                                            <h3 className="text-base font-black text-white uppercase tracking-tight">Tournament Draws</h3>
-                                                            <p className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest mt-0.5">View Live Brackets & Match Results</p>
-                                                        </div>
-                                                    </div>
-                                                    <ArrowRight className="w-5 h-5 text-[#CCFF00] group-hover:translate-x-1 transition-transform" />
-                                                </Link>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
-
-                                    {/* Winners */}
-                                    {(isEventPassed || hasResults) && (
+                                    {isEventPassed || hasResults ? (
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                             <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100">
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
@@ -2676,20 +2793,22 @@ const EventDetails = () => {
                                                 <div className="divide-y divide-gray-50">
                                                     {winners.map((winner, idx) => (
                                                         <div key={idx} className="px-6 py-5">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block mb-3">{winner.CategoryName}</p>
+                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block mb-3">
+                                                                {winner.CategoryName || winner.className || 'Unknown Division'}
+                                                            </p>
                                                             <div className="space-y-2">
                                                                 <div className="flex items-center justify-between bg-[#CCFF00]/5 border border-[#CCFF00]/20 p-3 rounded-xl">
                                                                     <div>
                                                                         <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">1st Place</p>
-                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || 'TBD'}</p>
+                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || winner.winners || 'TBD'}</p>
                                                                     </div>
                                                                     <span className="text-2xl">🥇</span>
                                                                 </div>
-                                                                {winner.RunnerUp?.Name && (
+                                                                {(winner.RunnerUp?.Name || winner.runnerUp) && (
                                                                     <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
                                                                         <div>
                                                                             <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">2nd Place</p>
-                                                                            <p className="text-sm font-bold text-slate-700">{winner.RunnerUp.Name}</p>
+                                                                            <p className="text-sm font-bold text-slate-700">{winner.RunnerUp?.Name || winner.runnerUp}</p>
                                                                         </div>
                                                                         <span className="text-2xl">🥈</span>
                                                                     </div>
@@ -2705,13 +2824,11 @@ const EventDetails = () => {
                                                 </div>
                                             )}
                                         </div>
-                                    )}
-
-                                    {!hasDraw && !hasResults && !isEventPassed && (
+                                    ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
-                                            <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">Draws Coming Soon</h3>
-                                            <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
+                                            <Trophy className="w-12 h-12 text-gray-200 mb-4" />
+                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Results Yet</h3>
+                                            <p className="text-sm text-gray-400">Tournament results will appear here once matches are completed.</p>
                                         </div>
                                     )}
                                 </div>
@@ -2860,9 +2977,9 @@ const EventDetails = () => {
                                 {/* Modal Header */}
                                 <div className="bg-black/20 backdrop-blur-xl px-6 py-4 flex justify-between items-center border-b border-white/5 sticky top-0 z-10">
                                     <h3 className="text-white font-bold text-lg">
-                                        {regStep === 1 
-                                            ? (calculateTotalAmount() > 0 
-                                                ? `Payment for ${event?.event_name || 'Event'}` 
+                                        {regStep === 1
+                                            ? (calculateTotalAmount() > 0
+                                                ? `Payment for ${event?.event_name || 'Event'}`
                                                 : (isRegistered ? 'Registered' : `Registration for ${event?.event_name || 'Event'}`))
                                             : (isRegistered ? 'Payment Successful' : 'Registration Successful')}
                                     </h3>
@@ -2877,8 +2994,8 @@ const EventDetails = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                                             <div className="col-span-1 space-y-4">
                                                 <div className="md:hidden">
-                                                    <button 
-                                                        type="button" 
+                                                    <button
+                                                        type="button"
                                                         onClick={() => setIsMobilePlayerInfoOpen(!isMobilePlayerInfoOpen)}
                                                         className="w-full bg-[#0F172A] shadow-sm border border-white/10 rounded-xl p-4 flex items-center justify-between transition-colors"
                                                     >
@@ -2893,377 +3010,375 @@ const EventDetails = () => {
                                                 </div>
                                                 <div className={`space-y-4 ${isMobilePlayerInfoOpen ? 'block' : 'hidden md:block'}`}>
                                                     <div className="grid grid-cols-1 gap-3">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
-                                                    <div className="relative group">
-                                                        <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-padel-green transition-colors" size={16} />
-                                                        <input
-                                                            type="text"
-                                                            name="full_name"
-                                                            value={formData.full_name}
-                                                            onChange={handleInputChange}
-                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
-                                                            placeholder="Player Full Name"
-                                                            required
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
-                                                    <div className="relative">
-                                                        <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
-                                                        <input
-                                                            type="email"
-                                                            name="email"
-                                                            value={formData.email}
-                                                            onChange={handleInputChange}
-                                                            className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
-                                                            placeholder="email@example.com"
-                                                            required
-                                                        />
-                                                        {emailCheckStatus === 'checking' && (
-                                                            <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
-                                                        )}
-                                                    </div>
-                                                    {emailCheckStatus === 'not_found' && (
-                                                        <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest bg-red-500/10 py-1.5 px-3 rounded-lg border border-red-500/20 inline-block mt-1">Profile not found. Please create a profile first.</p>
-                                                    )}
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
-                                                    <div className="relative">
-                                                        <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
-                                                        <input
-                                                            type="tel"
-                                                            name="phone"
-                                                            value={formData.phone}
-                                                            onChange={handleInputChange}
-                                                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
-                                                            placeholder="+27 00 000 0000"
-                                                        />
-                                                    </div>
-                                                </div>
-                                                </div>
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between ml-3 mb-1">
-                                                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
-                                                    {registeredDivisions.length > 0 && (
-                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
-                                                            {selectedDivisions.length} / {registeredDivisions.length} Selected
-                                                        </span>
-                                                    )}
-                                                </div>
-
-                                                {isCheckingReg ? (
-                                                    <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
-                                                        <Loader className="w-5 h-5 animate-spin text-padel-green" />
-                                                        <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
-                                                    </div>
-                                                ) : availableDivisions.length > 0 ? (
-                                                    <div className="relative">
-                                                        <div 
-                                                            onClick={() => setIsDivisionsDropdownOpen(!isDivisionsDropdownOpen)}
-                                                            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-h-[50px] flex flex-wrap items-center gap-2 cursor-pointer transition-all hover:border-padel-green/50"
-                                                        >
-                                                            {selectedDivisions.length === 0 ? (
-                                                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Click to select divisions...</span>
-                                                            ) : (
-                                                                selectedDivisions.map(div => (
-                                                                    <span key={div} className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md flex items-center gap-2 ${paidDivisions.includes(div) ? 'bg-padel-green/20 text-padel-green border border-padel-green/30' : 'bg-padel-green text-black'}`}>
-                                                                        {div}
-                                                                        {!paidDivisions.includes(div) && (
-                                                                            <button 
-                                                                                onClick={(e) => {
-                                                                                    e.stopPropagation();
-                                                                                    setSelectedDivisions(prev => prev.filter(d => d !== div));
-                                                                                }}
-                                                                                className="hover:text-red-600 transition-colors"
-                                                                            >
-                                                                                <X size={12} />
-                                                                            </button>
-                                                                        )}
-                                                                    </span>
-                                                                ))
-                                                            )}
-                                                            <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform ${isDivisionsDropdownOpen ? 'rotate-180' : ''}`} />
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
+                                                            <div className="relative group">
+                                                                <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-padel-green transition-colors" size={16} />
+                                                                <input
+                                                                    type="text"
+                                                                    name="full_name"
+                                                                    value={formData.full_name}
+                                                                    onChange={handleInputChange}
+                                                                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                    placeholder="Player Full Name"
+                                                                    required
+                                                                />
+                                                            </div>
                                                         </div>
 
-                                                        {/* The Dropdown Menu */}
-                                                        <AnimatePresence>
-                                                            {isDivisionsDropdownOpen && (
-                                                                <motion.div 
-                                                                    initial={{ opacity: 0, y: -10 }}
-                                                                    animate={{ opacity: 1, y: 0 }}
-                                                                    exit={{ opacity: 0, y: -10 }}
-                                                                    className="absolute z-50 w-full mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
+                                                            <div className="relative">
+                                                                <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
+                                                                <input
+                                                                    type="email"
+                                                                    name="email"
+                                                                    value={formData.email}
+                                                                    onChange={handleInputChange}
+                                                                    className={`w-full bg-white/5 border ${emailCheckStatus === 'not_found' ? 'border-red-500/50' : 'border-white/10'} rounded-xl pl-12 pr-10 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                    placeholder="email@example.com"
+                                                                    required
+                                                                />
+                                                                {emailCheckStatus === 'checking' && (
+                                                                    <Loader className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-gray-400" />
+                                                                )}
+                                                            </div>
+                                                            {emailCheckStatus === 'not_found' && (
+                                                                <p className="text-[9px] text-red-500 font-bold uppercase tracking-widest bg-red-500/10 py-1.5 px-3 rounded-lg border border-red-500/20 inline-block mt-1">Profile not found. Please create a profile first.</p>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
+                                                            <div className="relative">
+                                                                <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
+                                                                <input
+                                                                    type="tel"
+                                                                    name="phone"
+                                                                    value={formData.phone}
+                                                                    onChange={handleInputChange}
+                                                                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-12 pr-4 py-3 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all font-bold placeholder:text-gray-600"
+                                                                    placeholder="+27 00 000 0000"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-3">
+                                                        <div className="flex items-center justify-between ml-3 mb-1">
+                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
+                                                            {registeredDivisions.length > 0 && (
+                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
+                                                                    {selectedDivisions.length} / {registeredDivisions.length} Selected
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {isCheckingReg ? (
+                                                            <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
+                                                                <Loader className="w-5 h-5 animate-spin text-padel-green" />
+                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
+                                                            </div>
+                                                        ) : availableDivisions.length > 0 ? (
+                                                            <div className="relative">
+                                                                <div
+                                                                    onClick={() => setIsDivisionsDropdownOpen(!isDivisionsDropdownOpen)}
+                                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-h-[50px] flex flex-wrap items-center gap-2 cursor-pointer transition-all hover:border-padel-green/50"
                                                                 >
-                                                                    <div className="max-h-[250px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                                                                        {availableDivisions.map(divName => {
-                                                                            const alreadyPaid = paidDivisions.includes(divName);
-                                                                            const isSelected = selectedDivisions.includes(divName);
-                                                                            
-                                                                            return (
-                                                                                <div 
-                                                                                    key={divName}
-                                                                                    onClick={() => {
-                                                                                        if (alreadyPaid) return;
-                                                                                        setSelectedDivisions(prev => 
-                                                                                            prev.includes(divName) 
-                                                                                                ? prev.filter(d => d !== divName)
-                                                                                                : [...prev, divName]
-                                                                                        );
-                                                                                    }}
-                                                                                    className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${
-                                                                                        alreadyPaid ? 'opacity-50 cursor-not-allowed bg-white/5' : 
-                                                                                        isSelected ? 'bg-padel-green/10 text-padel-green' : 
-                                                                                        'hover:bg-white/5 text-white'
-                                                                                    }`}
-                                                                                >
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-all ${
-                                                                                            alreadyPaid ? 'bg-padel-green border-padel-green' :
-                                                                                            isSelected ? 'bg-padel-green border-padel-green' : 'border-white/20'
-                                                                                        }`}>
-                                                                                            {(isSelected || alreadyPaid) && <CheckCircle size={10} className={isSelected && !alreadyPaid ? 'text-black' : 'text-white'} />}
+                                                                    {selectedDivisions.length === 0 ? (
+                                                                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Click to select divisions...</span>
+                                                                    ) : (
+                                                                        selectedDivisions.map(div => (
+                                                                            <span key={div} className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md flex items-center gap-2 ${paidDivisions.includes(div) ? 'bg-padel-green/20 text-padel-green border border-padel-green/30' : 'bg-padel-green text-black'}`}>
+                                                                                {div}
+                                                                                {!paidDivisions.includes(div) && (
+                                                                                    <button
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedDivisions(prev => prev.filter(d => d !== div));
+                                                                                        }}
+                                                                                        className="hover:text-red-600 transition-colors"
+                                                                                    >
+                                                                                        <X size={12} />
+                                                                                    </button>
+                                                                                )}
+                                                                            </span>
+                                                                        ))
+                                                                    )}
+                                                                    <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform ${isDivisionsDropdownOpen ? 'rotate-180' : ''}`} />
+                                                                </div>
+
+                                                                {/* The Dropdown Menu */}
+                                                                <AnimatePresence>
+                                                                    {isDivisionsDropdownOpen && (
+                                                                        <motion.div
+                                                                            initial={{ opacity: 0, y: -10 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            exit={{ opacity: 0, y: -10 }}
+                                                                            className="absolute z-50 w-full mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+                                                                        >
+                                                                            <div className="max-h-[250px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
+                                                                                {availableDivisions.map(divName => {
+                                                                                    const alreadyPaid = paidDivisions.includes(divName);
+                                                                                    const isSelected = selectedDivisions.includes(divName);
+
+                                                                                    return (
+                                                                                        <div
+                                                                                            key={divName}
+                                                                                            onClick={() => {
+                                                                                                if (alreadyPaid) return;
+                                                                                                setSelectedDivisions(prev =>
+                                                                                                    prev.includes(divName)
+                                                                                                        ? prev.filter(d => d !== divName)
+                                                                                                        : [...prev, divName]
+                                                                                                );
+                                                                                            }}
+                                                                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${alreadyPaid ? 'opacity-50 cursor-not-allowed bg-white/5' :
+                                                                                                isSelected ? 'bg-padel-green/10 text-padel-green' :
+                                                                                                    'hover:bg-white/5 text-white'
+                                                                                                }`}
+                                                                                        >
+                                                                                            <div className="flex items-center gap-3">
+                                                                                                <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-all ${alreadyPaid ? 'bg-padel-green border-padel-green' :
+                                                                                                    isSelected ? 'bg-padel-green border-padel-green' : 'border-white/20'
+                                                                                                    }`}>
+                                                                                                    {(isSelected || alreadyPaid) && <CheckCircle size={10} className={isSelected && !alreadyPaid ? 'text-black' : 'text-white'} />}
+                                                                                                </div>
+                                                                                                <span className="text-[11px] font-black uppercase tracking-wider">{divName}</span>
+                                                                                            </div>
+                                                                                            <span className="text-[10px] font-bold">
+                                                                                                {alreadyPaid ? 'PAID' : `R${getEntryFeeForCategory(divName)}`}
+                                                                                            </span>
                                                                                         </div>
-                                                                                        <span className="text-[11px] font-black uppercase tracking-wider">{divName}</span>
-                                                                                    </div>
-                                                                                    <span className="text-[10px] font-bold">
-                                                                                        {alreadyPaid ? 'PAID' : `R${getEntryFeeForCategory(divName)}`}
-                                                                                    </span>
+                                                                                    );
+                                                                                })}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
+                                                            </div>
+                                                        ) : formData.email && (
+                                                            <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
+                                                                <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
+                                                                <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
+                                                                <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
+                                                                    Please ensure you are registered on Rankedin <br />for this specific event.
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        <div className="hidden items-center justify-between bg-[#0F172A] p-5 rounded-2xl border border-white/10 shadow-sm group">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-500">
+                                                                    <Users size={20} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
+                                                                    <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newState = !hasPartner;
+                                                                    setHasPartner(newState);
+                                                                    if (!newState) {
+                                                                        setPartnerProfile(null);
+                                                                        setPartnerSearchResults([]);
+                                                                        setPayForPartner(false);
+                                                                        setFormData(prev => ({ ...prev, partner_name: '' }));
+                                                                    }
+                                                                }}
+                                                                className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-blue-400' : 'bg-white/20'}`}
+                                                            >
+                                                                <span
+                                                                    aria-hidden="true"
+                                                                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                />
+                                                            </button>
+                                                        </div>
+
+                                                        <AnimatePresence>
+                                                            {hasPartner && (
+                                                                <motion.div
+                                                                    initial={{ opacity: 0, height: 0 }}
+                                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                                    exit={{ opacity: 0, height: 0 }}
+                                                                    className="space-y-3"
+                                                                >
+                                                                    <div className="space-y-1.5">
+                                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
+                                                                        <div className="relative group">
+                                                                            <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
+                                                                            <input
+                                                                                type="text"
+                                                                                name="partner_name"
+                                                                                value={formData.partner_name}
+                                                                                onChange={handleInputChange}
+                                                                                autoComplete="off"
+                                                                                className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-base text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all font-bold placeholder:text-gray-600`}
+                                                                                placeholder="Type 2+ characters to search..."
+                                                                            />
+                                                                            {isLookingUpPartner && (
+                                                                                <div className="absolute right-4 top-1/2 -translate-y-1/2">
+                                                                                    <Loader className="w-4 h-4 animate-spin text-blue-400" />
                                                                                 </div>
-                                                                            );
-                                                                        })}
+                                                                            )}
+                                                                            {partnerProfile && !isLookingUpPartner && (
+                                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-400 text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                                    <CheckCircle className="w-3 h-3 fill-current" />
+                                                                                    Found
+                                                                                </div>
+                                                                            )}
+
+                                                                            {/* Search Results Dropdown */}
+                                                                            <AnimatePresence>
+                                                                                {partnerSearchResults.length > 0 && (
+                                                                                    <motion.div
+                                                                                        initial={{ opacity: 0, y: -5 }}
+                                                                                        animate={{ opacity: 1, y: 0 }}
+                                                                                        exit={{ opacity: 0, y: -5 }}
+                                                                                        className="absolute top-full left-0 right-0 mt-1 bg-[#0F172A] rounded-xl border border-white/5 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
+                                                                                    >
+                                                                                        {partnerSearchResults.map((player) => (
+                                                                                            <button
+                                                                                                key={player.id}
+                                                                                                type="button"
+                                                                                                onClick={() => handleSelectPartner(player)}
+                                                                                                className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
+                                                                                            >
+                                                                                                <div className="flex items-center gap-2">
+                                                                                                    <div className="w-6 h-6 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-400 group-hover/item:bg-blue-400 group-hover/item:text-black transition-colors">
+                                                                                                        <User size={12} />
+                                                                                                    </div>
+                                                                                                    <div>
+                                                                                                        <p className="text-xs font-bold text-white">{player.name}</p>
+                                                                                                        <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                                <CheckCircle className="w-3 h-3 text-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                                                                                            </button>
+                                                                                        ))}
+                                                                                    </motion.div>
+                                                                                )}
+                                                                            </AnimatePresence>
+                                                                        </div>
+                                                                        {partnerLookupError && !partnerSearchResults.length && (
+                                                                            <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
+                                                                                {partnerLookupError}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
+
+                                                                    {partnerProfile && (
+                                                                        <>
+                                                                            <motion.div
+                                                                                initial={{ opacity: 0, y: 5 }}
+                                                                                animate={{ opacity: 1, y: 0 }}
+                                                                                className="bg-blue-50 border border-blue-100 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-100 transition-colors"
+                                                                            >
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <div className="w-10 h-10 bg-[#0F172A] rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
+                                                                                        <CreditCard className="w-5 h-5" />
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
+                                                                                        <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                                                                                            Multi-Division Fee Auto-Calculated
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() => setPayForPartner(!payForPartner)}
+                                                                                    className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-blue-400' : 'bg-slate-200'}`}
+                                                                                >
+                                                                                    <span
+                                                                                        aria-hidden="true"
+                                                                                        className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
+                                                                                    />
+                                                                                </button>
+                                                                            </motion.div>
+
+                                                                            <AnimatePresence>
+                                                                                {payForPartner && !partnerProfile.paid_registration && (
+                                                                                    <motion.div
+                                                                                        initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                        animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
+                                                                                        exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                                                                                        className="overflow-hidden"
+                                                                                    >
+                                                                                        <div className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group">
+                                                                                            <div className="flex items-center gap-2">
+                                                                                                <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
+                                                                                                    <CreditCard size={16} />
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
+                                                                                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => setPartnerLicenseChoice('temporary')}
+                                                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                                                >
+                                                                                                    Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                                                </button>
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    onClick={() => setPartnerLicenseChoice('full')}
+                                                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                                                >
+                                                                                                    Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                                                </button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </motion.div>
+                                                                                )}
+                                                                            </AnimatePresence>
+                                                                        </>
+                                                                    )}
                                                                 </motion.div>
                                                             )}
                                                         </AnimatePresence>
-                                                    </div>
-                                                ) : formData.email && (
-                                                    <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
-                                                        <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
-                                                        <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
-                                                        <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
-                                                            Please ensure you are registered on Rankedin <br />for this specific event.
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
 
-                                            <div className="space-y-3">
-                                                <div className="hidden items-center justify-between bg-[#0F172A] p-5 rounded-2xl border border-white/10 shadow-sm group">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-all duration-500">
-                                                            <Users size={20} />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
-                                                            <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const newState = !hasPartner;
-                                                            setHasPartner(newState);
-                                                            if (!newState) {
-                                                                setPartnerProfile(null);
-                                                                setPartnerSearchResults([]);
-                                                                setPayForPartner(false);
-                                                                setFormData(prev => ({ ...prev, partner_name: '' }));
-                                                            }
-                                                        }}
-                                                        className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-300 ease-in-out focus:outline-none ${hasPartner ? 'bg-blue-400' : 'bg-white/20'}`}
-                                                    >
-                                                        <span
-                                                            aria-hidden="true"
-                                                            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow-xl ring-0 transition duration-300 ease-in-out ${hasPartner ? 'translate-x-5' : 'translate-x-0'}`}
-                                                        />
-                                                    </button>
-                                                </div>
-
-                                                <AnimatePresence>
-                                                    {hasPartner && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, height: 0 }}
-                                                            animate={{ opacity: 1, height: 'auto' }}
-                                                            exit={{ opacity: 0, height: 0 }}
-                                                            className="space-y-3"
-                                                        >
-                                                            <div className="space-y-1.5">
-                                                                <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
-                                                                <div className="relative group">
-                                                                    <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
-                                                                    <input
-                                                                        type="text"
-                                                                        name="partner_name"
-                                                                        value={formData.partner_name}
-                                                                        onChange={handleInputChange}
-                                                                        autoComplete="off"
-                                                                        className={`w-full bg-white/5 border ${partnerLookupError ? 'border-red-500' : 'border-white/10'} rounded-xl pl-12 pr-20 py-3 text-base text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20 outline-none transition-all font-bold placeholder:text-gray-600`}
-                                                                        placeholder="Type 2+ characters to search..."
-                                                                    />
-                                                                    {isLookingUpPartner && (
-                                                                        <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                                                                            <Loader className="w-4 h-4 animate-spin text-blue-400" />
-                                                                        </div>
-                                                                    )}
-                                                                    {partnerProfile && !isLookingUpPartner && (
-                                                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-400 text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
-                                                                            <CheckCircle className="w-3 h-3 fill-current" />
-                                                                            Found
-                                                                        </div>
-                                                                    )}
-
-                                                                    {/* Search Results Dropdown */}
-                                                                    <AnimatePresence>
-                                                                        {partnerSearchResults.length > 0 && (
-                                                                            <motion.div
-                                                                                initial={{ opacity: 0, y: -5 }}
-                                                                                animate={{ opacity: 1, y: 0 }}
-                                                                                exit={{ opacity: 0, y: -5 }}
-                                                                                className="absolute top-full left-0 right-0 mt-1 bg-[#0F172A] rounded-xl border border-white/5 shadow-2xl z-[1200] overflow-hidden p-1 max-h-48 overflow-y-auto"
-                                                                            >
-                                                                                {partnerSearchResults.map((player) => (
-                                                                                    <button
-                                                                                        key={player.id}
-                                                                                        type="button"
-                                                                                        onClick={() => handleSelectPartner(player)}
-                                                                                        className="w-full flex items-center justify-between p-2.5 hover:bg-slate-50 rounded-lg transition-all text-left group/item"
-                                                                                    >
-                                                                                        <div className="flex items-center gap-2">
-                                                                                            <div className="w-6 h-6 rounded-full bg-blue-400/20 flex items-center justify-center text-blue-400 group-hover/item:bg-blue-400 group-hover/item:text-black transition-colors">
-                                                                                                <User size={12} />
-                                                                                            </div>
-                                                                                            <div>
-                                                                                                <p className="text-xs font-bold text-white">{player.name}</p>
-                                                                                                <p className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{player.category || 'No Category'}</p>
-                                                                                            </div>
-                                                                                        </div>
-                                                                                        <CheckCircle className="w-3 h-3 text-blue-400 opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                                                                                    </button>
-                                                                                ))}
-                                                                            </motion.div>
-                                                                        )}
-                                                                    </AnimatePresence>
+                                                        {playerProfileData && !playerProfileData.paid_registration && (
+                                                            <motion.div
+                                                                initial={{ opacity: 0, y: 5 }}
+                                                                animate={{ opacity: 1, y: 0 }}
+                                                                className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group mt-3"
+                                                            >
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
+                                                                        <CreditCard size={16} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
+                                                                        <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
+                                                                    </div>
                                                                 </div>
-                                                                {partnerLookupError && !partnerSearchResults.length && (
-                                                                    <p className="text-[9px] text-red-600 font-bold uppercase tracking-widest ml-12 bg-red-50 py-1.5 px-3 rounded-lg border border-red-100 inline-block">
-                                                                        {partnerLookupError}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-
-                                                            {partnerProfile && (
-                                                                <>
-                                                                    <motion.div
-                                                                        initial={{ opacity: 0, y: 5 }}
-                                                                        animate={{ opacity: 1, y: 0 }}
-                                                                        className="bg-blue-50 border border-blue-100 p-4 rounded-[1.5rem] flex items-center justify-between group hover:bg-blue-100 transition-colors"
+                                                                <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setLicenseChoice('temporary')}
+                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="w-10 h-10 bg-[#0F172A] rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
-                                                                                <CreditCard className="w-5 h-5" />
-                                                                            </div>
-                                                                            <div>
-                                                                                <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
-                                                                                <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                                                                                    Multi-Division Fee Auto-Calculated
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => setPayForPartner(!payForPartner)}
-                                                                            className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${payForPartner ? 'bg-blue-400' : 'bg-slate-200'}`}
-                                                                        >
-                                                                            <span
-                                                                                aria-hidden="true"
-                                                                                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-[#0F172A] shadow ring-0 transition duration-200 ease-in-out ${payForPartner ? 'translate-x-5' : 'translate-x-0'}`}
-                                                                            />
-                                                                        </button>
-                                                                    </motion.div>
-
-                                                                    <AnimatePresence>
-                                                                        {payForPartner && !partnerProfile.paid_registration && (
-                                                                            <motion.div
-                                                                                initial={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                animate={{ opacity: 1, height: 'auto', marginTop: 12 }}
-                                                                                exit={{ opacity: 0, height: 0, marginTop: 0 }}
-                                                                                className="overflow-hidden"
-                                                                            >
-                                                                                <div className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group">
-                                                                                    <div className="flex items-center gap-2">
-                                                                                        <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
-                                                                                            <CreditCard size={16} />
-                                                                                        </div>
-                                                                                        <div>
-                                                                                            <p className="text-xs font-bold text-white uppercase tracking-tight">Partner License</p>
-                                                                                            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => setPartnerLicenseChoice('temporary')}
-                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
-                                                                                        >
-                                                                                            Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                                                        </button>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => setPartnerLicenseChoice('full')}
-                                                                                            className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
-                                                                                        >
-                                                                                            Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                                                        </button>
-                                                                                    </div>
-                                                                                </div>
-                                                                            </motion.div>
-                                                                        )}
-                                                                    </AnimatePresence>
-                                                                </>
-                                                            )}
-                                                        </motion.div>
-                                                    )}
-                                                </AnimatePresence>
-
-                                                {playerProfileData && !playerProfileData.paid_registration && (
-                                                    <motion.div
-                                                        initial={{ opacity: 0, y: 5 }}
-                                                        animate={{ opacity: 1, y: 0 }}
-                                                        className="flex items-center justify-between bg-[#0F172A] p-4 rounded-2xl border border-white/10 shadow-sm group mt-3"
-                                                    >
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-blue-500">
-                                                                <CreditCard size={16} />
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-xs font-bold text-white uppercase tracking-tight">License Required</p>
-                                                                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Choose License Type</p>
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex bg-white/10 rounded-full p-1 border border-white/10">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setLicenseChoice('temporary')}
-                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
-                                                            >
-                                                                Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setLicenseChoice('full')}
-                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
-                                                            >
-                                                                Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
-                                                            </button>
-                                                        </div>
-                                                    </motion.div>
-                                                )}
-                                                </div>
+                                                                        Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setLicenseChoice('full')}
+                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                    >
+                                                                        Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
+                                                                    </button>
+                                                                </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </div>
 
@@ -3330,38 +3445,37 @@ const EventDetails = () => {
                                                                                             <div className="relative">
                                                                                                 <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                                                                                                 <input
-                                                                                                        type="text"
-                                                                                                        value={pState.partnerName || ''}
-                                                                                                        onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
-                                                                                                        autoComplete="off"
-                                                                                                        className={`w-full bg-white/5 border ${
-                                                                                                            pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
+                                                                                                    type="text"
+                                                                                                    value={pState.partnerName || ''}
+                                                                                                    onChange={(e) => handlePartnerSearchForDivision(div, e.target.value)}
+                                                                                                    autoComplete="off"
+                                                                                                    className={`w-full bg-white/5 border ${pState.partnerLookupError ? 'border-red-500/50' : 'border-white/10'
                                                                                                         } rounded-lg pl-10 pr-10 py-2.5 text-base text-white focus:border-padel-green focus:ring-1 focus:ring-padel-green/20 outline-none transition-all placeholder:text-gray-600`}
-                                                                                                        placeholder={`Search partner for ${div}...`}
-                                                                                                    />
-                                                                                            {pState.isLookingUpPartner && (
-                                                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                                                                                                    <Loader className="w-3 h-3 animate-spin text-padel-green" />
-                                                                                                </div>
-                                                                                            )}
-                                                                                            {pState.partnerSearchResults?.length > 0 && (
-                                                                                                <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-[1150]">
-                                                                                                    <div className="max-h-48 overflow-y-auto p-1.5 custom-scrollbar space-y-1">
-                                                                                                        {pState.partnerSearchResults.map(player => (
-                                                                                                            <button
-                                                                                                                key={player.id}
-                                                                                                                onClick={() => handleSelectPartnerForDivision(div, player)}
-                                                                                                                className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors group text-left"
-                                                                                                            >
-                                                                                                                <div>
-                                                                                                                    <p className="text-white font-bold text-xs group-hover:text-padel-green transition-colors">{player.name}</p>
-                                                                                                                    <p className="text-gray-500 text-[10px] mt-0.5 line-clamp-1">{player.email}</p>
-                                                                                                                </div>
-                                                                                                            </button>
-                                                                                                        ))}
+                                                                                                    placeholder={`Search partner for ${div}...`}
+                                                                                                />
+                                                                                                {pState.isLookingUpPartner && (
+                                                                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                                                                                                        <Loader className="w-3 h-3 animate-spin text-padel-green" />
                                                                                                     </div>
-                                                                                                </div>
-                                                                                            )}
+                                                                                                )}
+                                                                                                {pState.partnerSearchResults?.length > 0 && (
+                                                                                                    <div className="absolute top-full left-0 right-0 mt-2 bg-[#0F172A] border border-slate-200 rounded-xl shadow-2xl overflow-hidden z-[1150]">
+                                                                                                        <div className="max-h-48 overflow-y-auto p-1.5 custom-scrollbar space-y-1">
+                                                                                                            {pState.partnerSearchResults.map(player => (
+                                                                                                                <button
+                                                                                                                    key={player.id}
+                                                                                                                    onClick={() => handleSelectPartnerForDivision(div, player)}
+                                                                                                                    className="w-full flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors group text-left"
+                                                                                                                >
+                                                                                                                    <div>
+                                                                                                                        <p className="text-white font-bold text-xs group-hover:text-padel-green transition-colors">{player.name}</p>
+                                                                                                                        <p className="text-gray-500 text-[10px] mt-0.5 line-clamp-1">{player.email}</p>
+                                                                                                                    </div>
+                                                                                                                </button>
+                                                                                                            ))}
+                                                                                                        </div>
+                                                                                                    </div>
+                                                                                                )}
                                                                                             </div>
                                                                                         </div>
                                                                                     ) : (
@@ -3509,10 +3623,10 @@ const EventDetails = () => {
                                                                         className={`w-full md:w-auto min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.2em] text-[13px] group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
                                                                     >
                                                                         <span>
-                                                                            {isConfirmedWithoutChanges 
-                                                                                ? 'Registration Confirmed' 
-                                                                                : totalAmt > 0 
-                                                                                    ? 'Pay Now' 
+                                                                            {isConfirmedWithoutChanges
+                                                                                ? 'Registration Confirmed'
+                                                                                : totalAmt > 0
+                                                                                    ? 'Pay Now'
                                                                                     : (isRegistered ? (needsUpdate ? 'Update Registration' : 'Register Now') : 'Register Now')}
                                                                         </span>
                                                                     </button>

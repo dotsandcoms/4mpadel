@@ -486,8 +486,24 @@ export const useRankedin = () => {
                                         if (winningParticipant.SecondPlayer) winnerNames += ` & ${winningParticipant.SecondPlayer.Name}`;
                                     }
 
+                                    let runnerUpParticipant = null;
+                                    if (winningParticipant === p1) runnerUpParticipant = p2;
+                                    else if (winningParticipant === p2) runnerUpParticipant = p1;
+
+                                    let runnerUpNames = null;
+                                    if (runnerUpParticipant) {
+                                        runnerUpNames = runnerUpParticipant.Name;
+                                        if (!runnerUpNames && runnerUpParticipant.FirstPlayer) {
+                                            runnerUpNames = runnerUpParticipant.FirstPlayer.Name;
+                                            if (runnerUpParticipant.SecondPlayer) runnerUpNames += ` & ${runnerUpParticipant.SecondPlayer.Name}`;
+                                        }
+                                    }
+
                                     if (winnerNames) {
                                         winnersList.push({
+                                            CategoryName: cls.Name,
+                                            Winner: { Name: winnerNames },
+                                            RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
                                             className: cls.Name,
                                             drawName: draw.Name,
                                             winners: winnerNames
@@ -501,8 +517,14 @@ export const useRankedin = () => {
                             if (rr && rr.Ranking && rr.Ranking.length > 0) {
                                 const top = rr.Ranking[0];
                                 let winnerNames = top.ParticipantName;
+                                const runnerUp = rr.Ranking.length > 1 ? rr.Ranking[1] : null;
+                                let runnerUpNames = runnerUp ? runnerUp.ParticipantName : null;
+
                                 if (winnerNames) {
                                     winnersList.push({
+                                        CategoryName: cls.Name,
+                                        Winner: { Name: winnerNames },
+                                        RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
                                         className: cls.Name,
                                         drawName: draw.Name,
                                         winners: winnerNames
