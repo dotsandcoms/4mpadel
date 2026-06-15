@@ -656,7 +656,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
 
         {top10.map((player, index) => {
           const isActive = index === activeIndex;
-          const actualRank = index + 1;
+          const actualRank = player.rawRank || index + 1;
           
           return (
             <div
