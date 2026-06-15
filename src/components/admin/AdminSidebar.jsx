@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session }) => {
@@ -11,6 +11,7 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
         { id: 'calendar', label: 'Calendar', icon: Calendar },
         { id: 'event-mgmt', label: 'Event Manager', icon: Trophy },
         { id: 'gallery', label: 'Gallery', icon: ImageIcon },
+        { id: 'email-broadcast', label: 'Email Broadcast', icon: Mail },
         { id: 'finance', label: 'Finance', icon: DollarSign },
         { id: 'blog', label: 'Blog', icon: FileText },
         { id: 'settings', label: 'Settings', icon: Settings },

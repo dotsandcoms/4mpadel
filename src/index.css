@@ -156,3 +156,19 @@ html {
 .animate-blob-3 {
   animation: fluid-blob-3 12s infinite ease-in-out !important;
 }
+/* React Simple WYSIWYG Dark Theme Overrides */
+.wysiwyg-dark-theme .rsw-toolbar {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+.wysiwyg-dark-theme .rsw-btn {
+  color: #E2E8F0 !important;
+}
+.wysiwyg-dark-theme .rsw-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+.wysiwyg-dark-theme .rsw-editor {
+  min-height: 12rem;
+  font-family: inherit;
+  font-size: 0.875rem;
+}

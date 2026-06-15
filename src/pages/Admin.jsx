@@ -11,6 +11,7 @@ import CoachManager from '../components/admin/CoachManager';
 import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
 import EventManagement from '../components/admin/EventManagement';
+import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -374,6 +375,9 @@ const Admin = () => {
                                     )}
                                     {activeTab === 'finance' && (
                                         <FinanceManager />
+                                    )}
+                                    {activeTab === 'email-broadcast' && (
+                                        <EmailBroadcastManager />
                                     )}
                                     {activeTab === 'admin-mgmt' && (
                                         <AdminManager />
