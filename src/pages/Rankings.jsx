@@ -416,94 +416,13 @@ const FullRankingsTable = ({
       <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
         {/* Top 3 Podium (Only on page 1 without search) */}
         {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
-          <div className="flex items-end justify-center gap-4 sm:gap-8 md:gap-16 px-4 md:px-12 pt-8 md:pt-12 pb-10 bg-[#0A0F1D] md:bg-transparent border-b border-white/5">
-            {/* Rank 2 */}
-            <div
-              className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
-              onClick={() => setSelectedPlayer(paginatedData[1])}
-            >
-              <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
-                <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#E4E4E4] text-[#1E293B] flex items-center justify-center font-black text-xs z-10 border border-[#CBD5E1]">2</div>
-                <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#E4E4E4]/50 bg-[#1E293B]">
-                  {paginatedData[1].image && !imageErrors[paginatedData[1].id] ? (
-                    <img src={paginatedData[1].image} alt={paginatedData[1].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[1].id]: true }))} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[1].name)}</div>
-                  )}
-                </div>
-              </div>
-              <div className="text-center w-full">
-                <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[1].name}</h4>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[1].points.toLocaleString()}</p>
-                  <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[1].change > 0 ? 'text-padel-green' : paginatedData[1].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                    {paginatedData[1].change > 0 && `▲ ${paginatedData[1].change}`}
-                    {paginatedData[1].change < 0 && `▼ ${Math.abs(paginatedData[1].change)}`}
-                    {paginatedData[1].change === 0 && `-`}
-                  </span>
-                </div>
-                <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
-              </div>
-            </div>
-
-            {/* Rank 1 */}
-            <div
-              className="w-[35%] md:w-56 flex flex-col items-center -mt-6 cursor-pointer group"
-              onClick={() => setSelectedPlayer(paginatedData[0])}
-            >
-              <div className="relative mb-3 w-20 h-20 sm:w-24 sm:h-24 md:w-40 md:h-40">
-                <div className="absolute -top-2 -left-2 w-7 h-7 rounded bg-padel-green text-black flex items-center justify-center font-black text-sm z-10 shadow-[0_0_15px_rgba(190,255,0,0.5)]">1</div>
-                <div className="w-full h-full rounded-xl overflow-hidden border-[3px] border-padel-green shadow-lg shadow-padel-green/20 bg-[#1E293B]">
-                  {paginatedData[0].image && !imageErrors[paginatedData[0].id] ? (
-                    <img src={paginatedData[0].image} alt={paginatedData[0].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[0].id]: true }))} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(paginatedData[0].name)}</div>
-                  )}
-                </div>
-              </div>
-              <div className="text-center w-full">
-                <h4 className="text-[11px] sm:text-sm md:text-xl font-black text-white leading-tight uppercase line-clamp-2 min-h-[26px] sm:min-h-[32px]">{paginatedData[0].name}</h4>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <p className="text-xs sm:text-sm md:text-lg font-bold text-padel-green">{paginatedData[0].points.toLocaleString()}</p>
-                  <span className={`text-[9px] sm:text-[10px] md:text-sm font-black ${paginatedData[0].change > 0 ? 'text-padel-green' : paginatedData[0].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                    {paginatedData[0].change > 0 && `▲ ${paginatedData[0].change}`}
-                    {paginatedData[0].change < 0 && `▼ ${Math.abs(paginatedData[0].change)}`}
-                    {paginatedData[0].change === 0 && `-`}
-                  </span>
-                </div>
-                <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
-              </div>
-            </div>
-
-            {/* Rank 3 */}
-            <div
-              className="w-[30%] md:w-48 flex flex-col items-center cursor-pointer group"
-              onClick={() => setSelectedPlayer(paginatedData[2])}
-            >
-              <div className="relative mb-2 w-16 h-16 sm:w-20 sm:h-20 md:w-32 md:h-32">
-                <div className="absolute -top-2 -left-2 w-6 h-6 rounded bg-[#B45309] text-white flex items-center justify-center font-black text-xs z-10 border border-[#F59E0B]/50">3</div>
-                <div className="w-full h-full rounded-xl overflow-hidden border-2 border-[#B45309]/50 bg-[#1E293B]">
-                  {paginatedData[2].image && !imageErrors[paginatedData[2].id] ? (
-                    <img src={paginatedData[2].image} alt={paginatedData[2].name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [paginatedData[2].id]: true }))} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-xs font-black text-gray-400 bg-black/40">{getInitials(paginatedData[2].name)}</div>
-                  )}
-                </div>
-              </div>
-              <div className="text-center w-full">
-                <h4 className="text-[10px] sm:text-xs md:text-base font-black text-white leading-tight uppercase line-clamp-2 min-h-[24px] sm:min-h-[28px]">{paginatedData[2].name}</h4>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <p className="text-[10px] sm:text-xs md:text-base font-bold text-gray-400">{paginatedData[2].points.toLocaleString()}</p>
-                  <span className={`text-[9px] sm:text-[10px] md:text-xs font-black ${paginatedData[2].change > 0 ? 'text-padel-green' : paginatedData[2].change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                    {paginatedData[2].change > 0 && `▲ ${paginatedData[2].change}`}
-                    {paginatedData[2].change < 0 && `▼ ${Math.abs(paginatedData[2].change)}`}
-                    {paginatedData[2].change === 0 && `-`}
-                  </span>
-                </div>
-                <p className="text-[8px] font-black text-gray-600 tracking-widest mt-0.5 uppercase">Points</p>
-              </div>
-            </div>
-          </div>
+          <PodiumCoverflow 
+            data={paginatedData} 
+            onPlayerClick={setSelectedPlayer} 
+            imageErrors={imageErrors} 
+            setImageErrors={setImageErrors} 
+            getInitials={getInitials}
+          />
         )}
 
         {/* Desktop Table View */}
@@ -681,6 +600,134 @@ const FullRankingsTable = ({
     </div>
   );
 };
+
+
+const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, getInitials }) => {
+  const scrollRef = React.useRef(null);
+  const [activeIndex, setActiveIndex] = React.useState(0);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const scrollLeft = scrollRef.current.scrollLeft;
+    const containerWidth = scrollRef.current.clientWidth;
+    const centerPosition = scrollLeft + containerWidth / 2;
+
+    let minDistance = Infinity;
+    let newIndex = 0;
+    
+    Array.from(scrollRef.current.children).forEach((child) => {
+      const idxStr = child.getAttribute('data-index');
+      if (idxStr === null) return;
+      const idx = parseInt(idxStr);
+      const childCenter = child.offsetLeft + child.offsetWidth / 2;
+      const distance = Math.abs(centerPosition - childCenter);
+      if (distance < minDistance) {
+        minDistance = distance;
+        newIndex = idx;
+      }
+    });
+
+    if (newIndex !== activeIndex) setActiveIndex(newIndex);
+  };
+
+  // Center the first item on mount
+  React.useEffect(() => {
+    // slight delay to ensure layout is done
+    setTimeout(() => handleScroll(), 100);
+  }, [data]);
+
+  if (!data || data.length === 0) return null;
+
+  const top10 = data.slice(0, 10);
+
+  return (
+    <div className="relative w-full bg-[#0A0F1D] md:bg-transparent border-b border-white/5 py-8 md:py-12 overflow-hidden">
+      <div 
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center"
+        style={{ scrollBehavior: 'smooth' }}
+      >
+        {/* Left padding to center the first item */}
+        <div className="w-[calc(50vw-80px)] md:w-[calc(50%-112px)] flex-shrink-0" />
+
+        {top10.map((player, index) => {
+          const isActive = index === activeIndex;
+          const actualRank = index + 1;
+          
+          return (
+            <div
+              key={player.id || index}
+              data-index={index}
+              className={`flex-shrink-0 snap-center transition-all duration-300 ease-in-out cursor-pointer mx-2 md:mx-4
+                ${isActive ? 'w-[160px] md:w-[224px] scale-100 z-10 opacity-100' : 'w-[140px] md:w-[192px] scale-90 opacity-60 hover:opacity-80 z-0'}`}
+              onClick={() => {
+                if (!isActive && scrollRef.current) {
+                  const child = scrollRef.current.children[index + 1]; // +1 because of padding div
+                  if (child) {
+                     scrollRef.current.scrollTo({
+                       left: child.offsetLeft - scrollRef.current.clientWidth / 2 + child.offsetWidth / 2,
+                       behavior: 'smooth'
+                     });
+                  }
+                } else {
+                  onPlayerClick(player);
+                }
+              }}
+            >
+              <div className={`relative mb-3 w-full aspect-square rounded-xl overflow-hidden transition-all duration-300
+                  ${isActive ? 'border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border-2 border-gray-600/50'}`}>
+                
+                <div className={`absolute -top-1 -left-1 w-7 h-7 rounded flex items-center justify-center font-black text-xs z-10 transition-colors
+                    ${isActive ? 'bg-padel-green text-black' : 'bg-gray-700 text-white'}`}>
+                  {actualRank}
+                </div>
+                
+                <div className="w-full h-full bg-[#1E293B]">
+                  {player.image && !imageErrors[player.id] ? (
+                    <img src={player.image} alt={player.name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(player.name)}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-center w-full">
+                <h4 className={`font-black text-white leading-tight uppercase line-clamp-2 transition-all
+                  ${isActive ? 'text-xs md:text-lg min-h-[32px]' : 'text-[10px] md:text-sm min-h-[28px]'}`}>
+                  {player.name}
+                </h4>
+                <div className="flex items-center justify-center gap-1.5 mt-1">
+                  <p className={`font-bold transition-all ${isActive ? 'text-padel-green text-sm md:text-base' : 'text-gray-400 text-xs md:text-sm'}`}>
+                    {player.points.toLocaleString()}
+                  </p>
+                  <span className={`font-black transition-all ${isActive ? 'text-[10px] md:text-xs' : 'text-[9px] md:text-[10px]'} 
+                    ${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                    {player.change > 0 && `▲ ${player.change}`}
+                    {player.change < 0 && `▼ ${Math.abs(player.change)}`}
+                    {player.change === 0 && `-`}
+                  </span>
+                </div>
+                <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Right padding to center the last item */}
+        <div className="w-[calc(50vw-80px)] md:w-[calc(50%-112px)] flex-shrink-0" />
+      </div>
+      
+      {/* Scroll Hint */}
+      <div className="absolute bottom-2 left-0 w-full text-center pointer-events-none">
+        <p className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center justify-center gap-2">
+          <span>&larr;</span> Swipe to explore Top 10 <span>&rarr;</span>
+        </p>
+      </div>
+    </div>
+  );
+};
+
 
 const Rankings = () => {
   const { getOrganisationRankings } = useRankedin();
