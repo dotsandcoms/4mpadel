@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Calendar, Check, ChevronRight } from 'lucide-react';
-import { usePaystackPayment } from 'react-paystack';
+import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
@@ -124,10 +124,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
         };
     };
 
-    const handleFullLicensePay = usePaystackPayment(getConfig(FEES.FULL_LICENSE));
-    const handleTemporaryLicensePay = usePaystackPayment(getConfig(FEES.TEMPORARY_LICENSE));
-
-    const runPayment = (paymentFn, licenseType) => {
+    const runPayment = async (amountInRands, licenseType) => {
         setError(null);
         if (licenseType === 'temporary' && selectedEventId) {
             const hasLicense = existingLicenses.includes(selectedEventId.toString());
@@ -137,7 +134,11 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             }
         }
         setLoading(true);
-        paymentFn({
+
+        const paystackPop = new PaystackPop();
+        
+        await paystackPop.checkout({
+            ...getConfig(amountInRands),
             onSuccess: async () => {
                 let successCallback = onPaymentSuccess;
 
@@ -167,7 +168,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                     licenseType
                 );
             },
-            onClose: () => setLoading(false),
+            onCancel: () => setLoading(false),
         });
     };
 
@@ -211,7 +212,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
 
                         <div className="space-y-3">
                             <button
-                                onClick={() => runPayment(handleFullLicensePay, 'full')}
+                                onClick={() => runPayment(FEES.FULL_LICENSE, 'full')}
                                 disabled={loading || !isPaystackConfigured()}
                                 className="w-full flex items-center justify-between p-4 rounded-xl bg-padel-green/20 border border-padel-green/50 hover:bg-padel-green/30 transition-all group"
                             >
@@ -233,7 +234,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
                                     onClick={() => {
                                         if (showTempOptions) {
                                             if (selectedEventId) {
-                                                runPayment(handleTemporaryLicensePay, 'temporary');
+                                                runPayment(FEES.TEMPORARY_LICENSE, 'temporary');
                                             }
                                         } else {
                                             setShowTempOptions(true);

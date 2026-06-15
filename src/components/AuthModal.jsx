@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { usePaystackPayment } from 'react-paystack';
+import PaystackPop from '@paystack/inline-js';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
 import { useClubs } from '../hooks/useClubs';
@@ -347,7 +347,15 @@ const AuthModal = ({ isOpen, onClose }) => {
                 setLoading(false);
             } else {
                 console.log(`Initializing Paystack for ${formatCurrency(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE)} Registration...`);
-                handlePaystackPayment({
+                const paystackPop = new PaystackPop();
+                await paystackPop.checkout({
+                    key: PAYSTACK_PUBLIC_KEY,
+                    reference: (new Date()).getTime().toString(),
+                    email: email,
+                    amount: toPaystackAmount(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE),
+                    currency: 'ZAR',
+                    firstname: firstName,
+                    lastname: lastName,
                     onSuccess: async (reference) => {
                         console.log('Payment successful. Reference:', reference);
 
@@ -379,7 +387,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                         showMessage('Payment and Registration successful! Welcome to 4m Padel.', 'success');
                         setLoading(false);
                     },
-                    onClose: () => {
+                    onCancel: () => {
                         showMessage('Registration successful, but payment was cancelled. You can pay later from your profile.', 'error');
                         setLoading(false);
                     }
@@ -388,17 +396,7 @@ const AuthModal = ({ isOpen, onClose }) => {
         }
     };
 
-    const paystackConfig = {
-        reference: (new Date()).getTime().toString(),
-        email: email,
-        amount: toPaystackAmount(paymentOption === 'temporary' ? FEES.TEMPORARY_LICENSE : FEES.FULL_LICENSE),
-        publicKey: PAYSTACK_PUBLIC_KEY,
-        currency: 'ZAR',
-        firstname: firstName,
-        lastname: lastName,
-    };
 
-    const handlePaystackPayment = usePaystackPayment(paystackConfig);
 
     if (!isOpen) return null;
 

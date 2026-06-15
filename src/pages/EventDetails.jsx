@@ -6,7 +6,7 @@ import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
-import { usePaystackPayment } from 'react-paystack';
+import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
@@ -1211,34 +1211,7 @@ const EventDetails = () => {
         return total;
     };
 
-    const [firstname, ...lastnameParts] = (formData.full_name || '').split(' ');
-    const lastname = lastnameParts.join(' ');
 
-    const paystackConfig = {
-        reference: paymentReference || `REGEV-${event?.id}-${Date.now()}`,
-        email: formData.email,
-        firstname: firstname || '',
-        lastname: lastname || '',
-        amount: toPaystackAmount(calculateTotalAmount()),
-        currency: 'ZAR',
-        publicKey: PAYSTACK_PUBLIC_KEY,
-        metadata: {
-            event_id: event?.id,
-            event_name: event?.event_name,
-            full_name: formData.full_name,
-            partner_name: formData.partner_name,
-            partner_id: partnerProfile?.id,
-            division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
-            is_test: isTestMode,
-            includes_license: playerProfileData && !playerProfileData.paid_registration,
-            license_type: licenseChoice,
-            paying_for_partner: hasPartner && payForPartner,
-            partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
-            partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
-        }
-    };
-
-    const initializePayment = usePaystackPayment(paystackConfig);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -1500,7 +1473,7 @@ const EventDetails = () => {
         }
     };
 
-    const handlePayNow = () => {
+    const handlePayNow = async () => {
         // Validation
         if (!formData.full_name.trim() || !formData.email.trim()) {
             toast.error('Please fill in your name and email.');
@@ -1517,9 +1490,35 @@ const EventDetails = () => {
             return;
         }
 
-        initializePayment({
+        const [firstname, ...lastnameParts] = (formData.full_name || '').split(' ');
+        const lastname = lastnameParts.join(' ');
+
+        const paystackPop = new PaystackPop();
+
+        await paystackPop.checkout({
+            key: PAYSTACK_PUBLIC_KEY,
+            reference: paymentReference || `REGEV-${event?.id}-${Date.now()}`,
+            email: formData.email,
+            firstname: firstname || '',
+            lastname: lastname || '',
+            amount: toPaystackAmount(calculateTotalAmount()),
+            currency: 'ZAR',
+            metadata: {
+                event_id: event?.id,
+                event_name: event?.event_name,
+                full_name: formData.full_name,
+                partner_name: formData.partner_name,
+                partner_id: partnerProfile?.id,
+                division: selectedDivisions.length > 0 ? selectedDivisions.join(', ') : formData.division,
+                is_test: isTestMode,
+                includes_license: playerProfileData && !playerProfileData.paid_registration,
+                license_type: licenseChoice,
+                paying_for_partner: hasPartner && payForPartner,
+                partner_needs_license: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration,
+                partner_license_type: hasPartner && payForPartner && partnerProfile && !partnerProfile.paid_registration ? partnerLicenseChoice : null
+            },
             onSuccess: (ref) => handlePaymentSuccess(ref),
-            onClose: () => {
+            onCancel: () => {
                 console.log("Paystack payment cancelled.");
                 toast.info('Payment cancelled.');
             }
