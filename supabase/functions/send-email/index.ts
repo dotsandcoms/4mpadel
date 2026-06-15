@@ -30,13 +30,10 @@ function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: s
               <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #0F172A; border: 1px solid rgba(255,255,255,0.05); border-radius: 24px; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);">
                 <!-- Header Banner -->
                 <tr>
-                  <td style="background: linear-gradient(135deg, #0F172A, #020617); padding: 40px 40px 20px 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #FFFFFF; font-style: italic; text-transform: uppercase; font-family: 'Impact', 'Arial Black', sans-serif;">
-                      4M <span style="color: #9AE900;">PADEL</span>
-                    </div>
-                    <div style="font-size: 8px; font-weight: 900; letter-spacing: 4px; color: #94A3B8; text-transform: uppercase; margin-top: 4px; font-family: 'Inter', sans-serif;">
-                      South Africa
-                    </div>
+                  <td style="background: linear-gradient(135deg, #0F172A, #020617); padding: 40px 40px 30px 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <a href="https://4mpadel.co.za" target="_blank" style="text-decoration: none; display: inline-block;">
+                      <img src="https://4mpadel.co.za/favicon.png" alt="4M Padel Logo" style="height: 45px; width: auto; display: block; margin: 0 auto; border: 0;" />
+                    </a>
                   </td>
                 </tr>
                 <!-- Content Body -->
