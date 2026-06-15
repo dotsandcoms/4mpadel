@@ -1956,18 +1956,31 @@ const EventDetails = () => {
                 {/* Floating nav bar */}
                 <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center px-4 pt-safe pt-24 md:pt-28 pointer-events-none">
                     <div className="w-full max-w-7xl flex items-center justify-between">
-                        <Link
-                            to="/calendar"
-                            className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg"
+                        <button
+                            onClick={() => window.history.back()}
+                            className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
                         >
                             <ArrowLeft className="w-5 h-5" />
-                        </Link>
+                        </button>
 
                         <div className="flex items-center gap-2 pointer-events-auto">
                             <button
-                                onClick={() => {
-                                    navigator.clipboard.writeText(window.location.href);
-                                    toast.success('Link copied!');
+                                onClick={async () => {
+                                    if (navigator.share) {
+                                        try {
+                                            await navigator.share({
+                                                title: event.event_name,
+                                                url: window.location.href
+                                            });
+                                        } catch (err) {
+                                            console.log("Error sharing", err);
+                                        }
+                                    } else if (navigator.clipboard) {
+                                        navigator.clipboard.writeText(window.location.href);
+                                        toast.success('Link copied!');
+                                    } else {
+                                        toast.error('Sharing not supported on this browser');
+                                    }
                                 }}
                                 className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
                             >
@@ -2034,7 +2047,7 @@ const EventDetails = () => {
                             </div>
 
                             {/* Action Buttons Row */}
-                            <div className="flex items-center gap-3 w-full sm:w-auto relative">
+                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto relative">
                                 {(() => {
                                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                     if (!isEventPassed) {
@@ -2056,15 +2069,15 @@ const EventDetails = () => {
                                                     <button
                                                         type="button"
                                                         onClick={handleRankedinRedirect}
-                                                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                        className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                                                     >
                                                         Register Now <ArrowRight className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase())))) && (
+                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) && (
                                                     <button
                                                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                     >
                                                         <CreditCard className="w-4 h-4" />
@@ -2077,7 +2090,7 @@ const EventDetails = () => {
                                         return (
                                             <Link
                                                 to={`/draws/${event.slug || rId}`}
-                                                className={`flex-1 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                             >
                                                 <GitBranch className="w-4 h-4" />
@@ -2091,7 +2104,7 @@ const EventDetails = () => {
                                 {/* Add to Calendar Menu Toggle */}
                                 <button
                                     onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                                    className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
+                                    className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
                                 >
                                     <CalendarIcon className="w-4 h-4 shrink-0" />
                                     <span className="text-[11px] font-black uppercase tracking-widest truncate">Add to Calendar</span>
@@ -2215,11 +2228,11 @@ const EventDetails = () => {
                             { id: 'results', label: 'Results' },
                             { id: 'media', label: 'Media' },
                         ].map(({ id, label }) => {
-                            const active = activeTab === id || (id === 'draws' && activeTab === 'results' && hasDraw && !hasResults); // Handling logic
+                            const active = activeTab === id;
                             return (
                                 <button
                                     key={id}
-                                    onClick={() => setActiveTab(id === 'draws' && hasDraw && !hasResults ? 'results' : id)}
+                                    onClick={() => setActiveTab(id)}
                                     className={`flex-1 py-4 text-[15px] font-bold border-b-2 transition-all whitespace-nowrap text-center ${active
                                         ? 'text-[#0F172A] border-[#0F172A]'
                                         : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
@@ -2816,6 +2829,11 @@ const EventDetails = () => {
                                                             </div>
                                                         </div>
                                                     ))}
+                                                </div>
+                                            ) : fetchingRankedinData ? (
+                                                <div className="px-6 py-10 flex flex-col items-center justify-center">
+                                                    <div className="w-8 h-8 border-4 border-[#CCFF00] border-t-transparent rounded-full animate-spin mb-4"></div>
+                                                    <p className="text-xs font-bold text-gray-400">Loading results...</p>
                                                 </div>
                                             ) : (
                                                 <div className="px-6 py-10 text-center">
