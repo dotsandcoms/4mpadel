@@ -1872,14 +1872,14 @@ const EventDetails = () => {
     };
 
     const registrationBlock = (isRegistered || isPaid) && (
-        <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-5 border border-green-100 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0">
-                    <Check className="w-6 h-6 text-green-600" />
+        <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-4 sm:p-5 border border-green-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0">
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                 </div>
-                <div>
+                <div className="flex-1">
                     <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-0.5">YOU ARE REGISTERED FOR</p>
-                    <p className="text-lg font-black text-[#0F172A] leading-tight mb-1">
+                    <p className="text-sm font-semibold text-[#0F172A] leading-tight mb-1">
                         {registeredDivisions.length > 0 ? registeredDivisions.join(' & ') : 'Main Event'}
                     </p>
                     <div className="inline-flex items-center">
@@ -1892,7 +1892,7 @@ const EventDetails = () => {
 
             <button
                 onClick={handleRankedinRedirect}
-                className="hidden sm:flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap shrink-0"
             >
                 <span className="text-lg leading-none">+</span> Add Division
             </button>
@@ -2042,11 +2042,11 @@ const EventDetails = () => {
                                             return (
                                                 <button
                                                     onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                    className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                    className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
                                                     style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
                                                 >
-                                                    <CheckCircle className="w-4 h-4" />
-                                                    <span className="text-[11px] font-black uppercase tracking-widest">{isLive ? 'Registered' : 'Registered'}</span>
+                                                    <CheckCircle className="w-4 h-4 shrink-0" />
+                                                    <span className="text-[11px] font-black uppercase tracking-widest truncate">{isLive ? 'Registered' : 'Registered'}</span>
                                                 </button>
                                             );
                                         }
@@ -2091,10 +2091,10 @@ const EventDetails = () => {
                                 {/* Add to Calendar Menu Toggle */}
                                 <button
                                     onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
+                                    className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
                                 >
-                                    <CalendarIcon className="w-4 h-4" />
-                                    <span className="text-[11px] font-black uppercase tracking-widest">Add to Calendar</span>
+                                    <CalendarIcon className="w-4 h-4 shrink-0" />
+                                    <span className="text-[11px] font-black uppercase tracking-widest truncate">Add to Calendar</span>
                                 </button>
                                 <AnimatePresence>
                                     {isCalendarMenuOpen && (
@@ -2168,7 +2168,7 @@ const EventDetails = () => {
                                             <AlertCircle className="w-3.5 h-3.5" />
                                             STATUS
                                         </div>
-                                        <div className="text-[15px] font-medium text-[#0F172A] leading-tight px-2">
+                                        <div className="text-[13px] font-medium text-[#0F172A] leading-tight px-2">
                                             {computedStatus}
                                         </div>
                                     </div>
@@ -2184,7 +2184,7 @@ const EventDetails = () => {
                                     <div className="w-6 h-6 rounded-full flex items-center justify-center mb-1">
                                         <Icon className={`w-4 h-4 ${theme.accentText}`} />
                                     </div>
-                                    <p className="text-lg font-black text-[#0F172A] leading-tight">{value}</p>
+                                    <p className="text-base font-bold text-[#0F172A] leading-tight">{value}</p>
                                     <p className="text-[10px] text-gray-500 font-medium">{label}</p>
                                 </div>
                             ))}
@@ -2192,7 +2192,7 @@ const EventDetails = () => {
 
                         {/* Registration Status (If any) */}
                         {registrationBlock && (
-                            <div className="mb-6">
+                            <div className="mb-6 relative z-[60]">
                                 {registrationBlock}
                             </div>
                         )}
