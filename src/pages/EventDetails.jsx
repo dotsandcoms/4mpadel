@@ -557,7 +557,7 @@ const EventDetails = () => {
             const unpaidLocalDivs = [
                 ...(localParts || []).filter(p => !p.is_paid).map(p => (p.class_name || '').trim()),
                 ...(legacyRegs || []).filter(r => r.payment_status !== 'paid').map(r => (r.division || '').trim())
-            ];
+            ].filter(Boolean);
 
             setPaidDivisions(paidDivs);
             setIsPaid(paidDivs.length > 0);
@@ -616,8 +616,9 @@ const EventDetails = () => {
                 }
             }
 
-            setRegisteredDivisions(Array.from(new Set(regDivs)));
-            setIsRegistered(regDivs.length > 0);
+            const allRegDivs = Array.from(new Set([...paidDivs, ...regDivs])).filter(Boolean);
+            setRegisteredDivisions(allRegDivs);
+            setIsRegistered(allRegDivs.length > 0);
 
             // Fetch profiles for any found partners
             const partnerNames = Object.values(divPartnersMap).filter(Boolean);
@@ -954,38 +955,43 @@ const EventDetails = () => {
                     localRegs.forEach(reg => {
                         // Find division by name, case-insensitive
                         let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
-                        if (!div) {
+                        
+                        // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
+                        // If it's a local-only event (!rId), allow creating new divisions from registrations.
+                        if (!div && !rId) {
                             div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
                             divisions.push(div);
                         }
 
-                        if (!participantsMap[div.Id]) {
-                            participantsMap[div.Id] = [];
-                        }
-
-                        // Check if this player is already in the Rankedin list for this division
-                        const existingInRankedin = participantsMap[div.Id].some(item => {
-                            const p = item.Participant || {};
-                            const pNames = [];
-                            if (p.Players) p.Players.forEach(pl => pNames.push((pl.Name || '').toLowerCase()));
-                            if (p.FirstPlayer) pNames.push((p.FirstPlayer.Name || '').toLowerCase());
-                            if (p.SecondPlayer) pNames.push((p.SecondPlayer.Name || '').toLowerCase());
-                            return pNames.includes(reg.full_name.toLowerCase());
-                        });
-
-                        if (!existingInRankedin) {
-                            const players = [{ Name: reg.full_name, Email: reg.email }];
-                            if (reg.partner_name) {
-                                players.push({ Name: reg.partner_name });
+                        if (div) {
+                            if (!participantsMap[div.Id]) {
+                                participantsMap[div.Id] = [];
                             }
 
-                            participantsMap[div.Id].push({
-                                Participant: {
-                                    Id: `local_${reg.id}`,
-                                    Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
-                                    Players: players
-                                }
+                            // Check if this player is already in the Rankedin list for this division
+                            const existingInRankedin = participantsMap[div.Id].some(item => {
+                                const p = item.Participant || {};
+                                const pNames = [];
+                                if (p.Players) p.Players.forEach(pl => pNames.push((pl.Name || '').toLowerCase()));
+                                if (p.FirstPlayer) pNames.push((p.FirstPlayer.Name || '').toLowerCase());
+                                if (p.SecondPlayer) pNames.push((p.SecondPlayer.Name || '').toLowerCase());
+                                return pNames.includes((reg.full_name || '').toLowerCase());
                             });
+
+                            if (!existingInRankedin) {
+                                const players = [{ Name: reg.full_name, Email: reg.email }];
+                                if (reg.partner_name) {
+                                    players.push({ Name: reg.partner_name });
+                                }
+
+                                participantsMap[div.Id].push({
+                                    Participant: {
+                                        Id: `local_${reg.id}`,
+                                        Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
+                                        Players: players
+                                    }
+                                });
+                            }
                         }
                     });
                 }
