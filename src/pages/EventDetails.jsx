@@ -225,8 +225,9 @@ const EventDetails = () => {
     const [participants, setParticipants] = useState({});
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
+    const [globalRankings, setGlobalRankings] = useState(new Map());
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
-    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo } = useRankedin();
+    const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
 
     const totalPlayersCount = useMemo(() => {
         if (!participants || Object.keys(participants).length === 0) return event?.registered_players || 0;
@@ -1085,6 +1086,23 @@ const EventDetails = () => {
         };
         fetchFourMPlayers();
     }, []);
+
+    useEffect(() => {
+        const fetchGlobalRankings = async () => {
+            try {
+                // Fetch SAPA Men & Women rankings (OrgId 15809)
+                const men = await getOrganisationRankings(3, 82, 2000, 15809);
+                const women = await getOrganisationRankings(4, 83, 2000, 15809);
+                const map = new Map();
+                if (men) men.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
+                if (women) women.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
+                setGlobalRankings(map);
+            } catch (err) {
+                console.error("Error fetching global rankings:", err);
+            }
+        };
+        fetchGlobalRankings();
+    }, [getOrganisationRankings]);
 
     useEffect(() => {
         const fetchAlbumPhotos = async () => {
@@ -2312,18 +2330,38 @@ const EventDetails = () => {
                                                     {(() => {
                                                         let seedList = [];
 
-                                                        const mensOpenDivs = playerDivisions.filter(d => {
+                                                        let targetDivs = playerDivisions.filter(d => {
                                                             const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
-                                                            return name.includes('mens open');
+                                                            return name.includes('mens');
                                                         });
 
-                                                        const divParticipantsToProcess = mensOpenDivs.length > 0
-                                                            ? mensOpenDivs.map(d => participants[d.Id]).filter(Boolean)
-                                                            : [];
+                                                        if (targetDivs.length === 0) {
+                                                            const fallbackDivs = playerDivisions.filter(d => {
+                                                                const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
+                                                                const isLadies = name.includes('ladies') || name.includes('women') || name.includes('mixed');
+                                                                return !isLadies && (name.includes('open') || name.includes('advanced') || name.includes('pro'));
+                                                            });
+                                                            targetDivs.push(...fallbackDivs);
+                                                        }
+
+                                                        if (targetDivs.length === 0) {
+                                                            const genericDivs = playerDivisions.filter(d => {
+                                                                const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
+                                                                return !name.includes('ladies') && !name.includes('women') && !name.includes('mixed');
+                                                            });
+                                                            targetDivs.push(...genericDivs);
+                                                        }
+
+                                                        if (targetDivs.length === 0) {
+                                                            targetDivs = playerDivisions;
+                                                        }
+
+                                                        const divParticipantsToProcess = targetDivs.map(d => participants[d.Id]).filter(Boolean);
 
                                                         const seenNames = new Set();
 
                                                         divParticipantsToProcess.forEach(divParticipants => {
+                                                            if (!divParticipants) return;
                                                             divParticipants.forEach(item => {
                                                                 const p = item.Participant || {};
 
@@ -2340,8 +2378,11 @@ const EventDetails = () => {
                                                                 individualPlayers.forEach(player => {
                                                                     if (player && player.Name && !seenNames.has(player.Name)) {
                                                                         seenNames.add(player.Name);
+                                                                        
+                                                                        const globalRank = globalRankings.get(player.Name.toLowerCase());
+                                                                        const rankVal = globalRank !== undefined ? globalRank : (item.Ranking ? parseInt(item.Ranking) : Infinity);
                                                                         const seedVal = p.Seed ? parseInt(p.Seed) : Infinity;
-                                                                        const rankVal = item.Ranking ? parseInt(item.Ranking) : Infinity;
+                                                                        
                                                                         const country = player.Country?.ISOCode || 'za';
                                                                         seedList.push({ name: player.Name, seed: seedVal, rank: rankVal, country });
                                                                     }
@@ -2358,18 +2399,23 @@ const EventDetails = () => {
                                                         }
 
                                                         seedList.sort((a, b) => {
-                                                            if (a.seed !== Infinity || b.seed !== Infinity) return a.seed - b.seed;
-                                                            return a.rank - b.rank;
+                                                            if (a.rank !== Infinity || b.rank !== Infinity) return a.rank - b.rank;
+                                                            return a.seed - b.seed;
                                                         });
 
-                                                        return seedList.slice(0, 4).map((seed, idx) => (
+                                                        const validSeeds = seedList.filter(s => s.rank !== Infinity || s.seed !== Infinity);
+                                                        const displayList = validSeeds.length > 0 ? validSeeds : seedList;
+
+                                                        return displayList.slice(0, 4).map((seed, idx) => (
                                                             <div key={idx} className="flex items-center justify-between py-4">
                                                                 <div className="flex items-center gap-4">
-                                                                    <span className="font-black text-yellow-500 w-4">{idx + 1}</span>
-                                                                    <span className="font-medium text-[#0F172A] text-[14px] max-w-[160px] truncate" title={seed.name}>{seed.name}</span>
+                                                                    <span className="font-black text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
+                                                                    <span className="font-medium text-[#0F172A] text-[14px] max-w-[180px] truncate" title={seed.name}>
+                                                                        {seed.name} {seed.rank !== Infinity && <span className="text-gray-500 ml-1 text-[13px]">(#{seed.rank})</span>}
+                                                                    </span>
                                                                 </div>
                                                                 {seed.country && (
-                                                                    <img src={`https://flagcdn.com/w40/${seed.country.toLowerCase()}.png`} alt={seed.country} className="w-6 h-auto rounded-sm border border-gray-200" />
+                                                                    <img src={`https://flagcdn.com/w40/${seed.country.toLowerCase()}.png`} alt={seed.country} className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
                                                                 )}
                                                             </div>
                                                         ));
