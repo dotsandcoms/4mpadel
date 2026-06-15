@@ -3081,109 +3081,7 @@ const EventDetails = () => {
                                                             </div>
                                                         </div>
                                                     </div>
-                                                    <div className="space-y-3">
-                                                        <div className="flex items-center justify-between ml-3 mb-1">
-                                                            <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Select Divisions</label>
-                                                            {registeredDivisions.length > 0 && (
-                                                                <span className="text-[9px] font-black uppercase tracking-widest bg-padel-green/10 text-padel-green px-2 py-0.5 rounded-md border border-padel-green/20">
-                                                                    {selectedDivisions.length} / {registeredDivisions.length} Selected
-                                                                </span>
-                                                            )}
-                                                        </div>
 
-                                                        {isCheckingReg ? (
-                                                            <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
-                                                                <Loader className="w-5 h-5 animate-spin text-padel-green" />
-                                                                <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
-                                                            </div>
-                                                        ) : availableDivisions.length > 0 ? (
-                                                            <div className="relative">
-                                                                <div
-                                                                    onClick={() => setIsDivisionsDropdownOpen(!isDivisionsDropdownOpen)}
-                                                                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 min-h-[50px] flex flex-wrap items-center gap-2 cursor-pointer transition-all hover:border-padel-green/50"
-                                                                >
-                                                                    {selectedDivisions.length === 0 ? (
-                                                                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">Click to select divisions...</span>
-                                                                    ) : (
-                                                                        selectedDivisions.map(div => (
-                                                                            <span key={div} className={`text-[9px] font-black uppercase tracking-widest px-2.5 py-1.5 rounded-md flex items-center gap-2 ${paidDivisions.includes(div) ? 'bg-padel-green/20 text-padel-green border border-padel-green/30' : 'bg-padel-green text-black'}`}>
-                                                                                {div}
-                                                                                {!paidDivisions.includes(div) && (
-                                                                                    <button
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            setSelectedDivisions(prev => prev.filter(d => d !== div));
-                                                                                        }}
-                                                                                        className="hover:text-red-600 transition-colors"
-                                                                                    >
-                                                                                        <X size={12} />
-                                                                                    </button>
-                                                                                )}
-                                                                            </span>
-                                                                        ))
-                                                                    )}
-                                                                    <ChevronDown className={`absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 transition-transform ${isDivisionsDropdownOpen ? 'rotate-180' : ''}`} />
-                                                                </div>
-
-                                                                {/* The Dropdown Menu */}
-                                                                <AnimatePresence>
-                                                                    {isDivisionsDropdownOpen && (
-                                                                        <motion.div
-                                                                            initial={{ opacity: 0, y: -10 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            exit={{ opacity: 0, y: -10 }}
-                                                                            className="absolute z-50 w-full mt-2 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden"
-                                                                        >
-                                                                            <div className="max-h-[250px] overflow-y-auto p-2 space-y-1 custom-scrollbar">
-                                                                                {availableDivisions.map(divName => {
-                                                                                    const alreadyPaid = paidDivisions.includes(divName);
-                                                                                    const isSelected = selectedDivisions.includes(divName);
-
-                                                                                    return (
-                                                                                        <div
-                                                                                            key={divName}
-                                                                                            onClick={() => {
-                                                                                                if (alreadyPaid) return;
-                                                                                                setSelectedDivisions(prev =>
-                                                                                                    prev.includes(divName)
-                                                                                                        ? prev.filter(d => d !== divName)
-                                                                                                        : [...prev, divName]
-                                                                                                );
-                                                                                            }}
-                                                                                            className={`flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all ${alreadyPaid ? 'opacity-50 cursor-not-allowed bg-white/5' :
-                                                                                                isSelected ? 'bg-padel-green/10 text-padel-green' :
-                                                                                                    'hover:bg-white/5 text-white'
-                                                                                                }`}
-                                                                                        >
-                                                                                            <div className="flex items-center gap-3">
-                                                                                                <div className={`w-4 h-4 rounded-sm border flex items-center justify-center transition-all ${alreadyPaid ? 'bg-padel-green border-padel-green' :
-                                                                                                    isSelected ? 'bg-padel-green border-padel-green' : 'border-white/20'
-                                                                                                    }`}>
-                                                                                                    {(isSelected || alreadyPaid) && <CheckCircle size={10} className={isSelected && !alreadyPaid ? 'text-black' : 'text-white'} />}
-                                                                                                </div>
-                                                                                                <span className="text-[11px] font-black uppercase tracking-wider">{divName}</span>
-                                                                                            </div>
-                                                                                            <span className="text-[10px] font-bold">
-                                                                                                {alreadyPaid ? 'PAID' : `R${getEntryFeeForCategory(divName)}`}
-                                                                                            </span>
-                                                                                        </div>
-                                                                                    );
-                                                                                })}
-                                                                            </div>
-                                                                        </motion.div>
-                                                                    )}
-                                                                </AnimatePresence>
-                                                            </div>
-                                                        ) : formData.email && (
-                                                            <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
-                                                                <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
-                                                                <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
-                                                                <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
-                                                                    Please ensure you are registered on Rankedin <br />for this specific event.
-                                                                </p>
-                                                            </div>
-                                                        )}
-                                                    </div>
 
                                                     <div className="space-y-3">
                                                         <div className="hidden items-center justify-between bg-[#0F172A] p-5 rounded-2xl border border-white/10 shadow-sm group">
@@ -3397,6 +3295,40 @@ const EventDetails = () => {
                                                             </motion.div>
                                                         )}
                                                     </div>
+                                                </div>
+
+                                                {/* Read-Only Registered Divisions */}
+                                                <div className="space-y-3 mt-4">
+                                                    <div className="flex items-center justify-between ml-3 mb-1">
+                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Registered Divisions</label>
+                                                    </div>
+
+                                                    {isCheckingReg ? (
+                                                        <div className="flex items-center gap-4 bg-slate-900/50 border border-white/5 rounded-2xl px-6 py-4 animate-pulse">
+                                                            <Loader className="w-5 h-5 animate-spin text-padel-green" />
+                                                            <span className="text-sm text-gray-400 font-bold uppercase tracking-widest">Syncing Rankedin Status...</span>
+                                                        </div>
+                                                    ) : availableDivisions.length > 0 ? (
+                                                        <div className="flex flex-wrap gap-2 px-1">
+                                                            {selectedDivisions.length === 0 ? (
+                                                                <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">No unpaid entries found.</span>
+                                                            ) : (
+                                                                selectedDivisions.map(div => (
+                                                                    <span key={div} className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg bg-padel-green/20 text-padel-green border border-padel-green/30">
+                                                                        {div}
+                                                                    </span>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    ) : formData.email && (
+                                                        <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
+                                                            <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
+                                                            <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
+                                                            <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
+                                                                Please ensure you are registered on Rankedin <br />for this specific event.
+                                                            </p>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
 
