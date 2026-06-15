@@ -3615,22 +3615,31 @@ const EventDetails = () => {
                                                                 });
                                                                 const needsUpdate = hasNewDivisions || hasPartnerChanges;
                                                                 const isConfirmedWithoutChanges = !needsUpdate && isRegistered && totalAmt === 0;
+                                                                const isInAppBrowser = /FBAN|FBAV|Instagram|WhatsApp|Line|Snapchat/i.test(navigator.userAgent || navigator.vendor || window.opera);
 
                                                                 return (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
-                                                                        disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
-                                                                        className={`w-full md:w-auto min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.2em] text-[13px] group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
-                                                                    >
-                                                                        <span>
-                                                                            {isConfirmedWithoutChanges
-                                                                                ? 'Registration Confirmed'
-                                                                                : totalAmt > 0
-                                                                                    ? 'Pay Now'
-                                                                                    : (isRegistered ? (needsUpdate ? 'Update Registration' : 'Register Now') : 'Register Now')}
-                                                                        </span>
-                                                                    </button>
+                                                                    <div className="flex flex-col items-end gap-3 w-full md:w-auto">
+                                                                        {totalAmt > 0 && isInAppBrowser && (
+                                                                            <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-amber-400 text-[10px] w-full text-center leading-tight">
+                                                                                <span className="font-bold block mb-1">⚠️ Apple Pay Unavailable</span> 
+                                                                                Apple Pay doesn't work inside in-app browsers. Please tap the menu dots and select <span className="font-bold text-white">Open in Safari</span> to pay.
+                                                                            </div>
+                                                                        )}
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
+                                                                            disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
+                                                                            className={`w-full min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.2em] text-[13px] group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
+                                                                        >
+                                                                            <span>
+                                                                                {isConfirmedWithoutChanges
+                                                                                    ? 'Registration Confirmed'
+                                                                                    : totalAmt > 0
+                                                                                        ? 'Pay Now'
+                                                                                        : (isRegistered ? (needsUpdate ? 'Update Registration' : 'Register Now') : 'Register Now')}
+                                                                            </span>
+                                                                        </button>
+                                                                    </div>
                                                                 );
                                                             })()}
                                                         </div>
