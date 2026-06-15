@@ -15,7 +15,7 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    const mergedOptions = { ...options };
+    const mergedOptions = { cache: 'no-store', ...options };
     if (options.signal) {
         if (options.signal.aborted) {
             controller.abort();
