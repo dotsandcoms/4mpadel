@@ -333,6 +333,8 @@ const FullRankingsTable = ({
   setSelectedOrgId,
   categories
 }) => {
+  const [podiumIndex, setPodiumIndex] = useState(0);
+
   return (
     <div className="max-w-6xl mx-auto px-6 relative z-10">
       {/* Official Rankings Header */}
@@ -422,6 +424,8 @@ const FullRankingsTable = ({
             imageErrors={imageErrors} 
             setImageErrors={setImageErrors} 
             getInitials={getInitials}
+            activeIndex={podiumIndex}
+            setActiveIndex={setPodiumIndex}
           />
         )}
 
@@ -438,7 +442,7 @@ const FullRankingsTable = ({
             </thead>
             <tbody>
               {paginatedData.length > 0 ? (
-                (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(3) : paginatedData).map((player) => (
+                (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(Math.min(10, podiumIndex + 3)) : paginatedData).map((player) => (
                   <tr key={player.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group">
                     <td className="py-4 px-6 text-xl font-black text-gray-500 group-hover:text-padel-green transition-colors">
                       #{player.rawRank}
@@ -512,7 +516,7 @@ const FullRankingsTable = ({
 
           <div className="flex flex-col">
             {paginatedData.length > 0 ? (
-              (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(3) : paginatedData).map((player) => (
+              (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(Math.min(10, podiumIndex + 3)) : paginatedData).map((player) => (
                 <div
                   key={player.id}
                   onClick={() => setSelectedPlayer(player)}
@@ -602,9 +606,8 @@ const FullRankingsTable = ({
 };
 
 
-const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, getInitials }) => {
+const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, getInitials, activeIndex, setActiveIndex }) => {
   const scrollRef = React.useRef(null);
-  const [activeIndex, setActiveIndex] = React.useState(0);
 
   const handleScroll = () => {
     if (!scrollRef.current) return;
@@ -641,11 +644,11 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
   const top10 = data.slice(0, 10);
 
   return (
-    <div className="relative w-full bg-[#0A0F1D] md:bg-transparent border-b border-white/5 py-8 md:py-12 overflow-hidden">
+    <div className="relative w-full bg-[#0A0F1D] md:bg-transparent border-b border-white/5 overflow-hidden">
       <div 
         ref={scrollRef}
         onScroll={handleScroll}
-        className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center"
+        className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center py-10 md:py-14"
         style={{ scrollBehavior: 'smooth' }}
       >
         {/* Left padding to center the first item */}
@@ -659,8 +662,8 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
             <div
               key={player.id || index}
               data-index={index}
-              className={`flex-shrink-0 snap-center transition-all duration-300 ease-in-out cursor-pointer mx-2 md:mx-4
-                ${isActive ? 'w-[160px] md:w-[224px] scale-100 z-10 opacity-100' : 'w-[140px] md:w-[192px] scale-90 opacity-60 hover:opacity-80 z-0'}`}
+              className={`flex-shrink-0 snap-center transition-all duration-300 ease-in-out cursor-pointer mx-2 md:mx-5 w-[140px] md:w-[192px]
+                ${isActive ? 'scale-[1.15] z-10 opacity-100' : 'scale-90 opacity-60 hover:opacity-80 z-0'}`}
               onClick={() => {
                 if (!isActive && scrollRef.current) {
                   const child = scrollRef.current.children[index + 1]; // +1 because of padding div
