@@ -41,7 +41,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const getResolvedLicenseType = useCallback((p, eventId) => {
         if (!p?.players) return 'none';
         if (p.players.license_type === 'full') return 'full';
-        const hasTemp = p.players.temporary_licenses?.some(lic => lic.event_id === eventId);
+        const hasTemp = p.players.temporary_licenses?.some(lic => Number(lic.event_id) === Number(eventId));
         if (hasTemp) return 'temporary';
         return 'none';
     }, []);
@@ -442,15 +442,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
             // Step 4: Upsert participants
             for (const p of externalParticipants) {
-                const nameLower = p.full_name.toLowerCase().trim();
+                const cleanNameLower = p.full_name.toLowerCase().replace(/\s+/g, ' ').trim();
                 const nDiv = normalize(p.class_name);
 
                 // Auto-match system profile
                 let autoProfileId = null;
                 let matchedEmail = null;
-                const matchedProfile = systemProfiles.find(sp => 
-                    sp.name && (sp.name.toLowerCase().includes(nameLower) || nameLower.includes(sp.name.toLowerCase()))
-                );
+                const matchedProfile = systemProfiles.find(sp => {
+                    if (!sp.name) return false;
+                    const spClean = sp.name.toLowerCase().replace(/\s+/g, ' ').trim();
+                    return spClean.includes(cleanNameLower) || cleanNameLower.includes(spClean);
+                });
                 if (matchedProfile) {
                     autoProfileId = matchedProfile.id;
                     matchedEmail = matchedProfile.email?.toLowerCase().trim();
