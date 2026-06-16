@@ -1019,7 +1019,7 @@ const PlayerProfile = () => {
                                 <div className="flex items-center justify-between w-full text-sm font-bold text-gray-400 py-1 px-1 sm:px-2">
                                     <div className="flex flex-col items-center">
                                         <span className="text-yellow-500 font-extrabold text-base sm:text-lg leading-none">
-                                            {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '#22'}
+                                            {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : 'Unranked'}
                                         </span>
                                         <span className="text-[8px] sm:text-[9px] uppercase tracking-widest text-gray-500 font-black mt-0.5">Rank</span>
                                     </div>

@@ -23,7 +23,12 @@ const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b
 import logo4m from '../assets/logo_4m_lowercase.png';
 import { getEventImage } from '../utils/imageUtils';
 
-
+const formatPlayerName = (fullName) => {
+    if (!fullName) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0];
+    return `${parts[0]} ${parts[1].charAt(0)}`;
+};
 
 // Simple CountUp animation component
 const CountUp = ({ end, duration = 1.5 }) => {
@@ -2758,7 +2763,10 @@ const EventDetails = () => {
                                                                                                             <User className="w-4 h-4 text-gray-500" />
                                                                                                         )}
                                                                                                     </div>
-                                                                                                    <span className="text-xs font-bold text-[#0F172A]">{player.Name}</span>
+                                                                                                    <span className="text-xs font-bold text-[#0F172A]">
+                                                                                                        <span className="hidden sm:inline">{player.Name}</span>
+                                                                                                        <span className="sm:hidden">{formatPlayerName(player.Name)}</span>
+                                                                                                    </span>
                                                                                                 </div>
                                                                                             ))}
                                                                                         </div>
@@ -2780,7 +2788,10 @@ const EventDetails = () => {
                                                                                                         <User className="w-3.5 h-3.5 text-gray-500" />
                                                                                                     )}
                                                                                                 </div>
-                                                                                                <span className="text-xs font-bold text-[#0F172A]">{fPlayer.Name}</span>
+                                                                                                <span className="text-xs font-bold text-[#0F172A]">
+                                                                                                    <span className="hidden sm:inline">{fPlayer.Name}</span>
+                                                                                                    <span className="sm:hidden">{formatPlayerName(fPlayer.Name)}</span>
+                                                                                                </span>
                                                                                             </div>
 
                                                                                             {/* Player 2 */}
@@ -2793,7 +2804,10 @@ const EventDetails = () => {
                                                                                                             <User className="w-3.5 h-3.5 text-gray-500" />
                                                                                                         )}
                                                                                                     </div>
-                                                                                                    <span className="text-xs font-bold text-[#0F172A]">{sPlayer.Name}</span>
+                                                                                                    <span className="text-xs font-bold text-[#0F172A]">
+                                                                                                        <span className="hidden sm:inline">{sPlayer.Name}</span>
+                                                                                                        <span className="sm:hidden">{formatPlayerName(sPlayer.Name)}</span>
+                                                                                                    </span>
                                                                                                 </div>
                                                                                             )}
                                                                                         </div>
