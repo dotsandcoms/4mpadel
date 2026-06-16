@@ -405,7 +405,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 confirmedPayments.push({
                     name: r.full_name,
                     email: r.email,
-                    partner: r.partner_name,
+                    partner: '', // DO NOT use r.partner_name to avoid falsely marking unpaid partners as paid
                     division: r.division,
                     method: r.payment_method || 'system'
                 });

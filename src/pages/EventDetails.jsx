@@ -531,7 +531,7 @@ const EventDetails = () => {
 
             // 1b. Check legacy event_registrations table
             let legacyOr = [`email.ilike.${userEmail}`];
-            if (userName) legacyOr.push(`partner_name.ilike.%${userName}%`);
+            if (userName) legacyOr.push(`full_name.ilike.%${userName}%`);
 
             const { data: legacyRegs } = await supabase
                 .from('event_registrations')
@@ -540,13 +540,23 @@ const EventDetails = () => {
                 .or(legacyOr.join(','));
 
             // 1c. Check Direct Payments table
-            const { data: directPayments } = await supabase
+            const { data: allEventPayments } = await supabase
                 .from('payments')
-                .select('metadata')
+                .select('metadata, player_id')
                 .eq('event_id', event.id)
                 .eq('status', 'success')
-                .eq('payment_type', 'event_entry_fee')
-                .or(profile?.id ? `player_id.eq.${profile.id},metadata->>email.ilike.${userEmail}` : `metadata->>email.ilike.${userEmail}`);
+                .eq('payment_type', 'event_entry_fee');
+                
+            const directPayments = (allEventPayments || []).filter(pay => {
+                if (profile?.id && pay.player_id === profile.id) return true;
+                if (userEmail && pay.metadata?.email?.toLowerCase().trim() === userEmail) return true;
+                if (userName && pay.metadata?.line_items && Array.isArray(pay.metadata.line_items)) {
+                    return pay.metadata.line_items.some(item => 
+                        item.type === 'entry_fee' && item.player?.toLowerCase().trim() === userName
+                    );
+                }
+                return false;
+            });
 
             const paidDivs = Array.from(new Set([
                 ...(legacyRegs || []).filter(r => r.payment_status === 'paid').map(r => (r.division || '').trim()),
