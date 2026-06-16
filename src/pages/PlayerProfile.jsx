@@ -338,7 +338,8 @@ const PlayerProfile = () => {
                         const cal = reg.calendar;
                         if (!cal) return;
                         // Avoid duplicates if already fetched from Rankedin
-                        const rId = cal.rankedin_url ? cal.rankedin_url.split('/').filter(Boolean).pop() : null;
+                        const rankedinMatch = cal.rankedin_url ? cal.rankedin_url.match(/\/tournament\/(\d+)/) : null;
+                        const rId = rankedinMatch ? rankedinMatch[1] : null;
                         const isDuplicate = events.some(e => e.id?.toString() === rId);
                         
                         if (!isDuplicate && !events.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
@@ -358,7 +359,16 @@ const PlayerProfile = () => {
                 const startOfToday = new Date();
                 startOfToday.setHours(0, 0, 0, 0);
 
-                const upcoming = events
+                const uniqueEventsMap = new Map();
+                events.forEach(e => {
+                    const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
+                    if (!uniqueEventsMap.has(key)) {
+                        uniqueEventsMap.set(key, e);
+                    }
+                });
+                const uniqueEvents = Array.from(uniqueEventsMap.values());
+
+                const upcoming = uniqueEvents
                     .filter(e => {
                         const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
                         eventEnd.setHours(23, 59, 59, 999);
@@ -367,7 +377,7 @@ const PlayerProfile = () => {
                     .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
 
                 // Filter for past events (state === 4 or date is in past, excluding state 2)
-                const past = events
+                const past = uniqueEvents
                     .filter(e => {
                         const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
                         eventEnd.setHours(23, 59, 59, 999);
