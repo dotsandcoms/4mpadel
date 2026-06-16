@@ -439,12 +439,15 @@ const EventDetails = () => {
         if (!isModalOpen) return;
         const prefillFromSession = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.user) return;
+            const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+            const targetEmail = impersonationEmail || session?.user?.email;
+
+            if (!targetEmail) return;
 
             const { data: playerData } = await supabase
                 .from('players')
                 .select('name, email, contact_number, category, license_type, paid_registration')
-                .ilike('email', session.user.email)
+                .ilike('email', targetEmail)
                 .maybeSingle();
 
             if (playerData) {
@@ -452,7 +455,7 @@ const EventDetails = () => {
                 setFormData(prev => ({
                     ...prev,
                     full_name: prev.full_name || playerData.name || '',
-                    email: prev.email || playerData.email || session.user.email || '',
+                    email: prev.email || playerData.email || targetEmail || '',
                     phone: prev.phone || playerData.contact_number || '',
                     division: prev.division || playerData.category || ''
                 }));
@@ -460,12 +463,12 @@ const EventDetails = () => {
                 // Not a registered player yet, at least fill email
                 setFormData(prev => ({
                     ...prev,
-                    email: prev.email || session.user.email || ''
+                    email: prev.email || targetEmail || ''
                 }));
             }
 
             // check for existing registration to prevent duplicates early
-            const checkEmail = (playerData?.email || session.user.email || '').toLowerCase().trim();
+            const checkEmail = (playerData?.email || targetEmail || '').toLowerCase().trim();
             if (checkEmail) {
                 const { data: reg } = await supabase
                     .from('event_registrations')
@@ -500,7 +503,9 @@ const EventDetails = () => {
 
         const checkStatus = async () => {
             const { data: { session } } = await supabase.auth.getSession();
-            const userEmail = session?.user?.email?.toLowerCase().trim() || formData.email?.toLowerCase().trim();
+            const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+            const targetEmail = impersonationEmail || session?.user?.email;
+            const userEmail = targetEmail?.toLowerCase().trim() || formData.email?.toLowerCase().trim();
 
             if (!userEmail || userEmail.length < 5 || !userEmail.includes('@')) {
                 setRegisteredDivisions([]);
