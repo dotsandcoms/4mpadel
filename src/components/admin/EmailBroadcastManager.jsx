@@ -181,8 +181,8 @@ const EmailBroadcastManager = () => {
 
         setIsSending(true);
         try {
-            // Batch emails in chunks of 50 for Resend API limits
-            const chunkSize = 50;
+            // Batch emails in chunks of 49 for Resend API limits (Edge function adds 1 'To' address = 50 total)
+            const chunkSize = 49;
             const chunks = [];
             for (let i = 0; i < recipients.length; i += chunkSize) {
                 chunks.push(recipients.slice(i, i + chunkSize));
