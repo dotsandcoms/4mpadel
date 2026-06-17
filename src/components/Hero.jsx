@@ -393,9 +393,9 @@ const Hero = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 0.8 }}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-xs font-bold uppercase tracking-widest mb-6 max-w-fit"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit"
                     >
-                        <Trophy className="w-3.5 h-3.5" />
+                        <Trophy className="w-3 h-3" />
                         <span>The Home of 4M Padel</span>
                     </motion.div>
 
