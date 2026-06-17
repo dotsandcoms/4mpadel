@@ -225,55 +225,50 @@ const AlbumDetails = () => {
                     >
                         <Link
                             to="/gallery"
-                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-all mb-6 md:mb-10 group bg-black/40 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10"
+                            className="inline-flex items-center text-padel-green font-black uppercase tracking-[0.2em] text-[9px] sm:text-xs hover:translate-x-[-8px] transition-all mb-6 md:mb-10 group bg-white/5 backdrop-blur-xl px-4 py-2 rounded-full border border-white/10"
                         >
                             <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-3 group-hover:scale-110 transition-transform" />
                             Back to Collection
                         </Link>
                     </motion.div>
 
-                    {/* Title Group with Watermark - Centered Content */}
-                    <div className="relative flex flex-col items-center">
-                        {/* Massive Background Watermark Title (Centered Behind) */}
-                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none opacity-[0.03] whitespace-nowrap overflow-hidden w-full text-center z-0">
-                            <h2 className="text-[10vw] font-black text-white uppercase tracking-tighter leading-none">
-                                {album.title}
-                            </h2>
-                        </div>
-
+                    {/* Title Group - Left Aligned Content */}
+                    <div className="relative">
                         <motion.div
-                            initial={{ opacity: 0, y: 40 }}
+                            initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="space-y-4 md:space-y-8 relative z-10 flex flex-col items-center text-center"
+                            className="relative z-10 flex flex-col items-start text-left"
                         >
-                            <div className="flex flex-col items-center">
+                            <div className="flex flex-col items-start">
                                 <motion.div
                                     initial={{ opacity: 0, x: -10 }}
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: 0.2 }}
-                                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-padel-green/10 border border-padel-green/20 text-padel-green text-[10px] md:text-xs font-black uppercase tracking-[0.2em] mb-4 md:mb-5"
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit"
                                 >
                                     <div className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
                                     <span>Official Album</span>
                                 </motion.div>
                                 
-                                <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter uppercase leading-[0.9] transition-all drop-shadow-2xl">
-                                    {album.title}
-                                </h1>
+                                <div className="mb-6 w-full pr-4">
+                                    <h1 className="text-3xl sm:text-5xl md:text-7xl lg:text-[90px] xl:text-[110px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter font-display uppercase break-words">
+                                        {album.title}
+                                    </h1>
+                                </div>
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-center gap-4 text-white/40 font-black text-[9px] sm:text-xs uppercase tracking-[0.3em]">
-                                <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                            <div className="flex flex-wrap items-center justify-start gap-3 sm:gap-4 text-white/40 font-black text-[9px] sm:text-xs uppercase tracking-[0.3em]">
+                                <div className="px-4 py-2 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
                                     <span className="text-padel-green font-black">
                                         {new Date(album.album_date || album.created_at).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                                     </span>
                                 </div>
-                                <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                                <div className="px-4 py-2 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
                                     <span className="text-padel-green">{images.length}</span>
                                     <span className="opacity-40">MOMENTS CAPTURED</span>
                                 </div>
                                 {album.photographer_name && (
-                                    <div className="px-5 py-2.5 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
+                                    <div className="px-4 py-2 rounded-xl bg-white/5 backdrop-blur-xl border border-white/10 text-white flex items-center gap-3">
                                         <span className="text-white">PHOTOS BY</span>
                                         <a 
                                             href={album.photographer_instagram ? `https://instagram.com/${album.photographer_instagram.replace('@', '')}` : '#'}
@@ -289,19 +284,18 @@ const AlbumDetails = () => {
                             </div>
 
                             {album.description && (
-                                <p className="text-gray-400 text-sm sm:text-lg md:text-xl max-w-3xl font-medium leading-relaxed opacity-60 border-l-[3px] border-padel-green/30 pl-6 md:pl-8 mt-5 md:mt-8 mx-auto">
-                                    {album.description}
+                                <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mt-6 mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+                                    <strong className="text-white font-medium">{album.description}</strong>
                                 </p>
                             )}
 
                             {childAlbums.length > 0 && (
-                                <div className="mt-8 flex flex-col items-center w-full max-w-5xl mx-auto">
+                                <div className="mt-8 flex flex-col items-start w-full">
                                     <div className="flex items-center gap-2 mb-4">
                                         <div className="w-1.5 h-1.5 rounded-full bg-padel-green" />
                                         <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">Explore Event Days</p>
-                                        <div className="w-1.5 h-1.5 rounded-full bg-padel-green" />
                                     </div>
-                                    <div className="flex flex-wrap justify-center gap-3 md:gap-4">
+                                    <div className="flex flex-wrap justify-start gap-3 md:gap-4">
                                         {childAlbums.map((child) => (
                                             <Link
                                                 key={child.id}
@@ -326,7 +320,7 @@ const AlbumDetails = () => {
 
                             {/* Rankings-style Tab Navigation */}
                             {youtubePlaylistUrl && (
-                                <div className="flex items-center gap-1 md:gap-2 mt-8 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto backdrop-blur-xl">
+                                <div className="flex items-center justify-start gap-1 md:gap-2 mt-8 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit backdrop-blur-xl">
                                     {[
                                         { id: 'photos', label: 'Action Shots', icon: <ImageIcon className="w-3.5 h-3.5 md:w-4 md:h-4" /> },
                                         { id: 'video', label: 'Video', icon: <PlayCircle className="w-3.5 h-3.5 md:w-4 md:h-4" /> }
@@ -360,14 +354,14 @@ const AlbumDetails = () => {
                                 exit={{ opacity: 0, y: -20 }}
                                 transition={{ duration: 0.3 }}
                             >
-                                {/* Masonry / Grid Layout - 4 columns on mobile */}
+                                {/* Masonry / Grid Layout - 8 columns on desktop */}
                                 {images.length === 0 ? (
                                     <div className="text-center py-10 bg-[#1E293B]/10 rounded-2xl border border-white/5">
                                         <ImageIcon className="w-8 h-8 text-gray-700 mx-auto mb-2" />
                                         <h3 className="text-sm font-bold text-white uppercase">Archive is Empty</h3>
                                     </div>
                                 ) : (
-                                    <div className="columns-4 sm:columns-2 md:columns-3 lg:columns-4 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
+                                    <div className="columns-4 sm:columns-4 md:columns-5 lg:columns-8 gap-1 sm:gap-4 space-y-1 sm:space-y-4">
                                         {images.map((img, index) => (
                                             <motion.div
                                                 key={img.id}

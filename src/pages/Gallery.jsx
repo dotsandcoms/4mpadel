@@ -131,43 +131,24 @@ const Gallery = () => {
                 <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-padel-green/10 rounded-full blur-[150px] translate-y-1/2 -translate-x-1/4" />
             </div>
 
-            <div className="relative z-10 w-full max-w-[1800px] mx-auto px-2 sm:px-10 lg:px-16">
-                {/* Stylistic WOW Header - Full Width Style */}
-                <div className="relative pt-0 md:pt-12 pb-6 md:pb-16 overflow-hidden">
-                    {/* Background Translucent Watermark (Now scaled for true full width) */}
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none w-full flex items-center justify-center -rotate-2 overflow-hidden opacity-[0.03]">
-                        <h2 className="text-[15vw] font-black text-white uppercase tracking-tighter w-full text-center leading-none whitespace-nowrap">
-                            Moments
-                        </h2>
+            <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
+                {/* Unified Header */}
+                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-12 lg:pt-16 pb-4 md:pb-12">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+                        <ImageIcon className="w-3 h-3" />
+                        <span>Official Gallery</span>
                     </div>
 
-                    <div className="relative z-10 text-center flex flex-col items-center">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="bg-padel-green/10 border border-padel-green/20 px-6 py-2 rounded-full text-padel-green text-[10px] md:text-xs font-black uppercase tracking-[0.4em] mb-10"
-                        >
-                            4M Padel Official Gallery
-                        </motion.div>
-                        
-                        <motion.h1 
-                            initial={{ opacity: 0, y: 30 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
-                        >
-                            Our <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Gallery</span>
-                        </motion.h1>
-                        
-                        <motion.p 
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.2 }}
-                            className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
-                        >
-                            Capturing the intensity, the passion, and the legendary moments on the 4M courts.
-                        </motion.p>
+                    <div className="overflow-hidden mb-6">
+                        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+                            OUR <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">GALLERY</span>
+                        </h1>
                     </div>
-                </div>
+
+                    <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+                        <strong className="text-white font-medium">Capturing the intensity, the passion, and the legendary moments on the 4M courts.</strong>
+                    </p>
+                </section>
 
                 {loading ? (
                     <div className="flex flex-col justify-center items-center py-40 space-y-6">

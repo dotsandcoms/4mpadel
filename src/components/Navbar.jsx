@@ -531,7 +531,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
               </div>
 
               <div className="flex-1 overflow-y-auto px-5 py-4 custom-scrollbar flex flex-col gap-1.5">
-                {visibleLinks.map((link) => {
+                {visibleLinks
+                  .filter(link => !['Calendar', 'Rankings', 'Media'].includes(link.name))
+                  .map((link) => {
                   const isExpanded = expandedMobileMenus.includes(link.name);
                   const isActive = location.pathname === link.href;
                   return (
