@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabaseClient';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight, GitBranch, User, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Clock, Users, ArrowRight, GitBranch, User, ChevronLeft, ChevronRight, PlayCircle } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import tournamentBg from '../assets/tournament_bg.png';
@@ -78,108 +78,90 @@ const CalendarEventItem = ({ event, index }) => {
             transition={{ delay: index * 0.1 }}
             className="w-full min-w-0 max-w-full"
         >
-            <div
-                className={`group block backdrop-blur-md border ${tierColor} rounded-[2rem] p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative w-full`}
+            <Link
+                to={detailsPath}
+                target={event.slug ? "_self" : (event.rankedin_url ? "_blank" : "_self")}
+                className={`group block backdrop-blur-sm border ${tierColor} rounded-2xl p-4 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
             >
-                {/* Background Gradient */}
                 <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
 
-                <div className="flex flex-col md:flex-row gap-6 md:items-center justify-between relative z-10 w-full min-w-0">
-                    <div className="flex flex-row gap-4 items-center flex-1 w-full min-w-0">
-                        {/* Poster Image Box */}
-                        <div className="flex-shrink-0 w-[110px] sm:w-[130px] md:w-32 aspect-[3/4] md:h-32 md:aspect-auto rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group flex items-center justify-center">
-                            {getEventImage(event) ? (
-                                <img
-                                    src={getEventImage(event)}
-                                    alt={event.event_name}
-                                    className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-110"
-                                />
-                            ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center">
-                                    <CalendarIcon className="w-6 h-6 text-padel-green mb-1 opacity-50" />
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">No Poster</span>
+                <div className="flex flex-row items-center gap-4 relative z-10 w-full min-w-0">
+                    {/* Square Icon/Image on left */}
+                    <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-black/40 border border-white/5 relative shadow-xl">
+                        {getEventImage(event) ? (
+                            <img
+                                src={getEventImage(event)}
+                                alt={event.event_name || event.eventName}
+                                className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center">
+                                <CalendarIcon className="w-5 h-5 text-padel-green mb-1 opacity-50" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Info block */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 py-1">
+                        {/* Status Row */}
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
+                                {event.sapa_status}
+                            </span>
+                            {event.is_league && (
+                                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                    League
+                                </span>
+                            )}
+                        </div>
+                        
+                        {/* Date */}
+                        <div className="flex items-center gap-1 text-padel-green font-bold text-[10px] sm:text-xs">
+                            <CalendarIcon className="w-3.5 h-3.5" />
+                            <span>
+                                {event.event_dates ||
+                                    (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                    (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
+                            </span>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-lg sm:text-xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-1 sm:line-clamp-2">
+                            {event.event_name || event.eventName}
+                        </h3>
+
+                        {/* Bottom Metadata Row */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-400 text-[10px] sm:text-xs font-medium mt-0.5">
+                            {event.city && (
+                                <span className="flex items-center gap-1 shrink-0">
+                                    <MapPin className="w-3.5 h-3.5 text-padel-green/60" />
+                                    {event.city}
+                                </span>
+                            )}
+                            <span className="flex items-center gap-1 min-w-0">
+                                <MapPin className="w-3.5 h-3.5 text-padel-green/60 shrink-0" />
+                                <span className="truncate max-w-[120px] sm:max-w-[200px]" title={event.venue || event.clubName}>
+                                    {(event.venue || event.clubName || 'Location TBC').split(' ').slice(0, 3).join(' ') + ((event.venue || event.clubName || 'Location TBC').split(' ').length > 3 ? '...' : '')}
+                                </span>
+                            </span>
+                            {event.registered_players > 0 && (
+                                <span className="flex items-center gap-1 shrink-0 bg-padel-green/5 border border-padel-green/10 px-1.5 py-0.5 rounded-md">
+                                    <Users className="w-3 h-3 text-padel-green" />
+                                    <span className="text-white font-bold text-[9px] leading-none">{event.registered_players}</span>
+                                </span>
+                            )}
+                            
+                            {/* Tags */}
+                            {(event.live_youtube_url && event.featured_live) && (
+                                <div className="flex items-center gap-0.5 bg-red-600 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0 animate-pulse">
+                                    <PlayCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Live</span>
                                 </div>
                             )}
                         </div>
-
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                            {/* Top row pills */}
-                            <div className="flex flex-wrap items-center gap-2 mb-4">
-                                <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
-                                    {event.sapa_status}
-                                </span>
-                                {event.city && (
-                                    <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-400 shadow-sm">
-                                        {event.city}
-                                    </span>
-                                )}
-                                {event.registered_players > 0 && (
-                                    <div className="flex items-center gap-1.5 bg-padel-green/5 border border-padel-green/20 px-2.5 py-0.5 rounded-full">
-                                        <Users className="w-2.5 h-2.5 text-padel-green" />
-                                        <span className="text-white font-black text-[9px] leading-none uppercase tracking-wider">{event.registered_players} REGISTERED</span>
-                                    </div>
-                                )}
-                                {event.is_league && (
-                                    <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest">
-                                        LEAGUE
-                                    </span>
-                                )}
-                            </div>
-
-                            {/* Title Row */}
-                            <div className="mb-3 min-w-0">
-                                <h3 className="text-lg md:text-2xl font-black text-white group-hover:text-padel-green transition-colors leading-none uppercase tracking-tighter break-words min-w-0 whitespace-normal">
-                                    {event.event_name || event.eventName}
-                                </h3>
-                            </div>
-
-                            {/* Bottom row info */}
-                            <div className="flex flex-wrap items-center gap-y-3 gap-x-4 text-gray-400 text-sm font-medium">
-                                {(event.start_date || event.startDate) && (
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-padel-green bg-padel-green/10 border border-padel-green/20 px-3 py-1 rounded-full whitespace-nowrap w-fit shadow-sm">
-                                        <CalendarIcon size={12} />
-                                        {formatDate(event.start_date || event.startDate, event.end_date || event.endDate)}
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-2 truncate min-w-0">
-                                    <MapPin className="w-4 h-4 text-gray-500 shrink-0" />
-                                    <span className="text-xs font-bold text-gray-400 truncate" title={event.venue || event.clubName}>
-                                        {event.venue || event.clubName || 'Location to be confirmed'}
-                                    </span>
-                                </div>
-                                {event.organizer_name && (
-                                    <div className="flex items-center gap-1.5 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full shrink-0 shadow-sm">
-                                        <GitBranch className="w-3 h-3 text-gray-500" />
-                                        <span className="text-white font-bold text-[11px] uppercase tracking-tight leading-none">{event.organizer_name}</span>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-4 md:mt-0 justify-start md:justify-end">
-                        {(hasDraw || hasResults) && (
-                             <Link
-                                to={drawPath}
-                                className="flex items-center gap-2 bg-padel-green/5 border border-padel-green/20 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-2 rounded-xl transition-all duration-300 font-bold text-xs uppercase tracking-widest group/draw"
-                            >
-                                <GitBranch className="w-4 h-4 !text-padel-green group-hover/draw:!text-black transition-colors" />
-                                <span className="!text-current">Draws & Results</span>
-                            </Link>
-                        )}
-                        <Link
-                            to={detailsPath}
-                            target={event.slug ? "_self" : (event.rankedin_url ? "_blank" : "_self")}
-                            className="bg-padel-green !text-black px-6 py-2 rounded-xl font-black uppercase tracking-widest text-xs hover:bg-white hover:!text-black hover:scale-105 transition-all shadow-lg shadow-padel-green/20 flex items-center gap-2"
-                        >
-                            <span className="!text-black">Details</span>
-                            <ArrowRight className="w-4 h-4 !text-black" />
-                        </Link>
                     </div>
                 </div>
-            </div>
+            </Link>
         </motion.div>
     );
 };

@@ -285,10 +285,10 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
         >
             <Link
                 to={linkPath}
-                className={`group relative flex flex-row items-stretch h-full min-h-[220px] sm:min-h-[240px] bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+                className={`group relative flex flex-row items-stretch h-full min-h-[140px] sm:min-h-[160px] bg-[#060913] rounded-[20px] sm:rounded-[24px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
-                <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
+                <div className="relative w-[100px] sm:w-[130px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
                     {image ? (
                         <>
                             <FallbackImage
@@ -307,7 +307,7 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                         </>
                     ) : (
                         <div className="w-full h-full bg-[#0A0F1C] flex items-center justify-center">
-                            <Calendar className="w-8 h-8 text-white/10" />
+                            <Calendar className="w-6 h-6 text-white/10" />
                         </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
@@ -321,42 +321,42 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
                 </div>
 
                 {/* Content */}
-                <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
+                <div className="p-3 sm:p-4 flex flex-col flex-1 min-w-0 justify-center">
+                    <div className="flex items-center gap-2 mb-1.5">
                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
                             {label || status}
                         </span>
                     </div>
 
-                    <h3 className="text-sm sm:text-lg font-black text-white mb-2 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
+                    <h3 className="text-sm sm:text-base font-black text-white mb-1.5 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
                         {renderBrollTitle(title, status)}
                     </h3>
 
-                    <div className="space-y-2 mt-auto">
+                    <div className="space-y-1 mt-auto">
                         {date && (
-                            <div className="flex items-center gap-2 text-gray-400">
-                                <Calendar className={`w-3 h-3 sm:w-4 sm:h-4 ${accentColor} shrink-0`} />
-                                <span className={`text-[9px] sm:text-xs font-bold ${accentColor} truncate`}>
+                            <div className="flex items-center gap-1.5 text-gray-400">
+                                <Calendar className={`w-3 h-3 ${accentColor} shrink-0`} />
+                                <span className={`text-[9px] sm:text-[10px] font-bold ${accentColor} truncate`}>
                                     {date}
                                 </span>
                             </div>
                         )}
 
                         {(venue || city) && (
-                            <div className="flex items-center gap-2 text-gray-400">
-                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
-                                <span className="text-[9px] sm:text-xs font-medium truncate uppercase tracking-widest">
+                            <div className="flex items-center gap-1.5 text-gray-400">
+                                <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
+                                <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
                                     {[venue, city].filter(Boolean).join(', ')}
                                 </span>
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-3">
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
                             <div className="flex items-center gap-2">
                                 {registeredPlayers > 0 && (
                                     <div className="flex items-center gap-1">
-                                        <Users className={`w-3 h-3 ${accentColor}`} />
-                                        <span className="text-white font-bold text-[9px] sm:text-xs">{registeredPlayers}</span>
+                                        <Users className={`w-2.5 h-2.5 ${accentColor}`} />
+                                        <span className="text-white font-bold text-[9px] sm:text-[10px]">{registeredPlayers}</span>
                                     </div>
                                 )}
                                 {drawPath && (hasDraw || hasResults) && (
@@ -562,10 +562,11 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
                 ref={scrollRef}
-                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide w-full ${isSlider
-                    ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8'
+                className={`flex overflow-x-auto overflow-y-hidden touch-pan-x gap-4 pb-5 snap-x snap-mandatory scrollbar-hide no-scrollbar w-full ${isSlider
+                    ? 'md:flex md:overflow-x-auto md:overflow-y-hidden md:touch-pan-x md:pb-8 -mx-4 px-4 scroll-px-4 sm:-mx-8 sm:px-8 sm:scroll-px-8 xl:-mx-12 xl:px-12 xl:scroll-px-12 after:content-[\'\'] after:min-w-[1px] after:shrink-0'
                     : 'md:grid md:grid-cols-3 md:overflow-x-visible md:overflow-y-visible md:touch-auto md:pb-0'
                     }`}
+                style={isSlider ? { scrollbarWidth: 'none', msOverflowStyle: 'none' } : {}}
             >
                 {items?.map((t, i) => (
                     <div
