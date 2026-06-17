@@ -113,19 +113,13 @@ const HappeningNowWidget = () => {
                                     )}
                                 </div>
                             </div>
-                            <button 
-                                onClick={() => navigate('/calendar')}
-                                className="text-padel-green text-[10px] sm:text-xs font-black uppercase tracking-widest hover:text-padel-green/80 transition-colors flex items-center gap-1"
-                            >
-                                View All <span className="text-sm font-bold leading-none">&gt;</span>
-                            </button>
                         </div>
 
                         {/* Events List */}
                         <div className="relative z-10 flex overflow-x-auto snap-x snap-mandatory gap-4 pb-2 hide-scrollbar scroll-smooth">
                             {liveEvents.map(event => {
                                 const poster = getEventImage(event);
-                                
+
                                 let borderCls = 'border-padel-green/50';
                                 let hoverBorderCls = 'hover:border-padel-green hover:shadow-[0_0_20px_rgba(46,213,115,0.15)]';
                                 let btnBg = 'bg-padel-green text-black hover:bg-padel-green/90 group-hover:bg-padel-green/90 border-transparent';

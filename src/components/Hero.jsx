@@ -35,6 +35,7 @@ const Hero = () => {
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [nextMatch, setNextMatch] = useState(null);
     const [eventsLoading, setEventsLoading] = useState(false);
+    const [activeHeroTab, setActiveHeroTab] = useState('events'); // 'events' | 'matches'
     const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
 
     useEffect(() => {
@@ -99,12 +100,12 @@ const Hero = () => {
                 if (!playerData || !playerData.rankedin_id) {
                     const { data, error } = await supabase
                         .from('players')
-                        .select('id, rankedin_id, email')
+                        .select('id, rankedin_id, email, name')
                         .ilike('email', session.user.email)
                         .maybeSingle();
 
                     if (error) throw error;
-                    if (data?.rankedin_id) {
+                    if (data?.email) {
                         playerData = data;
                         try {
                             localStorage.setItem(PLAYER_METADATA_KEY, JSON.stringify(data));
@@ -112,7 +113,7 @@ const Hero = () => {
                     }
                 }
 
-                if (!playerData?.rankedin_id) {
+                if (!playerData?.email) {
                     setEventsLoading(false);
                     return;
                 }
@@ -121,22 +122,75 @@ const Hero = () => {
 
                 // Fetch events and matches in parallel using the signal
                 const [rawEvents, rawMatches] = await Promise.all([
-                    getPlayerEventsAsync(playerData.rankedin_id, signal),
-                    getPlayerMatches(playerData.rankedin_id, false, 20, signal)
+                    playerData.rankedin_id ? getPlayerEventsAsync(playerData.rankedin_id, signal) : Promise.resolve([]),
+                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, false, 20, signal) : Promise.resolve([])
                 ]);
 
                 if (signal.aborted) return;
 
+                let queryStr = `email.ilike.${playerData.email}`;
+                if (playerData.name) {
+                    queryStr += `,partner_name.ilike."${playerData.name}"`;
+                }
+                const localRegsRes = await supabase
+                    .from('event_registrations')
+                    .select('*, calendar(*)')
+                    .or(queryStr);
+                const localRegs = localRegsRes.data || [];
+
+                const allEvents = rawEvents || [];
+                localRegs.forEach(reg => {
+                    const cal = reg.calendar;
+                    if (!cal) return;
+                    const rankedinMatch = cal.rankedin_url ? cal.rankedin_url.match(/\/tournament\/(\d+)/) : null;
+                    const rId = rankedinMatch ? rankedinMatch[1] : null;
+                    const isDuplicate = allEvents.some(e => e.id?.toString() === rId);
+                    
+                    if (!isDuplicate && !allEvents.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
+                        allEvents.push({
+                            id: `local_${cal.id}`,
+                            db_id: cal.id,
+                            start_date: cal.start_date,
+                            end_date: cal.end_date,
+                            event_name: cal.event_name,
+                            state: 1,
+                            payment_status: reg.payment_status
+                        });
+                    }
+                });
+
                 const startOfToday = new Date();
                 startOfToday.setHours(0, 0, 0, 0);
-                const filtered = (rawEvents || [])
+                const currentMonth = startOfToday.getMonth();
+                const currentYear = startOfToday.getFullYear();
+
+                const uniqueEventsMap = new Map();
+                allEvents.forEach(e => {
+                    const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
+                    if (!uniqueEventsMap.has(key)) {
+                        uniqueEventsMap.set(key, e);
+                    }
+                });
+                const uniqueEvents = Array.from(uniqueEventsMap.values());
+
+                let filtered = uniqueEvents
                     .filter(e => {
                         const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
                         eventEnd.setHours(23, 59, 59, 999);
                         return eventEnd >= startOfToday && e.state !== 2;
                     })
-                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))
-                    .slice(0, 3);
+                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+                const currentMonthEvents = filtered.filter(e => {
+                    const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                    return eventEnd.getMonth() === currentMonth && eventEnd.getFullYear() === currentYear;
+                });
+
+                if (currentMonthEvents.length > 0) {
+                    filtered = currentMonthEvents;
+                } else {
+                    filtered = filtered.slice(0, 3);
+                }
 
                 if (filtered.length > 0) {
                     // Run all enrichment queries in parallel
@@ -160,7 +214,9 @@ const Hero = () => {
 
                     if (dbEventsRes.data) {
                         filtered.forEach(e => {
-                            const match = dbEventsRes.data.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
+                            const match = e.id?.toString().startsWith('local_')
+                                ? dbEventsRes.data.find(dbE => dbE.id === e.db_id)
+                                : dbEventsRes.data.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
                             if (match) {
                                 e.db_id = match.id;
                                 e.slug = match.slug;
@@ -466,262 +522,216 @@ const Hero = () => {
                                                     </div>
                                                 </div>
 
-                                                {/* Right Side Skeleton: My Next Match */}
-                                                <div className="order-1 lg:order-2 lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6">
-                                                    <div className="flex items-center justify-between mb-3.5 px-1 animate-pulse">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-5 h-5 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400" />
-                                                            <div className="w-24 h-3 bg-white/10 rounded" />
-                                                        </div>
-                                                        <div className="w-16 h-3 bg-white/10 rounded" />
-                                                    </div>
 
-                                                    <div className="w-full h-[130px] bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 animate-pulse flex flex-col justify-between relative overflow-hidden shadow-lg">
-                                                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.03] to-transparent -translate-x-full animate-[shimmer_2s_infinite] pointer-events-none" />
-
-                                                        <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
-                                                            <div className="w-24 h-2.5 bg-orange-500/10 rounded" />
-                                                            <div className="w-10 h-2.5 bg-white/10 rounded" />
-                                                        </div>
-
-                                                        <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5">
-                                                            <div className="flex-1 flex flex-col items-end space-y-1">
-                                                                <div className="w-16 h-2.5 bg-white/10 rounded" />
-                                                                <div className="w-10 h-2 bg-white/5 rounded" />
-                                                            </div>
-                                                            <div className="w-7 h-7 rounded-full bg-orange-500/15 border border-orange-500/20 flex items-center justify-center" />
-                                                            <div className="flex-1 flex flex-col items-start space-y-1">
-                                                                <div className="w-16 h-2.5 bg-white/10 rounded" />
-                                                                <div className="w-10 h-2 bg-white/5 rounded" />
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                            <div className="w-24 h-2.5 bg-white/10 rounded" />
-                                                            <div className="w-10 h-2.5 bg-orange-500/10 rounded" />
-                                                        </div>
-                                                    </div>
-                                                </div>
                                             </>
                                         ) : (
                                             // ── Actual Data ──
-                                            <>
+                                            <div className="lg:col-span-12">
+                                                <div className="flex items-center gap-2 mb-4 bg-white/5 p-1 rounded-lg w-fit border border-white/10">
+                                                    <button
+                                                        onClick={() => setActiveHeroTab('events')}
+                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                    >
+                                                        My Next Events
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setActiveHeroTab('matches')}
+                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                    >
+                                                        Upcoming Matches
+                                                    </button>
+                                                </div>
+
                                                 {/* Left Side: Upcoming Events */}
-                                                {upcomingEvents.length > 0 && (
-                                                    <div className={`order-2 lg:order-1 ${nextMatch ? 'lg:col-span-8 lg:pr-5' : 'lg:col-span-12'}`}>
-                                                        {/* Header row */}
-                                                        <div className="flex items-center justify-between mb-3.5 px-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="p-1 rounded-md bg-purple-500/10 border border-purple-500/20 text-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.15)]">
-                                                                    <Calendar size={13} />
-                                                                </div>
-                                                                <span className="text-sm sm:text-base font-bold uppercase tracking-widest text-white/95">My Next Events</span>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => navigate('/profile')}
-                                                                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-purple-400 hover:text-white transition-colors group"
-                                                            >
-                                                                View all
-                                                                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                                                            </button>
-                                                        </div>
+                                                {activeHeroTab === 'events' && (
+                                                    upcomingEvents.length > 0 ? (
+                                                        <div className="w-full animate-fade-in">
+                                                            {/* Event cards — horizontal scroll */}
+                                                            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                                                                {upcomingEvents.map((event, idx) => {
+                                                                    // colour accent
+                                                                    let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
+                                                                    let hoverCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
+                                                                    let dateCls = 'text-padel-green';
+                                                                    let glowBg = 'from-padel-green/10 to-transparent';
+                                                                    let ringCls = 'border-padel-green/30 text-padel-green';
 
-                                                        {/* Event cards — horizontal scroll */}
-                                                        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                                                            {upcomingEvents.map((event, idx) => {
-                                                                // colour accent
-                                                                let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
-                                                                let hoverCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
-                                                                let dateCls = 'text-padel-green';
-                                                                let glowBg = 'from-padel-green/10 to-transparent';
-                                                                let ringCls = 'border-padel-green/30 text-padel-green';
+                                                                    if (event.sapa_status === 'Major') {
+                                                                        borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
+                                                                        hoverCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
+                                                                        dateCls = 'text-red-400';
+                                                                        glowBg = 'from-red-500/10 to-transparent';
+                                                                        ringCls = 'border-red-500/30 text-red-400';
+                                                                    } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
+                                                                        borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
+                                                                        hoverCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
+                                                                        dateCls = 'text-amber-400';
+                                                                        glowBg = 'from-amber-500/10 to-transparent';
+                                                                        ringCls = 'border-amber-500/30 text-amber-400';
+                                                                    } else if (event.sapa_status === 'Gold') {
+                                                                        borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
+                                                                        hoverCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
+                                                                        dateCls = 'text-yellow-400';
+                                                                        glowBg = 'from-yellow-500/10 to-transparent';
+                                                                        ringCls = 'border-yellow-500/30 text-yellow-400';
+                                                                    } else if (event.sapa_status === 'Silver') {
+                                                                        borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
+                                                                        hoverCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
+                                                                        dateCls = 'text-gray-300';
+                                                                        glowBg = 'from-gray-400/10 to-transparent';
+                                                                        ringCls = 'border-gray-400/30 text-gray-300';
+                                                                    } else if (event.sapa_status === 'Bronze') {
+                                                                        borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
+                                                                        hoverCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
+                                                                        dateCls = 'text-orange-400';
+                                                                        glowBg = 'from-orange-600/10 to-transparent';
+                                                                        ringCls = 'border-orange-600/30 text-orange-400';
+                                                                    }
 
-                                                                if (event.sapa_status === 'Major') {
-                                                                    borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
-                                                                    hoverCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
-                                                                    dateCls = 'text-red-400';
-                                                                    glowBg = 'from-red-500/10 to-transparent';
-                                                                    ringCls = 'border-red-500/30 text-red-400';
-                                                                } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                    borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
-                                                                    hoverCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
-                                                                    dateCls = 'text-amber-400';
-                                                                    glowBg = 'from-amber-500/10 to-transparent';
-                                                                    ringCls = 'border-amber-500/30 text-amber-400';
-                                                                } else if (event.sapa_status === 'Gold') {
-                                                                    borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
-                                                                    hoverCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
-                                                                    dateCls = 'text-yellow-400';
-                                                                    glowBg = 'from-yellow-500/10 to-transparent';
-                                                                    ringCls = 'border-yellow-500/30 text-yellow-400';
-                                                                } else if (event.sapa_status === 'Silver') {
-                                                                    borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
-                                                                    hoverCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
-                                                                    dateCls = 'text-gray-300';
-                                                                    glowBg = 'from-gray-400/10 to-transparent';
-                                                                    ringCls = 'border-gray-400/30 text-gray-300';
-                                                                } else if (event.sapa_status === 'Bronze') {
-                                                                    borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
-                                                                    hoverCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
-                                                                    dateCls = 'text-orange-400';
-                                                                    glowBg = 'from-orange-600/10 to-transparent';
-                                                                    ringCls = 'border-orange-600/30 text-orange-400';
-                                                                }
+                                                                    return (
+                                                                        <motion.button
+                                                                            key={event.id}
+                                                                            initial={{ opacity: 0, y: 15 }}
+                                                                            animate={{ opacity: 1, y: 0 }}
+                                                                            transition={{ delay: 0.1 + idx * 0.08, type: 'spring', stiffness: 100 }}
+                                                                            onClick={() => {
+                                                                                if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
+                                                                                else if (!event.id.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+                                                                            }}
+                                                                            className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border ${borderCls} ${hoverCls} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02]`}
+                                                                        >
+                                                                            {/* Subtle status top gradient bar */}
+                                                                            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
 
-                                                                return (
-                                                                    <motion.button
-                                                                        key={event.id}
-                                                                        initial={{ opacity: 0, y: 15 }}
-                                                                        animate={{ opacity: 1, y: 0 }}
-                                                                        transition={{ delay: 1.2 + idx * 0.08, type: 'spring', stiffness: 100 }}
-                                                                        onClick={() => {
-                                                                            if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
-                                                                            else window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                                        }}
-                                                                        className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border ${borderCls} ${hoverCls} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02]`}
-                                                                    >
-                                                                        {/* Subtle status top gradient bar */}
-                                                                        <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
-
-                                                                        <div className="flex justify-between items-start mb-2">
-                                                                            <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
-                                                                                {event.sapa_status || 'SAPA'}
-                                                                            </span>
-
-                                                                            {/* Paid Stamp / Icon */}
-                                                                            {event.isPaid ? (
-                                                                                <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
-                                                                                    <CheckCircle2 size={10} className="shrink-0" /> Paid
+                                                                            <div className="flex justify-between items-start mb-2">
+                                                                                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
+                                                                                    {event.sapa_status || 'SAPA'}
                                                                                 </span>
-                                                                            ) : (
-                                                                                <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
-                                                                            )}
-                                                                        </div>
 
-                                                                        <p className="text-sm font-semibold text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-10">
-                                                                            {event.event_name}
-                                                                        </p>
+                                                                                {/* Paid Stamp / Icon */}
+                                                                                {event.isPaid ? (
+                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
+                                                                                        <CheckCircle2 size={10} className="shrink-0" /> Paid
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
+                                                                                )}
+                                                                            </div>
 
-                                                                        <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
-                                                                            <span className={`text-xs font-medium ${dateCls} flex items-center gap-1.5`}>
-                                                                                <Calendar size={12} className="shrink-0" />
-                                                                                {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                            </span>
-                                                                        </div>
-                                                                    </motion.button>
-                                                                );
-                                                            })}
+                                                                            <p className="text-sm font-semibold text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-10">
+                                                                                {event.event_name}
+                                                                            </p>
+
+                                                                            <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
+                                                                                <span className={`text-xs font-medium ${dateCls} flex items-center gap-1.5`}>
+                                                                                    <Calendar size={12} className="shrink-0" />
+                                                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                                </span>
+                                                                            </div>
+                                                                        </motion.button>
+                                                                    );
+                                                                })}
+                                                            </div>
                                                         </div>
-                                                    </div>
+                                                    ) : (
+                                                        <div className="text-white/50 py-4 text-sm font-medium">No upcoming events this month.</div>
+                                                    )
                                                 )}
 
                                                 {/* Right Side: My Next Match */}
-                                                {nextMatch && (
-                                                    <div className={`order-1 lg:order-2 ${upcomingEvents.length > 0 ? 'lg:col-span-4 lg:border-l lg:border-white/10 lg:pl-6' : 'lg:col-span-12'}`}>
-                                                        {/* Header row */}
-                                                        <div className="flex items-center justify-between mb-3.5 px-1">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="p-1 rounded-md bg-orange-500/10 border border-orange-500/20 text-orange-400 shadow-[0_0_10px_rgba(249,115,22,0.15)]">
-                                                                    <Trophy size={13} />
-                                                                </div>
-                                                                <span className="text-sm sm:text-base font-bold uppercase tracking-widest text-white/95">My Next Match</span>
-                                                            </div>
-                                                            <button
-                                                                onClick={() => navigate('/profile?tab=matches')}
-                                                                className="flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-orange-400 hover:text-white transition-colors group"
-                                                            >
-                                                                View Matches
-                                                                <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                                                            </button>
-                                                        </div>
+                                                {activeHeroTab === 'matches' && (
+                                                    nextMatch ? (
+                                                        <div className="w-full lg:w-1/2 xl:w-1/3 animate-fade-in">
+                                                            {/* Match Card */}
+                                                            {(() => {
+                                                                const info = nextMatch.Info || {};
 
-                                                        {/* Match Card */}
-                                                        {(() => {
-                                                            const info = nextMatch.Info || {};
+                                                                // Parse partners and names
+                                                                const team1P1 = info.Challenger?.Name || 'TBD';
+                                                                const team1P2 = info.Challenger1?.Name;
+                                                                const team2P1 = info.Challenged?.Name || 'TBD';
+                                                                const team2P2 = info.Challenged1?.Name;
 
-                                                            // Parse partners and names
-                                                            const team1P1 = info.Challenger?.Name || 'TBD';
-                                                            const team1P2 = info.Challenger1?.Name;
-                                                            const team2P1 = info.Challenged?.Name || 'TBD';
-                                                            const team2P2 = info.Challenged1?.Name;
+                                                                return (
+                                                                    <div
+                                                                        onClick={() => navigate('/profile?tab=matches')}
+                                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+                                                                    >
+                                                                        {/* Soft background glow */}
+                                                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                                                            return (
-                                                                <div
-                                                                    onClick={() => navigate('/profile?tab=matches')}
-                                                                    className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
-                                                                >
-                                                                    {/* Soft background glow */}
-                                                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                                                                    {/* Top Bar: Event Name and Date */}
-                                                                    <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
-                                                                        <div className="flex items-center gap-1.5 min-w-0">
-                                                                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
-                                                                            <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
-                                                                                {info.EventName || 'Next Match'}
-                                                                            </span>
-                                                                        </div>
-                                                                        {info.Date && (
-                                                                            <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
-                                                                                {info.Date}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-
-                                                                    {/* Centered Matchup Section */}
-                                                                    <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
-                                                                        {/* Team 1 (Challengers) */}
-                                                                        <div className="flex-1 flex flex-col items-end text-right min-w-0">
-                                                                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                {team1P1}
-                                                                            </span>
-                                                                            {team1P2 && (
-                                                                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                    {team1P2}
+                                                                        {/* Top Bar: Event Name and Date */}
+                                                                        <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
+                                                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
+                                                                                <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
+                                                                                    {info.EventName || 'Next Match'}
+                                                                                </span>
+                                                                            </div>
+                                                                            {info.Date && (
+                                                                                <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                                                                                    {info.Date}
                                                                                 </span>
                                                                             )}
                                                                         </div>
 
-                                                                        {/* VS Badge */}
-                                                                        <div className="relative shrink-0 flex items-center justify-center">
-                                                                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
-                                                                                <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
+                                                                        {/* Centered Matchup Section */}
+                                                                        <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
+                                                                            {/* Team 1 (Challengers) */}
+                                                                            <div className="flex-1 flex flex-col items-end text-right min-w-0">
+                                                                                <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                    {team1P1}
+                                                                                </span>
+                                                                                {team1P2 && (
+                                                                                    <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                        {team1P2}
+                                                                                </span>
+                                                                                )}
+                                                                            </div>
+
+                                                                            {/* VS Badge */}
+                                                                            <div className="relative shrink-0 flex items-center justify-center">
+                                                                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
+                                                                                    <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            {/* Team 2 (Challenged) */}
+                                                                            <div className="flex-1 flex flex-col items-start text-left min-w-0">
+                                                                                <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                    {team2P1}
+                                                                                </span>
+                                                                                {team2P2 && (
+                                                                                    <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                        {team2P2}
+                                                                                </span>
+                                                                                )}
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Team 2 (Challenged) */}
-                                                                        <div className="flex-1 flex flex-col items-start text-left min-w-0">
-                                                                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                {team2P1}
-                                                                            </span>
-                                                                            {team2P2 && (
-                                                                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                    {team2P2}
+                                                                        {/* Bottom Bar: Location and Court */}
+                                                                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                                                                            <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
+                                                                                <MapPin size={12} className="text-padel-green shrink-0" />
+                                                                                <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
+                                                                                    {info.Location || info.Venue || 'Location TBD'}
+                                                                                </span>
+                                                                            </div>
+                                                                            {info.Court && (
+                                                                                <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
+                                                                                    {info.Court}
                                                                                 </span>
                                                                             )}
                                                                         </div>
                                                                     </div>
-
-                                                                    {/* Bottom Bar: Location and Court */}
-                                                                    <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                                        <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
-                                                                            <MapPin size={12} className="text-padel-green shrink-0" />
-                                                                            <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
-                                                                                {info.Location || info.Venue || 'Location TBD'}
-                                                                            </span>
-                                                                        </div>
-                                                                        {info.Court && (
-                                                                            <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
-                                                                                {info.Court}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })()}
-                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-white/50 py-4 text-sm font-medium">No upcoming matches at this moment.</div>
+                                                    )
                                                 )}
-                                            </>
+                                            </div>
                                         )}
 
                                     </div>
