@@ -336,16 +336,16 @@ const FullRankingsTable = ({
   const [podiumIndex, setPodiumIndex] = useState(0);
 
   return (
-    <div className="max-w-6xl mx-auto px-6 relative z-10">
+    <div className="max-w-[1440px] mx-auto px-4 xl:px-8 relative z-10 pb-4 md:pb-24">
       {/* Official Rankings Header */}
-      <div className="hidden md:flex mb-10 flex-col items-center text-center">
-        <div className="flex flex-row items-center justify-center flex-nowrap gap-4 md:gap-5 mb-3">
+      <div className="flex mb-6 md:mb-10 flex-col items-center text-center">
+        <div className="flex flex-row items-center justify-center flex-nowrap gap-3 md:gap-5 mb-3">
           {ORG_LOGOS[selectedOrgId] && (
             <motion.div
               key={selectedOrgId}
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/5 border border-white/10 rounded-2xl p-2.5 backdrop-blur-sm h-12 w-28 md:h-16 md:w-36 flex items-center justify-center shadow-lg shadow-black/20 shrink-0"
+              className="bg-white/5 border border-white/10 rounded-2xl p-2 md:p-2.5 backdrop-blur-sm h-10 w-24 md:h-16 md:w-36 flex items-center justify-center shadow-lg shadow-black/20 shrink-0"
             >
               <img
                 src={ORG_LOGOS[selectedOrgId]}
@@ -354,64 +354,40 @@ const FullRankingsTable = ({
               />
             </motion.div>
           )}
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase text-center lg:text-left">
+          <h2 className="text-xl md:text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase text-center lg:text-left">
             Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings
           </h2>
         </div>
-        <p className="text-gray-400 text-sm max-w-xl mx-auto mt-1">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
-      </div>
+        <p className="text-gray-400 text-xs md:text-sm max-w-xl mx-auto mt-1 px-4">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
 
-      {/* Controls Box */}
-      <div className="bg-white/5 border border-white/10 rounded-3xl p-5 md:p-6 backdrop-blur-md mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-
-          {/* Internal Table Tabs with custom sliding background pill */}
-          <div className={`relative flex p-1 bg-black/40 rounded-xl w-full sm:w-auto border border-white/5 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}>
+        {/* Categories Tab Navigation */}
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-6 relative flex p-1 bg-white/5 backdrop-blur-sm rounded-xl w-full sm:w-auto border border-white/10 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}
+        >
             {categories.map((cat) => {
-              const isSelected = activeTab === cat.id;
-              return (
-                <button
-                  key={cat.id}
-                  onClick={() => setActiveTab(cat.id)}
-                  className="relative flex-1 sm:flex-none py-2 px-6 rounded-lg font-black text-xs uppercase tracking-widest transition-all duration-300 z-10"
-                  style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
-                >
-                  {isSelected && (
-                    <motion.div
-                      layoutId="activeGenderTab"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                      className="absolute inset-0 bg-padel-green rounded-lg shadow-lg shadow-padel-green/20"
-                      style={{ zIndex: -1 }}
-                    />
-                  )}
-                  {cat.label}
-                </button>
-              );
+                const isSelected = activeTab === cat.id;
+                return (
+                    <button
+                        key={cat.id}
+                        onClick={() => setActiveTab(cat.id)}
+                        className="relative flex-1 sm:flex-none py-2 px-6 md:px-8 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 z-10"
+                        style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
+                    >
+                        {isSelected && (
+                            <motion.div
+                                layoutId="activeGenderTabMain"
+                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                                className="absolute inset-0 bg-padel-green rounded-lg shadow-lg shadow-padel-green/20"
+                                style={{ zIndex: -1 }}
+                            />
+                        )}
+                        {cat.label}
+                    </button>
+                );
             })}
-          </div>
-
-          {/* Search Box */}
-          <div className="relative w-full sm:w-72">
-            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-              <Search className="h-4 w-4 text-gray-500" />
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search player name..."
-              className="w-full bg-black/40 border border-white/10 text-white rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:ring-2 focus:ring-padel-green/50 placeholder-gray-500 transition-all font-medium text-sm"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-500 hover:text-white"
-              >
-                &times;
-              </button>
-            )}
-          </div>
-        </div>
+        </motion.div>
       </div>
 
       {/* Table / List Area */}
@@ -971,7 +947,7 @@ const Rankings = () => {
   }, [filteredData, currentPage]);
 
   return (
-    <div className="bg-[#0F172A] min-h-screen pt-20 md:pt-32 pb-24 font-sans selection:bg-padel-green selection:text-black text-white">
+    <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
@@ -979,100 +955,112 @@ const Rankings = () => {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
       </div>
 
-      <div className="container mx-auto px-6 max-w-5xl relative z-10">
-        {/* Hero Header */}
-        <div className="text-center mb-12">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-[10px] md:text-xs font-black uppercase tracking-widest mb-4 md:mb-6"
-          >
-            <span className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
-            Live Standings
-          </motion.div>
-
-          <motion.h1
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
-          >
-            Player <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Rankings</span>
-          </motion.h1>
-
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
-          >
-            Browse ranking lists below
-          </motion.p>
-        </div>
-
-        {/* Organization Filter Header */}
-        <div ref={filterRef} className="flex justify-center mb-12 relative z-20 px-4">
-          <div className="bg-[#1E293B]/80 backdrop-blur-xl border border-white/10 rounded-[2rem] p-2 flex items-center shadow-2xl w-full max-w-lg mx-auto ring-1 ring-white/5 relative overflow-hidden">
-            {/* Subtle glow effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-padel-green/5 to-transparent pointer-events-none" />
-            
-            <div className="flex flex-col sm:flex-row items-center w-full bg-black/40 rounded-3xl p-1.5 border border-white/5 relative z-10">
-              <div className="w-full sm:w-auto px-5 py-3 flex items-center justify-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center border border-white/5">
-                  <Trophy className="w-3 h-3 text-padel-green" />
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 whitespace-nowrap">Organisation</span>
-              </div>
-              
-              <div className="relative w-full sm:flex-1 h-full mt-1 sm:mt-0">
-                <select
-                  value={selectedOrgId}
-                  onChange={(e) => setSelectedOrgId(Number(e.target.value))}
-                  className="w-full h-full min-h-[48px] bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/30 text-white rounded-[1.25rem] px-12 focus:outline-none focus:ring-2 focus:ring-padel-green appearance-none font-black uppercase text-[10px] sm:text-[11px] tracking-widest cursor-pointer transition-all duration-300 shadow-[0_0_15px_rgba(190,255,0,0.05)] text-center"
-                  style={{ textAlignLast: 'center' }}
-                >
-                  <option value={15809} className="bg-[#0F172A] text-white py-2">Official SAPA Ranking</option>
-                  <option value={16317} className="bg-[#0F172A] text-white py-2">Broll Pro Tour</option>
-                  <option value={16482} className="bg-[#0F172A] text-white py-2">SA Grand Tour</option>
-                </select>
-                <div className="absolute inset-y-0 right-0 flex items-center pr-5 pointer-events-none">
-                  <ChevronDown className="w-4 h-4 text-padel-green" />
-                </div>
-              </div>
+      <main className="relative z-10 pb-2 md:pb-6 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
+        {/* Unified Header */}
+        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+                <Trophy className="w-3 h-3" />
+                <span>Live Standings</span>
             </div>
-          </div>
-        </div>
 
-        {/* Categories Tab Navigation */}
-        <div className="relative flex items-center gap-1 mb-12 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full md:max-w-fit mx-auto overflow-hidden">
-          {[
-            { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5" /> },
-            // { id: 'leaderboards', label: 'Leaderboards', icon: <Trophy className="w-3.5 h-3.5" />, hideOnMobile: true },
-            { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5" /> }
-          ].map((tab) => {
-            const isActive = activeMainTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveMainTab(tab.id)}
-                className={`relative flex-1 md:flex-none flex items-center justify-center gap-1.5 px-3 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10 ${tab.hideOnMobile ? 'hidden md:flex' : ''}`}
-                style={{ color: isActive ? '#000000' : '#9CA3AF' }}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeTabPill"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    className="absolute inset-0 bg-padel-green rounded-xl md:rounded-full shadow-lg shadow-padel-green/20"
-                    style={{ zIndex: -1 }}
-                  />
-                )}
-                {tab.icon}
-                <span className="truncate">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+            <div className="overflow-hidden mb-6">
+                <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+                    PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">RANKINGS</span>
+                </h1>
+            </div>
 
-      </div>
+            <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+                <strong className="text-white font-medium">Browse ranking lists below.</strong>
+            </p>
+        </section>
+
+        {/* Search & Command Deck */}
+        <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-4 md:mb-8">
+            <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex flex-col md:flex-row gap-3 items-center shadow-2xl max-w-4xl mx-auto"
+            >
+                {/* Search Input Container */}
+                <div className="relative flex-1 w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+                    <input
+                        type="text"
+                        placeholder="Search player name..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
+                    />
+                    {searchTerm && (
+                        <button
+                            onClick={() => setSearchTerm('')}
+                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white"
+                        >
+                            <X className="w-4 h-4 md:w-5 md:h-5" />
+                        </button>
+                    )}
+                </div>
+
+                {/* Organization Dropdown */}
+                <div className="relative w-full md:w-auto shrink-0">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Trophy className="w-4 h-4 md:w-5 md:h-5 text-padel-green" />
+                    </div>
+                    <select
+                        value={selectedOrgId}
+                        onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                        className="w-full bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-12 pr-10 text-[16px] md:text-base text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all font-semibold"
+                    >
+                        <option value={15809} className="bg-[#0a0f1d]">SAPA</option>
+                        <option value={16317} className="bg-[#0a0f1d]">Broll Pro Tour</option>
+                        <option value={16482} className="bg-[#0a0f1d]">SA Grand Tour</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+                        <ChevronDown className="w-4 h-4 text-gray-400" />
+                    </div>
+                </div>
+            </motion.div>
+
+            {/* Quick Category Filters (Tabs) */}
+            <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mt-6 gap-4"
+            >
+                {/* Main Tabs: Overview / Rankings */}
+                <div className="relative flex items-center gap-1 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full sm:w-auto overflow-hidden">
+                    {[
+                        { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5" /> },
+                        { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5" /> }
+                    ].map((tab) => {
+                        const isActive = activeMainTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveMainTab(tab.id)}
+                                className={`relative flex-1 md:flex-none flex items-center justify-center gap-1.5 px-6 py-2 md:py-2.5 rounded-xl md:rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10`}
+                                style={{ color: isActive ? '#000000' : '#9CA3AF' }}
+                            >
+                                {isActive && (
+                                    <motion.div
+                                        layoutId="activeTabPill"
+                                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                                        className="absolute inset-0 bg-padel-green rounded-xl md:rounded-full shadow-lg shadow-padel-green/20"
+                                        style={{ zIndex: -1 }}
+                                    />
+                                )}
+                                {tab.icon}
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </motion.div>
+        </section>
+
+      </main>
 
       <AnimatePresence mode="wait">
         {activeMainTab === 'overview' && (
@@ -1082,7 +1070,7 @@ const Rankings = () => {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -15 }}
             transition={{ duration: 0.25 }}
-            className="container mx-auto px-6 max-w-5xl relative z-10"
+            className="container mx-auto px-6 max-w-5xl relative z-10 pb-6 md:pb-12"
           >
             {/* Info Cards */}
             <RankingExplanation />
