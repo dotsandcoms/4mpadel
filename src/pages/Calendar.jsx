@@ -7,7 +7,7 @@ import { getEventImage } from '../utils/imageUtils';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 
-import { GitBranch } from 'lucide-react';
+import { GitBranch, Map } from 'lucide-react';
 
 const extractRankedinId = (url) => {
     if (!url) return null;
@@ -65,10 +65,10 @@ const FeaturedEventCard = ({ event, index }) => {
         >
             <Link
                 to={detailsPath}
-                className={`group relative flex flex-row items-stretch h-full min-h-[220px] sm:min-h-[240px] bg-[#060913] rounded-[24px] sm:rounded-[32px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
+                className={`group relative flex flex-row items-stretch h-full min-h-[140px] sm:min-h-[160px] bg-[#060913] rounded-[20px] sm:rounded-[24px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
             >
                 {/* Poster Image Container */}
-                <div className="relative w-[120px] sm:w-[170px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
+                <div className="relative w-[100px] sm:w-[130px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
                     {getEventImage(event) ? (
                         <>
                             <img
@@ -85,11 +85,11 @@ const FeaturedEventCard = ({ event, index }) => {
                         </>
                     ) : (
                         <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                            <CalendarIcon className="w-8 h-8 text-white/10" />
+                            <CalendarIcon className="w-6 h-6 text-white/10" />
                         </div>
                     )}
                     <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
-                    
+
                     {event.featured_live && (
                         <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
                             <div className="w-1 h-1 rounded-full bg-white" />
@@ -99,21 +99,21 @@ const FeaturedEventCard = ({ event, index }) => {
                 </div>
 
                 {/* Content */}
-                <div className="p-4 sm:p-6 flex flex-col flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                         <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
+                <div className="p-3 sm:p-4 flex flex-col flex-1 min-w-0 justify-center">
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
                             {event.sapa_status}
                         </span>
                     </div>
 
-                    <h3 className="text-sm sm:text-lg font-black text-white mb-2 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
+                    <h3 className="text-sm sm:text-base font-black text-white mb-1.5 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
                         {event.event_name || event.eventName}
                     </h3>
 
-                    <div className="space-y-2 mt-auto">
-                        <div className="flex items-center gap-2 text-gray-400">
-                            <CalendarIcon className={`w-3 h-3 sm:w-4 sm:h-4 ${accentColor} shrink-0`} />
-                            <span className={`text-[9px] sm:text-xs font-bold ${accentColor} truncate`}>
+                    <div className="space-y-1 mt-auto">
+                        <div className="flex items-center gap-1.5 text-gray-400">
+                            <CalendarIcon className={`w-3 h-3 ${accentColor} shrink-0`} />
+                            <span className={`text-[9px] sm:text-[10px] font-bold ${accentColor} truncate`}>
                                 {event.event_dates ||
                                     (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
                                     (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
@@ -121,22 +121,22 @@ const FeaturedEventCard = ({ event, index }) => {
                         </div>
 
                         {(event.venue || event.city) && (
-                            <div className="flex items-center gap-2 text-gray-400">
-                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-gray-500 shrink-0" />
-                                <span className="text-[9px] sm:text-xs font-medium truncate uppercase tracking-widest">
+                            <div className="flex items-center gap-1.5 text-gray-400">
+                                <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
+                                <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
                                     {event.venue || event.city}
                                 </span>
                             </div>
                         )}
 
-                        <div className="flex items-center justify-between pt-3 border-t border-white/5 mt-3">
+                        <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
                             {event.registered_players > 0 ? (
                                 <div className="flex items-center gap-1">
-                                    <Users className={`w-3 h-3 ${accentColor}`} />
-                                    <span className="text-white font-bold text-[9px] sm:text-xs">{event.registered_players}</span>
+                                    <Users className={`w-2.5 h-2.5 ${accentColor}`} />
+                                    <span className="text-white font-bold text-[9px] sm:text-[10px]">{event.registered_players}</span>
                                 </div>
                             ) : <div></div>}
-                            
+
                             <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
                                 <span>Details</span>
                                 <ArrowRight className="w-3 h-3" />
@@ -187,20 +187,20 @@ const FeaturedCarousel = ({ events }) => {
     if (!events || events.length === 0) return null;
 
     return (
-        <div className="mb-12 relative">
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-8 gap-6 sm:gap-0">
-                <div className="flex flex-row items-center gap-4 text-left">
-                    <div className="w-12 h-12 rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center shrink-0">
-                        <Trophy className="w-6 h-6 text-padel-green" />
+        <div className="mb-6 relative">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 sm:mb-6 gap-4 sm:gap-0">
+                <div className="flex flex-row items-center gap-3 sm:gap-4 text-left">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-padel-green/10 border border-padel-green/20 flex items-center justify-center shrink-0">
+                        <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-padel-green" />
                     </div>
                     <div>
-                        <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-1">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-0.5 sm:mb-1">
                             Featured <span className="text-padel-green">Events</span>
                         </h2>
-                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Handpicked highlights for you</p>
+                        <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest">Handpicked highlights for you</p>
                     </div>
                 </div>
-                
+
                 {events.length > 3 && (
                     <div className="hidden sm:flex gap-3">
                         <button
@@ -223,7 +223,7 @@ const FeaturedCarousel = ({ events }) => {
 
             <div
                 ref={scrollRef}
-                className="flex gap-6 overflow-x-auto pb-12 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-6 px-6"
+                className="flex gap-4 sm:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-4 sm:-mx-8 xl:-mx-12 before:content-[''] before:w-4 before:shrink-0 sm:before:w-8 xl:before:w-12 after:content-[''] after:w-4 after:shrink-0 sm:after:w-8 xl:after:w-12"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {events.map((event, index) => (
@@ -236,7 +236,7 @@ const FeaturedCarousel = ({ events }) => {
             {/* Mobile Navigation Indicator */}
             {events.length > 1 && (
                 <div className="sm:hidden flex justify-center gap-1.5 mt-2">
-                     {/* We could add dots here if we wanted, but horizontal scroll is usually enough on mobile */}
+                    {/* We could add dots here if we wanted, but horizontal scroll is usually enough on mobile */}
                 </div>
             )}
         </div>
@@ -244,32 +244,6 @@ const FeaturedCarousel = ({ events }) => {
 };
 
 const CalendarEventItem = ({ event, index }) => {
-    const { getTournamentClasses } = useRankedin();
-    const [hasDraw, setHasDraw] = useState(false);
-    const [hasResults, setHasResults] = useState(false);
-
-    useEffect(() => {
-        const checkStatus = async () => {
-            const rId = event.rankedin_id || event.eventId || extractRankedinId(event.rankedin_url);
-            if (rId) {
-                const classes = await getTournamentClasses(rId);
-                const drawAvailable = classes && classes.some(c =>
-                    c.IsPublished &&
-                    Array.isArray(c.TournamentDraws) &&
-                    c.TournamentDraws.length > 0
-                );
-                setHasDraw(drawAvailable);
-
-                const resultsAvailable = classes && classes.some(c =>
-                    c.IsPublished &&
-                    c.HasResults === true
-                );
-                setHasResults(resultsAvailable);
-            }
-        };
-        checkStatus();
-    }, [event, getTournamentClasses]);
-
     let tierColor = 'border-white/10';
     let badgeColor = 'bg-white/10 text-gray-400';
     let bgGradient = 'bg-white/5';
@@ -282,7 +256,6 @@ const CalendarEventItem = ({ event, index }) => {
     else if (event.sapa_status === 'FIP event') { tierColor = 'border-white/10 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; bgGradient = 'bg-gradient-to-r from-blue-500/20 to-transparent'; }
 
     const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
-    const drawPath = `/draws/${event.slug || event.rankedin_id || event.eventId || extractRankedinId(event.rankedin_url)}`;
 
     return (
         <motion.div
@@ -291,143 +264,96 @@ const CalendarEventItem = ({ event, index }) => {
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ delay: index * 0.05 }}
         >
-            <div className={`group block backdrop-blur-sm border ${tierColor} rounded-3xl p-5 sm:p-6 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative`}>
+            <Link
+                to={detailsPath}
+                target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
+                className={`group block backdrop-blur-sm border ${tierColor} rounded-2xl p-4 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
+            >
                 <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
 
-                <div className="flex flex-col gap-6 relative z-10">
-                    {/* Top Row: Poster & Basic Info */}
-                    <div className="flex flex-row md:items-center gap-5 sm:gap-6 w-full min-w-0">
-                        {/* Poster Image Box */}
-                        <div className="flex-shrink-0 w-[100px] sm:w-[130px] md:w-32 aspect-[3/4] rounded-2xl overflow-hidden bg-black/40 border border-white/5 relative group shadow-2xl">
-                            {getEventImage(event) ? (
-                                <img
-                                    src={getEventImage(event)}
-                                    alt={event.event_name || event.eventName}
-                                    className="w-full h-full object-cover object-center transition-transform duration-500 group-hover:scale-110"
-                                />
-                            ) : (
-                                <div className="w-full h-full flex flex-col items-center justify-center">
-                                    <CalendarIcon className="w-6 h-6 text-padel-green mb-1 opacity-50" />
-                                    <span className="text-[10px] text-gray-500 font-bold uppercase">No Poster</span>
+                <div className="flex flex-row items-center gap-4 relative z-10 w-full min-w-0">
+                    {/* Square Icon/Image on left */}
+                    <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-black/40 border border-white/5 relative shadow-xl">
+                        {getEventImage(event) ? (
+                            <img
+                                src={getEventImage(event)}
+                                alt={event.event_name || event.eventName}
+                                className="w-full h-full object-cover object-center group-hover:scale-110 transition-transform duration-500"
+                            />
+                        ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center">
+                                <CalendarIcon className="w-5 h-5 text-padel-green mb-1 opacity-50" />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right Info block */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 py-1">
+                        {/* Status Row */}
+                        <div className="flex items-center gap-2 mb-0.5">
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
+                                {event.sapa_status}
+                            </span>
+                            {event.is_league && (
+                                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                    League
+                                </span>
+                            )}
+                        </div>
+                        
+                        {/* Date */}
+                        <div className="flex items-center gap-1 text-padel-green font-bold text-[10px] sm:text-xs">
+                            <CalendarIcon className="w-3.5 h-3.5" />
+                            <span>
+                                {event.event_dates ||
+                                    (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                    (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
+                            </span>
+                        </div>
+
+                        {/* Title */}
+                        <h3 className="text-lg sm:text-xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-1 sm:line-clamp-2">
+                            {event.event_name || event.eventName}
+                        </h3>
+
+                        {/* Bottom Metadata Row */}
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-400 text-[10px] sm:text-xs font-medium mt-0.5">
+                            {event.city && (
+                                <span className="flex items-center gap-1 shrink-0">
+                                    <Map className="w-3.5 h-3.5 text-padel-green/60" />
+                                    {event.city}
+                                </span>
+                            )}
+                            <span className="flex items-center gap-1 min-w-0">
+                                <MapPin className="w-3.5 h-3.5 text-padel-green/60 shrink-0" />
+                                <span className="truncate max-w-[120px] sm:max-w-[200px]" title={event.venue || event.clubName}>
+                                    {(event.venue || event.clubName || 'Location TBC').split(' ').slice(0, 3).join(' ') + ((event.venue || event.clubName || 'Location TBC').split(' ').length > 3 ? '...' : '')}
+                                </span>
+                            </span>
+                            {event.registered_players > 0 && (
+                                <span className="flex items-center gap-1 shrink-0 bg-padel-green/5 border border-padel-green/10 px-1.5 py-0.5 rounded-md">
+                                    <Users className="w-3 h-3 text-padel-green" />
+                                    <span className="text-white font-bold text-[9px] leading-none">{event.registered_players}</span>
+                                </span>
+                            )}
+                            
+                            {/* Tags */}
+                            {(event.live_youtube_url && event.featured_live) && (
+                                <div className="flex items-center gap-0.5 bg-red-600 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0 animate-pulse">
+                                    <PlayCircle className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Live</span>
+                                </div>
+                            )}
+                            {(new Date(event.end_date || event.start_date) < new Date()) && (
+                                <div className="flex items-center gap-0.5 bg-slate-900 text-gray-400 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border border-white/10 shrink-0">
+                                    <Check className="w-2.5 h-2.5 shrink-0 text-padel-green" />
+                                    <span>Complete</span>
                                 </div>
                             )}
                         </div>
-
-                        {/* Info Content */}
-                        <div className="flex-1 min-w-0 flex flex-col justify-center">
-                             <div className="flex flex-wrap items-center gap-1.5 mb-2 sm:mb-3">
-                                 <span className={`px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest ${badgeColor}`}>
-                                     {event.sapa_status}
-                                 </span>
-                                 {event.is_league && (
-                                     <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest">
-                                         League
-                                     </span>
-                                 )}
-                                 {event.city && (
-                                     <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-bold uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300">
-                                         {event.city}
-                                     </span>
-                                 )}
-                                 {event.registered_players > 0 && (
-                                     <div className="flex items-center gap-1 bg-padel-green/5 border border-padel-green/10 px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full">
-                                         <Users className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-padel-green" />
-                                         <span className="text-white font-bold text-[9px] sm:text-xs leading-none">{event.registered_players}</span>
-                                     </div>
-                                 )}
-                             </div>
-
-                            <h3 className="text-base sm:text-xl md:text-2xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight mb-2 sm:mb-3 line-clamp-2">
-                                {event.event_name || event.eventName}
-                            </h3>
-
-                             {/* Info Metadata Row */}
-                             <div className="flex flex-wrap items-center gap-y-1 gap-x-2.5 text-gray-400 text-[9px] sm:text-sm font-medium">
-                                 <div className="flex items-center gap-1 text-padel-green font-bold shrink-0">
-                                     <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                                     <span>
-                                         {event.event_dates ||
-                                             (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
-                                             (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
-                                     </span>
-                                 </div>
-                                 
-                                 <div className="flex items-center gap-1 shrink-0 max-w-[120px] sm:max-w-none">
-                                     <MapPin className="w-3 h-3 sm:w-4 sm:h-4 text-padel-green/50 shrink-0" />
-                                     <span className="truncate" title={event.venue || event.clubName}>
-                                         {event.venue || event.clubName || 'Location TBC'}
-                                     </span>
-                                 </div>
-
-                                 {event.organizer_name && (
-                                     <div className="flex items-center gap-1 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
-                                         <Shield className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 text-gray-400" />
-                                         <span className="text-white font-bold text-[8px] sm:text-[10px] uppercase whitespace-nowrap">{event.organizer_name}</span>
-                                     </div>
-                                 )}
-                             </div>
-                        </div>
-                    </div>
-
-                    {/* Bottom Row: Status Tag & Action Buttons */}
-                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 pt-5 border-t border-white/5">
-                         {/* Status/Organizer Info */}
-                          <div className="flex flex-nowrap items-center justify-center sm:justify-start gap-1.5 sm:gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar pb-0.5">
- 
-                             {event.live_youtube_url && event.featured_live && (
-                                 <div className="flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest animate-pulse border border-red-500 shadow-lg shadow-red-500/20 shrink-0">
-                                     <PlayCircle className="w-3 h-3 shrink-0" />
-                                     <span>Live</span>
-                                 </div>
-                             )}
-                             {(new Date(event.end_date || event.start_date) < new Date()) && (
-                                 <div className="flex items-center gap-1 bg-slate-900 text-gray-400 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-white/10 shadow-lg shrink-0">
-                                     <Check className="w-3 h-3 shrink-0 text-padel-green" />
-                                     <span>Complete</span>
-                                 </div>
-                             )}
-
-                             {(event.rankedin_id || event.rankedin_url) && (new Date(event.end_date || event.start_date) < new Date()) && (
-                                 <div className="flex items-center gap-1 bg-slate-900 text-padel-green px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-padel-green/50 shadow-lg shrink-0">
-                                     <Trophy className="w-3 h-3 shrink-0" />
-                                     <span>Results Available</span>
-                                 </div>
-                             )}
-
-                             {event.youtube_playlist_url && (
-                                 <div className="flex items-center gap-1 bg-slate-900 text-white border border-red-500/30 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shrink-0">
-                                     <Video className="w-3 h-3 text-red-600" />
-                                     <span>Media Available</span>
-                                 </div>
-                             )}
-
-                         </div>
-
-
-
-                        {/* Actions */}
-                        <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
-                            {(hasDraw || hasResults) && (
-                                <Link
-                                    to={drawPath}
-                                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-padel-green hover:border-padel-green !text-padel-green hover:!text-black px-4 py-3 rounded-xl transition-all duration-300 font-bold text-[10px] lg:text-xs uppercase tracking-widest group/draw"
-                                >
-                                    <GitBranch className="w-3.5 h-3.5 !text-padel-green group-hover/draw:!text-black transition-colors shrink-0" />
-                                    <span className="!text-current whitespace-nowrap uppercase">Draws & Results</span>
-                                </Link>
-                            )}
-                            <Link
-                                to={detailsPath}
-                                target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
-                                className="flex-1 sm:flex-none flex items-center justify-center gap-2 bg-padel-green !text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] lg:text-xs hover:bg-white hover:!text-black hover:scale-105 transition-all shadow-lg shadow-padel-green/20"
-                            >
-                                <span className="!text-black uppercase whitespace-nowrap">View Details</span>
-                                <ArrowRight className="w-4 h-4 !text-black shrink-0" />
-                            </Link>
-                        </div>
                     </div>
                 </div>
-            </div>
+            </Link>
         </motion.div>
     );
 };
@@ -443,11 +369,10 @@ const Calendar = () => {
     // Filter & Search State
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilters, setStatusFilters] = useState([]);
-    const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-    const dropdownRef = useRef(null);
     const [cityFilter, setCityFilter] = useState('All');
     const [activeTab, setActiveTab] = useState(initialTab); // 'upcoming', 'past', 'all', 'my-calendar'
     const [leagueFilter, setLeagueFilter] = useState('Tournaments'); // 'All' | 'League' | 'Tournaments'
+    const [showFilters, setShowFilters] = useState(false);
 
     useEffect(() => {
         const tab = searchParams.get('tab');
@@ -455,8 +380,6 @@ const Calendar = () => {
             setActiveTab(tab);
         }
     }, [searchParams]);
-
-    const [isFilterExpanded, setIsFilterExpanded] = useState(false);
 
     // View State
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
@@ -478,16 +401,6 @@ const Calendar = () => {
     useEffect(() => {
         fetchEvents();
         checkUserStatus();
-    }, []);
-
-    useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-                setIsStatusDropdownOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
     const checkUserStatus = async () => {
@@ -785,41 +698,214 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pt-10 md:pt-32 pb-20 container mx-auto px-6 max-w-7xl">
+            <main className="relative z-10 pb-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
+                {/* Unified Header */}
+                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+                        <CalendarIcon className="w-3 h-3" />
+                        <span>Events Schedule</span>
+                    </div>
 
-                {/* Hero Header */}
-                <div className="text-center mb-10 md:mb-16">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-sm font-bold uppercase tracking-widest mb-4 md:mb-8"
-                    >
-                        <span className="w-2 h-2 rounded-full bg-padel-green animate-pulse" />
-                        Official Schedule
-                    </motion.div>
-
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex flex-col md:flex-row items-center justify-center gap-4 mb-4 md:mb-6"
-                    >
-                        <h1 className="text-5xl md:text-8xl font-black font-display text-white tracking-tighter uppercase m-0 leading-none text-center mb-6">
-                            Tournament <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Calendar</span>
+                    <div className="overflow-hidden mb-6">
+                        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+                            TOUR <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">CALENDAR</span>
                         </h1>
-                    </motion.div>
+                    </div>
 
-                    <motion.p
+                    <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+                        <strong className="text-white font-medium">Explore the 2026/2027 season events.</strong>
+                    </p>
+                </section>
+
+                {/* Search & Command Deck */}
+                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+                    <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.1 }}
-                        className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
+                        transition={{ delay: 0.4 }}
+                        className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
                     >
-                        Explore the 2026/2027 season events. Find tournaments near you, plan your schedule, and compete for crucial ranking points.
-                    </motion.p>
-                </div>
+                        {/* Search Input Container */}
+                        <div className="relative flex-1">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+                            <input
+                                type="text"
+                                placeholder="Search events or venues..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
+                            />
+                        </div>
 
-                {/* Featured Carousel */}
-                <FeaturedCarousel events={featuredEvents} />
+                        {/* Filters Button */}
+                        <button
+                            onClick={() => setShowFilters(true)}
+                            className="relative flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-3.5 text-white transition-all font-semibold text-sm md:text-base shrink-0 group"
+                        >
+                            <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
+                            <span className="hidden sm:block">Filters</span>
+                            {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All')) && (
+                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 md:w-5 md:h-5 bg-padel-green text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg">
+                                    {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0)}
+                                </span>
+                            )}
+                        </button>
+
+                        {/* View Toggle (Grid/List) in Command Deck */}
+                        <div className="hidden sm:flex bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-1 gap-1">
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
+                                title="List View"
+                            >
+                                <List className="w-4 h-4 md:w-5 md:h-5" />
+                            </button>
+                            <button
+                                onClick={() => setViewMode('calendar')}
+                                className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
+                                title="Grid View"
+                            >
+                                <LayoutGrid className="w-4 h-4 md:w-5 md:h-5" />
+                            </button>
+                        </div>
+                    </motion.div>
+                </section>
+
+                {/* Filters Drawer/Bottom Sheet */}
+                <AnimatePresence>
+                    {showFilters && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowFilters(false)}
+                                className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
+                            />
+
+                            {/* Drawer */}
+                            <motion.div
+                                initial={{ y: '100%' }}
+                                animate={{ y: 0 }}
+                                exit={{ y: '100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-white">Filters</h3>
+                                    <button onClick={() => setShowFilters(false)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-colors">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* Type Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-300">Event Type</label>
+                                        <div className="relative">
+                                            <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                value={leagueFilter}
+                                                onChange={(e) => setLeagueFilter(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                <option value="All" className="bg-[#0a0f1d]">All Types</option>
+                                                <option value="League" className="bg-[#0a0f1d]">League Only</option>
+                                                <option value="Tournaments" className="bg-[#0a0f1d]">Tournaments</option>
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Status Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-300">Tier / Status</label>
+                                        <div className="relative">
+                                            <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                value={statusFilters[0] || 'All'}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    setStatusFilters(val === 'All' ? [] : [val]);
+                                                }}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                <option value="All" className="bg-[#0a0f1d]">All Statuses</option>
+                                                {uniqueStatuses.filter(s => s !== 'All').map(s => (
+                                                    <option key={s} value={s} className="bg-[#0a0f1d]">{s}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* City Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-300">City</label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                value={cityFilter}
+                                                onChange={(e) => setCityFilter(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                {uniqueCities.map(city => (
+                                                    <option key={city} value={city} className="bg-[#0a0f1d]">{city === 'All' ? 'All Cities' : city}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Mobile View Toggle */}
+                                    <div className="space-y-2 sm:hidden pt-2 border-t border-white/10">
+                                        <label className="text-sm font-semibold text-gray-300">View Mode</label>
+                                        <div className="flex bg-white/5 border border-white/10 rounded-xl p-1 gap-1">
+                                            <button
+                                                onClick={() => setViewMode('list')}
+                                                className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
+                                            >
+                                                <List className="w-4 h-4" /> List
+                                            </button>
+                                            <button
+                                                onClick={() => setViewMode('calendar')}
+                                                className={`flex-1 py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
+                                            >
+                                                <LayoutGrid className="w-4 h-4" /> Grid
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setStatusFilters([]);
+                                            setCityFilter('All');
+                                            setLeagueFilter('All');
+                                        }}
+                                        className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
+                                    >
+                                        Clear
+                                    </button>
+                                    <button
+                                        onClick={() => setShowFilters(false)}
+                                        className="flex-1 bg-padel-green hover:bg-[#beff00] text-black font-bold py-3.5 rounded-xl transition-colors text-sm"
+                                    >
+                                        Show Results
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
 
                 {/* Primary Tab Navigation */}
                 <div className="flex justify-center mb-10 relative z-50">
@@ -853,215 +939,8 @@ const Calendar = () => {
                     </div>
                 </div>
 
-                {/* Filters & Controls */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white/5 backdrop-blur-md border border-white/10 rounded-[2rem] p-4 mb-10 relative z-40"
-                >
-                    <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
-                        {/* Search Bar - Always Visible */}
-                        <div className="relative w-full lg:w-96 flex-shrink-0 flex gap-2">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                                <input
-                                    type="text"
-                                    placeholder="Search events or venues..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green transition-all placeholder-gray-500 text-base"
-                                />
-                            </div>
-
-                            {/* Mobile Filter Toggle */}
-                            <button
-                                onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-                                className="lg:hidden flex items-center justify-center px-4 bg-black/40 border border-white/10 rounded-2xl text-padel-green hover:bg-white/10 transition-colors group"
-                            >
-                                <Filter className={`w-5 h-5 transition-transform duration-300 ${isFilterExpanded ? 'scale-110' : ''}`} />
-                                <span className="ml-2 text-xs font-bold uppercase tracking-widest md:hidden">Filters</span>
-                            </button>
-                        </div>
-
-                        {/* DESKTOP FILTERS (Always Visible) */}
-                        <div className="hidden lg:flex flex-row gap-4 items-center justify-end">
-                            {/* Type Filter */}
-                            <div className="relative min-w-[150px]">
-                                <Layers className="absolute pointer-events-none left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                                <select
-                                    value={leagueFilter}
-                                    onChange={(e) => setLeagueFilter(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-base"
-                                >
-                                    <option value="All" className="bg-slate-900">All Types</option>
-                                    <option value="League" className="bg-slate-900">League Only</option>
-                                    <option value="Tournaments" className="bg-slate-900">Tournaments</option>
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            </div>
-
-                            {/* Status Filter */}
-                            <div className="relative min-w-[160px]" ref={dropdownRef}>
-                                <Filter className="absolute z-10 left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
-                                <button
-                                    onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-10 text-white text-left appearance-none focus:outline-none focus:border-padel-green hover:bg-black/60 transition-colors text-base"
-                                >
-                                    <span className="truncate block">
-                                        {statusFilters.length === 0
-                                            ? 'All Statuses'
-                                            : statusFilters.length === 1
-                                                ? statusFilters[0]
-                                                : `${statusFilters.length} Selected`}
-                                    </span>
-                                </button>
-                                <ChevronDown className={`w-4 h-4 text-gray-400 absolute z-10 right-3 top-1/2 -translate-y-1/2 pointer-events-none transition-transform duration-200 ${isStatusDropdownOpen ? 'rotate-180' : ''}`} />
-
-                                <AnimatePresence>
-                                    {isStatusDropdownOpen && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, y: -10 }}
-                                            className="absolute z-50 top-full left-0 mt-2 w-full bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col"
-                                        >
-                                            <div className="max-h-60 overflow-y-auto nice-scrollbar py-2">
-                                                <button
-                                                    onClick={() => { setStatusFilters([]); setIsStatusDropdownOpen(false); }}
-                                                    className={`w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.length === 0 ? 'text-padel-green font-bold bg-white/5' : 'text-gray-300'}`}
-                                                >
-                                                    <span>All Statuses</span>
-                                                    {statusFilters.length === 0 && <Check className="w-4 h-4" />}
-                                                </button>
-                                                {uniqueStatuses.filter(s => s !== 'All').map(status => (
-                                                    <button
-                                                        key={status}
-                                                        onClick={() => setStatusFilters(prev => prev.includes(status) ? prev.filter(s => s !== status) : [...prev, status])}
-                                                        className={`w-full text-left px-4 py-2 text-xs hover:bg-white/5 transition-colors flex items-center justify-between ${statusFilters.includes(status) ? 'text-white font-bold bg-white/5' : 'text-gray-300'}`}
-                                                    >
-                                                        <span>{status}</span>
-                                                        {statusFilters.includes(status) && <Check className="w-4 h-4 text-padel-green" />}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-
-                            {/* City Filter */}
-                            <div className="relative min-w-[140px]">
-                                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4" />
-                                <select
-                                    value={cityFilter}
-                                    onChange={(e) => setCityFilter(e.target.value)}
-                                    className="w-full bg-black/40 border border-white/10 rounded-2xl py-3 pl-10 pr-8 text-white appearance-none focus:outline-none focus:border-padel-green cursor-pointer hover:bg-black/60 transition-colors text-base"
-                                >
-                                    {uniqueCities.map(city => (
-                                        <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown className="w-4 h-4 text-gray-500 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                            </div>
-
-                            {/* View Toggle */}
-                            <div className="flex bg-black/40 border border-white/10 rounded-xl p-1">
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`w-12 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
-                                    title="List View"
-                                >
-                                    <List className="w-4 h-4" />
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('calendar')}
-                                    className={`w-12 h-10 rounded-lg flex items-center justify-center transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
-                                    title="Grid View"
-                                >
-                                    <LayoutGrid className="w-4 h-4" />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* MOBILE FILTERS (Accordion) */}
-                    <AnimatePresence>
-                        {isFilterExpanded && (
-                            <motion.div
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                                className="lg:hidden w-full space-y-4 pt-4 border-t border-white/5 mt-4"
-                            >
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* Type Filter */}
-                                    <div className="relative">
-                                        <Layers className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
-                                        <select
-                                            value={leagueFilter}
-                                            onChange={(e) => setLeagueFilter(e.target.value)}
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-base"
-                                        >
-                                            <option value="All" className="bg-slate-900">All Types</option>
-                                            <option value="League" className="bg-slate-900">League Only</option>
-                                            <option value="Tournaments" className="bg-slate-900">Tournaments</option>
-                                        </select>
-                                    </div>
-
-                                    {/* Status Filter */}
-                                    <div className="relative">
-                                        <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
-                                        <select
-                                            multiple={false}
-                                            value={statusFilters[0] || 'All'}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setStatusFilters(val === 'All' ? [] : [val]);
-                                            }}
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
-                                        >
-                                            <option value="All" className="bg-slate-900">All Statuses</option>
-                                            {uniqueStatuses.filter(s => s !== 'All').map(s => (
-                                                <option key={s} value={s} className="bg-slate-900">{s}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* City Filter */}
-                                    <div className="relative">
-                                        <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-5 h-5 pointer-events-none" />
-                                        <select
-                                            value={cityFilter}
-                                            onChange={(e) => setCityFilter(e.target.value)}
-                                            className="w-full bg-black/40 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white appearance-none focus:outline-none focus:border-padel-green text-sm"
-                                        >
-                                            {uniqueCities.map(city => (
-                                                <option key={city} value={city} className="bg-slate-900">{city === 'All' ? 'All Cities' : city}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* View Mode */}
-                                    <div className="flex bg-black/40 border border-white/10 rounded-2xl p-1 gap-1">
-                                        <button
-                                            onClick={() => setViewMode('list')}
-                                            className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'list' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
-                                        >
-                                            <List className="w-4 h-4" /> List
-                                        </button>
-                                        <button
-                                            onClick={() => setViewMode('calendar')}
-                                            className={`flex-1 py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-bold transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white' : 'text-gray-500'}`}
-                                        >
-                                            <LayoutGrid className="w-4 h-4" /> Grid
-                                        </button>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </motion.div>
+                {/* Featured Carousel */}
+                <FeaturedCarousel events={featuredEvents} />
 
                 {/* Content Area */}
                 {(loading || personalLoading) ? (
