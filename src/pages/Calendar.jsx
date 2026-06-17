@@ -223,7 +223,7 @@ const FeaturedCarousel = ({ events }) => {
 
             <div
                 ref={scrollRef}
-                className="flex gap-4 sm:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-4 sm:-mx-8 xl:-mx-12 before:content-[''] before:w-4 before:shrink-0 sm:before:w-8 xl:before:w-12 after:content-[''] after:w-4 after:shrink-0 sm:after:w-8 xl:after:w-12"
+                className="flex gap-4 sm:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide no-scrollbar -mx-4 px-4 scroll-px-4 sm:-mx-8 sm:px-8 sm:scroll-px-8 xl:-mx-12 xl:px-12 xl:scroll-px-12 after:content-[''] after:min-w-[1px] after:shrink-0"
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {events.map((event, index) => (
