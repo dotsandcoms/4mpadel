@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import Navbar from '../components/Navbar';
-import { Search, Filter, MapPin, Trophy, Instagram, ArrowUpRight, Zap, Image, X } from 'lucide-react';
+import { Search, Filter, Trophy, ArrowUpRight, Zap, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import heroBg from '../assets/hero_bg.png';
 import PlayerModal from '../components/PlayerModal';
@@ -146,46 +146,27 @@ const Players = () => {
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[150px] pointer-events-none" />
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
-        {/* Hero Section */}
-        <section className="hidden md:flex relative h-[45vh] min-h-[420px] items-center justify-center overflow-hidden">
-          <div className="absolute inset-0 z-0">
-            <img
-              src={heroBg}
-              alt="Players Hero"
-              className="w-full h-full object-cover opacity-20"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#060a14] via-[#060a14]/65 to-transparent" />
+        {/* Unified Header */}
+        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12 px-4 container mx-auto">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+            <Trophy className="w-3 h-3" />
+            <span>COMPETE. RANK. WIN.</span>
           </div>
 
-          <div className="relative z-10 text-center px-6 max-w-4xl mx-auto">
-            <motion.h1
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter"
-            >
-              Our <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Players</span>
-            </motion.h1>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2 }}
-              className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
-            >
-              Meet the elite talent driving the sport forward. From rising tournament stars to seasoned champions.
-            </motion.p>
-            <motion.p
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mx-auto mt-4 font-medium tracking-wide"
-            >
-              *Only players holding a valid Player's License are listed
-            </motion.p>
+          <div className="overflow-hidden mb-6">
+            <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+              PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">DIRECTORY</span>
+            </h1>
           </div>
+
+          <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+            <strong className="text-white font-medium">Meet the elite talent driving the sport forward.</strong> <span className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mt-1 mb-2 md:mb-8 font-medium tracking-wide block sm:inline">-*Only players holding a valid Player's License are listed</span>
+          </p>
         </section>
 
         {/* Search & Command Deck */}
-        <section className="container mx-auto px-6 pt-20 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+        <section className="container mx-auto px-6 pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -197,7 +178,7 @@ const Players = () => {
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
               <input
                 type="text"
-                placeholder="Search pro players..."
+                placeholder="Search Players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
@@ -231,11 +212,10 @@ const Players = () => {
               <button
                 key={cat}
                 onClick={() => setSelectedCategory(cat)}
-                className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all uppercase tracking-widest border ${
-                  selectedCategory === cat 
-                    ? 'bg-padel-green text-black border-padel-green' 
-                    : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20 hover:text-white'
-                }`}
+                className={`whitespace-nowrap px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold transition-all uppercase tracking-widest border ${selectedCategory === cat
+                  ? 'bg-padel-green text-black border-padel-green'
+                  : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20 hover:text-white'
+                  }`}
               >
                 {cat}
               </button>
@@ -385,7 +365,7 @@ const Players = () => {
 
                     {/* Category Overlay Capsule */}
                     {player.category && (
-                      <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-black px-1.5 py-0.5 sm:px-1.5 sm:py-0.5 rounded-md sm:rounded-md text-[6px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg">
+                      <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-1 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-bold sm:font-black px-1 py-0.5 sm:px-1.5 sm:py-0.5 rounded sm:rounded-md text-[4px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg max-w-[50%] text-center truncate">
                         {player.category}
                       </motion.div>
                     )}
@@ -412,47 +392,11 @@ const Players = () => {
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
 
                     <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className="text-[10px] sm:text-base font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10">
+                      <motion.h3 layoutId={`name-${player.id}`} className="text-[8px] sm:text-base font-bold sm:font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10">
                         {player.name}
                       </motion.h3>
 
-                      {/* Info Badges & Social Row */}
-                      <div className="flex flex-wrap items-center gap-x-1 sm:gap-x-1.5 gap-y-1 text-[7px] sm:text-[10px] text-gray-300 font-semibold mb-1.5 sm:mb-2">
-                        <div className="flex items-center gap-0.5 sm:gap-1 bg-white/5 border border-white/5 px-1 sm:px-1.5 py-0.5 rounded-sm sm:rounded-md">
-                          <MapPin className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-padel-green" />
-                          <span className="line-clamp-1 max-w-[50px] sm:max-w-[60px]">{player.nationality}</span>
-                        </div>
-                        <div className="flex items-center gap-0.5 sm:gap-1 bg-white/5 border border-white/5 px-1 sm:px-1.5 py-0.5 rounded-sm sm:rounded-md">
-                          <Trophy className="w-2 h-2 sm:w-2.5 sm:h-2.5 text-padel-green" />
-                          <span className="truncate max-w-[50px] sm:max-w-[70px]">{player.home_club || 'No Club'}</span>
-                        </div>
-                        {player.instagram_link && (
-                          <a
-                            href={player.instagram_link.startsWith('http') ? player.instagram_link : `https://instagram.com/${player.instagram_link.replace('@', '')}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="bg-white/5 border border-white/5 md:hover:bg-padel-green md:hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0 relative z-20"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Instagram className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                          </a>
-                        )}
-                        {player.hasGallery && (
-                          <div
-                            className="bg-white/5 border border-white/5 text-padel-green md:hover:bg-padel-green md:hover:text-black p-0.5 sm:p-1 rounded-sm sm:rounded-md transition-colors shrink-0 relative z-20"
-                            title="Player Photo Gallery Available"
-                          >
-                            <Image className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                          </div>
-                        )}
-                      </div>
                     </div>
-
-                    {player.bio && (
-                      <p className="text-[7px] sm:text-[10px] text-gray-400 line-clamp-2 italic font-medium leading-relaxed border-t border-white/5 pt-1.5 sm:pt-2 mt-auto">
-                        "{player.bio}"
-                      </p>
-                    )}
                   </div>
                 </motion.div>
               ))
@@ -469,7 +413,7 @@ const Players = () => {
               </div>
             )}
           </div>
-          
+
           {/* Load More Button */}
           {visibleCount < filteredPlayers.length && (
             <div className="mt-8 flex justify-center pb-8">
