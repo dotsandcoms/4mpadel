@@ -1375,7 +1375,7 @@ const EventDetails = () => {
         }
 
         // 2. Sync / Insert to tournament_participants
-        const insertParticipant = async (pEmail, pName, targetDivs) => {
+        const insertParticipant = async (pEmail, pName, targetDivs, overrideIsPaid = isPaidStatus) => {
             let pId = null;
             let finalEmail = pEmail;
 
@@ -1408,12 +1408,12 @@ const EventDetails = () => {
                         email: finalEmail || null,
                         class_name: div,
                         profile_id: pId,
-                        is_paid: isPaidStatus,
+                        is_paid: overrideIsPaid,
                         last_synced_at: new Date().toISOString()
                     });
                 } else {
                     await supabase.from('tournament_participants').update({
-                        is_paid: isPaidStatus,
+                        is_paid: overrideIsPaid,
                         last_synced_at: new Date().toISOString()
                     }).eq('id', existing.id);
                 }
@@ -1425,10 +1425,13 @@ const EventDetails = () => {
         for (const div of selectedDivisions) {
             const part = divisionPartners[div];
             if (part?.hasPartner) {
+                // Partner is only marked as paid if the main user successfully paid AND explicitly chose to pay for the partner
+                const partnerPaidStatus = isPaidStatus && part.payForPartner === true;
+
                 if (part.partnerProfile) {
-                    await insertParticipant(part.partnerProfile.email, part.partnerProfile.name, [div]);
+                    await insertParticipant(part.partnerProfile.email, part.partnerProfile.name, [div], partnerPaidStatus);
                 } else if (part.partnerName) {
-                    await insertParticipant(null, part.partnerName, [div]);
+                    await insertParticipant(null, part.partnerName, [div], partnerPaidStatus);
                 }
             }
         }
