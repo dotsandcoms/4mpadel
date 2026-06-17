@@ -147,7 +147,7 @@ const Players = () => {
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
         {/* Unified Header */}
-        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12 px-4 container mx-auto">
+        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
             <Trophy className="w-3 h-3" />
             <span>COMPETE. RANK. WIN.</span>
@@ -165,7 +165,7 @@ const Players = () => {
         </section>
 
         {/* Search & Command Deck */}
-        <section className="container mx-auto px-6 pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+        <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -206,7 +206,7 @@ const Players = () => {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="flex overflow-x-auto md:justify-center gap-2 pb-2 mt-4 hide-scrollbar"
+            className="flex overflow-x-auto gap-2 pb-2 mt-4 hide-scrollbar max-w-4xl mx-auto"
           >
             {categories.map((cat) => (
               <button
@@ -321,8 +321,8 @@ const Players = () => {
           )}
         </AnimatePresence>
 
-        {/* Players Grid */}
-        <section className="container mx-auto px-6">
+        {/* Players Grid Container */}
+        <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 relative z-20">
           <div className="mb-4 text-gray-400 text-xs sm:text-sm font-black uppercase tracking-widest">
             {filteredPlayers.length} PLAYERS FOUND
           </div>
