@@ -242,7 +242,7 @@ const Players = () => {
                 animate={{ y: 0 }}
                 exit={{ y: '100%' }}
                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
               >
                 <div className="flex items-center justify-between">
                   <h3 className="text-xl font-bold text-white">Filters</h3>
