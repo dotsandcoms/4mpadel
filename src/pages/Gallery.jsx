@@ -119,7 +119,7 @@ const Gallery = () => {
     );
 
     return (
-        <div className="pt-4 md:pt-24 pb-4 md:pb-2 min-h-[60vh] relative overflow-hidden bg-[#0A0D14]">
+        <div className="pb-4 md:pb-2 min-h-screen relative overflow-hidden bg-[#0F172A] text-white font-sans selection:bg-padel-green selection:text-black">
             <Helmet>
                 <title>Gallery | 4M Padel</title>
                 <meta name="description" content="View our latest photo galleries from 4M Padel tournaments and events." />
@@ -133,7 +133,7 @@ const Gallery = () => {
 
             <div className="relative z-10 w-full max-w-[1800px] mx-auto px-4 sm:px-10 lg:px-16">
                 {/* Unified Header */}
-                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-12 lg:pt-16 pb-4 md:pb-12">
+                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
                     <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
                         <ImageIcon className="w-3 h-3" />
                         <span>Official Gallery</span>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2, ExternalLink, Search, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Award, Mail, Phone, MapPin, Star, ShieldCheck, Instagram, Youtube, UserX, Loader2, ExternalLink, Search, X, ChevronDown, Filter } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { Link, useSearchParams } from 'react-router-dom';
 import CoachProfileModal from '../components/CoachProfileModal';
@@ -99,6 +99,7 @@ const ApprovedCoaches = () => {
     const [cityFilter, setCityFilter] = useState('All');
     const [genderFilter, setGenderFilter] = useState('All');
     const [selectedCoach, setSelectedCoach] = useState(null);
+    const [showFilters, setShowFilters] = useState(false);
     const [searchParams, setSearchParams] = useSearchParams();
  
     // Get unique cities from coaches
@@ -156,7 +157,7 @@ const ApprovedCoaches = () => {
     }, [searchParams]);
 
     return (
-        <div className="bg-[#0F172A] min-h-screen pt-32 pb-12 font-sans">
+        <div className="bg-[#0F172A] min-h-screen pb-12 font-sans relative">
             {/* Background elements */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
                 <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
@@ -164,90 +165,161 @@ const ApprovedCoaches = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <div className="container mx-auto px-6 max-w-7xl relative z-10">
-                {/* Header */}
-                <div className="text-center mb-20">
-                    <motion.div
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 text-padel-green text-xs font-black uppercase tracking-widest mb-8"
-                    >
-                        <Award className="w-4 h-4" /> Elite Padel Training
-                    </motion.div>
+            <main className="relative z-10 pb-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
+                {/* Unified Header */}
+                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+                        <Award className="w-3 h-3" />
+                        <span>Elite Padel Training</span>
+                    </div>
 
-                    <motion.h1
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-5xl md:text-8xl font-black font-display mb-6 uppercase tracking-tighter text-white"
-                    >
-                        Approved <span className="bg-gradient-to-r from-padel-green to-[#beff00] bg-clip-text text-transparent">Coaches</span>
-                    </motion.h1>
+                    <div className="overflow-hidden mb-6">
+                        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+                            APPROVED <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">COACHES</span>
+                        </h1>
+                    </div>
 
-                    <motion.p
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: 0.2 }}
-                        className="text-gray-400 text-base md:text-lg max-w-2xl mx-auto leading-relaxed"
-                    >
-                        Train with the best in the country. Our certified coaches are vetted by 4M to ensure the highest quality of instruction across South Africa.
-                    </motion.p>
-                </div>
+                    <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+                        <strong className="text-white font-medium">Train with the best in the country. Our certified coaches are vetted by 4M to ensure the highest quality of instruction across South Africa.</strong>
+                    </p>
+                </section>
 
-                {/* Filters */}
+                {/* Search & Command Deck */}
                 {!loading && coaches.length > 0 && (
-                    <motion.div 
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mb-12 flex flex-col md:flex-row gap-4"
-                    >
-                        <div className="relative flex-grow">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
-                            <input
-                                type="text"
-                                placeholder="Search coaches by name, bio, or club..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
-                            />
-                            {searchTerm && (
-                                <button 
-                                    onClick={() => setSearchTerm('')}
-                                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-                                >
-                                    <X size={18} />
-                                </button>
-                            )}
-                        </div>
-                        <div className="relative min-w-[200px]">
-                            <select
-                                value={cityFilter}
-                                onChange={(e) => setCityFilter(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-padel-green appearance-none cursor-pointer"
-                            >
-                                {cities.map(city => (
-                                    <option key={city} value={city} className="bg-[#0F172A]">{city}</option>
-                                ))}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                                <MapPin size={18} />
+                    <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
+                        >
+                            {/* Search Input Container */}
+                            <div className="relative flex-1">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Search coaches by name, bio, or club..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
+                                />
+                                {searchTerm && (
+                                    <button 
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                )}
                             </div>
-                        </div>
-                        <div className="relative min-w-[150px]">
-                            <select
-                                value={genderFilter}
-                                onChange={(e) => setGenderFilter(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 px-6 text-white focus:outline-none focus:border-padel-green appearance-none cursor-pointer"
+                            
+                            {/* Filters Button */}
+                            <button
+                                onClick={() => setShowFilters(true)}
+                                className="relative flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-3.5 text-white transition-all font-semibold text-sm md:text-base shrink-0 group"
                             >
-                                <option value="All" className="bg-[#0F172A]">All Genders</option>
-                                <option value="Male" className="bg-[#0F172A]">Male</option>
-                                <option value="Female" className="bg-[#0F172A]">Female</option>
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                                <Award size={18} />
-                            </div>
-                        </div>
-                    </motion.div>
+                                <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
+                                <span className="hidden sm:block">Filters</span>
+                                {((cityFilter !== 'All') || (genderFilter !== 'All')) && (
+                                    <span className="absolute -top-1.5 -right-1.5 w-4 h-4 md:w-5 md:h-5 bg-padel-green text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg">
+                                        {(cityFilter !== 'All' ? 1 : 0) + (genderFilter !== 'All' ? 1 : 0)}
+                                    </span>
+                                )}
+                            </button>
+                        </motion.div>
+                    </section>
                 )}
+
+                {/* Filters Drawer/Bottom Sheet */}
+                <AnimatePresence>
+                    {showFilters && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => setShowFilters(false)}
+                                className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
+                            />
+
+                            {/* Drawer */}
+                            <motion.div
+                                initial={{ y: '100%' }}
+                                animate={{ y: 0 }}
+                                exit={{ y: '100%' }}
+                                transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+                                className="fixed bottom-0 left-0 right-0 z-[1001] bg-[#0a0f1d] border-t border-white/10 rounded-t-3xl p-6 pb-28 md:pb-6 shadow-2xl flex flex-col gap-6 max-h-[85vh] overflow-y-auto md:max-w-md md:left-1/2 md:-translate-x-1/2 md:bottom-4 md:border md:rounded-3xl"
+                            >
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xl font-bold text-white">Filters</h3>
+                                    <button onClick={() => setShowFilters(false)} className="p-2 text-gray-400 hover:text-white bg-white/5 rounded-full transition-colors">
+                                        <X className="w-5 h-5" />
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4">
+                                    {/* City Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-300">City</label>
+                                        <div className="relative">
+                                            <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                value={cityFilter}
+                                                onChange={(e) => setCityFilter(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                {cities.map(city => (
+                                                    <option key={city} value={city} className="bg-[#0a0f1d]">{city === 'All' ? 'All Cities' : city}</option>
+                                                ))}
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Gender Filter */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold text-gray-300">Gender</label>
+                                        <div className="relative">
+                                            <Award className="absolute left-4 top-1/2 -translate-y-1/2 text-padel-green w-4 h-4 pointer-events-none" />
+                                            <select
+                                                value={genderFilter}
+                                                onChange={(e) => setGenderFilter(e.target.value)}
+                                                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-10 text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green transition-colors font-semibold text-sm"
+                                            >
+                                                <option value="All" className="bg-[#0a0f1d]">All Genders</option>
+                                                <option value="Male" className="bg-[#0a0f1d]">Male</option>
+                                                <option value="Female" className="bg-[#0a0f1d]">Female</option>
+                                            </select>
+                                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                <ChevronDown className="w-4 h-4 text-gray-400" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-2 flex gap-3">
+                                    <button
+                                        onClick={() => {
+                                            setCityFilter('All');
+                                            setGenderFilter('All');
+                                        }}
+                                        className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-semibold py-3.5 rounded-xl transition-colors text-sm"
+                                    >
+                                        Clear
+                                    </button>
+                                    <button
+                                        onClick={() => setShowFilters(false)}
+                                        className="flex-1 bg-padel-green hover:bg-[#beff00] text-black font-bold py-3.5 rounded-xl transition-colors text-sm"
+                                    >
+                                        Show Results
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
 
                 {/* Coaches Grid */}
                 {loading ? (
@@ -299,7 +371,7 @@ const ApprovedCoaches = () => {
                     </Link>
                 </motion.div>
 
-            </div>
+            </main>
 
             {/* Coach Details Modal */}
             <CoachProfileModal 
