@@ -318,7 +318,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
             const { error: insertError } = await supabase.rpc('create_player_profile', {
                 p_email: email,
-                p_name: `${firstName} ${lastName}`.trim(),
+                p_name: `${firstName} ${lastName}`.replace(/\s+/g, ' ').trim(),
                 p_contact: contactNumber,
                 p_category: category || 'Unranked',
                 p_gender: gender,
