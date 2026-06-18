@@ -147,7 +147,7 @@ const HappeningNowWidget = () => {
                                     btnBg = 'bg-yellow-500 text-black hover:bg-yellow-400 group-hover:bg-yellow-400 border-transparent';
                                     iconColor = 'text-yellow-400';
                                     statusLabel = 'GOLD';
-                                    statusBg = 'bg-[#1A1A14] text-[#BEFF00]'; // Using the specific padel green / yellow color for Gold
+                                    statusBg = 'bg-yellow-500/20 text-yellow-500';
                                 } else if (event.sapa_status === 'Silver' || event.event_name?.includes('Silver')) {
                                     borderCls = 'border-gray-400/50';
                                     hoverBorderCls = 'hover:border-gray-300 hover:shadow-[0_0_20px_rgba(156,163,175,0.15)]';
