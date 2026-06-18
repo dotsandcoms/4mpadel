@@ -126,7 +126,7 @@ const CalendarEventItem = ({ event, index }) => {
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-lg sm:text-xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-1 sm:line-clamp-2">
+                        <h3 className="text-base sm:text-xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-2">
                             {event.event_name || event.eventName}
                         </h3>
 
