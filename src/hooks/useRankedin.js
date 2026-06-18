@@ -337,7 +337,8 @@ export const useRankedin = () => {
             // Step 2: Fetch events using internal ID
             const data = await fetchWithCache(
                 `${API_BASE}/player/ParticipatedEventsAsync?playerId=${internalId}&language=en&skip=0&take=100`,
-                { signal }
+                { signal },
+                1000 * 60 * 15 // 15 minutes cache for events
             );
 
             const rawEvents = data.Payload || data.payload || [];
@@ -589,27 +590,27 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            // Step 0: Check custom player_matches cache
-            try {
-                const { data: cacheRow } = await supabase
-                    .from('player_matches')
-                    .select('*')
-                    .eq('rankedin_id', rankedinId)
-                    .maybeSingle();
+            // Step 0: Check custom player_matches cache (ONLY for history)
+            if (takeHistory) {
+                try {
+                    const { data: cacheRow } = await supabase
+                        .from('player_matches')
+                        .select('*')
+                        .eq('rankedin_id', rankedinId)
+                        .maybeSingle();
 
-                if (cacheRow) {
-                    const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
-                    // 24 hours = 86400000 ms
-                    if (ageMs < 86400000) {
-                        const cachedData = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
-                        // Return if it's not null (meaning it has been populated at least once)
-                        if (cachedData !== null) {
-                            return cachedData;
+                    if (cacheRow) {
+                        const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
+                        // 24 hours = 86400000 ms
+                        if (ageMs < 86400000) {
+                            if (cacheRow.past_matches !== null) {
+                                return cacheRow.past_matches;
+                            }
                         }
                     }
+                } catch (cacheErr) {
+                    console.warn("player_matches cache read error:", cacheErr);
                 }
-            } catch (cacheErr) {
-                console.warn("player_matches cache read error:", cacheErr);
             }
 
             // Step 1: Get internal PlayerId
@@ -630,7 +631,8 @@ export const useRankedin = () => {
                         ...(token ? { 'x-anonymous-token': token } : {}),
                         'Accept': 'application/json'
                     }
-                }
+                },
+                takeHistory ? 1000 * 60 * 60 * 6 : 1000 * 60 * 5 // 6 hours for history, 5 minutes for upcoming
             );
 
             let payload = data.Payload || [];
@@ -746,21 +748,19 @@ export const useRankedin = () => {
                 payload = historyMatches;
             }
 
-            // Step 4: Save result to player_matches
-            const updateData = takeHistory 
-                ? { past_matches: payload } 
-                : { upcoming_matches: payload };
-            
-            supabase
-                .from('player_matches')
-                .upsert({ 
-                    rankedin_id: rankedinId, 
-                    ...updateData,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'rankedin_id' })
-                .then(({ error }) => {
-                    if (error) console.error("player_matches write error:", error);
-                });
+            // Step 4: Save result to player_matches (ONLY for history)
+            if (takeHistory) {
+                supabase
+                    .from('player_matches')
+                    .upsert({ 
+                        rankedin_id: rankedinId, 
+                        past_matches: payload,
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'rankedin_id' })
+                    .then(({ error }) => {
+                        if (error) console.error("player_matches write error:", error);
+                    });
+            }
 
             return payload;
         } catch (err) {

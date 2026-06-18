@@ -155,28 +155,54 @@ const PlayerManager = () => {
 
     const fetchPlayers = async () => {
         setLoading(true);
-        const [{ data: playersData, error: playersError }, { data: paymentsData, error: paymentsError }] = await Promise.all([
-            supabase
-                .from('players')
-                .select('*, temporary_licenses(event_name, event_date)')
-                .order('created_at', { ascending: false }),
-            supabase
-                .from('payments')
-                .select('player_id, created_at, amount')
-                .in('payment_type', ['membership', 'full_license'])
-                .eq('status', 'success')
-                .order('created_at', { ascending: false })
-        ]);
+        try {
+            let allPlayers = [];
+            let allPayments = [];
+            const limit = 1000;
+            
+            let page = 0;
+            while (true) {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('*, temporary_licenses(event_name, event_date)')
+                    .order('created_at', { ascending: false })
+                    .range(page * limit, (page + 1) * limit - 1);
+                
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    allPlayers = [...allPlayers, ...data];
+                    if (data.length < limit) break;
+                    page++;
+                } else {
+                    break;
+                }
+            }
 
-        if (playersError) {
-            console.error('Error fetching players:', playersError);
+            page = 0;
+            while (true) {
+                const { data, error } = await supabase
+                    .from('payments')
+                    .select('player_id, created_at, amount')
+                    .in('payment_type', ['membership', 'full_license'])
+                    .eq('status', 'success')
+                    .order('created_at', { ascending: false })
+                    .range(page * limit, (page + 1) * limit - 1);
+                
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    allPayments = [...allPayments, ...data];
+                    if (data.length < limit) break;
+                    page++;
+                } else {
+                    break;
+                }
+            }
+
+            setPlayers(allPlayers);
+            setFullLicensePayments(allPayments);
+        } catch (error) {
+            console.error('Error fetching players:', error);
             showToast('Failed to fetch players', 'error');
-        } else {
-            setPlayers(playersData || []);
-        }
-
-        if (!paymentsError && paymentsData) {
-            setFullLicensePayments(paymentsData);
         }
 
         setLoading(false);

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, MapPin, PlayCircle, ExternalLink, Activity } from 'lucide-react';
+import { Calendar, MapPin, PlayCircle, ExternalLink, Activity, Eye } from 'lucide-react';
 import { getEventImage } from '../utils/imageUtils';
 
 const HappeningNowWidget = () => {
@@ -186,12 +186,17 @@ const HappeningNowWidget = () => {
                                         </div>
 
                                         {/* Badges Row */}
-                                        <div className="flex justify-between items-start z-10">
-                                            {statusLabel && (
+                                        <div className="flex justify-between items-start z-10 w-full">
+                                            {statusLabel ? (
                                                 <div className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-widest ${statusBg}`}>
                                                     {statusLabel}
                                                 </div>
+                                            ) : (
+                                                <div />
                                             )}
+                                            <div className={`w-8 h-8 rounded-full bg-white/5 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity`}>
+                                                <Eye size={14} className={iconColor} />
+                                            </div>
                                         </div>
 
                                         {/* Title */}
@@ -217,13 +222,7 @@ const HappeningNowWidget = () => {
                                             </div>
                                         </div>
 
-                                        {/* Action Button */}
-                                        <div className="mt-1 z-10">
-                                            <button className={`w-full rounded-xl transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-1.5 py-2 shadow-sm ${btnBg}`}>
-                                                <PlayCircle size={14} />
-                                                View
-                                            </button>
-                                        </div>
+
                                     </div>
                                 );
                             })}

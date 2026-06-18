@@ -34,6 +34,7 @@ const Hero = () => {
     const [session, setSession] = useState(null);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [nextMatch, setNextMatch] = useState(null);
+    const [matchesCount, setMatchesCount] = useState(0);
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('events'); // 'events' | 'matches'
     const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
@@ -74,6 +75,7 @@ const Hero = () => {
         if (!session?.user) {
             setUpcomingEvents([]);
             setNextMatch(null);
+            setMatchesCount(0);
             setEventsLoading(false);
             return;
         }
@@ -248,11 +250,12 @@ const Hero = () => {
                 // Update UI and cache
                 setUpcomingEvents(filtered);
                 setNextMatch(firstNextMatch);
+                setMatchesCount(validMatches.length);
                 setEventsLoading(false);
 
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
-                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch }));
+                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length }));
                 } catch (_) { }
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -282,9 +285,10 @@ const Hero = () => {
         try {
             const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
             if (cachedMatch) {
-                const { ts, match } = JSON.parse(cachedMatch);
+                const { ts, match, count } = JSON.parse(cachedMatch);
                 if (match) {
                     setNextMatch(match);
+                    setMatchesCount(count || 1);
                     hasCachedData = true;
                     if (Date.now() - ts < CACHE_TTL) {
                         isCacheExpired = false;
@@ -530,15 +534,25 @@ const Hero = () => {
                                                 <div className="flex items-center gap-2 mb-4 bg-white/5 p-1 rounded-lg w-fit border border-white/10">
                                                     <button
                                                         onClick={() => setActiveHeroTab('events')}
-                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
                                                         My Next Events
+                                                        {upcomingEvents.length > 0 && (
+                                                            <span className="bg-padel-green text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                                                {upcomingEvents.length}
+                                                            </span>
+                                                        )}
                                                     </button>
                                                     <button
                                                         onClick={() => setActiveHeroTab('matches')}
-                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
                                                         Upcoming Matches
+                                                        {matchesCount > 0 && (
+                                                            <span className="bg-orange-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                                                {matchesCount}
+                                                            </span>
+                                                        )}
                                                     </button>
                                                 </div>
 
@@ -655,7 +669,7 @@ const Hero = () => {
                                                                 return (
                                                                     <div
                                                                         onClick={() => navigate('/profile?tab=matches')}
-                                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
+                                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between min-h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                                                                     >
                                                                         {/* Soft background glow */}
                                                                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
