@@ -718,7 +718,7 @@ const Calendar = () => {
                 </section>
 
                 {/* Search & Command Deck */}
-                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
+                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-6 md:mb-12">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -908,7 +908,7 @@ const Calendar = () => {
                 </AnimatePresence>
 
                 {/* Primary Tab Navigation */}
-                <div className="flex justify-center mb-10 relative z-50">
+                <div className="flex justify-center mb-6 md:mb-10 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-[2rem] border border-white/10 shadow-xl shadow-black/20 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
                             ...(activeTab === 'my-calendar' ? [{ id: 'my-calendar', label: 'My Calendar' }] : []),
