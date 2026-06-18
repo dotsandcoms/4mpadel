@@ -53,19 +53,19 @@ const FAQ = () => {
     ];
 
     return (
-        <section className="py-24 bg-black/50">
+        <section className="py-12 md:py-24 bg-black/50">
             <div className="container mx-auto px-6 md:px-20 max-w-4xl">
-                <h2 className="text-4xl font-bold text-white mb-12 text-center">Frequently Asked Questions</h2>
+                <h2 className="text-3xl md:text-4xl font-bold text-white mb-8 md:mb-12 text-center leading-tight">Frequently Asked Questions</h2>
 
                 <div className="space-y-4">
                     {questions.map((item, index) => (
                         <div key={index} className="border-b border-white/10">
                             <button
                                 onClick={() => setActiveIndex(activeIndex === index ? null : index)}
-                                className="w-full py-6 flex justify-between items-center text-left hover:text-padel-green transition-colors"
+                                className="w-full py-4 md:py-6 flex justify-between items-center text-left hover:text-padel-green transition-colors gap-4"
                             >
-                                <span className="text-xl font-medium text-white">{item.q}</span>
-                                <span className="text-padel-green">
+                                <span className="text-base md:text-xl font-medium text-white">{item.q}</span>
+                                <span className="text-padel-green shrink-0">
                                     {activeIndex === index ? <Minus /> : <Plus />}
                                 </span>
                             </button>
@@ -77,7 +77,7 @@ const FAQ = () => {
                                         exit={{ height: 0, opacity: 0 }}
                                         className="overflow-hidden"
                                     >
-                                        <p className="text-gray-400 pb-6 leading-relaxed">
+                                        <p className="text-sm md:text-base text-gray-400 pb-4 md:pb-6 leading-relaxed">
                                             {item.a}
                                         </p>
                                     </motion.div>
