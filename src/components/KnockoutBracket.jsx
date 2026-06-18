@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, ChevronLeft, MoveHorizontal } from 'lucide-react';
 
-const KnockoutBracket = ({ matches, forcedViewMode }) => {
+const KnockoutBracket = ({ matches, forcedViewMode, allMatches }) => {
     const scrollContainerRef = useRef(null);
     const [activeRoundIndex, setActiveRoundIndex] = useState(0);
     const [showSwipeHint, setShowSwipeHint] = useState(true);
@@ -290,9 +290,46 @@ const KnockoutBracket = ({ matches, forcedViewMode }) => {
                                             <div className={`${viewMode === 'bracket' ? 'flex flex-col justify-around h-full gap-6' : 'grid gap-4 md:grid-cols-1'}`}>
                                                 {roundMatches.map((cell, cellIndex) => {
                                                     const m = cell.MatchCell || cell;
-                                                    const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
-                                                    const hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                                                    let scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score;
+                                                    let hasScore = m.MatchResults?.HasScore || m.MatchViewModel?.HasScore || m.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
                                                     const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId;
+
+                                                    const team1Players = getTeamPlayers(cell.ChallengerParticipant || m.ChallengerParticipant);
+                                                    const team2Players = getTeamPlayers(cell.ChallengedParticipant || m.ChallengedParticipant);
+
+                                                    // Merge missing scores from allMatches if available
+                                                    if (!hasScore && typeof allMatches !== 'undefined' && allMatches && allMatches.length > 0) {
+                                                        const t1Names = team1Players.map(p => p.name).filter(n => n && n !== 'Bye' && n !== 'TBD');
+                                                        const t2Names = team2Players.map(p => p.name).filter(n => n && n !== 'Bye' && n !== 'TBD');
+                                                        
+                                                        if (t1Names.length > 0 && t2Names.length > 0) {
+                                                            const foundMatchInfo = allMatches.reduce((found, am) => {
+                                                                if (found) return found;
+                                                                if (!am.Challenger?.Name || !am.Challenged?.Name) return null;
+                                                                
+                                                                const amT1 = [am.Challenger.Name, am.Challenger.Player2Name].filter(Boolean).map(cleanPlayerName);
+                                                                const amT2 = [am.Challenged.Name, am.Challenged.Player2Name].filter(Boolean).map(cleanPlayerName);
+                                                                
+                                                                const isNormal = t1Names.every(n => amT1.includes(n)) && t2Names.every(n => amT2.includes(n));
+                                                                const isReversed = t1Names.every(n => amT2.includes(n)) && t2Names.every(n => amT1.includes(n));
+                                                                
+                                                                if (isNormal) return { am, reversed: false };
+                                                                if (isReversed) return { am, reversed: true };
+                                                                return null;
+                                                            }, null);
+
+                                                            if (foundMatchInfo && foundMatchInfo.am.MatchResult?.HasScore) {
+                                                                hasScore = true;
+                                                                scoreObj = foundMatchInfo.am.MatchResult.Score;
+                                                                if (foundMatchInfo.reversed) {
+                                                                    scoreObj = {
+                                                                        ...scoreObj,
+                                                                        IsFirstParticipantWinner: !scoreObj.IsFirstParticipantWinner
+                                                                    };
+                                                                }
+                                                            }
+                                                        }
+                                                    }
 
                                                     let isFirstWinner = false;
                                                     let isSecondWinner = false;
@@ -309,8 +346,7 @@ const KnockoutBracket = ({ matches, forcedViewMode }) => {
                                                         }
                                                     }
 
-                                                    const team1Players = getTeamPlayers(cell.ChallengerParticipant || m.ChallengerParticipant);
-                                                    const team2Players = getTeamPlayers(cell.ChallengedParticipant || m.ChallengedParticipant);
+
 
                                                     return (
                                                         <motion.div
@@ -372,9 +408,45 @@ const KnockoutBracket = ({ matches, forcedViewMode }) => {
 
                                     if (finalMatchCell) {
                                         const fm = finalMatchCell.MatchCell || finalMatchCell;
-                                        const scoreObj = fm.MatchResults?.Score || fm.MatchViewModel?.Score || fm.Score;
-                                        const hasScore = fm.MatchResults?.HasScore || fm.MatchViewModel?.HasScore || fm.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
+                                        let scoreObj = fm.MatchResults?.Score || fm.MatchViewModel?.Score || fm.Score;
+                                        let hasScore = fm.MatchResults?.HasScore || fm.MatchViewModel?.HasScore || fm.HasScore || (scoreObj && scoreObj.FirstParticipantScore !== null);
                                         const winnerId = fm.MatchResults?.WinnerParticipantId || fm.MatchViewModel?.WinnerParticipantId || fm.WinnerParticipantId;
+
+                                        const fTeam1Players = getTeamPlayers(finalMatchCell.ChallengerParticipant || fm.ChallengerParticipant);
+                                        const fTeam2Players = getTeamPlayers(finalMatchCell.ChallengedParticipant || fm.ChallengedParticipant);
+
+                                        if (!hasScore && typeof allMatches !== 'undefined' && allMatches && allMatches.length > 0) {
+                                            const t1Names = fTeam1Players.map(p => p.name).filter(n => n && n !== 'Bye' && n !== 'TBD');
+                                            const t2Names = fTeam2Players.map(p => p.name).filter(n => n && n !== 'Bye' && n !== 'TBD');
+                                            
+                                            if (t1Names.length > 0 && t2Names.length > 0) {
+                                                const foundMatchInfo = allMatches.reduce((found, am) => {
+                                                    if (found) return found;
+                                                    if (!am.Challenger?.Name || !am.Challenged?.Name) return null;
+                                                    
+                                                    const amT1 = [am.Challenger.Name, am.Challenger.Player2Name].filter(Boolean).map(cleanPlayerName);
+                                                    const amT2 = [am.Challenged.Name, am.Challenged.Player2Name].filter(Boolean).map(cleanPlayerName);
+                                                    
+                                                    const isNormal = t1Names.every(n => amT1.includes(n)) && t2Names.every(n => amT2.includes(n));
+                                                    const isReversed = t1Names.every(n => amT2.includes(n)) && t2Names.every(n => amT1.includes(n));
+                                                    
+                                                    if (isNormal) return { am, reversed: false };
+                                                    if (isReversed) return { am, reversed: true };
+                                                    return null;
+                                                }, null);
+
+                                                if (foundMatchInfo && foundMatchInfo.am.MatchResult?.HasScore) {
+                                                    hasScore = true;
+                                                    scoreObj = foundMatchInfo.am.MatchResult.Score;
+                                                    if (foundMatchInfo.reversed) {
+                                                        scoreObj = {
+                                                            ...scoreObj,
+                                                            IsFirstParticipantWinner: !scoreObj.IsFirstParticipantWinner
+                                                        };
+                                                    }
+                                                }
+                                            }
+                                        }
 
                                         if (hasScore) {
                                             let isFirstWinner = false;
@@ -390,8 +462,8 @@ const KnockoutBracket = ({ matches, forcedViewMode }) => {
                                                 isSecondWinner = !isFirstWinner;
                                             }
 
-                                            if (isFirstWinner) finalWinnerPlayers = getTeamPlayers(finalMatchCell.ChallengerParticipant || fm.ChallengerParticipant);
-                                            else if (isSecondWinner) finalWinnerPlayers = getTeamPlayers(finalMatchCell.ChallengedParticipant || fm.ChallengedParticipant);
+                                            if (isFirstWinner) finalWinnerPlayers = fTeam1Players;
+                                            else if (isSecondWinner) finalWinnerPlayers = fTeam2Players;
                                         }
                                     }
 

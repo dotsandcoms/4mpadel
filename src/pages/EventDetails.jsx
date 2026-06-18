@@ -216,6 +216,7 @@ const EventDetails = () => {
     const [hasDraw, setHasDraw] = useState(false);
     const [hasResults, setHasResults] = useState(false);
     const [winners, setWinners] = useState([]);
+    const [expandedResults, setExpandedResults] = useState({ 0: true });
 
     // New State for Tabs & Enhanced Data
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'divisions', 'media'
@@ -892,21 +893,23 @@ const EventDetails = () => {
                             setHasDraw(drawAvailable);
                         }
 
-                        if (isPassed) {
-                            const tournamentWinners = await getTournamentWinners(rId);
-                            if (tournamentWinners && tournamentWinners.length > 0) {
-                                apiWinners = tournamentWinners;
-                                setWinners(tournamentWinners);
+                        // ALWAYS attempt to fetch winners because some divisions/tournaments might finish early
+                        const tournamentWinners = await getTournamentWinners(rId);
+                        if (tournamentWinners && tournamentWinners.length > 0) {
+                            apiWinners = tournamentWinners;
+                            setWinners(tournamentWinners);
+                            apiHasResults = true;
+                            setHasResults(true);
+                        } else {
+                            // If no winners, check if there are completed matches to show in results
+                            const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
+                            if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
                                 apiHasResults = true;
                                 setHasResults(true);
-                            } else {
-                                const tournamentMatchesCompleted = await getTournamentMatches({ tournamentId: rId, isFinished: true });
-                                if (tournamentMatchesCompleted && tournamentMatchesCompleted.length > 0) {
-                                    apiHasResults = true;
-                                    setHasResults(true);
-                                }
                             }
-                        } else {
+                        }
+
+                        if (!isPassed) {
                             // Fetch upcoming matches for live/upcoming events
                             const matchesPreview = await getTournamentMatches({ tournamentId: rId, isFinished: false });
                             if (matchesPreview && matchesPreview.length > 0) {
@@ -1136,13 +1139,15 @@ const EventDetails = () => {
 
             // Check if there's an album linked to this event in our DB
             try {
-                const { data: albumData, error: albumError } = await supabase
+                const { data: albumsData, error: albumError } = await supabase
                     .from('albums')
                     .select('id, title, description, slug')
                     .eq('event_id', event.id)
-                    .single();
+                    .is('parent_album_id', null)
+                    .limit(1);
 
-                if (albumData?.id && !albumError) {
+                if (!albumError && albumsData && albumsData.length > 0) {
+                    const albumData = albumsData[0];
                     setAlbumInfo(albumData);
                     const { data: images, error: imageError } = await supabase
                         .from('gallery_images')
@@ -2479,24 +2484,11 @@ const EventDetails = () => {
                                                         </div>
                                                     );
                                                 }) : (
-                                                    /* Fallback layout for empty states matching design */
-                                                    [
-                                                        { name: "Men's Open", teams: 24 },
-                                                        { name: "Men's Intermediate", teams: 16 },
-                                                        { name: "Ladies Intermediate", teams: 12 },
-                                                        { name: "Men's 40+", teams: 10 }
-                                                    ].map((div, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
-                                                            <div className="flex items-center gap-4">
-                                                                <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
-                                                                <span className="font-medium text-[#0F172A] text-[15px]">{div.name}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-[13px] text-gray-500 font-medium">{div.teams} Teams</span>
-                                                                <ChevronRight className="w-4 h-4 text-gray-300" />
-                                                            </div>
-                                                        </div>
-                                                    ))
+                                                    <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
+                                                        <Users className="w-10 h-10 text-gray-200 mb-3" />
+                                                        <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
+                                                        <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -2887,31 +2879,72 @@ const EventDetails = () => {
                                             </div>
                                             {winners.length > 0 ? (
                                                 <div className="divide-y divide-gray-50">
-                                                    {winners.map((winner, idx) => (
-                                                        <div key={idx} className="px-6 py-5">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block mb-3">
-                                                                {winner.CategoryName || winner.className || 'Unknown Division'}
-                                                            </p>
-                                                            <div className="space-y-2">
-                                                                <div className="flex items-center justify-between bg-[#CCFF00]/5 border border-[#CCFF00]/20 p-3 rounded-xl">
-                                                                    <div>
-                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">1st Place</p>
-                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || winner.winners || 'TBD'}</p>
+                                                    {winners.map((winner, idx) => {
+                                                        const isExpanded = expandedResults[idx];
+                                                        return (
+                                                            <div key={idx} className="px-6 py-5">
+                                                                <button
+                                                                    onClick={() => setExpandedResults(prev => ({ ...prev, [idx]: !prev[idx] }))}
+                                                                    className="w-full flex items-center justify-between group"
+                                                                >
+                                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block">
+                                                                        {winner.CategoryName || winner.className || 'Unknown Division'}
+                                                                    </p>
+                                                                    <div className="text-gray-400 group-hover:text-[#0F172A] transition-colors">
+                                                                        {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                                                     </div>
-                                                                    <span className="text-2xl">🥇</span>
-                                                                </div>
-                                                                {(winner.RunnerUp?.Name || winner.runnerUp) && (
-                                                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
-                                                                        <div>
-                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">2nd Place</p>
-                                                                            <p className="text-sm font-bold text-slate-700">{winner.RunnerUp?.Name || winner.runnerUp}</p>
-                                                                        </div>
-                                                                        <span className="text-2xl">🥈</span>
-                                                                    </div>
-                                                                )}
+                                                                </button>
+                                                                
+                                                                <AnimatePresence>
+                                                                    {isExpanded && (
+                                                                        <motion.div
+                                                                            initial={{ height: 0, opacity: 0 }}
+                                                                            animate={{ height: "auto", opacity: 1 }}
+                                                                            exit={{ height: 0, opacity: 0 }}
+                                                                            className="overflow-hidden"
+                                                                        >
+                                                                            <div className="space-y-2 pt-4">
+                                                                                <div className="flex items-center justify-between bg-[#CCFF00]/5 border border-[#CCFF00]/20 p-3 rounded-xl">
+                                                                                    <div>
+                                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">1st Place</p>
+                                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || winner.winners || 'TBD'}</p>
+                                                                                    </div>
+                                                                                    <span className="text-2xl">🥇</span>
+                                                                                </div>
+                                                                                {(winner.RunnerUp?.Name || winner.runnerUp) && (
+                                                                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
+                                                                                        <div>
+                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">2nd Place</p>
+                                                                                            <p className="text-sm font-bold text-slate-700">{winner.RunnerUp?.Name || winner.runnerUp}</p>
+                                                                                        </div>
+                                                                                        <span className="text-2xl">🥈</span>
+                                                                                    </div>
+                                                                                )}
+                                                                                {(winner.ThirdPlace?.Name || winner.thirdPlace) && (
+                                                                                    <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-3 rounded-xl">
+                                                                                        <div>
+                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Semi-Finalist</p>
+                                                                                            <p className="text-sm font-bold text-slate-700">{winner.ThirdPlace?.Name || winner.thirdPlace}</p>
+                                                                                        </div>
+                                                                                        <span className="text-2xl">🥉</span>
+                                                                                    </div>
+                                                                                )}
+                                                                                {(winner.FourthPlace?.Name || winner.fourthPlace) && (
+                                                                                    <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
+                                                                                        <div>
+                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Semi-Finalist</p>
+                                                                                            <p className="text-sm font-bold text-slate-700">{winner.FourthPlace?.Name || winner.fourthPlace}</p>
+                                                                                        </div>
+                                                                                        <span className="text-2xl">🏅</span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </motion.div>
+                                                                    )}
+                                                                </AnimatePresence>
                                                             </div>
-                                                        </div>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             ) : fetchingRankedinData ? (
                                                 <div className="px-6 py-10 flex flex-col items-center justify-center">
@@ -2962,7 +2995,7 @@ const EventDetails = () => {
                                                 </div>
                                                 <Link
                                                     to={`/gallery/${albumInfo.slug || albumInfo.id}`}
-                                                    className="px-6 py-3 bg-[#CCFF00] text-[#0F172A] rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors flex-shrink-0 ml-4"
+                                                    className="px-6 py-3 bg-[#CCFF00] !text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors flex-shrink-0 ml-4"
                                                 >
                                                     View All
                                                 </Link>

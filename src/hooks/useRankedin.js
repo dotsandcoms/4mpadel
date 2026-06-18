@@ -452,24 +452,32 @@ export const useRankedin = () => {
                             });
 
                             const finalRound = sortedRounds.length > 0 ? sortedRounds[sortedRounds.length - 1] : [];
+                            const semiFinalRound = sortedRounds.length > 1 ? sortedRounds[sortedRounds.length - 2] : [];
                             const finalCell = finalRound.length > 0 ? finalRound[0] : null;
 
-                            
-                            if (finalCell) {
-                                const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
-                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || finalCell.Score;
-                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || finalCell.WinnerParticipantId;
-                                
-                                const p1 = finalCell.ChallengerParticipant || m.ChallengerParticipant;
-                                const p2 = finalCell.ChallengedParticipant || m.ChallengedParticipant;
+                            const extractNames = (participant) => {
+                                if (!participant) return null;
+                                let names = participant.Name;
+                                if (!names && participant.FirstPlayer) {
+                                    names = participant.FirstPlayer.Name;
+                                    if (participant.SecondPlayer) names += ` & ${participant.SecondPlayer.Name}`;
+                                }
+                                return names;
+                            };
 
-                                // Robust detection: Winner ID or Boolean flag
-                                let winningParticipant = null;
+                            const getLoser = (matchCell) => {
+                                if (!matchCell) return null;
+                                const m = matchCell.MatchCell || matchCell.MatchViewModel || matchCell;
+                                const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || matchCell.Score;
+                                const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || matchCell.WinnerParticipantId;
                                 
+                                const p1 = matchCell.ChallengerParticipant || m.ChallengerParticipant;
+                                const p2 = matchCell.ChallengedParticipant || m.ChallengedParticipant;
+
+                                let winningParticipant = null;
                                 if (winnerId) {
                                     const p1Matches = (p1?.Id == winnerId || p1?.EventParticipantId == winnerId);
                                     const p2Matches = (p2?.Id == winnerId || p2?.EventParticipantId == winnerId);
-                                    
                                     if (p1Matches) winningParticipant = p1;
                                     else if (p2Matches) winningParticipant = p2;
                                 }
@@ -479,36 +487,44 @@ export const useRankedin = () => {
                                     winningParticipant = isFirstWinner ? p1 : p2;
                                 }
                                 
-                                if (winningParticipant) {
-                                    let winnerNames = winningParticipant.Name;
-                                    if (!winnerNames && winningParticipant.FirstPlayer) {
-                                        winnerNames = winningParticipant.FirstPlayer.Name;
-                                        if (winningParticipant.SecondPlayer) winnerNames += ` & ${winningParticipant.SecondPlayer.Name}`;
-                                    }
+                                if (winningParticipant === p1) return p2;
+                                if (winningParticipant === p2) return p1;
+                                return null;
+                            };
+                            
+                            if (finalCell) {
+                                const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
+                                const p1 = finalCell.ChallengerParticipant || m.ChallengerParticipant;
+                                const p2 = finalCell.ChallengedParticipant || m.ChallengedParticipant;
+                                
+                                const loser = getLoser(finalCell);
+                                const winner = loser === p1 ? p2 : p1;
 
-                                    let runnerUpParticipant = null;
-                                    if (winningParticipant === p1) runnerUpParticipant = p2;
-                                    else if (winningParticipant === p2) runnerUpParticipant = p1;
+                                const winnerNames = extractNames(winner);
+                                const runnerUpNames = extractNames(loser);
+                                
+                                let thirdPlaceNames = null;
+                                let fourthPlaceNames = null;
+                                
+                                if (semiFinalRound.length === 2) {
+                                    const sf1Loser = getLoser(semiFinalRound[0]);
+                                    const sf2Loser = getLoser(semiFinalRound[1]);
+                                    thirdPlaceNames = extractNames(sf1Loser);
+                                    fourthPlaceNames = extractNames(sf2Loser);
+                                }
 
-                                    let runnerUpNames = null;
-                                    if (runnerUpParticipant) {
-                                        runnerUpNames = runnerUpParticipant.Name;
-                                        if (!runnerUpNames && runnerUpParticipant.FirstPlayer) {
-                                            runnerUpNames = runnerUpParticipant.FirstPlayer.Name;
-                                            if (runnerUpParticipant.SecondPlayer) runnerUpNames += ` & ${runnerUpParticipant.SecondPlayer.Name}`;
-                                        }
-                                    }
-
-                                    if (winnerNames) {
-                                        winnersList.push({
-                                            CategoryName: cls.Name,
-                                            Winner: { Name: winnerNames },
-                                            RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
-                                            className: cls.Name,
-                                            drawName: draw.Name,
-                                            winners: winnerNames
-                                        });
-                                    }
+                                if (winnerNames) {
+                                    winnersList.push({
+                                        CategoryName: cls.Name,
+                                        Winner: { Name: winnerNames },
+                                        RunnerUp: runnerUpNames ? { Name: runnerUpNames } : null,
+                                        ThirdPlace: thirdPlaceNames ? { Name: thirdPlaceNames } : null,
+                                        FourthPlace: fourthPlaceNames ? { Name: fourthPlaceNames } : null,
+                                        className: cls.Name,
+                                        drawName: draw.Name,
+                                        winners: winnerNames,
+                                        runnerUp: runnerUpNames
+                                    });
                                 }
                             }
                         } else if (drawData.some(d => d.BaseType === 'RoundRobin')) {

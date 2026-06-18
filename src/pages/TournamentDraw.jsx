@@ -595,6 +595,7 @@ const TournamentDraw = () => {
                                         <KnockoutBracket 
                                             matches={drawData} 
                                             forcedViewMode={activeTab === 'match-list' ? 'list' : 'bracket'}
+                                            allMatches={matches}
                                         />
                                     )}
                                 </div>
