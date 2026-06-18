@@ -10,7 +10,7 @@ import brollLogo from '../assets/BrollLogo.png';
 const ORG_LABELS = {
   15809: 'SAPA',
   16317: 'Broll Pro Tour',
-  16482: 'SA Grand Tour'
+  11706: 'SA Grand Tour'
 };
 
 const ORG_CATEGORIES = {
@@ -22,7 +22,7 @@ const ORG_CATEGORIES = {
     { id: 'men', label: 'Men', rankingType: 3, ageGroup: 82 },
     { id: 'ladies', label: 'Women', rankingType: 4, ageGroup: 83 }
   ],
-  16482: [ // SA Grand Tour
+  11706: [ // SA Grand Tour
     { id: 'mo35', label: 'Men Over 35', rankingType: 3, ageGroup: 2 },
     { id: 'mo40', label: 'Men Over 40', rankingType: 3, ageGroup: 3 },
     { id: 'mo45', label: 'Men Over 45', rankingType: 3, ageGroup: 4 },
@@ -715,7 +715,7 @@ const Rankings = () => {
   const [imageErrors, setImageErrors] = useState({});
   const [localProfileMap, setLocalProfileMap] = useState({});
 
-  const [selectedOrgId, setSelectedOrgId] = useState(15809); // 15809 = SAPA, 16317 = Broll Pro Tour, 16482 = SA Grand Tour
+  const [selectedOrgId, setSelectedOrgId] = useState(15809); // 15809 = SAPA, 16317 = Broll Pro Tour, 11706 = SA Grand Tour
 
   // Search & Pagination State
   const [activeMainTab, setActiveMainTab] = useState('rankings'); // 'overview', 'leaderboards', 'rankings'
@@ -1018,7 +1018,7 @@ const Rankings = () => {
                     >
                         <option value={15809} className="bg-[#0a0f1d]">Official SAPA Rankings</option>
                         <option value={16317} className="bg-[#0a0f1d]">Official Broll Pro Tour Rankings</option>
-                        <option value={16482} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
+                        <option value={11706} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
                     </select>
                     <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                         <ChevronDown className="w-4 h-4 text-gray-400" />
