@@ -178,7 +178,7 @@ const HappeningNowWidget = () => {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
                                         }}
-                                        className={`relative flex-none w-[280px] sm:w-[290px] snap-start bg-[#1E2530]/50 border rounded-2xl p-4 transition-all duration-300 group cursor-pointer flex flex-col gap-2.5 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
+                                        className={`relative flex-none w-[240px] sm:w-[290px] snap-start bg-[#1E2530]/50 border rounded-2xl p-3 sm:p-4 transition-all duration-300 group cursor-pointer flex flex-col gap-2 sm:gap-2.5 overflow-hidden hover:-translate-y-1 ${borderCls} ${hoverBorderCls}`}
                                     >
                                         {/* Optional background ball image */}
                                         <div className="absolute -right-6 top-1/4 w-32 h-32 opacity-10 pointer-events-none group-hover:scale-110 transition-transform duration-500 mix-blend-screen">
@@ -196,7 +196,7 @@ const HappeningNowWidget = () => {
 
                                         {/* Title */}
                                         <div className="z-10">
-                                            <h3 className="text-base sm:text-lg font-bold text-white leading-tight transition-colors group-hover:text-padel-green line-clamp-2">
+                                            <h3 className="text-sm sm:text-lg font-bold text-white leading-tight transition-colors group-hover:text-padel-green line-clamp-2">
                                                 {event.event_name}
                                             </h3>
                                         </div>
