@@ -336,7 +336,7 @@ const Players = () => {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: Math.min((index % 24) * 0.03, 0.2) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className={`group relative bg-[#0a0f1d]/60 border md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between ${player.isTop10 ? 'border-[#FFD700]' : 'border-white/10'}`}
+                  className={`group relative bg-[#0a0f1d]/60 border border-white/10 md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between`}
                 >
                   {/* Invisible Click Catch-all for Mobile */}
                   <div className="absolute inset-0 z-[5]" />
@@ -392,7 +392,7 @@ const Players = () => {
                     <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
 
                     <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className="text-[8px] sm:text-base font-bold sm:font-black text-white leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10">
+                      <motion.h3 layoutId={`name-${player.id}`} className={`text-[8px] sm:text-base font-bold sm:font-black leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10 ${player.isTop10 ? 'text-[#FFD700]' : 'text-white'}`}>
                         {player.name}
                       </motion.h3>
 
