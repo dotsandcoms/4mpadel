@@ -339,7 +339,7 @@ const FullRankingsTable = ({
     <div className="max-w-[1440px] mx-auto px-4 xl:px-8 relative z-10 pb-4 md:pb-24">
       {/* Official Rankings Header */}
       <div className="flex mb-6 md:mb-10 flex-col items-center text-center">
-        <div className="flex flex-row items-center justify-center flex-nowrap gap-3 md:gap-5 mb-3">
+        <div className="hidden md:flex flex-row items-center justify-center flex-nowrap gap-3 md:gap-5 mb-3">
           {ORG_LOGOS[selectedOrgId] && (
             <motion.div
               key={selectedOrgId}
@@ -358,13 +358,13 @@ const FullRankingsTable = ({
             Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings
           </h2>
         </div>
-        <p className="text-gray-400 text-xs md:text-sm max-w-xl mx-auto mt-1 px-4">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
+        <p className="hidden md:block text-gray-400 text-xs md:text-sm max-w-xl mx-auto mt-1 px-4">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
 
         {/* Categories Tab Navigation */}
         <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`mt-6 relative flex p-1 bg-white/5 backdrop-blur-sm rounded-xl w-full sm:w-auto border border-white/10 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}
+            className={`mt-0 md:mt-6 relative flex p-1 bg-white/5 backdrop-blur-sm rounded-xl w-full sm:w-auto border border-white/10 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}
         >
             {categories.map((cat) => {
                 const isSelected = activeTab === cat.id;
@@ -1005,16 +1005,20 @@ const Rankings = () => {
                 {/* Organization Dropdown */}
                 <div className="relative w-full md:w-auto shrink-0">
                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Trophy className="w-4 h-4 md:w-5 md:h-5 text-padel-green" />
+                        {ORG_LOGOS[selectedOrgId] ? (
+                            <img src={ORG_LOGOS[selectedOrgId]} alt="Logo" className="w-5 h-5 object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
+                        ) : (
+                            <Trophy className="w-4 h-4 md:w-5 md:h-5 text-padel-green" />
+                        )}
                     </div>
                     <select
                         value={selectedOrgId}
                         onChange={(e) => setSelectedOrgId(Number(e.target.value))}
                         className="w-full bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-12 pr-10 text-[16px] md:text-base text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all font-semibold"
                     >
-                        <option value={15809} className="bg-[#0a0f1d]">SAPA</option>
-                        <option value={16317} className="bg-[#0a0f1d]">Broll Pro Tour</option>
-                        <option value={16482} className="bg-[#0a0f1d]">SA Grand Tour</option>
+                        <option value={15809} className="bg-[#0a0f1d]">Official SAPA Rankings</option>
+                        <option value={16317} className="bg-[#0a0f1d]">Official Broll Pro Tour Rankings</option>
+                        <option value={16482} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
                     </select>
                     <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
                         <ChevronDown className="w-4 h-4 text-gray-400" />
