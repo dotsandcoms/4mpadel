@@ -107,7 +107,7 @@ const HappeningNowWidget = () => {
                                         {isLive ? 'Happening Now!' : 'Happening Next'}
                                     </h2>
                                     {isLive && (
-                                        <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded shadow-[0_0_10px_rgba(220,38,38,0.8)] animate-pulse-slow flex items-center gap-1 shrink-0 mt-1">
+                                        <span className="bg-red-600 text-white text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded animate-pulse-slow flex items-center gap-1 shrink-0 mt-1">
                                             <span className="w-1.5 h-1.5 bg-white rounded-full"></span> LIVE
                                         </span>
                                     )}
@@ -169,11 +169,7 @@ const HappeningNowWidget = () => {
                                         key={event.id}
                                         onClick={() => {
                                             if (event.slug || event.id) {
-                                                if (isLive) {
-                                                    navigate(`/draws/${event.slug || event.id}`);
-                                                } else {
-                                                    navigate(`/calendar/${event.slug || event.id}`);
-                                                }
+                                                navigate(`/calendar/${event.slug || event.id}`);
                                             } else if (event.rankedin_url) {
                                                 window.open(event.rankedin_url, '_blank');
                                             }
@@ -194,8 +190,8 @@ const HappeningNowWidget = () => {
                                             ) : (
                                                 <div />
                                             )}
-                                            <div className={`w-8 h-8 rounded-full bg-white/5 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity`}>
-                                                <Eye size={14} className={iconColor} />
+                                            <div className={`w-6 h-6 rounded-full bg-black/40 flex items-center justify-center opacity-70 group-hover:opacity-100 transition-opacity`}>
+                                                <Eye size={12} className={iconColor} />
                                             </div>
                                         </div>
 
@@ -208,12 +204,14 @@ const HappeningNowWidget = () => {
 
                                         {/* Event Details */}
                                         <div className="flex flex-col gap-1.5 mt-auto z-10 mb-1">
-                                            <div className="flex items-center gap-2 text-gray-400">
-                                                <Calendar size={14} className={`${iconColor} shrink-0`} />
-                                                <span className="text-xs font-medium text-white/90">
-                                                    {isLive ? 'Today' : new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
-                                                </span>
-                                            </div>
+                                            {!isLive && (
+                                                <div className="flex items-center gap-2 text-gray-400">
+                                                    <Calendar size={14} className={`${iconColor} shrink-0`} />
+                                                    <span className="text-xs font-medium text-white/90">
+                                                        {new Date(event.start_date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' })}
+                                                    </span>
+                                                </div>
+                                            )}
                                             <div className="flex items-start gap-2 text-gray-400">
                                                 <MapPin size={14} className={`${iconColor} shrink-0 mt-0.5`} />
                                                 <span className="text-xs font-medium text-gray-300 leading-tight line-clamp-2">

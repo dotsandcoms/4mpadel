@@ -557,12 +557,12 @@ const EventDetails = () => {
                 .eq('event_id', event.id)
                 .eq('status', 'success')
                 .eq('payment_type', 'event_entry_fee');
-                
+
             const directPayments = (allEventPayments || []).filter(pay => {
                 if (profile?.id && pay.player_id === profile.id) return true;
                 if (userEmail && pay.metadata?.email?.toLowerCase().trim() === userEmail) return true;
                 if (userName && pay.metadata?.line_items && Array.isArray(pay.metadata.line_items)) {
-                    return pay.metadata.line_items.some(item => 
+                    return pay.metadata.line_items.some(item =>
                         item.type === 'entry_fee' && item.player?.toLowerCase().trim() === userName
                     );
                 }
@@ -978,7 +978,7 @@ const EventDetails = () => {
                     localRegs.forEach(reg => {
                         // Find division by name, case-insensitive
                         let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
-                        
+
                         // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
                         // If it's a local-only event (!rId), allow creating new divisions from registrations.
                         if (!div && !rId) {
@@ -2063,7 +2063,7 @@ const EventDetails = () => {
                     {isLive && (
                         <div className="absolute top-20 left-4 z-20">
                             <span className="inline-flex items-center gap-1.5 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Live Now
+                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Live Today
                             </span>
                         </div>
                     )}
@@ -2223,6 +2223,7 @@ const EventDetails = () => {
                                 const computedStatus = (() => {
                                     if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                     if (isEventPassed) return 'Completed';
+                                    if (isLive) return 'Live Today';
                                     if (isRankedinRegistrationClosed) return 'Registration Closed';
                                     return 'Registration Open';
                                 })();
@@ -2323,6 +2324,7 @@ const EventDetails = () => {
                                                         const computedStatus = (() => {
                                                             if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                                             if (isEventPassed) return 'Completed';
+                                                            if (isLive) return 'Live Today';
                                                             if (isRankedinRegistrationClosed) return 'Registration Closed';
                                                             return 'Registration Open';
                                                         })();
@@ -2412,11 +2414,11 @@ const EventDetails = () => {
                                                                 individualPlayers.forEach(player => {
                                                                     if (player && player.Name && !seenNames.has(player.Name)) {
                                                                         seenNames.add(player.Name);
-                                                                        
+
                                                                         const globalRank = globalRankings.get(player.Name.toLowerCase());
                                                                         const rankVal = globalRank !== undefined ? globalRank : (item.Ranking ? parseInt(item.Ranking) : Infinity);
                                                                         const seedVal = p.Seed ? parseInt(p.Seed) : Infinity;
-                                                                        
+
                                                                         const country = player.Country?.ISOCode || 'za';
                                                                         seedList.push({ name: player.Name, seed: seedVal, rank: rankVal, country });
                                                                     }
@@ -2894,7 +2896,7 @@ const EventDetails = () => {
                                                                         {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                                                                     </div>
                                                                 </button>
-                                                                
+
                                                                 <AnimatePresence>
                                                                     {isExpanded && (
                                                                         <motion.div
@@ -3686,7 +3688,7 @@ const EventDetails = () => {
                                                                     <div className="flex flex-col items-end gap-3 w-full md:w-auto">
                                                                         {totalAmt > 0 && isInAppBrowser && (
                                                                             <div className="bg-amber-500/10 border border-amber-500/30 p-3 rounded-xl text-amber-400 text-[10px] w-full text-center leading-tight">
-                                                                                <span className="font-bold block mb-1">⚠️ Apple Pay Unavailable</span> 
+                                                                                <span className="font-bold block mb-1">⚠️ Apple Pay Unavailable</span>
                                                                                 Apple Pay doesn't work inside in-app browsers. Please tap the menu dots and select <span className="font-bold text-white">Open in Safari</span> to pay.
                                                                             </div>
                                                                         )}

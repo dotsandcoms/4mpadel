@@ -317,7 +317,7 @@ const Hero = () => {
     return (
         <div className="relative w-full bg-black">
             <div
-                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-between min-h-[100vh] lg:min-h-[85vh]"
+                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-center min-h-[90vh] lg:min-h-[80vh]"
                 onMouseMove={handleMouseMove}
             >
                 {/* Parallax Background */}
@@ -391,7 +391,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 flex flex-col flex-none lg:flex-1 justify-start lg:justify-center pt-28 pb-4 lg:pt-32 lg:pb-12 px-4 lg:px-8 container mx-auto"
+                    className="relative z-20 flex flex-col flex-none justify-start pt-24 pb-2 lg:pt-28 lg:pb-4 px-4 lg:px-8 container mx-auto"
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -470,7 +470,7 @@ const Hero = () => {
                 </motion.div>
 
                 {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
-                <div className="relative z-30 px-4 pb-36 lg:pb-5 mt-8 lg:mt-auto w-full lg:px-8 flex flex-col gap-4 container mx-auto">
+                <div className="relative z-30 px-4 pb-20 lg:pb-5 mt-4 lg:mt-6 w-full lg:px-8 flex flex-col gap-4 container mx-auto">
                     {/* Happening Now Widget — Global live events */}
                     <HappeningNowWidget />
 
