@@ -16,7 +16,7 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
     const [matchHistory, setMatchHistory] = useState({ upcoming: [], history: [] });
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [matchViewTab, setMatchViewTab] = useState('upcoming');
-    const { getPlayerMatches } = useRankedin();
+    const { getPlayerMatches, getPlayerEventsAsync } = useRankedin();
 
     useEffect(() => {
         if (player?.rankedin_id && activeTab === 'matches' && matchHistory.upcoming.length === 0 && matchHistory.history.length === 0 && !loadingMatches) {
@@ -31,18 +31,51 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                         return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
                     };
 
-                    const [upcoming, history] = await Promise.all([
+                    const [upcoming, history, events] = await Promise.all([
                         getPlayerMatches(player.rankedin_id, false),
-                        getPlayerMatches(player.rankedin_id, true)
+                        getPlayerMatches(player.rankedin_id, true),
+                        getPlayerEventsAsync ? getPlayerEventsAsync(player.rankedin_id) : Promise.resolve([])
                     ]);
 
                     const filterValid = (matches) => (matches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
-                    const validUpcoming = filterValid(upcoming);
+                    
+                    const startOfToday = new Date();
+                    startOfToday.setHours(0, 0, 0, 0);
+
+                    const upcomingEvents = (events || []).filter(e => {
+                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
+                        eventEnd.setHours(23, 59, 59, 999);
+                        return eventEnd >= startOfToday && e.state !== 2;
+                    });
+
+                    const actualUpcomingMatches = filterValid(upcoming);
+                    const matchEventNames = new Set(actualUpcomingMatches.map(m => m.Info?.EventName?.trim().toLowerCase()).filter(Boolean));
+
+                    const formattedEvents = upcomingEvents
+                        .filter(e => {
+                            const evName = e.event_name || e.name || "";
+                            return !matchEventNames.has(evName.trim().toLowerCase());
+                        })
+                        .map(e => {
+                            const startDate = new Date(e.start_date);
+                            const dateStr = `${startDate.getDate().toString().padStart(2, '0')}/${(startDate.getMonth() + 1).toString().padStart(2, '0')}/${startDate.getFullYear()}`;
+                            return {
+                                isEventPlaceholder: true,
+                                Info: {
+                                    Date: dateStr,
+                                    EventName: e.event_name || e.name || "Tournament",
+                                }
+                            };
+                        });
+
+                    const validUpcoming = [...actualUpcomingMatches, ...formattedEvents];
                     const validHistory = filterValid(history);
 
-                    const sorter = (a, b) => parseDate(b.Info?.Date) - parseDate(a.Info?.Date);
-                    validUpcoming.sort(sorter);
-                    validHistory.sort(sorter);
+                    const sorterAsc = (a, b) => parseDate(a.Info?.Date) - parseDate(b.Info?.Date);
+                    const sorterDesc = (a, b) => parseDate(b.Info?.Date) - parseDate(a.Info?.Date);
+                    
+                    validUpcoming.sort(sorterAsc);
+                    validHistory.sort(sorterDesc);
 
                     setMatchHistory({ upcoming: validUpcoming, history: validHistory });
                 } catch (err) {
@@ -532,17 +565,25 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                                                         <div className="text-[10px] text-gray-400 font-bold uppercase">{info.Date}</div>
                                                                         <div className="text-[10px] font-black text-padel-green uppercase tracking-widest text-right truncate max-w-[120px] sm:max-w-[150px]">{info.EventName}</div>
                                                                     </div>
-                                                                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 md:gap-3 items-center w-full min-w-0">
-                                                                        <div className={`text-xs font-bold min-w-0 ${info.Challenger?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
-                                                                            <div className="truncate w-full">{info.Challenger?.Name}</div>
-                                                                            <div className="truncate w-full">{info.Challenger1?.Name}</div>
+                                                                    {match.isEventPlaceholder ? (
+                                                                        <div className="flex flex-col items-center justify-center py-2 text-center">
+                                                                            <div className="text-padel-green text-[10px] font-black uppercase tracking-widest mb-1">REGISTERED EVENT</div>
+                                                                            <div className="text-white text-sm font-bold truncate w-full px-4">{info.EventName}</div>
+                                                                            <div className="text-gray-400 text-[10px] uppercase font-bold mt-1">Match draw pending</div>
                                                                         </div>
-                                                                        <div className="text-[10px] font-black bg-black/40 px-2 py-1 rounded border border-white/5 shrink-0">VS</div>
-                                                                        <div className={`text-xs font-bold text-right min-w-0 ${info.Challenged?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
-                                                                            <div className="truncate w-full">{info.Challenged?.Name}</div>
-                                                                            <div className="truncate w-full">{info.Challenged1?.Name}</div>
+                                                                    ) : (
+                                                                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 md:gap-3 items-center w-full min-w-0">
+                                                                            <div className={`text-xs font-bold min-w-0 ${info.Challenger?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
+                                                                                <div className="truncate w-full">{info.Challenger?.Name}</div>
+                                                                                <div className="truncate w-full">{info.Challenger1?.Name}</div>
+                                                                            </div>
+                                                                            <div className="text-[10px] font-black bg-black/40 px-2 py-1 rounded border border-white/5 shrink-0">VS</div>
+                                                                            <div className={`text-xs font-bold text-right min-w-0 ${info.Challenged?.IsWinner ? 'text-white' : 'text-gray-500'}`}>
+                                                                                <div className="truncate w-full">{info.Challenged?.Name}</div>
+                                                                                <div className="truncate w-full">{info.Challenged1?.Name}</div>
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
+                                                                    )}
                                                                     {matchViewTab === 'past' && match.Score?.Score && match.Score.Score.length > 0 && (
                                                                         <div className="mt-3 pt-3 border-t border-white/5 flex justify-center gap-2">
                                                                             {match.Score.Score.map((set, sIdx) => (
