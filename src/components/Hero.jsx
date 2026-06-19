@@ -147,7 +147,7 @@ const Hero = () => {
                     const rankedinMatch = cal.rankedin_url ? cal.rankedin_url.match(/\/tournament\/(\d+)/) : null;
                     const rId = rankedinMatch ? rankedinMatch[1] : null;
                     const isDuplicate = allEvents.some(e => e.id?.toString() === rId);
-                    
+
                     if (!isDuplicate && !allEvents.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
                         allEvents.push({
                             id: `local_${cal.id}`,
@@ -536,7 +536,7 @@ const Hero = () => {
                                                         onClick={() => setActiveHeroTab('matches')}
                                                         className={`px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        Upcoming Matches
+                                                        My Next Matches
                                                         {matchesCount > 0 && (
                                                             <span className="bg-orange-500 text-white text-[11px] sm:text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 leading-none">
                                                                 {matchesCount}
@@ -699,7 +699,7 @@ const Hero = () => {
                                                                                 {team1P2 && (
                                                                                     <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
                                                                                         {team1P2}
-                                                                                </span>
+                                                                                    </span>
                                                                                 )}
                                                                             </div>
 
@@ -718,7 +718,7 @@ const Hero = () => {
                                                                                 {team2P2 && (
                                                                                     <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
                                                                                         {team2P2}
-                                                                                </span>
+                                                                                    </span>
                                                                                 )}
                                                                             </div>
                                                                         </div>
