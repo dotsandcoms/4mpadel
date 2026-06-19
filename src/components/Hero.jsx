@@ -36,7 +36,7 @@ const Hero = () => {
     const [nextMatch, setNextMatch] = useState(null);
     const [matchesCount, setMatchesCount] = useState(0);
     const [eventsLoading, setEventsLoading] = useState(false);
-    const [activeHeroTab, setActiveHeroTab] = useState('events'); // 'events' | 'matches'
+    const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
     const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
 
     useEffect(() => {
@@ -531,26 +531,26 @@ const Hero = () => {
                                         ) : (
                                             // ── Actual Data ──
                                             <div className="lg:col-span-12">
-                                                <div className="flex items-center gap-2 mb-4 bg-white/5 p-1 rounded-lg w-fit border border-white/10">
+                                                <div className="flex items-center gap-1 sm:gap-2 mb-4 bg-white/5 p-1 rounded-lg w-fit border border-white/10">
                                                     <button
-                                                        onClick={() => setActiveHeroTab('events')}
-                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        onClick={() => setActiveHeroTab('matches')}
+                                                        className={`px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        My Next Events
-                                                        {upcomingEvents.length > 0 && (
-                                                            <span className="bg-padel-green text-black text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                                                                {upcomingEvents.length}
+                                                        Upcoming Matches
+                                                        {matchesCount > 0 && (
+                                                            <span className="bg-orange-500 text-white text-[11px] sm:text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 leading-none">
+                                                                {matchesCount}
                                                             </span>
                                                         )}
                                                     </button>
                                                     <button
-                                                        onClick={() => setActiveHeroTab('matches')}
-                                                        className={`px-4 py-1.5 rounded-md text-sm font-bold transition-all flex items-center gap-2 ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        onClick={() => setActiveHeroTab('events')}
+                                                        className={`px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        Upcoming Matches
-                                                        {matchesCount > 0 && (
-                                                            <span className="bg-orange-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                                                                {matchesCount}
+                                                        My Next Events
+                                                        {upcomingEvents.length > 0 && (
+                                                            <span className="bg-padel-green text-black text-[11px] sm:text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 leading-none">
+                                                                {upcomingEvents.length}
                                                             </span>
                                                         )}
                                                     </button>
