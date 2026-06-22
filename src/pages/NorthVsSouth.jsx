@@ -5,6 +5,7 @@ import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
 import { MapPin, Calendar, Trophy, Users, ChevronRight, ChevronDown, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List, Edit3, Save } from 'lucide-react';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
+import InstagramFeed from '../components/InstagramFeed';
 
 // ── Assets ────────────────────────────────────────────────────────────────────
 import nvsLogo from '../assets/nvs/official_logo.png';
@@ -31,17 +32,10 @@ const MAGENTA = '#c200ab';
 const GOLD = '#f5b800';
 const WHITE = '#ffffff';
 
-// ── Instagram Widget Config ───────────────────────────────────────────────────
-// To use a live Instagram feed widget (like Elfsight or Juicer), set active to true, 
-// specify the provider ('elfsight' or 'juicer'), and set the widget ID. 
-// If active is false or details are missing, it will gracefully fall back to the 
-// premium mock image feed linking to the Instagram page.
-const INSTAGRAM_WIDGET_CONFIG = {
-  active: true, // Set to true to enable live widget
-  provider: 'elfsight', // 'elfsight' | 'juicer'
-  id: '645386a7-a128-422e-b7da-3718f92fd606', // Your Elfsight widget ID or Juicer Feed ID
-  profileUrl: 'https://www.instagram.com/northvsouthpadel/'
-};
+// ── Instagram Feed Config ─────────────────────────────────────────────────────
+// Self-hosted feed via Supabase cache — no third-party view limits
+const INSTAGRAM_HANDLE = 'northvsouthpadel';
+const INSTAGRAM_PROFILE_URL = 'https://www.instagram.com/northvsouthpadel/';
 
 const PLACEHOLDER_SVG = "https://northvssouthpadel.co.za/wp-content/uploads/2026/02/player.svg";
 
@@ -306,142 +300,7 @@ const staggerContainer = {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-const InstagramFeedWidget = ({ config }) => {
-  const { active, provider, id } = config;
-
-  useEffect(() => {
-    if (!active || !id) return;
-
-    if (provider === 'elfsight') {
-      // Precise shadow-DOM branding blender (blends the badge to match background invisibly)
-      const hideBranding = () => {
-        const allElements = document.querySelectorAll('*');
-        allElements.forEach(el => {
-          if (el.shadowRoot) {
-            // Find any link pointing to elfsight.com inside the shadow root and make it completely transparent/invisible
-            const shadowLinks = el.shadowRoot.querySelectorAll('a[href*="elfsight.com"]');
-            shadowLinks.forEach(link => {
-              link.style.setProperty('background', 'transparent', 'important');
-              link.style.setProperty('background-color', 'transparent', 'important');
-              link.style.setProperty('color', 'transparent', 'important');
-              link.style.setProperty('border', 'none', 'important');
-              link.style.setProperty('border-color', 'transparent', 'important');
-              link.style.setProperty('box-shadow', 'none', 'important');
-              link.style.setProperty('text-shadow', 'none', 'important');
-              link.style.setProperty('pointer-events', 'none', 'important');
-              link.style.setProperty('font-size', '0', 'important');
-              link.style.setProperty('line-height', '0', 'important');
-              link.style.setProperty('height', '0', 'important');
-              link.style.setProperty('padding', '0', 'important');
-              link.style.setProperty('margin', '0', 'important');
-
-              // Blend all sub-elements (SVGs, spans, text) inside the link
-              const children = link.querySelectorAll('*');
-              children.forEach(child => {
-                child.style.setProperty('background', 'transparent', 'important');
-                child.style.setProperty('background-color', 'transparent', 'important');
-                child.style.setProperty('color', 'transparent', 'important');
-                child.style.setProperty('border', 'none', 'important');
-                child.style.setProperty('border-color', 'transparent', 'important');
-                child.style.setProperty('fill', 'transparent', 'important');
-                child.style.setProperty('stroke', 'transparent', 'important');
-                child.style.setProperty('box-shadow', 'none', 'important');
-                child.style.setProperty('font-size', '0', 'important');
-              });
-
-              // Blend the parent BadgeContainer/BrandingContainer if it exists
-              const badgeParent = link.closest('[class*="BadgeContainer"]') || link.closest('[class*="BrandingContainer"]');
-              if (badgeParent) {
-                badgeParent.style.setProperty('background', 'transparent', 'important');
-                badgeParent.style.setProperty('background-color', 'transparent', 'important');
-                badgeParent.style.setProperty('border', 'none', 'important');
-                badgeParent.style.setProperty('border-color', 'transparent', 'important');
-                badgeParent.style.setProperty('box-shadow', 'none', 'important');
-                badgeParent.style.setProperty('color', 'transparent', 'important');
-                badgeParent.style.setProperty('pointer-events', 'none', 'important');
-                badgeParent.style.setProperty('height', '0', 'important');
-                badgeParent.style.setProperty('padding', '0', 'important');
-                badgeParent.style.setProperty('margin', '0', 'important');
-              }
-            });
-          }
-        });
-      };
-
-      const interval = setInterval(hideBranding, 300);
-      const timeout = setTimeout(() => clearInterval(interval), 15000);
-
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
-    } else if (provider === 'juicer') {
-      const cssId = 'juicer-embed-css';
-      if (!document.getElementById(cssId)) {
-        const link = document.createElement('link');
-        link.id = cssId;
-        link.href = 'https://assets.juicer.io/embed.css';
-        link.media = 'all';
-        link.rel = 'stylesheet';
-        link.type = 'text/css';
-        document.head.appendChild(link);
-      }
-
-      const scriptId = 'juicer-embed-script';
-      if (!document.getElementById(scriptId)) {
-        const script = document.createElement('script');
-        script.id = scriptId;
-        script.src = 'https://assets.juicer.io/embed.js';
-        script.async = true;
-        script.defer = true;
-        document.body.appendChild(script);
-      }
-    }
-  }, [active, provider, id]);
-
-  if (!active || !id) {
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 md:gap-8 mb-10 md:mb-16 w-full">
-        {[heroImg, actionImg, venueImg].map((img, idx) => (
-          <a
-            key={idx}
-            href={config.profileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative aspect-square rounded-[24px] md:rounded-[32px] overflow-hidden bg-gray-100 shadow-lg block"
-          >
-            <img src={img} alt="Instagram Content" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors duration-300 flex items-center justify-center">
-              <div className="opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300">
-                <Instagram className="w-10 h-10 md:w-16 md:h-16 text-white drop-shadow-lg" />
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-    );
-  }
-
-  if (provider === 'elfsight') {
-    return (
-      <div className="w-full mb-10 md:mb-16 rounded-[16px] md:rounded-[32px] overflow-hidden bg-gray-50 p-1 md:p-2 border border-gray-100 shadow-inner">
-        <div className={`elfsight-app-${id}`} data-elfsight-app-lazy></div>
-      </div>
-    );
-  }
-
-  if (provider === 'juicer') {
-    return (
-      <div className="w-full mb-10 md:mb-16 rounded-[24px] md:rounded-[32px] overflow-hidden bg-gray-50 p-6 border border-gray-100 shadow-inner max-h-[600px] overflow-y-auto custom-scrollbar">
-        <ul className="juicer-feed" data-feed-id={id}>
-          <h1 className="referral"><a href="https://www.juicer.io">Powered by Juicer</a></h1>
-        </ul>
-      </div>
-    );
-  }
-
-  return null;
-};
+// InstagramFeedWidget removed — replaced by <InstagramFeed /> component
 
 const PlayerModal = ({ player, onClose }) => {
   if (!player) return null;
@@ -1717,12 +1576,14 @@ const NorthVsSouth = () => {
               Stay up to date with the latest from the tournament, behind-the-scenes moments, and match highlights on our official Instagram.
             </p>
 
-            <InstagramFeedWidget config={INSTAGRAM_WIDGET_CONFIG} />
+            <div className="w-full mb-10 md:mb-16">
+              <InstagramFeed handle={INSTAGRAM_HANDLE} limit={9} />
+            </div>
 
             <motion.a
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              href="https://www.instagram.com/northvsouthpadel/"
+              href={INSTAGRAM_PROFILE_URL}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-3 px-8 py-4 md:px-10 md:py-5 bg-magenta text-white rounded-full font-black text-[10px] md:text-xs uppercase tracking-widest shadow-xl"
@@ -1813,22 +1674,7 @@ const NorthVsSouth = () => {
         ::selection { background: ${MAGENTA}; color: #fff; }
         html { scroll-behavior: smooth; }
 
-        /* Extra defense: Blend only the Elfsight branding referral banner invisibly */
-        a[href*="elfsight.com/pages/referral"],
-        a[href*="referral"],
-        [class*="BadgeContainer"],
-        [class*="BrandingContainer"] {
-          background: transparent !important;
-          background-color: transparent !important;
-          color: transparent !important;
-          border: none !important;
-          border-color: transparent !important;
-          box-shadow: none !important;
-          text-shadow: none !important;
-          fill: transparent !important;
-          stroke: transparent !important;
-          pointer-events: none !important;
-        }
+
       `}} />
     </div>
   );

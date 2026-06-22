@@ -45,6 +45,8 @@ self.addEventListener('fetch', (event) => {
   if (
     url.hostname.includes('supabase') || 
     url.hostname.includes('google-analytics') || 
+    url.hostname.includes('instagram.com') ||
+    url.hostname.includes('cdninstagram.com') ||
     url.pathname.includes('/api/') || 
     url.pathname.startsWith('/rest/')
   ) {
