@@ -9,8 +9,6 @@ import Partners from '../components/Partners';
 import UpcomingEventsWidget from '../components/UpcomingEventsWidget';
 import dynamicsPlayer from '../assets/augustin.jpeg';
 import { motion } from 'framer-motion';
-import { Instagram } from 'lucide-react';
-import InstagramFeed from '../components/InstagramFeed';
 import { supabase } from '../supabaseClient';
 
 const Home = () => {
@@ -37,44 +35,6 @@ const Home = () => {
                 <UpcomingEventsWidget session={session} />
 
                 <FeaturedSections />
-
-                {/* ═══════════════ INSTAGRAM FEED ═══════════════════════════════════════════ */}
-                <section className="py-12 md:py-24 px-4 md:px-6 container mx-auto">
-                    <div className="max-w-7xl mx-auto text-center">
-                        <motion.div
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true }}
-                            className="flex flex-col items-center"
-                        >
-                            <div className="inline-flex items-center justify-center p-4 rounded-full bg-padel-green/10 mb-6">
-                                <Instagram className="w-8 h-8 text-padel-green" />
-                            </div>
-                            <h2 className="text-3xl md:text-5xl font-black uppercase tracking-tighter mb-4 text-white">
-                                Follow Us on Instagram
-                            </h2>
-                            <p className="text-gray-400 text-sm md:text-lg font-medium mb-10 md:mb-16 max-w-2xl mx-auto">
-                                Catch up on the latest highlights, tournaments, and community moments from 4M Padel.
-                            </p>
-
-                            <div className="w-full mb-10 md:mb-12">
-                                <InstagramFeed handle="4m_padel" limit={9} />
-                            </div>
-
-                            <motion.a
-                                whileHover={{ scale: 1.05 }}
-                                whileTap={{ scale: 0.95 }}
-                                href="https://www.instagram.com/4m_padel/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-3 px-8 py-4 bg-padel-green text-black rounded-full font-black text-[10px] md:text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(190,255,0,0.3)] hover:shadow-[0_0_30px_rgba(190,255,0,0.5)] transition-all"
-                            >
-                                <Instagram className="w-4 h-4 md:w-5 md:h-5" />
-                                @4m_padel
-                            </motion.a>
-                        </motion.div>
-                    </div>
-                </section>
 
                 {/* Intro / Dynamics Section */}
                 <section className="relative py-24 px-6 md:px-20 container mx-auto">
