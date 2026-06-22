@@ -4033,9 +4033,15 @@ const PlayerProfile = () => {
                                                                             <>
                                                                                 {currentMatchesHistoryList.map((match, idx) => {
                                                                                     const info = match.Info || {};
-                                                                                    const isWinner = info.IsWinner !== undefined
-                                                                                        ? info.IsWinner
-                                                                                        : info.Challenger?.IsWinner;
+                                                                                    const team1Won = info.Challenger?.IsWinner === true;
+                                                                                    const team2Won = info.Challenged?.IsWinner === true;
+                                                                                    const playerName = player?.name?.toLowerCase().trim();
+                                                                                    const isOnTeam1 = info.Challenger?.Name?.toLowerCase().trim() === playerName || info.Challenger1?.Name?.toLowerCase().trim() === playerName;
+                                                                                    const isOnTeam2 = info.Challenged?.Name?.toLowerCase().trim() === playerName || info.Challenged1?.Name?.toLowerCase().trim() === playerName;
+                                                                                    // Fallback: if somehow we can't map the user, we just check if Team 1 won (old behavior)
+                                                                                    const isProfileOwnerWinner = (isOnTeam1 || isOnTeam2) 
+                                                                                        ? ((isOnTeam1 && team1Won) || (isOnTeam2 && team2Won))
+                                                                                        : team1Won;
                                                                                     const date = info.Date;
                                                                                     const hasResult = match.Score?.Score && match.Score.Score.length > 0;
 
@@ -4054,20 +4060,20 @@ const PlayerProfile = () => {
                                                                                                     </div>
 
                                                                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                                                                        <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && isWinner ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
+                                                                                                        <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && team1Won ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
                                                                                                             <div className="flex justify-between items-center mb-1.5">
                                                                                                                 <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 1</p>
-                                                                                                                {hasResult && isWinner && <Trophy size={10} className="text-padel-green" />}
+                                                                                                                {hasResult && team1Won && <Trophy size={10} className="text-padel-green" />}
                                                                                                             </div>
                                                                                                             <p className="text-sm font-bold text-white truncate">
                                                                                                                 {info.Challenger?.Name || 'TBD'}
                                                                                                                 {info.Challenger1?.Name && ` & ${info.Challenger1.Name}`}
                                                                                                             </p>
                                                                                                         </div>
-                                                                                                        <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && !isWinner ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
+                                                                                                        <div className={`p-3.5 rounded-xl border transition-colors duration-300 ${hasResult && team2Won ? 'bg-padel-green/[0.05] border-padel-green/30 ring-1 ring-padel-green/20' : 'bg-white/[0.04] border-white/10'}`}>
                                                                                                             <div className="flex justify-between items-center mb-1.5">
                                                                                                                 <p className="text-[8px] font-black text-gray-500 uppercase tracking-widest">Team 2</p>
-                                                                                                                {hasResult && !isWinner && <Trophy size={10} className="text-padel-green" />}
+                                                                                                                {hasResult && team2Won && <Trophy size={10} className="text-padel-green" />}
                                                                                                             </div>
                                                                                                             <p className="text-sm font-bold text-white truncate">
                                                                                                                 {info.Challenged?.Name || 'TBD'}
@@ -4105,11 +4111,11 @@ const PlayerProfile = () => {
                                                                                                                     </div>
                                                                                                                 ))}
                                                                                                             </div>
-                                                                                                            <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] shadow-lg ${isWinner
+                                                                                                            <div className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] shadow-lg ${isProfileOwnerWinner
                                                                                                                 ? 'bg-padel-green text-black ring-1 ring-white/20'
                                                                                                                 : 'bg-red-500/10 text-red-500 border border-red-500/20'
                                                                                                                 }`}>
-                                                                                                                {isWinner ? 'Victory' : 'Defeat'}
+                                                                                                                {isProfileOwnerWinner ? 'Victory' : 'Defeat'}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     ) : (

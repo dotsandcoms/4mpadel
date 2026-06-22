@@ -54,7 +54,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
                 console.log(`[Cache HIT - Fresh]: ${url}`);
                 return data.payload;
             }
-            console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs/1000)}s]: ${url}`);
+            console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs / 1000)}s]: ${url}`);
         }
     } catch (e) {
         console.error("Cache read error:", e);
@@ -77,7 +77,7 @@ const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 6
         return data;
     } catch (liveError) {
         console.warn(`[Rankedin Offline/Timeout]: ${liveError.message}. Attempting stale cache fallback...`);
-        
+
         // 4. Fallback to stale cache if Rankedin is offline
         try {
             const { data } = await supabase
@@ -411,7 +411,7 @@ export const useRankedin = () => {
 
             for (const cls of classes.slice(0, 24)) {
                 if (!cls.TournamentDraws || cls.TournamentDraws.length === 0) continue;
-                
+
                 // Fetch each draw (Main, Backdraw, etc.)
                 for (const draw of cls.TournamentDraws) {
                     try {
@@ -421,12 +421,12 @@ export const useRankedin = () => {
                         // Look for Elimination draw winners
                         const eliminationDraw = drawData.find(d => d.BaseType === 'Elimination');
                         const elimination = eliminationDraw?.Elimination;
-                        
+
                         if (elimination && elimination.DrawData) {
                             // Find the Final (highest round)
                             const allCells = elimination.DrawData.flat()
                                 .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
-                            
+
                             // Identical grouping logic to KnockoutBracket.jsx
                             const roundsMap = {};
                             elimination.DrawData.forEach(row => {
@@ -471,7 +471,7 @@ export const useRankedin = () => {
                                 const m = matchCell.MatchCell || matchCell.MatchViewModel || matchCell;
                                 const scoreObj = m.MatchResults?.Score || m.MatchViewModel?.Score || m.Score || matchCell.Score;
                                 const winnerId = m.MatchResults?.WinnerParticipantId || m.MatchViewModel?.WinnerParticipantId || m.WinnerParticipantId || matchCell.WinnerParticipantId;
-                                
+
                                 const p1 = matchCell.ChallengerParticipant || m.ChallengerParticipant;
                                 const p2 = matchCell.ChallengedParticipant || m.ChallengedParticipant;
 
@@ -487,26 +487,26 @@ export const useRankedin = () => {
                                     const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
                                     winningParticipant = isFirstWinner ? p1 : p2;
                                 }
-                                
+
                                 if (winningParticipant === p1) return p2;
                                 if (winningParticipant === p2) return p1;
                                 return null;
                             };
-                            
+
                             if (finalCell) {
                                 const m = finalCell.MatchCell || finalCell.MatchViewModel || finalCell;
                                 const p1 = finalCell.ChallengerParticipant || m.ChallengerParticipant;
                                 const p2 = finalCell.ChallengedParticipant || m.ChallengedParticipant;
-                                
+
                                 const loser = getLoser(finalCell);
                                 const winner = loser === p1 ? p2 : p1;
 
                                 const winnerNames = extractNames(winner);
                                 const runnerUpNames = extractNames(loser);
-                                
+
                                 let thirdPlaceNames = null;
                                 let fourthPlaceNames = null;
-                                
+
                                 if (semiFinalRound.length === 2) {
                                     const sf1Loser = getLoser(semiFinalRound[0]);
                                     const sf2Loser = getLoser(semiFinalRound[1]);
@@ -601,8 +601,8 @@ export const useRankedin = () => {
 
                     if (cacheRow) {
                         const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
-                        // 24 hours = 86400000 ms
-                        if (ageMs < 86400000) {
+                        // 5 minutes = 300000 ms
+                        if (ageMs < 300000) {
                             if (cacheRow.past_matches !== null) {
                                 return cacheRow.past_matches;
                             }
@@ -632,21 +632,21 @@ export const useRankedin = () => {
                         'Accept': 'application/json'
                     }
                 },
-                takeHistory ? 1000 * 60 * 60 * 6 : 1000 * 60 * 5 // 6 hours for history, 5 minutes for upcoming
+                takeHistory ? 1000 * 60 * 5 : 1000 * 60 * 5 // 5 minutes for both history and upcoming
             );
 
             let payload = data.Payload || [];
 
             // If we're fetching history and only got placeholders, use the tournament fallback
             const isPlaceholder = payload.length > 0 && payload.every(m => m.Info?.EventName === 'EventName');
-            
+
             if (takeHistory && (payload.length === 0 || isPlaceholder)) {
                 // FALLBACK: Fetch events and then their matches
                 const events = await getPlayerEventsAsync(rankedinId, signal);
                 const now = new Date();
                 const pastEvents = events
                     .filter(e => new Date(e.start_date) < now)
-                    .sort((a,b) => new Date(b.start_date) - new Date(a.start_date))
+                    .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
                     .slice(0, 5); // Limit to last 5 tournaments to avoid too many requests
 
                 const historyMatches = [];
@@ -658,12 +658,12 @@ export const useRankedin = () => {
                         }
                         const mData = await fetchWithCache(url, { signal });
                         const matches = (mData[0] && mData[0].Matches && mData[0].Matches.Matches) ? mData[0].Matches.Matches : (mData.Matches || []);
-                        
+
                         // Filter matches for THIS player AND only those already played
                         const filtered = matches.filter(m => {
                             const pId = internalId;
                             const isThisPlayer = (m.Challenger?.Player1Id === pId || m.Challenger?.Player2Id === pId ||
-                                                m.Challenged?.Player1Id === pId || m.Challenged?.Player2Id === pId);
+                                m.Challenged?.Player1Id === pId || m.Challenged?.Player2Id === pId);
                             // Only include in history if strictly played
                             return isThisPlayer && m.MatchResult?.IsPlayed;
                         });
@@ -682,12 +682,12 @@ export const useRankedin = () => {
                                 const hours = String(d.getHours()).padStart(2, '0');
                                 const mins = String(d.getMinutes()).padStart(2, '0');
                                 formattedDate = `${day}/${month}/${year} ${hours}:${mins}`;
-                            } catch (e) {}
+                            } catch (e) { }
 
                             // Determine if Team 1 (Challenger) won
                             const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
                             let firstWon = false;
-                            
+
                             if (winnerId) {
                                 firstWon = (m.Challenger?.Id == winnerId || m.Challenger?.EventParticipantId == winnerId || m.Challenger?.Player1Id == winnerId);
                             } else if (m.MatchResult?.Score) {
@@ -702,7 +702,7 @@ export const useRankedin = () => {
                             }
 
                             const pId = internalId;
-                            
+
                             // Check if the current player is on Team 1 or Team 2 and if their team won
                             const isOnTeam1 = (m.Challenger?.Player1Id === pId || m.Challenger?.Player2Id === pId);
                             const playerIsWinner = isOnTeam1 ? firstWon : !firstWon;
@@ -711,14 +711,14 @@ export const useRankedin = () => {
                                 Info: {
                                     EventName: event.event_name,
                                     Date: formattedDate,
-                                    Challenger: { 
-                                        Name: m.Challenger?.Name, 
+                                    Challenger: {
+                                        Name: m.Challenger?.Name,
                                         Id: m.Challenger?.Player1Id,
-                                        IsWinner: firstWon 
+                                        IsWinner: firstWon
                                     },
                                     Challenger1: { Name: m.Challenger?.Player2Name, Id: m.Challenger?.Player2Id },
-                                    Challenged: { 
-                                        Name: m.Challenged?.Name, 
+                                    Challenged: {
+                                        Name: m.Challenged?.Name,
                                         Id: m.Challenged?.Player1Id,
                                         IsWinner: !firstWon
                                     },
@@ -752,8 +752,8 @@ export const useRankedin = () => {
             if (takeHistory) {
                 supabase
                     .from('player_matches')
-                    .upsert({ 
-                        rankedin_id: rankedinId, 
+                    .upsert({
+                        rankedin_id: rankedinId,
                         past_matches: payload,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'rankedin_id' })
@@ -776,7 +776,7 @@ export const useRankedin = () => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersForClassAsync?tournamentId=${tournamentId}&tournamentClassId=${classId}&language=en`;
             const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
-            
+
             if (data.Teams && data.Teams.length > 0) {
                 return data.Teams.map(team => ({ Participant: team }));
             }
@@ -826,7 +826,7 @@ export const useRankedin = () => {
                 if (standingsData && standingsData.ScoresViewModels && standingsData.ScoresViewModels.length >= 2) {
                     team1 = standingsData.ScoresViewModels[0];
                     team2 = standingsData.ScoresViewModels[1];
-                    
+
                     // Ensure North is Team1
                     if (team1.ParticipantName.toLowerCase().includes('south')) {
                         const temp = team1;
@@ -843,7 +843,7 @@ export const useRankedin = () => {
             const formattedMatches = rawMatches.map(m => {
                 const team1Name = m.Challenger ? [m.Challenger.Name, m.Challenger.Player2Name].filter(Boolean).join(' / ') : '';
                 const team2Name = m.Challenged ? [m.Challenged.Name, m.Challenged.Player2Name].filter(Boolean).join(' / ') : '';
-                
+
                 let scoreText = 'Upcoming';
                 let winnerTeamId = null;
                 let isFinished = false;
@@ -851,20 +851,20 @@ export const useRankedin = () => {
                 if (m.MatchResult && m.MatchResult.IsPlayed) {
                     isFinished = true;
                     if (m.MatchResult.Score && Array.isArray(m.MatchResult.Score.DetailedScoring) && m.MatchResult.Score.DetailedScoring.length > 0) {
-                         scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
+                        scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
                     } else if (m.MatchResult.Score && m.MatchResult.Score.FirstParticipantScore !== undefined && m.MatchResult.Score.SecondParticipantScore !== undefined) {
-                         scoreText = `${m.MatchResult.Score.FirstParticipantScore}-${m.MatchResult.Score.SecondParticipantScore}`;
+                        scoreText = `${m.MatchResult.Score.FirstParticipantScore}-${m.MatchResult.Score.SecondParticipantScore}`;
                     } else {
-                         scoreText = 'Played'; 
+                        scoreText = 'Played';
                     }
-                    
+
                     if (m.MatchResult.Score && m.MatchResult.Score.IsFirstParticipantWinner === true) {
                         winnerTeamId = team1 ? team1.ParticipantId : null;
                     } else if (m.MatchResult.Score && m.MatchResult.Score.IsFirstParticipantWinner === false) {
                         winnerTeamId = team2 ? team2.ParticipantId : null;
                     }
                 } else if (m.MatchResult && m.MatchResult.Score && Array.isArray(m.MatchResult.Score.DetailedScoring) && m.MatchResult.Score.DetailedScoring.length > 0) {
-                     scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
+                    scoreText = m.MatchResult.Score.DetailedScoring.map(s => `${s.FirstParticipantScore}-${s.SecondParticipantScore}`).join(' ');
                 }
 
                 let formattedDate = 'Upcoming';
@@ -884,7 +884,7 @@ export const useRankedin = () => {
                     WinnerTeamId: winnerTeamId,
                     IsFinished: isFinished,
                     MatchDateFormatted: formattedDate,
-                    CategoryName: 'Men-Doubles' 
+                    CategoryName: 'Men-Doubles'
                 };
             });
 
