@@ -334,8 +334,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         let errorCount = 0;
 
         try {
-            // Step 1: Get all class tabs for this tournament
-            const tabs = await getTournamentPlayerTabs(rId);
+            // Step 1: Get all class tabs for this tournament.
+            // forceRefresh bypasses the rankedin_cache so a manual sync always reflects
+            // the live RankedIn state (e.g. divisions/players that were just removed).
+            const tabs = await getTournamentPlayerTabs(rId, true);
 
             if (!tabs || !Array.isArray(tabs) || tabs.length === 0) {
                 console.warn(`No player tabs for ${eventName}`);
@@ -346,7 +348,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             let externalParticipants = [];
             for (const tab of tabs) {
                 try {
-                    const parts = await getTournamentParticipants(rId, tab.Id);
+                    const parts = await getTournamentParticipants(rId, tab.Id, true);
                     if (!Array.isArray(parts)) continue;
 
                     parts.forEach(p => {
@@ -374,7 +376,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 }
             }
 
-            if (externalParticipants.length === 0) return { success: 0, error: 0, message: "No players found" };
+            // NOTE: we intentionally do NOT early-return when externalParticipants is empty.
+            // Tabs were fetched successfully above, so an empty list means every player was
+            // genuinely removed on RankedIn — the cleanup step below must run to mirror that.
 
             // Deduplicate by Participant ID AND Class (Division)
             const seenKeys = new Map();

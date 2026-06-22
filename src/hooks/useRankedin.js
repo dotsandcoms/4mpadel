@@ -39,25 +39,28 @@ const fetchWithTimeout = async (url, options = {}, timeout = 8000) => {
  * Generic fetch helper that implements a standard timeout, abort signal merging,
  * and caches the response in Supabase `rankedin_cache` for high availability and sub-second loads.
  */
-const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6) => { // Default 6 hours cache
-    // 1. Attempt to read from Supabase cache first
-    try {
-        const { data, error } = await supabase
-            .from('rankedin_cache')
-            .select('payload, updated_at')
-            .eq('url', url)
-            .maybeSingle();
+const fetchWithCache = async (url, options = {}, cacheDurationMs = 1000 * 60 * 60 * 6, forceRefresh = false) => { // Default 6 hours cache
+    // 1. Attempt to read from Supabase cache first (skipped when forceRefresh is requested,
+    //    e.g. an admin clicking "Sync" expects live data so removals propagate immediately).
+    if (!forceRefresh) {
+        try {
+            const { data, error } = await supabase
+                .from('rankedin_cache')
+                .select('payload, updated_at')
+                .eq('url', url)
+                .maybeSingle();
 
-        if (data) {
-            const ageMs = Date.now() - new Date(data.updated_at).getTime();
-            if (ageMs < cacheDurationMs) {
-                console.log(`[Cache HIT - Fresh]: ${url}`);
-                return data.payload;
+            if (data) {
+                const ageMs = Date.now() - new Date(data.updated_at).getTime();
+                if (ageMs < cacheDurationMs) {
+                    console.log(`[Cache HIT - Fresh]: ${url}`);
+                    return data.payload;
+                }
+                console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs / 1000)}s]: ${url}`);
             }
-            console.log(`[Cache HIT - Stale, age: ${Math.round(ageMs / 1000)}s]: ${url}`);
+        } catch (e) {
+            console.error("Cache read error:", e);
         }
-    } catch (e) {
-        console.error("Cache read error:", e);
     }
 
     // 2. Fetch live from RankedIn API
@@ -772,10 +775,10 @@ export const useRankedin = () => {
         }
     }, [getAnonymousToken, getPlayerEventsAsync]);
 
-    const getTournamentParticipants = useCallback(async (tournamentId, classId) => {
+    const getTournamentParticipants = useCallback(async (tournamentId, classId, forceRefresh = false) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersForClassAsync?tournamentId=${tournamentId}&tournamentClassId=${classId}&language=en`;
-            const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 2, forceRefresh); // 2 minutes cache
 
             if (data.Teams && data.Teams.length > 0) {
                 return data.Teams.map(team => ({ Participant: team }));
@@ -787,10 +790,10 @@ export const useRankedin = () => {
         }
     }, []);
 
-    const getTournamentPlayerTabs = useCallback(async (tournamentId) => {
+    const getTournamentPlayerTabs = useCallback(async (tournamentId, forceRefresh = false) => {
         try {
             const url = `${API_BASE}/tournament/GetPlayersTabAsync?id=${tournamentId}&language=en`;
-            const data = await fetchWithCache(url, {}, 1000 * 60 * 2); // 2 minutes cache
+            const data = await fetchWithCache(url, {}, 1000 * 60 * 2, forceRefresh); // 2 minutes cache
             return data || [];
         } catch (err) {
             console.error('Error fetching tournament player tabs:', err);
