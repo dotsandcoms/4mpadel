@@ -232,7 +232,7 @@ const Hero = () => {
                 }
 
                 // Filter & sort matches in ascending chronological order to find next match
-                const validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
+                let validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
                 const parseDate = (dateStr) => {
                     if (!dateStr) return new Date(0);
                     if (dateStr.includes('T') || dateStr.includes('-')) {
@@ -242,6 +242,15 @@ const Hero = () => {
                     const [day, month, year] = datePart.split('/');
                     return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
                 };
+                
+                // Remove matches that are more than 24 hours in the past
+                const now = new Date();
+                const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+                validMatches = validMatches.filter(m => {
+                    const matchDate = parseDate(m.Info?.Date);
+                    return matchDate > oneDayAgo;
+                });
+                
                 validMatches.sort((a, b) => parseDate(a.Info?.Date) - parseDate(b.Info?.Date));
                 const firstNextMatch = validMatches[0] || null;
 
@@ -285,13 +294,29 @@ const Hero = () => {
         try {
             const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
             if (cachedMatch) {
-                const { ts, match, count } = JSON.parse(cachedMatch);
+                let { ts, match, count } = JSON.parse(cachedMatch);
                 if (match) {
-                    setNextMatch(match);
-                    setMatchesCount(count || 1);
-                    hasCachedData = true;
-                    if (Date.now() - ts < CACHE_TTL) {
-                        isCacheExpired = false;
+                    // Check if the cached match is already in the past
+                    const parseDate = (dateStr) => {
+                        if (!dateStr) return new Date(0);
+                        if (dateStr.includes('T') || dateStr.includes('-')) return new Date(dateStr);
+                        const [datePart, timePart] = dateStr.split(' ');
+                        const [day, month, year] = datePart.split('/');
+                        return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
+                    };
+                    const matchDate = parseDate(match.Info?.Date);
+                    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+                    
+                    if (matchDate > oneDayAgo) {
+                        setNextMatch(match);
+                        setMatchesCount(count || 1);
+                        hasCachedData = true;
+                        if (Date.now() - ts < CACHE_TTL) {
+                            isCacheExpired = false;
+                        }
+                    } else {
+                        // Cached match is stale, force a refetch
+                        isCacheExpired = true;
                     }
                 }
             }
