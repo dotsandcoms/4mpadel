@@ -9,6 +9,9 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@burkcorp/reactmath': path.resolve(__dirname, './reactmath-package'),
+      'react': path.resolve(__dirname, './node_modules/react'),
+      'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
+      'react-helmet-async': path.resolve(__dirname, './node_modules/react-helmet-async'),
     },
   },
 })

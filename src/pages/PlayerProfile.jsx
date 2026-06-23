@@ -341,6 +341,8 @@ const PlayerProfile = () => {
                         const isDuplicate = events.some(e => e.id?.toString() === rId);
                         
                         if (!isDuplicate && !events.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
+                            const isRegistrant = reg.email?.toLowerCase() === player.email?.toLowerCase();
+                            const userPaymentStatus = isRegistrant ? reg.payment_status : reg.partner_payment_status;
                             events.push({
                                 id: `local_${cal.id}`,
                                 db_id: cal.id,
@@ -348,7 +350,7 @@ const PlayerProfile = () => {
                                 end_date: cal.end_date,
                                 name: cal.event_name,
                                 state: 1, // Default to upcoming
-                                payment_status: reg.payment_status
+                                payment_status: userPaymentStatus
                             });
                         }
                     });
@@ -391,18 +393,24 @@ const PlayerProfile = () => {
                 if (allFiltered.length > 0) {
                     const { data: dbEvents } = await supabase
                         .from('calendar')
-                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees, event_name');
+                        .select('id, slug, rankedin_url, city, venue, registered_players, organizer_name, sapa_status, image_url, entry_fee, category_fees, event_name, is_manual');
 
                     // Fetch user's paid registrations
                     let paidRegs = [];
                     if (player?.email) {
                         const { data } = await supabase
                             .from('event_registrations')
-                            .select('event_id')
+                            .select('event_id, email, partner_email, payment_status, partner_payment_status')
                             .or(`email.ilike.${player.email},partner_email.ilike.${player.email}`)
-                            .eq('payment_status', 'paid')
                             .neq('status', 'withdrawn');
-                        paidRegs = data || [];
+                        
+                        paidRegs = (data || []).filter(r => {
+                            const isRegistrant = r.email?.toLowerCase() === player.email.toLowerCase();
+                            const isPartner = r.partner_email?.toLowerCase() === player.email.toLowerCase();
+                            if (isRegistrant && r.payment_status === 'paid') return true;
+                            if (isPartner && r.partner_payment_status === 'paid') return true;
+                            return false;
+                        });
                     }
 
                     let paidParticipants = [];
@@ -426,6 +434,7 @@ const PlayerProfile = () => {
                         .eq('status', 'success')
                         .eq('payment_type', 'event_entry_fee');
 
+                    const paidManualEventIds = new Set((paidRegs || []).map(r => r.event_id));
                     const paidEventIds = new Set([
                         ...(paidRegs || []).map(r => r.event_id),
                         ...(paidParticipants || []).map(p => p.event_id),
@@ -449,7 +458,10 @@ const PlayerProfile = () => {
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
                                 e.event_name = match.event_name || e.event_name;
-                                e.isPaid = paidEventIds.has(match.id);
+                                e.is_manual = match.is_manual;
+                                e.isPaid = e.id?.toString().startsWith('local_')
+                                    ? paidManualEventIds.has(match.id)
+                                    : paidEventIds.has(match.id);
                             }
                         });
                     }
@@ -1303,7 +1315,7 @@ const PlayerProfile = () => {
                                                 }
 
                                                 const hasPending = pendingPayments?.some(p => p.id === event.db_id);
-                                                const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0);
+                                                const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
                                                 const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
 
                                                 return (
@@ -3796,7 +3808,7 @@ const PlayerProfile = () => {
 
                                                                         const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                                         const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
-                                                                        const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0);
+                                                                        const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
                                                                         const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
 
                                                                         return (

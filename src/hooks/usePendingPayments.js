@@ -75,24 +75,35 @@ export const usePendingPayments = (email, rankedinId) => {
                     .select(`
                         event_id,
                         class_name,
-                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments)
+                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments, is_manual)
                     `)
                     .or(profileId ? `email.ilike.${email},profile_id.eq.${profileId}` : `email.ilike.${email}`)
                     .neq('is_paid', true) // Include false and null
                     .gte('calendar.start_date', todayStr);
 
                 // Fetch pending registrations
-                const { data: registrations, error: rError } = await supabase
+                const { data: rawRegistrations, error: rError } = await supabase
                     .from('event_registrations')
                     .select(`
                         event_id,
                         division,
-                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments)
+                        email,
+                        partner_email,
+                        payment_status,
+                        partner_payment_status,
+                        calendar!inner(id, event_name, start_date, entry_fee, category_fees, slug, allow_payments, is_manual)
                     `)
-                    .ilike('email', email)
-                    .in('payment_status', ['pending', 'failed'])
+                    .or(`email.ilike.${email},partner_email.ilike.${email}`)
                     .neq('status', 'withdrawn')
                     .gte('calendar.start_date', todayStr);
+
+                const registrations = (rawRegistrations || []).filter(r => {
+                    const isRegistrant = r.email?.toLowerCase() === email.toLowerCase();
+                    const isPartner = r.partner_email?.toLowerCase() === email.toLowerCase();
+                    if (isRegistrant && ['pending', 'failed'].includes(r.payment_status)) return true;
+                    if (isPartner && ['pending', 'failed'].includes(r.partner_payment_status)) return true;
+                    return false;
+                });
 
                 if (pError) console.error("Error fetching participants:", pError);
                 if (rError) console.error("Error fetching registrations:", rError);
@@ -102,7 +113,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     const cal = record.calendar;
                     
                     // Check if event has a fee AND allows payments
-                    const hasFee = cal.entry_fee > 0 || (cal.category_fees && Object.keys(cal.category_fees).length > 0);
+                    const hasFee = cal.entry_fee > 0 || (cal.category_fees && Object.keys(cal.category_fees).length > 0) || cal.is_manual === true;
                     
                     if (hasFee && cal.allow_payments) {
                         const division = (record.class_name || record.division || 'N/A').trim();
@@ -124,13 +135,20 @@ export const usePendingPayments = (email, rankedinId) => {
                 if (unpaidEvents.size > 0) {
                     const eventIds = Array.from(new Set(Array.from(unpaidEvents.values()).map(e => e.id)));
                     
-                    const { data: paidRegs } = await supabase
+                    const { data: rawPaidRegs } = await supabase
                         .from('event_registrations')
-                        .select('event_id, division')
-                        .ilike('email', email)
-                        .eq('payment_status', 'paid')
+                        .select('event_id, division, email, partner_email, payment_status, partner_payment_status')
+                        .or(`email.ilike.${email},partner_email.ilike.${email}`)
                         .neq('status', 'withdrawn')
                         .in('event_id', eventIds);
+
+                    const paidRegs = (rawPaidRegs || []).filter(r => {
+                        const isRegistrant = r.email?.toLowerCase() === email.toLowerCase();
+                        const isPartner = r.partner_email?.toLowerCase() === email.toLowerCase();
+                        if (isRegistrant && r.payment_status === 'paid') return true;
+                        if (isPartner && r.partner_payment_status === 'paid') return true;
+                        return false;
+                    });
                         
                     const { data: paidParts } = await supabase
                         .from('tournament_participants')
@@ -200,8 +218,16 @@ export const usePendingPayments = (email, rankedinId) => {
                     }
                     if (directPayments) {
                         directPayments.forEach(p => {
-                            const division = p.metadata?.division;
-                            findAndRemove(p.event_id, division);
+                            if (p.metadata?.covers && Array.isArray(p.metadata.covers)) {
+                                p.metadata.covers.forEach(c => {
+                                    if (c.type === 'entry' && c.email?.toLowerCase() === email.toLowerCase() && c.division) {
+                                        findAndRemove(p.event_id, c.division);
+                                    }
+                                });
+                            } else {
+                                const division = p.metadata?.division;
+                                findAndRemove(p.event_id, division);
+                            }
                         });
                     }
                 }

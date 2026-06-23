@@ -962,7 +962,7 @@ const CalendarManager = () => {
                     </button>
                     <button
                         onClick={() => openBuilder(null)}
-                        className="bg-padel-green/10 text-padel-green border border-padel-green/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-padel-green hover:text-black transition-colors"
+                        className="bg-padel-green/10 text-padel-green border border-padel-green/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-padel-green hover:!text-black transition-colors"
                     >
                         <Plus size={18} /> Create Manual Event
                     </button>

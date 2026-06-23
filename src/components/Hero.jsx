@@ -142,7 +142,13 @@ const Hero = () => {
                 );
                 const paidManualEventIds = new Set(
                     localRegs
-                        .filter((r) => r.payment_status === 'paid')
+                        .filter((r) => {
+                            const isRegistrant = r.email?.toLowerCase() === playerData.email?.toLowerCase();
+                            const isPartner = r.partner_email?.toLowerCase() === playerData.email?.toLowerCase();
+                            if (isRegistrant && r.payment_status === 'paid') return true;
+                            if (isPartner && r.partner_payment_status === 'paid') return true;
+                            return false;
+                        })
                         .map((r) => r.event_id || r.calendar?.id)
                         .filter(Boolean),
                 );
@@ -156,6 +162,8 @@ const Hero = () => {
                     const isDuplicate = allEvents.some(e => e.id?.toString() === rId);
 
                     if (!isDuplicate && !allEvents.some(e => e.db_id === cal.id || e.id === `local_${cal.id}`)) {
+                        const isRegistrant = reg.email?.toLowerCase() === playerData.email?.toLowerCase();
+                        const userPaymentStatus = isRegistrant ? reg.payment_status : reg.partner_payment_status;
                         allEvents.push({
                             id: `local_${cal.id}`,
                             db_id: cal.id,
@@ -163,8 +171,8 @@ const Hero = () => {
                             end_date: cal.end_date,
                             event_name: cal.event_name,
                             state: 1,
-                            payment_status: reg.payment_status,
-                            isPaid: reg.payment_status === 'paid',
+                            payment_status: userPaymentStatus,
+                            isPaid: userPaymentStatus === 'paid',
                         });
                     }
                 });

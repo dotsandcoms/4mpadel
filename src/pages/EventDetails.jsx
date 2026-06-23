@@ -2931,7 +2931,7 @@ const EventDetails = () => {
                                                 const hasTotal = event.prize_money_total != null && Number(event.prize_money_total) > 0;
                                                 if (!hasTotal && prizeBreakdown.length === 0) return null;
                                                 return (
-                                                    <InfoSection title="Prize Money" icon={Trophy} accent={theme.fill} defaultOpen={hasTotal || prizeBreakdown.length > 0}>
+                                                    <InfoSection title="Prize Money" icon={Trophy} accent={theme.fill} defaultOpen={false}>
                                                         {hasTotal && (
                                                             <p className="text-2xl font-semibold text-slate-900 mb-3">
                                                                 R {Number(event.prize_money_total).toLocaleString('en-ZA')}

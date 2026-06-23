@@ -20,6 +20,32 @@ const STANDARD_DIVISIONS = [
 const FORMATS = ['Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
 
+const safeISOString = (val) => {
+    if (!val) return null;
+    try {
+        const date = new Date(val);
+        return isNaN(date.getTime()) ? null : date.toISOString();
+    } catch {
+        return null;
+    }
+};
+
+// Convert a UTC ISO string from the DB into a local-time string suitable for
+// a <input type="datetime-local"> (which always works in local time).
+const toLocalInput = (utcStr) => {
+    if (!utcStr) return '';
+    try {
+        const date = new Date(utcStr);
+        if (isNaN(date.getTime())) return '';
+        // Shift from UTC to local so the picker shows the correct local time.
+        const offsetMs = date.getTimezoneOffset() * 60000;
+        const localDate = new Date(date.getTime() - offsetMs);
+        return localDate.toISOString().substring(0, 16);
+    } catch {
+        return '';
+    }
+};
+
 // SAPA status badge colours — kept in sync with the site-wide tiers (see Calendar.jsx).
 const sapaBadgeClass = (status) => {
     switch (status) {
@@ -407,7 +433,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             ...Object.fromEntries(Object.keys(blankForm).map((k) => [k, ev[k] ?? blankForm[k]])),
             start_date: ev.start_date ? ev.start_date.substring(0, 10) : '',
             end_date: ev.end_date ? ev.end_date.substring(0, 10) : '',
-            registration_closes_at: ev.registration_closes_at ? ev.registration_closes_at.substring(0, 16) : '',
+            registration_closes_at: toLocalInput(ev.registration_closes_at),
             prize_money_total: ev.prize_money_total != null ? String(ev.prize_money_total) : '',
             prize_money_breakdown: prizeBreakdown,
             sponsor_logos: Array.isArray(ev.sponsor_logos) ? ev.sponsor_logos : [],
@@ -428,7 +454,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                     name: d.name || '',
                     entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
                     format: d.format || 'Knockout',
-                    entries_close_at: d.entries_close_at ? d.entries_close_at.substring(0, 16) : '',
+                    entries_close_at: toLocalInput(d.entries_close_at),
                     license_required: !!d.license_required,
                     age_category: d.age_category || '',
                     gender: d.gender || '',
@@ -562,7 +588,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             prize_money_breakdown: (form.prize_money_breakdown || [])
                 .filter((r) => r.label && r.amount)
                 .map((r) => ({ label: r.label, amount: r.amount })),
-            registration_closes_at: form.registration_closes_at || null,
+            registration_closes_at: safeISOString(form.registration_closes_at),
             start_date: form.start_date || null,
             end_date: form.end_date || null,
             start_time: form.start_time || null,
@@ -583,7 +609,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                 name: d.name.trim(),
                 entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
                 format: d.format || null,
-                entries_close_at: d.entries_close_at || null,
+                entries_close_at: safeISOString(d.entries_close_at),
                 license_required: !!d.license_required,
                 age_category: d.age_category || null,
                 gender: d.gender || null,
@@ -811,8 +837,38 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                                 <SelectMenu value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
                                             </div>
                                             <div>
-                                                <label className={labelClass}>Entries Close</label>
-                                                <input type="datetime-local" value={d.entries_close_at} onChange={(e) => updateDivision(d._key, { entries_close_at: e.target.value })} className={inputClass} />
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Entries Close</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => updateDivision(d._key, {
+                                                            entries_close_at: d.entries_close_at ? '' : (() => {
+                                                                const now = new Date();
+                                                                const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                            })()
+                                                        })}
+                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                            d.entries_close_at ? 'bg-padel-green' : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                            d.entries_close_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                                {d.entries_close_at ? (
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={d.entries_close_at}
+                                                        onChange={(e) => updateDivision(d._key, { entries_close_at: e.target.value })}
+                                                        className={inputClass}
+                                                    />
+                                                ) : (
+                                                    <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                        No deadline set
+                                                    </div>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className={labelClass}>Age Category</label>
@@ -1003,8 +1059,39 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className={labelClass}>Registration Closes At</label>
-                                        <input type="datetime-local" name="registration_closes_at" value={form.registration_closes_at} onChange={handleInput} className={inputClass} />
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className={labelClass} style={{ marginBottom: 0 }}>Registration Closes At</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setField('registration_closes_at',
+                                                    form.registration_closes_at ? '' : (() => {
+                                                        const now = new Date();
+                                                        const offsetMs = now.getTimezoneOffset() * 60000;
+                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                    })()
+                                                )}
+                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                    form.registration_closes_at ? 'bg-padel-green' : 'bg-white/20'
+                                                }`}
+                                            >
+                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                    form.registration_closes_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                }`} />
+                                            </button>
+                                        </div>
+                                        {form.registration_closes_at ? (
+                                            <input
+                                                type="datetime-local"
+                                                name="registration_closes_at"
+                                                value={form.registration_closes_at}
+                                                onChange={handleInput}
+                                                className={inputClass}
+                                            />
+                                        ) : (
+                                            <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                No deadline set
+                                            </div>
+                                        )}
                                         <p className="text-[11px] text-gray-500 mt-1">Event-wide fallback. Per-division close dates take priority.</p>
                                     </div>
                                 </div>

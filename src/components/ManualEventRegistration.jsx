@@ -117,6 +117,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [agreeRules, setAgreeRules] = useState(false);
     const [agreeComplete, setAgreeComplete] = useState(false);
     const [agreeSapa, setAgreeSapa] = useState(false);
+    const [showRulesModal, setShowRulesModal] = useState(false);
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
     const partnerSearchSeq = useRef(0);
@@ -469,6 +470,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const isSelfDivisionPaid = (divisionId) =>
         myRegs.some((r) => r.division_id === divisionId && r.email?.toLowerCase() === userEmail?.toLowerCase() && r.payment_status === 'paid');
 
+    const isPartnerDivisionPaid = (divisionId) =>
+        myRegs.some((r) => r.division_id === divisionId && r.partner_payment_status === 'paid');
+
     const isSelfPayingDivision = (divId, sel) => {
         if (isSelfDivisionPaid(divId)) return false;
         return sel?.payForSelf !== false;
@@ -624,6 +628,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             return next;
         });
     }, [payMode]);
+
+    useEffect(() => {
+        const anyPartnerPaid = selectedDivisions.some(d => isPartnerDivisionPaid(d.id));
+        if (anyPartnerPaid && payMode === 'both') {
+            setPayMode('self');
+        }
+    }, [selectedDivisions, myRegs, payMode]);
 
     const licenseFee = (choice) => (choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE);
 
@@ -1288,17 +1299,61 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         const closed = isClosed(d, event);
                                         const sel = !!selected[d.id];
                                         const reged = registeredDivisionIds.has(d.id);
+                                        // Find the registration to get payer info
+                                        const myReg = reged ? myRegs.find((r) => r.division_id === d.id) : null;
+                                        const enteredByName = myReg?._payerName || null;
                                         return (
                                             <button
                                                 key={d.id}
                                                 type="button"
                                                 disabled={closed || reged}
-                                                onClick={() => toggleDivision(d)}
-                                                className={`relative px-3 py-2.5 rounded-lg text-xs font-medium border text-left transition-colors ${reged ? 'opacity-50 cursor-not-allowed border-gray-200 bg-gray-50 text-gray-400' : sel ? 'border-transparent shadow-sm' : 'border-gray-200 bg-white text-slate-700 hover:border-gray-300'}`}
-                                                style={sel ? { backgroundColor: accent, color: btnTextColor, borderColor: accent } : undefined}
+                                                title={
+                                                    closed
+                                                        ? 'Registration is closed for this division'
+                                                        : reged
+                                                        ? enteredByName
+                                                            ? `Entered by ${enteredByName}`
+                                                            : 'You are already entered in this division'
+                                                        : undefined
+                                                }
+                                                onClick={() => {
+                                                    if (closed || reged) return;
+                                                    toggleDivision(d);
+                                                }}
+                                                className={`relative px-3 py-2.5 rounded-lg text-xs font-medium border text-left transition-colors ${
+                                                    closed
+                                                        ? 'cursor-not-allowed border-red-100 bg-red-50/60 text-slate-400'
+                                                        : reged
+                                                        ? 'cursor-not-allowed border-emerald-200 bg-emerald-50 text-emerald-800'
+                                                        : sel
+                                                        ? 'border-transparent shadow-sm'
+                                                        : 'border-gray-200 bg-white text-slate-700 hover:border-gray-300'
+                                                }`}
+                                                style={sel && !closed && !reged ? { backgroundColor: accent, color: btnTextColor, borderColor: accent } : undefined}
                                             >
-                                                {sel && <Check size={14} className="absolute top-2 right-2" />}
-                                                {d.name}{reged ? ' ✓' : ''}
+                                                {/* Top-right badge */}
+                                                {sel && !closed && !reged && <Check size={14} className="absolute top-2 right-2" />}
+                                                {reged && <Check size={12} className="absolute top-2 right-2 text-emerald-600" />}
+                                                {closed && (
+                                                    <span className="absolute top-1.5 right-2 text-[9px] font-bold uppercase tracking-wide text-red-400">
+                                                        Closed
+                                                    </span>
+                                                )}
+
+                                                {/* Division name — no text ✓, icon handles it */}
+                                                <span className="block pr-8">{d.name}</span>
+
+                                                {/* Sub-label */}
+                                                {reged && (
+                                                    <span className="block text-[10px] font-normal mt-0.5 text-emerald-600">
+                                                        {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
+                                                    </span>
+                                                )}
+                                                {closed && (
+                                                    <span className="block text-[10px] text-red-400 font-normal mt-0.5">
+                                                        Registration closed
+                                                    </span>
+                                                )}
                                             </button>
                                         );
                                     })}
@@ -1530,26 +1585,34 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     {[
                                         ['both', 'Pay for both players', 'You will complete payment for both entries.'],
                                         ['self', 'Pay only my entry', 'Your partner will receive a notification to complete payment and registration.'],
-                                    ].map(([val, label, description]) => (
-                                        <label
-                                            key={val}
-                                            className={`flex items-start gap-2.5 p-3 rounded-lg border cursor-pointer transition-colors ${payMode === val ? 'border-2' : 'border-gray-200 hover:bg-gray-50'}`}
-                                            style={payMode === val ? { borderColor: accent, backgroundColor: `${accent}10` } : undefined}
-                                        >
-                                            <input
-                                                type="radio"
-                                                name="payMode"
-                                                checked={payMode === val}
-                                                onChange={() => setPayMode(val)}
-                                                className="w-3.5 h-3.5 mt-0.5 shrink-0"
-                                                style={{ accentColor: accent }}
-                                            />
-                                            <div className="min-w-0">
-                                                <span className="text-xs font-semibold text-slate-900">{label}</span>
-                                                <p className="text-[11px] text-slate-500 mt-0.5 leading-snug font-normal">{description}</p>
-                                            </div>
-                                        </label>
-                                    ))}
+                                    ].map(([val, label, description]) => {
+                                        const anyPartnerPaid = selectedDivisions.some(d => isPartnerDivisionPaid(d.id));
+                                        const isDisabled = val === 'both' && anyPartnerPaid;
+                                        return (
+                                            <label
+                                                key={val}
+                                                className={`flex items-start gap-2.5 p-3 rounded-lg border transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200' : payMode === val ? 'border-2 cursor-pointer' : 'border-gray-200 hover:bg-gray-50 cursor-pointer'}`}
+                                                style={!isDisabled && payMode === val ? { borderColor: accent, backgroundColor: `${accent}10` } : undefined}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    name="payMode"
+                                                    disabled={isDisabled}
+                                                    checked={payMode === val}
+                                                    onChange={() => !isDisabled && setPayMode(val)}
+                                                    className="w-3.5 h-3.5 mt-0.5 shrink-0"
+                                                    style={{ accentColor: accent }}
+                                                />
+                                                <div className="min-w-0">
+                                                    <span className="text-xs font-semibold text-slate-900">
+                                                        {label}
+                                                        {isDisabled && <span className="ml-2 text-[10px] font-medium text-emerald-600">(Partner already paid)</span>}
+                                                    </span>
+                                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug font-normal">{description}</p>
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
                                 </CardBody>
                             </Card>
                         )}
@@ -1561,6 +1624,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     const sel = selected[d.id];
                                     const fee = Number(d.entry_fee || 0);
                                     const selfPaid = isSelfDivisionPaid(d.id);
+                                    const partnerPaid = isPartnerDivisionPaid(d.id);
                                     const showPartnerOption = hasPartner && primaryPartner.partnerName && payMode === 'both';
                                     const payerSelfName = displayProfile?.name || profile?.name || 'You';
                                     return (
@@ -1586,18 +1650,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     </span>
                                                 </label>
                                                 {showPartnerOption && (
-                                                    <label className="flex items-center gap-2 text-xs cursor-pointer font-normal">
+                                                    <label className={`flex items-center gap-2 text-xs font-normal ${partnerPaid ? 'opacity-60' : 'cursor-pointer'}`}>
                                                         <input
                                                             type="checkbox"
-                                                            checked={!!sel?.payForPartner}
-                                                            disabled={fee === 0}
+                                                            checked={partnerPaid || !!sel?.payForPartner}
+                                                            disabled={partnerPaid || fee === 0}
                                                             onChange={(e) => setDivisionPayFlag(d.id, 'payForPartner', e.target.checked)}
                                                             className="w-3.5 h-3.5 shrink-0"
                                                             style={{ accentColor: accent }}
                                                         />
                                                         <span className="text-slate-900">
                                                             Pay for {primaryPartner.partnerName}
-                                                            {fee === 0 && <span className="ml-2 text-xs text-slate-500">Free entry</span>}
+                                                            {partnerPaid && <span className="ml-2 text-xs font-medium text-emerald-600">Already paid</span>}
+                                                            {!partnerPaid && fee === 0 && <span className="ml-2 text-xs text-slate-500">Free entry</span>}
                                                         </span>
                                                     </label>
                                                 )}
@@ -1812,7 +1877,29 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                         <div className="space-y-2">
                             {[
-                                [agreeRules, setAgreeRules, 'I agree to the tournament rules, code of conduct, and terms & conditions.'],
+                                [
+                                    agreeRules,
+                                    setAgreeRules,
+                                    event?.rules_regs ? (
+                                        <span>
+                                            I agree to the{' '}
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    setShowRulesModal(true);
+                                                }}
+                                                className="font-bold underline hover:text-slate-900 focus:outline-none bg-transparent border-0 p-0 cursor-pointer text-slate-800"
+                                            >
+                                                tournament rules, code of conduct
+                                            </button>
+                                            , and terms & conditions.
+                                        </span>
+                                    ) : (
+                                        'I agree to the tournament rules, code of conduct, and terms & conditions.'
+                                    ),
+                                ],
                                 [agreeComplete, setAgreeComplete, 'I confirm that my registration is only complete once all required license and payment obligations are met.'],
                                 [agreeSapa, setAgreeSapa, 'This is a SAPA sanctioned event and I agree to all SAPA rules and regulations.'],
                             ].map(([checked, setter, label], i) => (
@@ -1905,15 +1992,27 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     );
                                 })}
                             </div>
-                            {hasPendingPayment ? (
-                                <PrimaryBtn onClick={openPayWizard}>
-                                    Pay Entry <CreditCard className="w-4 h-4" />
-                                </PrimaryBtn>
-                            ) : canAddDivision ? (
-                                <PrimaryBtn onClick={openWizard}>
-                                    Add Division <ArrowRight className="w-4 h-4" />
-                                </PrimaryBtn>
-                            ) : null}
+                            <div className="flex flex-col gap-2">
+                                {hasPendingPayment && (
+                                    <PrimaryBtn onClick={openPayWizard}>
+                                        Pay Entry <CreditCard className="w-4 h-4" />
+                                    </PrimaryBtn>
+                                )}
+                                {canAddDivision && (
+                                    <button
+                                        type="button"
+                                        onClick={openWizard}
+                                        className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold transition-colors ${
+                                            hasPendingPayment
+                                                ? 'border border-gray-200 bg-white text-slate-700 hover:bg-gray-50'
+                                                : 'text-white'
+                                        }`}
+                                        style={hasPendingPayment ? undefined : { backgroundColor: accent, color: btnTextColor }}
+                                    >
+                                        Add Division <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                )}
+                            </div>
                         </>
                     ) : (
                         <>
@@ -2092,6 +2191,72 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 >
                                     {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                     {withdrawing ? 'Withdrawing…' : 'Withdraw'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Rules and Regulations Modal */}
+            <AnimatePresence>
+                {showRulesModal && (
+                    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setShowRulesModal(false)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            className="relative w-full max-w-xl bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden flex flex-col max-h-[80vh]"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {/* Header */}
+                            <div className="px-6 py-5 border-b border-gray-50 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center shrink-0">
+                                        <Trophy className="w-5 h-5 text-slate-600" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-base font-semibold text-slate-900">
+                                            Rules & Regulations
+                                        </h3>
+                                        <p className="text-xs text-slate-500 font-normal leading-snug">
+                                            {event?.event_name}
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRulesModal(false)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100 shrink-0"
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            {/* Content */}
+                            <div className="px-6 py-5 overflow-y-auto text-sm text-slate-700 font-normal space-y-4 prose prose-slate max-w-none">
+                                {event?.rules_regs ? (
+                                    <div dangerouslySetInnerHTML={{ __html: event.rules_regs }} />
+                                ) : (
+                                    <p className="text-slate-500 italic">No rules and regulations specified for this event.</p>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-6 py-4 bg-slate-50 border-t border-gray-100 flex justify-end shrink-0">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRulesModal(false)}
+                                    className="px-5 py-2.5 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors"
+                                >
+                                    Close
                                 </button>
                             </div>
                         </motion.div>
