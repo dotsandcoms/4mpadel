@@ -104,7 +104,7 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             reference: `${(new Date()).getTime()}-${amountInRands}`,
             email: userEmail || '',
             amount: toPaystackAmount(amountInRands),
-            publicKey: PAYSTACK_PUBLIC_KEY,
+            key: PAYSTACK_PUBLIC_KEY,
             currency: 'ZAR',
             metadata: {
                 license_type: isTemp ? 'temporary' : 'full',
@@ -118,8 +118,15 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
         };
     };
 
-    const runPayment = async (amountInRands, licenseType) => {
+    const runPayment = (amountInRands, licenseType) => {
         setError(null);
+
+        // Guard: Paystack requires a valid email address
+        if (!userEmail || !userEmail.includes('@')) {
+            setError('A valid email address is required to process payment. Please update your profile email.');
+            return;
+        }
+
         if (licenseType === 'temporary' && selectedEventId) {
             const hasLicense = existingLicenses.includes(selectedEventId.toString());
             if (hasLicense) {
@@ -129,41 +136,58 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
         }
         setLoading(true);
 
-        const paystackPop = new PaystackPop();
-        
-        await paystackPop.checkout({
-            ...getConfig(amountInRands),
-            onSuccess: async () => {
-                let successCallback = onPaymentSuccess;
+        try {
+            const paystackPop = new PaystackPop();
 
-                if (licenseType === 'temporary' && selectedEventId) {
-                    const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
-                    if (eventDetails) {
-                        const { data: { user } } = await supabase.auth.getUser();
-                        if (user) {
-                            const { data: pData } = await supabase.from('players').select('id').ilike('email', userEmail).maybeSingle();
-                            if (pData?.id) {
-                                await supabase.from('temporary_licenses').insert({
-                                    player_id: pData.id,
-                                    event_id: eventDetails.id,
-                                    event_name: eventDetails.event_name || 'Calendar Event',
-                                    event_date: eventDetails.end_date || eventDetails.start_date
-                                });
+            // NOTE: checkout() is NOT async — do NOT await it.
+            // It opens the Paystack popup and calls onSuccess/onCancel when done.
+            paystackPop.checkout({
+                ...getConfig(amountInRands),
+                onSuccess: async () => {
+                    let successCallback = onPaymentSuccess;
+
+                    if (licenseType === 'temporary' && selectedEventId) {
+                        const eventDetails = upcomingEvents.find(e => e.id?.toString() === selectedEventId.toString());
+                        if (eventDetails) {
+                            try {
+                                const { data: { user } } = await supabase.auth.getUser();
+                                if (user) {
+                                    const { data: pData } = await supabase.from('players').select('id').ilike('email', userEmail).maybeSingle();
+                                    if (pData?.id) {
+                                        await supabase.from('temporary_licenses').insert({
+                                            player_id: pData.id,
+                                            event_id: eventDetails.id,
+                                            event_name: eventDetails.event_name || 'Calendar Event',
+                                            event_date: eventDetails.end_date || eventDetails.start_date
+                                        });
+                                    }
+                                }
+                            } catch (err) {
+                                console.error('Failed to record temporary license:', err);
                             }
                         }
                     }
-                }
 
-                await handlePaymentComplete(
-                    () => setLoading(false),
-                    successCallback,
-                    setError,
-                    onClose,
-                    licenseType
-                );
-            },
-            onCancel: () => setLoading(false),
-        });
+                    await handlePaymentComplete(
+                        () => setLoading(false),
+                        successCallback,
+                        setError,
+                        onClose,
+                        licenseType
+                    );
+                },
+                onCancel: () => setLoading(false),
+                onError: (err) => {
+                    console.error('Paystack error:', err);
+                    setError('Payment failed. Please try again.');
+                    setLoading(false);
+                },
+            });
+        } catch (err) {
+            console.error('Failed to initialise Paystack:', err);
+            setError('Could not open payment window. Please try again.');
+            setLoading(false);
+        }
     };
 
 
