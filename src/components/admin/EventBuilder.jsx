@@ -66,6 +66,9 @@ const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 let googleMapsPromise = null;
 const loadGoogleMaps = () => {
     if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+    if (!GOOGLE_MAPS_KEY) {
+        return Promise.reject(new Error('VITE_GOOGLE_MAPS_API_KEY is not set. Add it to your host env (e.g. Vercel) and redeploy.'));
+    }
     if (window.google?.maps?.places) return Promise.resolve(window.google);
     if (googleMapsPromise) return googleMapsPromise;
     googleMapsPromise = new Promise((resolve, reject) => {

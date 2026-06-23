@@ -26,6 +26,36 @@ const formatPlayerName = (fullName) => {
     return `${parts[0]} ${parts[1].charAt(0)}`;
 };
 
+const divisionsMatch = (a, b) => {
+    const na = (a || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    const nb = (b || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!na || !nb) return false;
+    return na === nb || na.includes(nb) || nb.includes(na);
+};
+
+const playerNamesMatch = (profileName, rankedinName) => {
+    const a = (profileName || '').trim().toLowerCase();
+    const b = (rankedinName || '').trim().toLowerCase();
+    if (!a || !b) return false;
+    if (a === b) return true;
+    const partsA = a.split(/\s+/).filter(Boolean);
+    const partsB = b.split(/\s+/).filter(Boolean);
+    if (partsA.length < 2 || partsB.length < 2) return a.includes(b) || b.includes(a);
+    const lastA = partsA[partsA.length - 1];
+    const lastB = partsB[partsB.length - 1];
+    if (lastA !== lastB) return false;
+    const firstA = partsA[0];
+    const firstB = partsB[0];
+    return firstA === firstB || firstA.startsWith(firstB) || firstB.startsWith(firstA);
+};
+
+const rankedinIdsMatch = (a, b) => {
+    if (!a || !b) return false;
+    const sa = String(a).replace(/^R/i, '');
+    const sb = String(b).replace(/^R/i, '');
+    return sa === sb;
+};
+
 // Simple CountUp animation component
 const CountUp = ({ end, duration = 1.5 }) => {
     const [count, setCount] = useState(0);
@@ -689,7 +719,8 @@ const EventDetails = () => {
                 if (userEmail && pay.metadata?.email?.toLowerCase().trim() === userEmail) return true;
                 if (userName && pay.metadata?.line_items && Array.isArray(pay.metadata.line_items)) {
                     return pay.metadata.line_items.some(item =>
-                        item.type === 'entry_fee' && item.player?.toLowerCase().trim() === userName
+                        (item.type === 'entry_fee' || item.type === 'entry') &&
+                        playerNamesMatch(userName, item.player?.toLowerCase().trim())
                     );
                 }
                 return false;
@@ -698,13 +729,26 @@ const EventDetails = () => {
             const paidDivs = Array.from(new Set([
                 ...(legacyRegs || []).filter(r => r.payment_status === 'paid').map(r => (r.division || '').trim()),
                 ...(localParts || []).filter(p => p.is_paid).map(p => (p.class_name || '').trim()),
-                ...(directPayments || []).map(p => (p.metadata?.division || '').trim())
+                ...(directPayments || []).flatMap((p) => {
+                    const divs = [];
+                    if (p.metadata?.division) divs.push(String(p.metadata.division).trim());
+                    if (Array.isArray(p.metadata?.line_items)) {
+                        p.metadata.line_items.forEach((item) => {
+                            if ((item.type === 'entry_fee' || item.type === 'entry') && item.division) {
+                                divs.push(String(item.division).trim());
+                            }
+                        });
+                    }
+                    return divs;
+                }),
             ].filter(Boolean)));
+
+            const isDivPaid = (divName) => paidDivs.some((pd) => divisionsMatch(pd, divName));
 
             const unpaidLocalDivs = [
                 ...(localParts || []).filter(p => !p.is_paid).map(p => (p.class_name || '').trim()),
-                ...(legacyRegs || []).filter(r => r.payment_status !== 'paid').map(r => (r.division || '').trim())
-            ].filter(Boolean);
+                ...(legacyRegs || []).filter(r => r.payment_status !== 'paid').map(r => (r.division || '').trim()),
+            ].filter(Boolean).filter((div) => !isDivPaid(div));
 
             setPaidDivisions(paidDivs);
             setIsPaid(paidDivs.length > 0);
@@ -721,12 +765,12 @@ const EventDetails = () => {
                 }
             });
 
-            if (rId && regDivs.length === 0) {
+            if (rId) {
                 setIsCheckingReg(true);
                 try {
-                    const divisions = await getTournamentPlayerTabs(rId);
+                    const divisions = await getTournamentPlayerTabs(rId, true);
                     await Promise.all(divisions.map(async (cls) => {
-                        const teams = await getTournamentParticipants(rId, cls.Id);
+                        const teams = await getTournamentParticipants(rId, cls.Id, true);
                         const divName = (cls.Name || '').trim();
 
                         const isMatch = teams.some(t => {
@@ -740,8 +784,8 @@ const EventDetails = () => {
                                 const pRID = player.RankedinId?.toString() || player.Id?.toString();
 
                                 return (pEmail && pEmail === userEmail) ||
-                                    (userRID && pRID === userRID?.toString()) ||
-                                    (userName && pName === userName);
+                                    rankedinIdsMatch(pRID, userRID) ||
+                                    playerNamesMatch(userName, pName);
                             });
 
                             if (userMatch) {
@@ -754,7 +798,9 @@ const EventDetails = () => {
                             return false;
                         });
 
-                        if (isMatch && !regDivs.includes(divName)) regDivs.push(divName);
+                        if (isMatch && !regDivs.some((d) => divisionsMatch(d, divName))) {
+                            regDivs.push(divName);
+                        }
                     }));
                 } catch (e) {
                     console.error("Registration check failed:", e);
@@ -796,7 +842,7 @@ const EventDetails = () => {
             }
 
             // Auto-select all unpaid registered divisions
-            const unpaidRegDivs = Array.from(new Set(regDivs)).filter(d => !paidDivs.includes(d));
+            const unpaidRegDivs = Array.from(new Set(regDivs)).filter((d) => !isDivPaid(d));
             if (unpaidRegDivs.length > 0) {
                 setSelectedDivisions(unpaidRegDivs);
             }
@@ -1728,7 +1774,7 @@ const EventDetails = () => {
             return;
         }
 
-        const hasUnpaidSelections = selectedDivisions.some(div => !paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()));
+        const hasUnpaidSelections = selectedDivisions.some((div) => !paidDivisions.some((pd) => divisionsMatch(pd, div)));
         if (!hasUnpaidSelections) {
             toast.error('You have already registered for these divisions!');
             return;
@@ -2206,7 +2252,7 @@ const EventDetails = () => {
                 className: 'bg-green-100 text-green-700'
             };
         }
-        const isDivPaid = paidDivisions.some(pd => pd.trim().toLowerCase() === divName.trim().toLowerCase());
+        const isDivPaid = paidDivisions.some((pd) => divisionsMatch(pd, divName));
         if (isDivPaid) {
             return {
                 text: 'Paid & Confirmed',
@@ -2267,7 +2313,7 @@ const EventDetails = () => {
 
     const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
-    const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))));
+    const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))));
     const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
 
     const readyToCompeteBlock = showReadyToCompete && (
@@ -2468,7 +2514,7 @@ const EventDetails = () => {
                                         return null;
                                     }
                                     if (!isEventPassed) {
-                                        if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
+                                        if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
                                             return (
                                                 <button
                                                     onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
@@ -2491,7 +2537,7 @@ const EventDetails = () => {
                                                         Register Now <ArrowRight className="w-4 h-4" />
                                                     </button>
                                                 )}
-                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) && (
+                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
                                                     <button
                                                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
                                                         className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
