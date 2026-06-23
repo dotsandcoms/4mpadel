@@ -75,30 +75,53 @@ const DashboardHome = ({ onTabChange }) => {
 
     useEffect(() => {
         fetchDashboardData();
-        generateChartData();
     }, []);
 
-    const generateChartData = () => {
-        // Create mock data for the growth chart based on realistic progression
-        const months = ['Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
-        const base = 250;
-        const data = months.map((month, i) => ({
-            name: month,
-            players: base + (i * 20) + Math.floor(Math.random() * 15)
-        }));
-        setChartData(data);
-    };
+    const buildRegistrationTrend = (playersWithDates) => {
+        const now = new Date();
+        const buckets = [];
 
+        for (let i = 6; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            buckets.push({
+                key: `${d.getFullYear()}-${d.getMonth()}`,
+                name: d.toLocaleString('default', { month: 'short' }),
+                players: 0,
+            });
+        }
+
+        for (const player of playersWithDates || []) {
+            if (!player.created_at) continue;
+            const d = new Date(player.created_at);
+            const key = `${d.getFullYear()}-${d.getMonth()}`;
+            const bucket = buckets.find((b) => b.key === key);
+            if (bucket) bucket.players += 1;
+        }
+
+        return buckets.map(({ name, players }) => ({ name, players }));
+    };
 
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
             const today = new Date().toISOString().split('T')[0];
+            const trendStart = new Date();
+            trendStart.setMonth(trendStart.getMonth() - 6);
+            trendStart.setDate(1);
+            trendStart.setHours(0, 0, 0, 0);
 
             // 1. Fetch Total Players
             const { count: playerCount, error: playerError } = await supabase
                 .from('players')
                 .select('*', { count: 'exact', head: true });
+
+            const { data: trendPlayers, error: trendError } = await supabase
+                .from('players')
+                .select('created_at')
+                .gte('created_at', trendStart.toISOString());
+
+            if (trendError) console.error('Error fetching player trend:', trendError);
+            setChartData(buildRegistrationTrend(trendPlayers));
 
             // 1.5. Fetch Coach Stats
             const { count: totalCoachCount, error: coachError } = await supabase
@@ -247,7 +270,7 @@ const DashboardHome = ({ onTabChange }) => {
                         <h3 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight flex items-center gap-3">
                             <Activity className="text-padel-green w-5 h-5 md:w-6 md:h-6" /> Growth Overview
                         </h3>
-                        <p className="text-gray-500 text-[10px] md:text-xs font-bold tracking-widest uppercase mt-1">Player Registration Trend</p>
+                        <p className="text-gray-500 text-[10px] md:text-xs font-bold tracking-widest uppercase mt-1">New player sign-ups · last 7 months</p>
                     </div>
                 </div>
 
@@ -275,6 +298,8 @@ const DashboardHome = ({ onTabChange }) => {
                                 tickLine={false} 
                                 tick={{ fill: '#64748b', fontSize: 12, fontWeight: 700 }}
                                 dx={-10}
+                                allowDecimals={false}
+                                domain={[0, 'auto']}
                             />
                             <Tooltip 
                                 contentStyle={{ 
@@ -285,6 +310,8 @@ const DashboardHome = ({ onTabChange }) => {
                                     fontWeight: 'bold'
                                 }}
                                 itemStyle={{ color: '#CCFF00' }}
+                                formatter={(value) => [`${value} new`, 'Sign-ups']}
+                                labelFormatter={(label) => label}
                             />
                             <Area 
                                 type="monotone" 
