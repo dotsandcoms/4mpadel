@@ -8,16 +8,12 @@ import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, A
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
+import ManualEventRegistration from '../components/ManualEventRegistration';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
+import { canAccessHiddenEvents } from '../hooks/useAdminPermissions';
 
-const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
-    .trim()
-    .replace(/['"]/g, '')
-    .split(/\s+/)[0]
-    .replace(/[^a-zA-Z0-9_]/g, '');
-
-const isTestMode = PAYSTACK_PUBLIC_KEY.startsWith('pk_test');
+import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/paystackConfig';
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
@@ -126,6 +122,71 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title }) => {
     );
 };
 
+const parsePrizeBreakdown = (raw) => {
+    if (!raw) return [];
+    let data = raw;
+    if (typeof raw === 'string') {
+        try { data = JSON.parse(raw); } catch { return []; }
+    }
+    if (!Array.isArray(data)) return [];
+    return data
+        .map((row) => ({
+            label: (row?.label || row?.name || '').trim(),
+            amount: row?.amount ?? row?.value ?? '',
+        }))
+        .filter((row) => row.label && row.amount !== '' && row.amount != null);
+};
+
+const formatPrizeAmount = (amount) => {
+    const raw = String(amount).trim();
+    if (!raw) return '';
+    if (raw.startsWith('R')) return raw;
+    const n = Number(raw.replace(/[^\d.]/g, ''));
+    if (!Number.isNaN(n)) return `R ${n.toLocaleString('en-ZA')}`;
+    return `R ${raw}`;
+};
+
+const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = false, text = null, children }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+            <div
+                onClick={() => setOpen((o) => !o)}
+                className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+            >
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: accent + '20' }}>
+                        {Icon && <Icon className="w-4 h-4 text-[#0F172A]" />}
+                    </div>
+                    <h2 className="text-sm font-semibold text-slate-900 tracking-normal">{title}</h2>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${open ? '' : '-rotate-90'}`} />
+            </div>
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                    >
+                        <div className="px-6 py-5">
+                            {text != null ? (
+                                /<[a-z][\s\S]*>/i.test(text) ? (
+                                    <div className="rich-text text-slate-600 leading-snug text-xs font-normal" dangerouslySetInnerHTML={{ __html: text }} />
+                                ) : (
+                                    <div className="text-slate-600 leading-snug text-xs font-normal whitespace-pre-wrap">{text}</div>
+                                )
+                            ) : children}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, className = "" }) => {
     const [isOpen, setIsOpen] = useState(defaultOpen);
 
@@ -137,7 +198,7 @@ const ModuleAccordion = ({ title, icon: Icon, children, defaultOpen = false, cla
             >
                 <div className="flex items-center gap-4">
                     {Icon && <Icon className={`w-6 h-6 transition-colors duration-300 ${isOpen ? 'text-padel-green drop-shadow-[0_0_8px_rgba(154,233,0,0.4)]' : 'text-padel-green'}`} />}
-                    <h3 className={`text-xl md:text-2xl font-bold transition-colors duration-300 ${isOpen ? 'text-white' : 'text-slate-900'}`}>{title}</h3>
+                    <h3 className={`text-base md:text-lg font-semibold tracking-normal transition-colors duration-300 ${isOpen ? 'text-white' : 'text-slate-900'}`}>{title}</h3>
                 </div>
                 <motion.div
                     animate={{ rotate: isOpen ? 180 : 0 }}
@@ -236,7 +297,10 @@ const EventDetails = () => {
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
 
     const totalPlayersCount = useMemo(() => {
-        if (!participants || Object.keys(participants).length === 0) return event?.registered_players || 0;
+        // Manual events are the source of truth via their own registrations — never fall
+        // back to the cached registered_players column (which can hold stale RankedIn data).
+        const fallback = event?.is_manual ? 0 : (event?.registered_players || 0);
+        if (!participants || Object.keys(participants).length === 0) return fallback;
         const uniqueNames = new Set();
         Object.values(participants).forEach(divisionPlayers => {
             if (!divisionPlayers) return;
@@ -249,8 +313,8 @@ const EventDetails = () => {
                 if (p.SecondPlayer?.Name) uniqueNames.add(p.SecondPlayer.Name.toLowerCase());
             });
         });
-        return Math.max(uniqueNames.size, event?.registered_players || 0);
-    }, [participants, event?.registered_players]);
+        return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
+    }, [participants, event?.registered_players, event?.is_manual]);
 
     const isEventPassed = useMemo(() => {
         if (!event) return false;
@@ -264,6 +328,16 @@ const EventDetails = () => {
 
         return eventDate < today;
     }, [event]);
+
+    // For manual events, registration closing is driven by the event-wide close date
+    // (per-division close dates are handled inside the registration widget itself).
+    const isManualRegClosed = useMemo(() => {
+        if (!event?.is_manual) return false;
+        if (!event.registration_closes_at) return false;
+        return new Date(event.registration_closes_at) < new Date();
+    }, [event]);
+
+    const registrationClosed = event?.is_manual ? isManualRegClosed : isRankedinRegistrationClosed;
 
     const stripHtml = (html) => {
         if (!html) return '';
@@ -439,6 +513,47 @@ const EventDetails = () => {
 
     const theme = getTierTheme();
 
+    // Resolve the effective logged-in (or impersonated) user email for manual-event registration.
+    // NOTE: never call supabase.auth.getSession() inside onAuthStateChange — that deadlocks the
+    // auth lock and causes AbortErrors elsewhere. Use the session passed to the callback instead.
+    const [manualUserEmail, setManualUserEmail] = useState('');
+    const [manualRegStatus, setManualRegStatus] = useState({
+        hasPendingPayment: false,
+        hasRegistrations: false,
+        allRegistrationsPaid: false,
+    });
+    const manualRegActionsRef = React.useRef({});
+    useEffect(() => {
+        let active = true;
+        const applySession = (session) => {
+            const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+            const targetEmail = impersonationEmail || session?.user?.email;
+            if (active) setManualUserEmail((targetEmail || '').toLowerCase().trim());
+        };
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => applySession(session))
+            .catch(() => { });
+        const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
+        return () => { active = false; listener?.subscription?.unsubscribe?.(); };
+    }, []);
+
+    // Load logged-in player profile for manual-event registration (profile pic, license, points)
+    useEffect(() => {
+        if (!event?.is_manual || !manualUserEmail) {
+            setLoggedInPlayer(null);
+            return;
+        }
+        let active = true;
+        (async () => {
+            const { data } = await supabase
+                .from('players')
+                .select('id, name, contact_number, email, license_type, paid_registration, image_url, points, approved, temporary_licenses(event_id, event_date)')
+                .ilike('email', manualUserEmail)
+                .maybeSingle();
+            if (active) setLoggedInPlayer(data || null);
+        })();
+        return () => { active = false; };
+    }, [event?.is_manual, event?.id, manualUserEmail]);
 
     // Prefill form from logged-in player profile when modal opens
     useEffect(() => {
@@ -776,14 +891,7 @@ const EventDetails = () => {
                     .from('calendar')
                     .select('*');
 
-                // Check if the parameter looks like a UUID (simple check)
                 const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-5][0-9a-f]{3}-[089ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(slug);
-
-                // Alternatively, just check if it's numeric (ID) vs string (Slug)
-                // Since our IDs seem to be integers in some contexts or UUIDs... 
-                // Wait, in CalendarManager it uses auto-increment ID? "order('id')" suggests int.
-                // The previous code had `id` param.
-                // If ID is numeric:
                 const isNumeric = /^\d+$/.test(slug);
 
                 if (isNumeric) {
@@ -791,27 +899,41 @@ const EventDetails = () => {
                 } else if (isUuid) {
                     query = query.eq('id', slug);
                 } else {
-                    // Assume it's a slug
                     query = query.eq('slug', slug);
                 }
 
-                const { data, error } = await query
-                    .neq('is_visible', false)
-                    .single();
-
+                const { data, error } = await query.maybeSingle();
                 if (error) throw error;
-                setEvent(data);
+                if (!data) {
+                    setEvent(null);
+                    return;
+                }
 
-                // Removed auto-open registration modal
+                // Hidden events are excluded from calendar listings, but manual events
+                // must stay reachable via direct link so players can register and pay.
+                if (data.is_visible === false && !data.is_manual) {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+                    const viewerEmail = impersonationEmail || session?.user?.email;
+                    const canPreview = await canAccessHiddenEvents(viewerEmail);
+                    if (!canPreview) {
+                        setEvent(null);
+                        return;
+                    }
+                }
+
+                setEvent(data);
             } catch (error) {
                 console.error('Error fetching event details:', error);
+                setEvent(null);
             } finally {
                 setLoading(false);
             }
         };
 
+        setLoading(true);
         fetchEventDetails();
-    }, [slug]);
+    }, [slug, manualUserEmail]);
 
     useEffect(() => {
         const checkRankedinStatus = async () => {
@@ -866,6 +988,17 @@ const EventDetails = () => {
                             if (diffHrs < (2 / 60) && isCacheValid) {
                                 useCache = true;
                             }
+                        }
+                    }
+                    
+                    if (useCache && cacheRow && cacheRow.winners && Array.isArray(cacheRow.winners)) {
+                        const hasPending = cacheRow.winners.some(w => {
+                            const wStr = JSON.stringify(w).toLowerCase();
+                            return wStr.includes('pending') || wStr.includes('null');
+                        });
+                        if (hasPending) {
+                            useCache = false;
+                            console.log('Cache invalidated because winners contain Pending or null data');
                         }
                     }
 
@@ -950,12 +1083,61 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchParticipantsData = async () => {
             if (!event) return;
-            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
             setFetchingParticipants(true);
             try {
                 let divisions = [];
                 let participantsMap = {};
+
+                // Manual events: divisions come only from tournament_divisions (never RankedIn).
+                if (event.is_manual) {
+                    const { data: manualDivs } = await supabase
+                        .from('tournament_divisions')
+                        .select('*')
+                        .eq('event_id', event.id)
+                        .eq('is_active', true)
+                        .order('sort_order', { ascending: true });
+
+                    divisions = (manualDivs || []).map((d) => ({ Id: d.id, Name: d.name }));
+
+                    const { data: localRegs } = await supabase
+                        .from('event_registrations')
+                        .select('*')
+                        .eq('event_id', event.id)
+                        .neq('status', 'withdrawn');
+
+                    (localRegs || []).forEach((reg) => {
+                        const div = divisions.find((d) => d.Name.toLowerCase() === (reg.division || '').toLowerCase())
+                            || (reg.division_id ? divisions.find((d) => d.Id === reg.division_id) : null);
+                        if (!div) return;
+                        if (!participantsMap[div.Id]) participantsMap[div.Id] = [];
+
+                        const existing = participantsMap[div.Id].some((item) => {
+                            const p = item.Participant || {};
+                            const names = [];
+                            if (p.Players) p.Players.forEach((pl) => names.push((pl.Name || '').toLowerCase()));
+                            if (p.FirstPlayer?.Name) names.push(p.FirstPlayer.Name.toLowerCase());
+                            if (p.SecondPlayer?.Name) names.push(p.SecondPlayer.Name.toLowerCase());
+                            return names.includes((reg.full_name || '').toLowerCase());
+                        });
+
+                        if (!existing) {
+                            const players = [{ Name: reg.full_name, Email: reg.email }];
+                            if (reg.partner_name) players.push({ Name: reg.partner_name });
+                            participantsMap[div.Id].push({
+                                Participant: {
+                                    Id: `local_${reg.id}`,
+                                    Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
+                                    Players: players,
+                                },
+                            });
+                        }
+                    });
+
+                    setPlayerDivisions(divisions);
+                    setParticipants((prev) => ({ ...prev, ...participantsMap }));
+                } else {
+                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
                 // 1. Fetch from Rankedin if rId exists
                 if (rId) {
@@ -1021,6 +1203,7 @@ const EventDetails = () => {
 
                 setPlayerDivisions(divisions);
                 setParticipants(prev => ({ ...prev, ...participantsMap }));
+                }
 
                 // Gather all player names and Rankedin IDs for bulk database query
                 const names = new Set();
@@ -1358,6 +1541,7 @@ const EventDetails = () => {
 
             try {
                 sendEmail(formData.email.trim(), 'event_entry', {
+                    eventId: event.id,
                     playerName: formData.full_name,
                     eventName: event.event_name,
                     division: division,
@@ -1369,6 +1553,7 @@ const EventDetails = () => {
             if (part.hasPartner && part.partnerProfile?.email) {
                 try {
                     sendEmail(part.partnerProfile.email.trim(), 'event_entry', {
+                        eventId: event.id,
                         playerName: part.partnerProfile.name,
                         eventName: event.event_name,
                         division: division,
@@ -1922,28 +2107,68 @@ const EventDetails = () => {
         }
     };
 
-    const registrationBlock = (isRegistered || isPaid) && (
+    const eventAllowsPayments = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0);
+
+    const getDivisionStatus = (divName) => {
+        if (!eventAllowsPayments) {
+            return {
+                text: isPaid ? 'Paid & Confirmed' : 'Registered',
+                className: 'bg-green-100 text-green-700'
+            };
+        }
+        const isDivPaid = paidDivisions.some(pd => pd.trim().toLowerCase() === divName.trim().toLowerCase());
+        if (isDivPaid) {
+            return {
+                text: 'Paid & Confirmed',
+                className: 'bg-green-100 text-green-700'
+            };
+        }
+        return {
+            text: 'Payment Pending',
+            className: 'bg-amber-100 text-amber-700'
+        };
+    };
+
+    const registrationBlock = !event.is_manual && (isRegistered || isPaid) && (
         <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-4 sm:p-5 border border-green-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-3 sm:gap-4 w-full sm:w-auto">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0">
+            <div className="flex items-start gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0 mt-0.5 sm:mt-0">
                     <Check className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
                 </div>
-                <div className="flex-1">
-                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-0.5">YOU ARE REGISTERED FOR</p>
-                    <p className="text-sm font-semibold text-[#0F172A] leading-tight mb-1">
-                        {registeredDivisions.length > 0 ? registeredDivisions.join(' & ') : 'Main Event'}
-                    </p>
-                    <div className="inline-flex items-center">
-                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-green-100 text-green-700">
-                            {isPaid ? 'Paid & Confirmed' : 'Registered'}
-                        </span>
+                <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1.5">YOU ARE REGISTERED FOR</p>
+                    <div className="flex flex-col gap-2">
+                        {registeredDivisions.length > 0 ? (
+                            registeredDivisions.map(div => {
+                                const status = getDivisionStatus(div);
+                                return (
+                                    <div key={div} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <span className="text-sm font-semibold text-[#0F172A] leading-tight">
+                                            {div}
+                                        </span>
+                                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${status.className}`}>
+                                            {status.text}
+                                        </span>
+                                    </div>
+                                );
+                            })
+                        ) : (
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <span className="text-sm font-semibold text-[#0F172A] leading-tight">
+                                    Main Event
+                                </span>
+                                <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                                    {isPaid ? 'Paid & Confirmed' : 'Registered'}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
 
             <button
                 onClick={handleRankedinRedirect}
-                className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap shrink-0"
+                className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap shrink-0 sm:self-center"
             >
                 <span className="text-lg leading-none">+</span> Add Division
             </button>
@@ -1957,14 +2182,14 @@ const EventDetails = () => {
 
     const readyToCompeteBlock = showReadyToCompete && (
         <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
-            <p className="text-[9px] font-black uppercase tracking-widest mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
             <p className="text-xs text-gray-400 mb-4">Secure your spot at {event.event_name}.</p>
             <div className="space-y-2">
                 {needsRegistration && (
                     <button
                         type="button"
                         onClick={handleRankedinRedirect}
-                        className="w-full block text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                        className="w-full block text-center text-[10px] font-semibold tracking-normal px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                         style={{ color: '#0F172A' }}
                     >
                         Register Now
@@ -1973,7 +2198,7 @@ const EventDetails = () => {
                 {needsPayment && (
                     <button
                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                        className={`w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                        className={`w-full text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                     >
                         Pay Entry Fee
@@ -1982,7 +2207,7 @@ const EventDetails = () => {
                 {(!needsRegistration && !needsPayment && isRegistrationAllowed) && (
                     <button
                         onClick={handleRankedinRedirect}
-                        className="w-full text-center text-[10px] font-black uppercase tracking-widest px-4 py-3 rounded-xl transition-all bg-green-500 text-white hover:bg-green-600"
+                        className="w-full text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all bg-green-500 text-white hover:bg-green-600"
                     >
                         Add Division
                     </button>
@@ -2003,6 +2228,14 @@ const EventDetails = () => {
 
             {/* ===== MAIN PAGE ===== */}
             <div className="min-h-screen bg-gray-50 font-sans relative">
+
+                {event.is_visible === false && (
+                    <div className="relative z-[110] bg-amber-400 text-[#0F172A] text-center text-xs sm:text-sm font-medium py-2.5 px-4">
+                        {event.is_manual
+                            ? 'This event is hidden from the public calendar — only people with this link can view it.'
+                            : 'Preview mode — this event is hidden from the public calendar.'}
+                    </div>
+                )}
 
                 {/* Floating nav bar */}
                 <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center px-4 pt-safe pt-24 md:pt-28 pointer-events-none">
@@ -2062,7 +2295,7 @@ const EventDetails = () => {
                     {/* Live badge */}
                     {isLive && (
                         <div className="absolute top-20 left-4 z-20">
-                            <span className="inline-flex items-center gap-1.5 bg-red-500 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full shadow-lg">
+                            <span className="inline-flex items-center gap-1.5 bg-red-500 text-white text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full shadow-lg">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> Live Today
                             </span>
                         </div>
@@ -2072,26 +2305,26 @@ const EventDetails = () => {
                     <div className="relative z-50 pt-[55vw] sm:pt-[350px] pb-8">
                         <div className="max-w-5xl mx-auto px-5 w-full flex flex-col md:items-center md:text-center">
                             {event.sapa_status && event.sapa_status !== 'None' && (
-                                <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full mb-4 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
+                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-4 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
                                     {event.sapa_status}
                                 </span>
                             )}
-                            <h1 className="text-3xl md:text-5xl font-black text-white leading-tight mb-5 drop-shadow-lg w-full md:text-center text-left">
+                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-5 drop-shadow-lg w-full md:text-center text-left">
                                 {event.event_name}
                             </h1>
 
                             <div className="flex flex-col gap-3 mb-8 md:items-center w-full">
-                                <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
                                     <CalendarIcon className="w-5 h-5 text-white/70" />
                                     <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
                                 </div>
                                 {(event.city || event.venue) && (
-                                    <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                    <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
                                         <MapPin className="w-5 h-5 text-white/70" />
                                         <span>{event.venue ? `${event.venue}, ` : ''}{event.city}</span>
                                     </div>
                                 )}
-                                <div className="flex items-center gap-3 text-white/90 text-sm font-medium">
+                                <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
                                     <Users className="w-5 h-5 text-white/70" />
                                     <span>{totalPlayersCount} Players Registered</span>
                                 </div>
@@ -2101,6 +2334,49 @@ const EventDetails = () => {
                             <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto relative">
                                 {(() => {
                                     const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                    if (event.is_manual) {
+                                        if (!isEventPassed) {
+                                            if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                                        className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                        style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                    >
+                                                        <CheckCircle className="w-4 h-4 shrink-0" />
+                                                        <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                    </button>
+                                                );
+                                            }
+                                            if (manualRegStatus.hasPendingPayment) {
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                            manualRegActionsRef.current?.openPayFlow?.();
+                                                        }}
+                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                    >
+                                                        <CreditCard className="w-4 h-4" />
+                                                        Pay Entry
+                                                    </button>
+                                                );
+                                            }
+                                            return (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                                    className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                >
+                                                    Register Now <ArrowRight className="w-4 h-4" />
+                                                </button>
+                                            );
+                                        }
+                                        return null;
+                                    }
                                     if (!isEventPassed) {
                                         if (isRegistered && isPaid && registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) {
                                             return (
@@ -2110,7 +2386,7 @@ const EventDetails = () => {
                                                     style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
                                                 >
                                                     <CheckCircle className="w-4 h-4 shrink-0" />
-                                                    <span className="text-[11px] font-black uppercase tracking-widest truncate">{isLive ? 'Registered' : 'Registered'}</span>
+                                                    <span className="text-xs font-semibold tracking-normal truncate">{isLive ? 'Registered' : 'Registered'}</span>
                                                 </button>
                                             );
                                         }
@@ -2120,7 +2396,7 @@ const EventDetails = () => {
                                                     <button
                                                         type="button"
                                                         onClick={handleRankedinRedirect}
-                                                        className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                        className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                                                     >
                                                         Register Now <ArrowRight className="w-4 h-4" />
                                                     </button>
@@ -2128,7 +2404,7 @@ const EventDetails = () => {
                                                 {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every(div => paidDivisions.some(pd => pd.trim().toLowerCase() === div.trim().toLowerCase()))) && (
                                                     <button
                                                         onClick={() => { setRegStep(1); setIsModalOpen(true); }}
-                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                     >
                                                         <CreditCard className="w-4 h-4" />
@@ -2141,7 +2417,7 @@ const EventDetails = () => {
                                         return (
                                             <Link
                                                 to={`/draws/${event.slug || rId}`}
-                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                             >
                                                 <GitBranch className="w-4 h-4" />
@@ -2158,7 +2434,7 @@ const EventDetails = () => {
                                     className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
                                 >
                                     <CalendarIcon className="w-4 h-4 shrink-0" />
-                                    <span className="text-[11px] font-black uppercase tracking-widest truncate">Add to Calendar</span>
+                                    <span className="text-xs font-semibold tracking-normal truncate">Add to Calendar</span>
                                 </button>
                                 <AnimatePresence>
                                     {isCalendarMenuOpen && (
@@ -2224,12 +2500,12 @@ const EventDetails = () => {
                                     if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                     if (isEventPassed) return 'Completed';
                                     if (isLive) return 'Live Today';
-                                    if (isRankedinRegistrationClosed) return 'Registration Closed';
+                                    if (registrationClosed) return 'Registration Closed';
                                     return 'Registration Open';
                                 })();
                                 return (
                                     <div className={`flex-1 py-4 flex flex-col items-center justify-center text-center ${theme.accentBg.split(' ')[0]}`}>
-                                        <div className={`flex items-center justify-center gap-1.5 ${theme.accentText} font-semibold text-[10px] tracking-widest uppercase mb-1`}>
+                                        <div className={`flex items-center justify-center gap-1.5 ${theme.accentText} font-medium text-[10px] tracking-wide uppercase mb-1`}>
                                             <AlertCircle className="w-3.5 h-3.5" />
                                             STATUS
                                         </div>
@@ -2242,15 +2518,15 @@ const EventDetails = () => {
                             {[
                                 { label: 'Players', value: totalPlayersCount, icon: Users },
                                 { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard },
-                                { label: 'Divisions', value: playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0), icon: Trophy },
+                                { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Trophy },
                                 { label: 'Points', value: event.points || '1000', icon: Trophy }
                             ].map(({ label, value, icon: Icon }, idx) => (
                                 <div key={idx} className="flex-1 py-4 flex flex-col items-center justify-center text-center">
                                     <div className="w-6 h-6 rounded-full flex items-center justify-center mb-1">
                                         <Icon className={`w-4 h-4 ${theme.accentText}`} />
                                     </div>
-                                    <p className="text-base font-bold text-[#0F172A] leading-tight">{value}</p>
-                                    <p className="text-[10px] text-gray-500 font-medium">{label}</p>
+                                    <p className="text-base font-semibold text-slate-900 leading-tight">{value}</p>
+                                    <p className="text-[10px] text-slate-500 font-normal">{label}</p>
                                 </div>
                             ))}
                         </div>
@@ -2285,7 +2561,7 @@ const EventDetails = () => {
                                 <button
                                     key={id}
                                     onClick={() => setActiveTab(id)}
-                                    className={`flex-1 py-4 text-[15px] font-bold border-b-2 transition-all whitespace-nowrap text-center ${active
+                                    className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-all whitespace-nowrap text-center ${active
                                         ? 'text-[#0F172A] border-[#0F172A]'
                                         : 'border-transparent text-gray-400 hover:text-gray-700 hover:border-gray-300'
                                         }`}
@@ -2317,7 +2593,7 @@ const EventDetails = () => {
                                         <div className="flex-1 space-y-6">
                                             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                                 <div className="px-6 py-5 border-b border-gray-50">
-                                                    <h2 className="font-bold text-[#0F172A] text-lg">Event Information</h2>
+                                                    <h2 className="text-base font-semibold text-slate-900">Event Information</h2>
                                                 </div>
                                                 <div className="divide-y divide-gray-50">
                                                     {(() => {
@@ -2325,14 +2601,21 @@ const EventDetails = () => {
                                                             if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                                             if (isEventPassed) return 'Completed';
                                                             if (isLive) return 'Live Today';
-                                                            if (isRankedinRegistrationClosed) return 'Registration Closed';
+                                                            if (registrationClosed) return 'Registration Closed';
                                                             return 'Registration Open';
                                                         })();
 
                                                         return [
                                                             { label: 'Venue', value: event.venue || 'Virgin Active Padel Club', icon: MapPin },
+                                                            ...(event.courts ? [{ label: 'Courts', value: event.courts, icon: Layout }] : []),
                                                             { label: 'Organiser', value: event.organizer_name || 'VAPC', icon: User },
                                                             { label: 'Tournament Tier', value: event.sapa_status || 'Gold 1000', icon: Award, valueColor: theme.accentText },
+                                                            ...(event.prize_money_total != null && Number(event.prize_money_total) > 0 ? [{
+                                                                label: 'Prize Pool',
+                                                                value: `R ${Number(event.prize_money_total).toLocaleString('en-ZA')}`,
+                                                                icon: Trophy,
+                                                                valueColor: theme.accentText,
+                                                            }] : []),
                                                             { label: 'Status', value: computedStatus, icon: Clock }
                                                         ].map((item, idx) => (
                                                             <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
@@ -2351,7 +2634,8 @@ const EventDetails = () => {
                                             </div>
                                         </div>
 
-                                        {/* Right Column: Top Seeds & Divisions */}
+                                        {/* Right Column: Top Seeds (RankedIn events only) */}
+                                        {!event.is_manual && (
                                         <div className="flex-1 space-y-6">
 
                                             {/* Top Seeds */}
@@ -2445,7 +2729,7 @@ const EventDetails = () => {
                                                         return displayList.slice(0, 4).map((seed, idx) => (
                                                             <div key={idx} className="flex items-center justify-between py-4">
                                                                 <div className="flex items-center gap-4">
-                                                                    <span className="font-black text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
+                                                                    <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
                                                                     <span className="font-medium text-[#0F172A] text-[14px] max-w-[180px] truncate" title={seed.name}>
                                                                         {seed.name} {seed.rank !== Infinity && <span className="text-gray-500 ml-1 text-[13px]">(#{seed.rank})</span>}
                                                                     </span>
@@ -2460,12 +2744,27 @@ const EventDetails = () => {
                                             </div>
 
                                         </div>
+                                        )}
                                     </div>
                                     <div className="w-full space-y-6">
-                                        {/* Divisions */}
+                                        {/* Manual event registration & checkout */}
+                                        {event.is_manual && (
+                                            <div id="manual-registration">
+                                                <ManualEventRegistration
+                                                    event={event}
+                                                    userEmail={manualUserEmail}
+                                                    theme={theme}
+                                                    initialPlayer={loggedInPlayer}
+                                                    onStatusChange={setManualRegStatus}
+                                                    registrationActionsRef={manualRegActionsRef}
+                                                />
+                                            </div>
+                                        )}
+                                        {/* Divisions — hidden for manual events (shown in Register block above) */}
+                                        {!event.is_manual && (
                                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                                             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-                                                <h2 className="font-bold text-[#0F172A] text-lg">Divisions</h2>
+                                                <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
                                                 <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
                                                     View All Divisions <ChevronRight className="w-4 h-4" />
                                                 </button>
@@ -2494,6 +2793,7 @@ const EventDetails = () => {
                                                 )}
                                             </div>
                                         </div>
+                                        )}
 
                                         {/* Event Info */}
                                         <div className="space-y-5">
@@ -2509,7 +2809,7 @@ const EventDetails = () => {
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
                                                                 <FileText className="w-4 h-4 text-[#0F172A]" />
                                                             </div>
-                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">About This Event</h2>
+                                                            <h2 className="font-semibold text-slate-900 text-sm tracking-normal">About This Event</h2>
                                                         </div>
                                                         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.about ? '-rotate-90' : ''}`} />
                                                     </div>
@@ -2524,7 +2824,7 @@ const EventDetails = () => {
                                                             >
                                                                 <div className="px-6 py-5">
                                                                     <div
-                                                                        className="text-slate-600 leading-relaxed text-sm prose max-w-none"
+                                                                        className="text-slate-600 leading-snug text-xs font-normal prose max-w-none"
                                                                         dangerouslySetInnerHTML={{ __html: event.description }}
                                                                     />
                                                                 </div>
@@ -2532,6 +2832,93 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
+                                            )}
+
+                                            {/* Prize Money */}
+                                            {(() => {
+                                                const prizeBreakdown = parsePrizeBreakdown(event.prize_money_breakdown);
+                                                const hasTotal = event.prize_money_total != null && Number(event.prize_money_total) > 0;
+                                                if (!hasTotal && prizeBreakdown.length === 0) return null;
+                                                return (
+                                                    <InfoSection title="Prize Money" icon={Trophy} accent={theme.fill} defaultOpen={hasTotal || prizeBreakdown.length > 0}>
+                                                        {hasTotal && (
+                                                            <p className="text-2xl font-semibold text-slate-900 mb-3">
+                                                                R {Number(event.prize_money_total).toLocaleString('en-ZA')}
+                                                            </p>
+                                                        )}
+                                                        {prizeBreakdown.length > 0 && (
+                                                            <div className={hasTotal ? 'pt-3 border-t border-gray-100' : ''}>
+                                                                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                                                    Prize Pool Breakdown
+                                                                </p>
+                                                                <div className="divide-y divide-gray-100">
+                                                                    {prizeBreakdown.map((row, i) => (
+                                                                        <div key={i} className="flex items-center justify-between gap-4 py-2.5 text-sm first:pt-0">
+                                                                            <span className="text-slate-600 font-medium">{row.label}</span>
+                                                                            <span className="font-semibold text-[#0F172A] shrink-0">{formatPrizeAmount(row.amount)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </InfoSection>
+                                                );
+                                            })()}
+
+                                            {/* Points Breakdown */}
+                                            {event.points_breakdown && (
+                                                <InfoSection title="Points Breakdown" icon={Award} accent={theme.fill} text={event.points_breakdown} />
+                                            )}
+
+                                            {/* Tournament Details */}
+                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
+                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
+                                                    <div className="divide-y divide-gray-100">
+                                                        {[
+                                                            ['Courts', event.courts],
+                                                            ['Balls', event.balls],
+                                                            ['Draw Released', event.draw_released],
+                                                            ['Cut-off Times', event.cut_off_times],
+                                                            ['Tournament Director', event.tournament_director],
+                                                            ['Referees', event.referees],
+                                                        ].filter(([, v]) => v).map(([label, value]) => (
+                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
+                                                                <span className="text-slate-500 font-medium">{label}</span>
+                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </InfoSection>
+                                            )}
+
+                                            {/* Sanctioning Details */}
+                                            {event.sanctioning_details && (
+                                                <InfoSection title="Sanctioning Details" icon={CheckCircle} accent={theme.fill} text={event.sanctioning_details} />
+                                            )}
+
+                                            {/* Rules & Regulations */}
+                                            {event.rules_regs && (
+                                                <InfoSection title="Rules & Regulations" icon={FileText} accent={theme.fill} text={event.rules_regs} />
+                                            )}
+
+                                            {/* Withdrawal & Substitution */}
+                                            {event.withdrawal_substitution && (
+                                                <InfoSection title="Withdrawal & Substitution" icon={AlertCircle} accent={theme.fill} text={event.withdrawal_substitution} />
+                                            )}
+
+                                            {/* Contact */}
+                                            {(event.contact_details || event.organizer_phone || event.organizer_email) && (
+                                                <InfoSection title="Contact" icon={Phone} accent={theme.fill}>
+                                                    <div className="space-y-2 text-sm">
+                                                        {event.contact_details && <p className="text-slate-600 whitespace-pre-wrap">{event.contact_details}</p>}
+                                                        {event.organizer_phone && (
+                                                            <a href={`tel:${event.organizer_phone}`} className="flex items-center gap-2 text-[#0F172A] font-semibold"><Phone className="w-4 h-4" /> {event.organizer_phone}</a>
+                                                        )}
+                                                        {event.organizer_email && (
+                                                            <a href={`mailto:${event.organizer_email}`} className="flex items-center gap-2 text-[#0F172A] font-semibold"><Mail className="w-4 h-4" /> {event.organizer_email}</a>
+                                                        )}
+                                                    </div>
+                                                </InfoSection>
                                             )}
 
                                             {/* Location & Map */}
@@ -2545,14 +2932,14 @@ const EventDetails = () => {
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
                                                                 <MapPin className="w-4 h-4 text-[#0F172A]" />
                                                             </div>
-                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Location</h2>
+                                                            <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Location</h2>
                                                         </div>
                                                         <div className="flex items-center gap-3">
                                                             <a
                                                                 href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
+                                                                className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
                                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
@@ -2571,12 +2958,12 @@ const EventDetails = () => {
                                                                 className="overflow-hidden"
                                                             >
                                                                 <div className="px-6 py-3 bg-gray-50/30 flex justify-between items-center border-b border-gray-100">
-                                                                    <p className="text-sm font-bold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
+                                                                    <p className="text-sm font-semibold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
                                                                     <a
                                                                         href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                                         target="_blank"
                                                                         rel="noopener noreferrer"
-                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
+                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
                                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                                     >
                                                                         Directions
@@ -2612,7 +2999,7 @@ const EventDetails = () => {
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
                                                                 <ImageIcon className="w-4 h-4 text-[#0F172A]" />
                                                             </div>
-                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Sponsors</h2>
+                                                            <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Sponsors</h2>
                                                         </div>
                                                         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.sponsors ? '-rotate-90' : ''}`} />
                                                     </div>
@@ -2649,7 +3036,7 @@ const EventDetails = () => {
                                                             <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
                                                                 <Cloud className="w-4 h-4 text-[#0F172A]" />
                                                             </div>
-                                                            <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Weather Forecast</h2>
+                                                            <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Weather Forecast</h2>
                                                         </div>
                                                         <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${collapsedSections.weather ? '-rotate-90' : ''}`} />
                                                     </div>
@@ -2667,7 +3054,7 @@ const EventDetails = () => {
                                                                         <Cloud className="w-7 h-7 text-[#0F172A]" />
                                                                     </div>
                                                                     <div>
-                                                                        <p className="text-2xl font-black text-[#0F172A]">{Math.round(weather.temp)}°C</p>
+                                                                        <p className="text-2xl font-semibold text-slate-900">{Math.round(weather.temp)}°C</p>
                                                                         <p className="text-xs font-bold text-gray-500 capitalize">{weather.condition}</p>
                                                                         {weather.humidity && <p className="text-[10px] text-gray-400 font-bold mt-0.5">Humidity: {weather.humidity}%</p>}
                                                                     </div>
@@ -2690,7 +3077,7 @@ const EventDetails = () => {
                                     {fetchingParticipants && playerDivisions.length === 0 ? (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 flex flex-col items-center">
                                             <Loader className="w-8 h-8 animate-spin text-[#0F172A] mb-4" />
-                                            <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Loading Players...</p>
+                                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">Loading Players...</p>
                                         </div>
                                     ) : playerDivisions.length > 0 ? (
                                         playerDivisions.map((cls) => {
@@ -2702,9 +3089,9 @@ const EventDetails = () => {
                                                         onClick={() => toggleDivision(cls.Id)}
                                                         className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
                                                     >
-                                                        <h3 className="font-black text-[#0F172A] uppercase tracking-tight text-base">{cls.Name}</h3>
+                                                        <h3 className="font-semibold text-slate-900 text-base tracking-normal">{cls.Name}</h3>
                                                         <div className="flex items-center gap-3">
-                                                            <span className="text-[9px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-3 py-1.5 rounded-full">
+                                                            <span className="text-[10px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-3 py-1.5 rounded-full">
                                                                 {clsParticipants.length} Teams
                                                             </span>
                                                             <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -2745,8 +3132,8 @@ const EventDetails = () => {
                                                                                         {(rank || seed) && (
                                                                                             <div className="flex justify-end mb-3">
                                                                                                 <div className="flex gap-2">
-                                                                                                    {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                                    {seed && <span className="text-[8px] font-black uppercase tracking-widest bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                                    {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                                    {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
                                                                                                 </div>
                                                                                             </div>
                                                                                         )}
@@ -2774,7 +3161,7 @@ const EventDetails = () => {
                                                                             return (
                                                                                 <div key={pIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
                                                                                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                                                        <span className="w-5 text-[10px] font-black text-gray-400 flex-shrink-0">{pIdx + 1}</span>
+                                                                                        <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
                                                                                         <div className="flex flex-wrap gap-2.5">
                                                                                             {/* Player 1 */}
                                                                                             <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5 shadow-sm">
@@ -2810,8 +3197,8 @@ const EventDetails = () => {
                                                                                         </div>
                                                                                     </div>
                                                                                     <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                                                                                        {rank && <span className="text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                        {seed && <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border border-gray-200" style={{ backgroundColor: theme.fill + '15', color: theme.fill, borderColor: theme.fill + '25' }}>Seed {seed}</span>}
+                                                                                        {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                        {seed && <span className="text-[8px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-gray-200" style={{ backgroundColor: theme.fill + '15', color: theme.fill, borderColor: theme.fill + '25' }}>Seed {seed}</span>}
                                                                                     </div>
                                                                                 </div>
                                                                             );
@@ -2832,7 +3219,7 @@ const EventDetails = () => {
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <Users className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Players Yet</h3>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">No Players Yet</h3>
                                             <p className="text-sm text-gray-400">The player list will populate closer to the event.</p>
                                         </div>
                                     )}
@@ -2852,7 +3239,7 @@ const EventDetails = () => {
                                                     <GitBranch className="w-6 h-6 text-[#CCFF00]" />
                                                 </div>
                                                 <div>
-                                                    <h3 className="text-base font-black text-white uppercase tracking-tight">Tournament Draws</h3>
+                                                    <h3 className="text-sm font-semibold text-white tracking-normal">Tournament Draws</h3>
                                                     <p className="text-[10px] font-bold text-[#CCFF00] uppercase tracking-widest mt-0.5">View Live Brackets & Match Results</p>
                                                 </div>
                                             </div>
@@ -2861,7 +3248,7 @@ const EventDetails = () => {
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <GitBranch className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">Draws Coming Soon</h3>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">Draws Coming Soon</h3>
                                             <p className="text-sm text-gray-400">Draws will be released shortly before the tournament begins.</p>
                                         </div>
                                     )}
@@ -2877,7 +3264,7 @@ const EventDetails = () => {
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
                                                     <Trophy className="w-4 h-4 text-[#0F172A]" />
                                                 </div>
-                                                <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Champions</h2>
+                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Champions</h2>
                                             </div>
                                             {winners.length > 0 ? (
                                                 <div className="divide-y divide-gray-50">
@@ -2889,7 +3276,7 @@ const EventDetails = () => {
                                                                     onClick={() => setExpandedResults(prev => ({ ...prev, [idx]: !prev[idx] }))}
                                                                     className="w-full flex items-center justify-between group"
                                                                 >
-                                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block">
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#CCFF00] bg-[#0F172A] px-2 py-1 rounded-md inline-block">
                                                                         {winner.CategoryName || winner.className || 'Unknown Division'}
                                                                     </p>
                                                                     <div className="text-gray-400 group-hover:text-[#0F172A] transition-colors">
@@ -2908,15 +3295,15 @@ const EventDetails = () => {
                                                                             <div className="space-y-2 pt-4">
                                                                                 <div className="flex items-center justify-between bg-[#CCFF00]/5 border border-[#CCFF00]/20 p-3 rounded-xl">
                                                                                     <div>
-                                                                                        <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">1st Place</p>
-                                                                                        <p className="text-sm font-black text-[#0F172A]">{winner.Winner?.Name || winner.winners || 'TBD'}</p>
+                                                                                        <p className="text-[8px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">1st Place</p>
+                                                                                        <p className="text-sm font-semibold text-slate-900">{winner.Winner?.Name || winner.winners || 'TBD'}</p>
                                                                                     </div>
                                                                                     <span className="text-2xl">🥇</span>
                                                                                 </div>
                                                                                 {(winner.RunnerUp?.Name || winner.runnerUp) && (
                                                                                     <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
                                                                                         <div>
-                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">2nd Place</p>
+                                                                                            <p className="text-[8px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">2nd Place</p>
                                                                                             <p className="text-sm font-bold text-slate-700">{winner.RunnerUp?.Name || winner.runnerUp}</p>
                                                                                         </div>
                                                                                         <span className="text-2xl">🥈</span>
@@ -2925,7 +3312,7 @@ const EventDetails = () => {
                                                                                 {(winner.ThirdPlace?.Name || winner.thirdPlace) && (
                                                                                     <div className="flex items-center justify-between bg-orange-50 border border-orange-100 p-3 rounded-xl">
                                                                                         <div>
-                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Semi-Finalist</p>
+                                                                                            <p className="text-[8px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Semi-Finalist</p>
                                                                                             <p className="text-sm font-bold text-slate-700">{winner.ThirdPlace?.Name || winner.thirdPlace}</p>
                                                                                         </div>
                                                                                         <span className="text-2xl">🥉</span>
@@ -2934,7 +3321,7 @@ const EventDetails = () => {
                                                                                 {(winner.FourthPlace?.Name || winner.fourthPlace) && (
                                                                                     <div className="flex items-center justify-between bg-gray-50 border border-gray-100 p-3 rounded-xl">
                                                                                         <div>
-                                                                                            <p className="text-[8px] font-black uppercase tracking-widest text-gray-400 mb-0.5">Semi-Finalist</p>
+                                                                                            <p className="text-[8px] font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Semi-Finalist</p>
                                                                                             <p className="text-sm font-bold text-slate-700">{winner.FourthPlace?.Name || winner.fourthPlace}</p>
                                                                                         </div>
                                                                                         <span className="text-2xl">🏅</span>
@@ -2963,7 +3350,7 @@ const EventDetails = () => {
                                     ) : (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <Trophy className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Results Yet</h3>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">No Results Yet</h3>
                                             <p className="text-sm text-gray-400">Tournament results will appear here once matches are completed.</p>
                                         </div>
                                     )}
@@ -2991,13 +3378,13 @@ const EventDetails = () => {
                                             )}
                                             <div className="p-6 flex items-center justify-between">
                                                 <div>
-                                                    <p className="text-[9px] font-black uppercase tracking-widest text-[#CCFF00] mb-1">Official Gallery</p>
-                                                    <h3 className="text-xl font-black text-white uppercase tracking-tight">{albumInfo.title}</h3>
+                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#CCFF00] mb-1">Official Gallery</p>
+                                                    <h3 className="text-lg font-semibold text-white tracking-normal">{albumInfo.title}</h3>
                                                     <p className="text-xs text-gray-400 mt-1 font-bold">{albumPhotos.length} Photos</p>
                                                 </div>
                                                 <Link
                                                     to={`/gallery/${albumInfo.slug || albumInfo.id}`}
-                                                    className="px-6 py-3 bg-[#CCFF00] !text-black rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-white transition-colors flex-shrink-0 ml-4"
+                                                    className="px-6 py-3 bg-[#CCFF00] !text-black rounded-xl font-semibold text-xs tracking-normal hover:bg-white transition-colors flex-shrink-0 ml-4"
                                                 >
                                                     View All
                                                 </Link>
@@ -3012,7 +3399,7 @@ const EventDetails = () => {
                                                 <div className="w-8 h-8 rounded-lg bg-[#CCFF00]/20 flex items-center justify-center">
                                                     <PlayCircle className="w-4 h-4 text-[#0F172A]" />
                                                 </div>
-                                                <h2 className="font-black text-[#0F172A] uppercase tracking-tight text-sm">Event Highlights</h2>
+                                                <h2 className="font-semibold text-slate-900 text-sm tracking-normal">Event Highlights</h2>
                                             </div>
                                             {fetchingVideos ? (
                                                 <div className="flex items-center justify-center py-12">
@@ -3061,7 +3448,7 @@ const EventDetails = () => {
                                     {!albumInfo && !event.youtube_playlist_url && (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-6 py-16 flex flex-col items-center text-center">
                                             <ImageIcon className="w-12 h-12 text-gray-200 mb-4" />
-                                            <h3 className="text-lg font-black text-[#0F172A] mb-2">No Media Yet</h3>
+                                            <h3 className="text-base font-semibold text-slate-900 mb-2">No Media Yet</h3>
                                             <p className="text-sm text-gray-400">Media will be added after the event.</p>
                                         </div>
                                     )}
@@ -3079,7 +3466,7 @@ const EventDetails = () => {
                             return (
                                 <Link
                                     to={`/draws/${event.slug || rId}`}
-                                    className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${theme.primary} ${theme.glow}`}
+                                    className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-semibold text-xs tracking-normal transition-all ${theme.primary} ${theme.glow}`}
                                     style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                 >
                                     <GitBranch className="w-4 h-4" />
@@ -3139,7 +3526,7 @@ const EventDetails = () => {
                                                             <div className="w-8 h-8 rounded-lg bg-padel-green/20 flex items-center justify-center">
                                                                 <User className="w-4 h-4 text-padel-green" />
                                                             </div>
-                                                            <span className="text-[11px] font-black uppercase tracking-widest text-white">Player Information</span>
+                                                            <span className="text-xs font-semibold tracking-normal text-white">Player Information</span>
                                                         </div>
                                                         {isMobilePlayerInfoOpen ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
                                                     </button>
@@ -3147,7 +3534,7 @@ const EventDetails = () => {
                                                 <div className={`space-y-4 ${isMobilePlayerInfoOpen ? 'block' : 'hidden md:block'}`}>
                                                     <div className="grid grid-cols-1 gap-3">
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Full Name</label>
+                                                            <label className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 ml-3">Full Name</label>
                                                             <div className="relative group">
                                                                 <User className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-padel-green transition-colors" size={16} />
                                                                 <input
@@ -3163,7 +3550,7 @@ const EventDetails = () => {
                                                         </div>
 
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Email Address</label>
+                                                            <label className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 ml-3">Email Address</label>
                                                             <div className="relative">
                                                                 <Mail className={`absolute left-5 top-1/2 -translate-y-1/2 ${emailCheckStatus === 'not_found' ? 'text-red-500' : 'text-padel-green'}`} size={16} />
                                                                 <input
@@ -3185,7 +3572,7 @@ const EventDetails = () => {
                                                         </div>
 
                                                         <div className="space-y-1.5">
-                                                            <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Phone Number</label>
+                                                            <label className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 ml-3">Phone Number</label>
                                                             <div className="relative">
                                                                 <Phone className="absolute left-5 top-1/2 -translate-y-1/2 text-padel-green" size={16} />
                                                                 <input
@@ -3208,7 +3595,7 @@ const EventDetails = () => {
                                                                     <Users size={20} />
                                                                 </div>
                                                                 <div>
-                                                                    <p className="text-xs font-black text-white uppercase tracking-tight">Register with a Partner?</p>
+                                                                    <p className="text-xs font-semibold text-white tracking-normal">Register with a Partner?</p>
                                                                     <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest">Optional Entry Fee Payment</p>
                                                                 </div>
                                                             </div>
@@ -3242,7 +3629,7 @@ const EventDetails = () => {
                                                                     className="space-y-3"
                                                                 >
                                                                     <div className="space-y-1.5">
-                                                                        <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 ml-3">Partner Name</label>
+                                                                        <label className="text-[9px] font-semibold uppercase tracking-wide text-gray-400 ml-3">Partner Name</label>
                                                                         <div className="relative group">
                                                                             <Users className="absolute left-5 top-1/2 -translate-y-1/2 text-blue-500" size={16} />
                                                                             <input
@@ -3260,7 +3647,7 @@ const EventDetails = () => {
                                                                                 </div>
                                                                             )}
                                                                             {partnerProfile && !isLookingUpPartner && (
-                                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-400 text-black px-2 py-1 rounded-lg shadow-sm font-black uppercase tracking-widest text-[8px]">
+                                                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1 bg-blue-400 text-black px-2 py-1 rounded-lg shadow-sm font-semibold text-[8px]">
                                                                                     <CheckCircle className="w-3 h-3 fill-current" />
                                                                                     Found
                                                                                 </div>
@@ -3317,7 +3704,7 @@ const EventDetails = () => {
                                                                                         <CreditCard className="w-5 h-5" />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <h5 className="font-black text-white text-[11px] uppercase tracking-tight">Pay for {partnerProfile.name}?</h5>
+                                                                                        <h5 className="font-semibold text-white text-xs tracking-normal">Pay for {partnerProfile.name}?</h5>
                                                                                         <p className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
                                                                                             Multi-Division Fee Auto-Calculated
                                                                                         </p>
@@ -3357,14 +3744,14 @@ const EventDetails = () => {
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => setPartnerLicenseChoice('temporary')}
-                                                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                                                    className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'temporary' ? 'bg-blue-400 text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                                 >
                                                                                                     Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                                                 </button>
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => setPartnerLicenseChoice('full')}
-                                                                                                    className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                                                    className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                                                 >
                                                                                                     Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                                                                 </button>
@@ -3398,14 +3785,14 @@ const EventDetails = () => {
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setLicenseChoice('temporary')}
-                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'temporary' ? 'bg-padel-green text-black shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
                                                                         Temp <span className="opacity-70">(R{FEES.TEMPORARY_LICENSE})</span>
                                                                     </button>
                                                                     <button
                                                                         type="button"
                                                                         onClick={() => setLicenseChoice('full')}
-                                                                        className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
+                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-full transition-all flex items-center gap-1 ${licenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400 hover:text-white'}`}
                                                                     >
                                                                         Full <span className="opacity-70">(R{FEES.FULL_LICENSE})</span>
                                                                     </button>
@@ -3418,7 +3805,7 @@ const EventDetails = () => {
                                                 {/* Read-Only Registered Divisions */}
                                                 <div className="space-y-3 mt-4">
                                                     <div className="flex items-center justify-between ml-3 mb-1">
-                                                        <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-500">Registered Divisions</label>
+                                                        <label className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">Registered Divisions</label>
                                                     </div>
 
                                                     {isCheckingReg ? (
@@ -3432,7 +3819,7 @@ const EventDetails = () => {
                                                                 <span className="text-[11px] font-bold text-gray-500 uppercase tracking-widest">No unpaid entries found.</span>
                                                             ) : (
                                                                 selectedDivisions.map(div => (
-                                                                    <span key={div} className="text-[10px] font-black uppercase tracking-widest px-3 py-2 rounded-lg bg-padel-green/20 text-padel-green border border-padel-green/30">
+                                                                    <span key={div} className="text-[10px] font-semibold tracking-normal px-3 py-2 rounded-lg bg-padel-green/20 text-padel-green border border-padel-green/30">
                                                                         {div}
                                                                     </span>
                                                                 ))
@@ -3441,7 +3828,7 @@ const EventDetails = () => {
                                                     ) : formData.email && (
                                                         <div className="bg-orange-500/10 border border-orange-500/20 rounded-2xl p-6 text-center">
                                                             <Trophy className="w-8 h-8 text-orange-500/40 mx-auto mb-3" />
-                                                            <p className="text-xs text-orange-400 font-black uppercase tracking-[0.2em] mb-1">Entry Not Found</p>
+                                                            <p className="text-xs text-orange-400 font-semibold mb-1">Entry Not Found</p>
                                                             <p className="text-[10px] text-orange-400/60 font-bold uppercase tracking-widest leading-relaxed">
                                                                 Please ensure you are registered on Rankedin <br />for this specific event.
                                                             </p>
@@ -3461,7 +3848,7 @@ const EventDetails = () => {
                                                             <div className="space-y-2">
                                                                 {/* Registrant Section */}
                                                                 <div className="space-y-2">
-                                                                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-padel-green mb-1">Your Entries</p>
+                                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-padel-green mb-1">Your Entries</p>
                                                                     {selectedDivisions.map(div => {
                                                                         const pState = divisionPartners[div] || {};
                                                                         const pProf = pState.partnerProfile;
@@ -3469,7 +3856,7 @@ const EventDetails = () => {
                                                                             <div key={`div-${div}`} className="flex flex-col gap-2 bg-[#0F172A] p-3 rounded-xl border border-white/10 shadow-sm">
                                                                                 <div className="flex justify-between items-center">
                                                                                     <div className="flex items-center gap-3">
-                                                                                        <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center border border-padel-green/30 text-padel-green font-black text-[9px] uppercase">
+                                                                                        <div className="w-6 h-6 rounded-full bg-padel-green/20 flex items-center justify-center border border-padel-green/30 text-padel-green font-semibold text-[9px]">
                                                                                             {div.substring(0, 2)}
                                                                                         </div>
                                                                                         <div>
@@ -3477,7 +3864,7 @@ const EventDetails = () => {
                                                                                             <p className="text-[9px] text-gray-400 font-medium uppercase tracking-wider mt-0.5">Selected Category</p>
                                                                                         </div>
                                                                                     </div>
-                                                                                    <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R{getEntryFeeForCategory(div)}</span>
+                                                                                    <span className="text-[10px] font-semibold tracking-tight whitespace-nowrap pt-0.5 text-white">R{getEntryFeeForCategory(div)}</span>
                                                                                 </div>
                                                                                 <div className="mt-2 pt-2 border-t border-white/5 space-y-3">
                                                                                     {!pState.hasPartner ? (
@@ -3595,8 +3982,8 @@ const EventDetails = () => {
                                                                                                                 <div className="mt-3 flex items-center justify-between pt-2 border-t border-white/5">
                                                                                                                     <span className="text-[9px] font-bold text-gray-400 uppercase">License Choice</span>
                                                                                                                     <div className="flex bg-white/10 rounded-full p-0.5 border border-white/10">
-                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-white' : 'text-gray-400'}`}>Temp</button>
-                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-black uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'temporary' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice !== 'full' ? 'bg-blue-400 text-white' : 'text-gray-400'}`}>Temp</button>
+                                                                                                                        <button type="button" onClick={() => setDivisionPartners(prev => ({ ...prev, [div]: { ...prev[div], partnerLicenseChoice: 'full' } }))} className={`text-[8px] font-semibold uppercase px-2 py-1 rounded-full ${pState.partnerLicenseChoice === 'full' ? 'bg-[#0F172A] text-white shadow-sm' : 'text-gray-400'}`}>Full</button>
                                                                                                                     </div>
                                                                                                                 </div>
                                                                                                             )}
@@ -3616,22 +4003,22 @@ const EventDetails = () => {
                                                                                 <p className="text-[10px] font-bold uppercase tracking-widest text-white">{formData.full_name || 'You'}</p>
                                                                                 <p className="text-[9px] font-medium text-gray-400 uppercase tracking-wider">No Category Selected</p>
                                                                             </div>
-                                                                            <span className="text-xs font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R0</span>
+                                                                            <span className="text-xs font-semibold tracking-tight whitespace-nowrap pt-0.5 text-white">R0</span>
                                                                         </div>
                                                                     )}
                                                                 </div>
 
                                                                 {playerProfileData && !playerProfileData.paid_registration && (
                                                                     <div className="flex justify-between items-center bg-padel-green/10 p-2.5 rounded-xl border border-padel-green/20 mt-2">
-                                                                        <span className="text-[8px] font-black uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                        <span className="text-[10px] font-black text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                        <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-padel-green">4M Padel {licenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                        <span className="text-[10px] font-semibold text-padel-green">R{licenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                     </div>
                                                                 )}
 
                                                                 {/* Partner Section - Conditional */}
                                                                 {selectedDivisions.some(div => divisionPartners[div]?.partnerProfile) && (
                                                                     <div className="space-y-2 pt-1">
-                                                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400 mb-0.5">Partner Entries</p>
+                                                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-blue-400 mb-0.5">Partner Entries</p>
                                                                         {selectedDivisions.map(div => {
                                                                             const pState = divisionPartners[div] || {};
                                                                             if (!pState.partnerProfile) return null;
@@ -3640,14 +4027,14 @@ const EventDetails = () => {
                                                                                     <div className="flex justify-between items-start gap-4 bg-white/5 p-2.5 rounded-xl border border-white/5">
                                                                                         <div className="space-y-0.5">
                                                                                             <p className="text-[9px] font-bold uppercase tracking-widest text-white">{pState.partnerProfile.name} <span className="text-gray-500">(Partner)</span></p>
-                                                                                            <p className="text-[8px] font-black text-blue-500 uppercase tracking-wider italic">{div}</p>
+                                                                                            <p className="text-[8px] font-semibold text-blue-500 uppercase tracking-wider italic">{div}</p>
                                                                                         </div>
-                                                                                        <span className="text-[10px] font-black tracking-tight whitespace-nowrap pt-0.5 text-white">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
+                                                                                        <span className="text-[10px] font-semibold tracking-tight whitespace-nowrap pt-0.5 text-white">R{pState.payForPartner ? getEntryFeeForCategory(div) : 0}</span>
                                                                                     </div>
                                                                                     {pState.payForPartner && !pState.partnerProfile.paid_registration && pState.payForPartnerLicense && (
                                                                                         <div className="flex justify-between items-center bg-blue-400/10 p-2.5 rounded-xl border border-blue-400/20 mt-1">
-                                                                                            <span className="text-[8px] font-black uppercase tracking-[0.2em] text-blue-500">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
-                                                                                            <span className="text-[10px] font-black text-blue-500">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
+                                                                                            <span className="text-[8px] font-semibold uppercase tracking-[0.2em] text-blue-500">Partner {pState.partnerLicenseChoice === 'full' ? 'Full' : 'Temp'} License</span>
+                                                                                            <span className="text-[10px] font-semibold text-blue-500">R{pState.partnerLicenseChoice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE}</span>
                                                                                         </div>
                                                                                     )}
                                                                                 </React.Fragment>
@@ -3664,11 +4051,11 @@ const EventDetails = () => {
                                                     <div className="pt-4 border-t border-white/10 mt-auto">
                                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 w-full">
                                                             <div className="space-y-0.5">
-                                                                <p className="text-[8px] font-black uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
+                                                                <p className="text-[8px] font-semibold uppercase tracking-[0.3em] text-padel-green mb-0.5">Grand Total</p>
                                                                 <div className="space-y-1">
-                                                                    <p className="text-3xl font-black tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
+                                                                    <p className="text-3xl font-semibold tracking-tighter leading-none text-white">R {calculateTotalAmount()}</p>
                                                                     {event?.allow_payments && (
-                                                                        <p className="text-[7px] font-black uppercase tracking-[0.2em] text-gray-400 whitespace-nowrap">SECURE PAYSTACK</p>
+                                                                        <p className="text-[7px] font-semibold uppercase tracking-[0.2em] text-gray-400 whitespace-nowrap">SECURE PAYSTACK</p>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -3696,7 +4083,7 @@ const EventDetails = () => {
                                                                             type="button"
                                                                             onClick={totalAmt > 0 ? handlePayNow : handleRegisterOnly}
                                                                             disabled={isSubmitting || emailCheckStatus === 'not_found' || selectedDivisions.length === 0 || isConfirmedWithoutChanges}
-                                                                            className={`w-full min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-[0.2em] text-[13px] group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
+                                                                            className={`w-full min-h-[72px] md:min-h-[64px] px-12 rounded-xl flex items-center justify-center gap-3 transition-all duration-500 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed font-semibold text-sm group mb-2 md:mb-0 ${isConfirmedWithoutChanges ? 'bg-white/10 text-gray-500 border border-white/10' : 'bg-padel-green text-black hover:bg-padel-green/90 hover:scale-[1.03] active:scale-95 shadow-lg shadow-padel-green/20'}`}
                                                                         >
                                                                             <span>
                                                                                 {isConfirmedWithoutChanges
@@ -3727,7 +4114,7 @@ const EventDetails = () => {
                                                 <div className="absolute inset-0 bg-padel-green/30 blur-2xl rounded-full scale-110 animate-pulse" />
                                             </div>
 
-                                            <h3 className="text-4xl font-black text-center text-white mb-4 tracking-tight uppercase leading-none italic animate-in fade-in slide-in-from-bottom duration-700">
+                                            <h3 className="text-2xl font-semibold text-center text-white mb-4 tracking-normal leading-tight animate-in fade-in slide-in-from-bottom duration-700">
                                                 Registration <br />
                                                 <span className="text-padel-green">Confirmed</span>
                                             </h3>
@@ -3742,7 +4129,7 @@ const EventDetails = () => {
                                                 {!isPaid && calculateTotalAmount() > 0 && (
                                                     <button
                                                         onClick={handlePayNow}
-                                                        className="w-full min-h-[72px] md:min-h-[64px] bg-blue-500 hover:bg-blue-600 text-white font-black uppercase tracking-widest text-[13px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-xl shadow-blue-500/20 hover:scale-[1.03] active:scale-95"
+                                                        className="w-full min-h-[72px] md:min-h-[64px] bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm flex items-center justify-center gap-3 rounded-2xl transition-all duration-300 shadow-xl shadow-blue-500/20 hover:scale-[1.03] active:scale-95"
                                                     >
                                                         <CreditCard className="w-5 h-5" />
                                                         <span>Pay R{calculateTotalAmount()} Now</span>
@@ -3753,12 +4140,12 @@ const EventDetails = () => {
                                                         setIsModalOpen(false);
                                                         window.location.reload();
                                                     }}
-                                                    className="w-full h-14 bg-white/10 hover:bg-white/20 text-white font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-3 rounded-2xl transition-all duration-300"
+                                                    className="w-full h-14 bg-white/10 hover:bg-white/20 text-white font-semibold text-xs flex items-center justify-center gap-3 rounded-2xl transition-all duration-300"
                                                 >
                                                     <span>Close & Refresh</span>
                                                     <ArrowRight className="w-4 h-4" />
                                                 </button>
-                                                {isPaid && <p className="text-[10px] text-gray-500 font-bold uppercase tracking-[0.2em] text-center">Data Syncing Complete</p>}
+                                                {isPaid && <p className="text-[10px] text-slate-500 font-medium text-center">Data Syncing Complete</p>}
                                             </div>
                                         </>
                                     )}
