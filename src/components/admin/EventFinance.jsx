@@ -46,6 +46,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         return 'none';
     }, []);
 
+    const getPaymentSubLabel = useCallback((p) => {
+        if (p.paid_by_name) return `By ${p.paid_by_name}`;
+        if (p.actual_payment?.metadata?.paid_by_name) return `By ${p.actual_payment.metadata.paid_by_name}`;
+        return p.actual_payment?.payment_method || p.registration_payment_method || p.metadata?.payment_method || 'System';
+    }, []);
+
     const filteredEvents = useMemo(() => {
         let sorted = [...events].sort((a, b) => {
             const dateA = new Date(a.start_date);
@@ -247,7 +253,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!eventId) return;
         setLoading(prev => ({ ...prev, matching: true }));
         try {
-            const [{ data: pData, error: pError }, { data: payData, error: payError }] = await Promise.all([
+            const [{ data: pData, error: pError }, { data: payData, error: payError }, { data: regData, error: regError }] = await Promise.all([
                 supabase
                     .from('tournament_participants')
                     .select('*, players(id, name, email, contact_number, license_type, paid_registration, temporary_licenses(id, event_id))')
@@ -257,19 +263,49 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     .from('payments')
                     .select('*')
                     .eq('event_id', eventId)
-                    .eq('status', 'success')
+                    .eq('status', 'success'),
+                supabase
+                    .from('event_registrations')
+                    .select('email, division, registered_by, partner_name, partner_email, payment_method')
+                    .eq('event_id', eventId)
+                    .eq('payment_status', 'paid'),
             ]);
 
             if (pError) throw pError;
             if (payError) throw payError;
+            if (regError) throw regError;
+
+            const payerEmails = [...new Set((regData || []).map((r) => (r.registered_by || '').toLowerCase()).filter(Boolean))];
+            const payerNameByEmail = {};
+            for (const r of regData || []) {
+                const rb = (r.registered_by || '').toLowerCase();
+                if (rb && r.partner_email?.toLowerCase() === rb && r.partner_name) {
+                    payerNameByEmail[rb] = r.partner_name;
+                }
+            }
+            if (payerEmails.length > 0) {
+                const { data: payers } = await supabase.from('players').select('email, name').in('email', payerEmails);
+                for (const payer of payers || []) {
+                    const em = (payer.email || '').toLowerCase();
+                    if (em && payer.name) payerNameByEmail[em] = payer.name;
+                }
+            }
 
             // Enrich participants with their actual payment records
             const normalize = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 
             const enriched = (pData || []).map(p => {
-                // Find payment by metadata participant_id OR by profile_id + division match
                 const pDiv = normalize(p.class_name);
+                const playerEmail = normalize(p.players?.email || p.email);
 
+                const registration = (regData || []).find((r) => {
+                    const rDiv = normalize(r.division);
+                    const rEmail = normalize(r.email);
+                    if (rEmail !== playerEmail) return false;
+                    return !rDiv || !pDiv || rDiv.includes(pDiv) || pDiv.includes(rDiv);
+                });
+
+                // Find payment by metadata participant_id OR by profile_id + division match
                 const payment = (payData || []).find(pay => {
                     // 1. Highest priority: direct link
                     if (pay.metadata?.participant_id === p.id) return true;
@@ -302,10 +338,18 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     // If no division in metadata, we assume it's a match
                     return true;
                 });
+
+                let paidByName = payment?.metadata?.paid_by_name || null;
+                const registeredBy = (registration?.registered_by || '').toLowerCase();
+                if (!paidByName && registeredBy && registeredBy !== playerEmail) {
+                    paidByName = registration.partner_name || payerNameByEmail[registeredBy] || null;
+                }
                 
                 return {
                     ...p,
-                    actual_payment: payment || null
+                    actual_payment: payment || null,
+                    paid_by_name: paidByName,
+                    registration_payment_method: registration?.payment_method || null,
                 };
             });
 
@@ -811,7 +855,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     p.players?.contact_number || 'N/A',
                     licLabel,
                     p.is_paid ? 'PAID' : 'UNPAID',
-                    p.is_paid ? (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || 'System')) : 'N/A',
+                    p.is_paid ? (p.paid_by_name ? `Paid by ${p.paid_by_name}` : (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || p.registration_payment_method || 'System'))) : 'N/A',
                     amountPaid,
                     p.whatsapp_added ? 'YES' : 'NO'
                 ]);
@@ -1439,13 +1483,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     <div className="flex flex-col gap-1">
                                                         <span className="bg-padel-green/10 text-padel-green px-3 py-1 rounded-full text-[10px] font-black border border-padel-green/20 max-w-fit tracking-tighter">PAID</span>
                                                         <span className="text-[8px] text-gray-400 italic uppercase font-black tracking-wider">
-                                                            {p.actual_payment?.metadata?.paid_by_name 
-                                                                ? `By ${p.actual_payment.metadata.paid_by_name}`
-                                                                : (p.actual_payment?.payment_method || p.metadata?.payment_method || 'System')}
+                                                            {getPaymentSubLabel(p)}
                                                         </span>
-                                                        {p.actual_payment && (
+                                                        {(p.actual_payment || p.paid_by_name) && (
                                                             <span className="text-[8px] text-white font-black">
-                                                                {Number(p.actual_payment.amount) === 0 ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
+                                                                {p.paid_by_name ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1582,12 +1624,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                             {p.is_paid ? (
                                                 <div className="space-y-0.5">
                                                     <p className="text-[10px] text-padel-green font-black uppercase italic tracking-wider">
-                                                        {p.actual_payment?.metadata?.paid_by_name 
-                                                           ? `By ${p.actual_payment.metadata.paid_by_name}` 
-                                                           : (p.actual_payment?.payment_method || p.metadata?.payment_method || 'System')}
+                                                        {getPaymentSubLabel(p)}
                                                     </p>
-                                                    {p.actual_payment && (
-                                                        <p className="text-[10px] text-white font-black">R {p.actual_payment.amount}</p>
+                                                    {(p.actual_payment || p.paid_by_name) && (
+                                                        <p className="text-[10px] text-white font-black">
+                                                            {p.paid_by_name ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
+                                                        </p>
                                                     )}
                                                 </div>
                                             ) : (

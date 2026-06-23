@@ -91,6 +91,7 @@ export const usePendingPayments = (email, rankedinId) => {
                     `)
                     .ilike('email', email)
                     .in('payment_status', ['pending', 'failed'])
+                    .neq('status', 'withdrawn')
                     .gte('calendar.start_date', todayStr);
 
                 if (pError) console.error("Error fetching participants:", pError);
@@ -128,6 +129,7 @@ export const usePendingPayments = (email, rankedinId) => {
                         .select('event_id, division')
                         .ilike('email', email)
                         .eq('payment_status', 'paid')
+                        .neq('status', 'withdrawn')
                         .in('event_id', eventIds);
                         
                     const { data: paidParts } = await supabase

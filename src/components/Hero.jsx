@@ -130,15 +130,22 @@ const Hero = () => {
 
                 if (signal.aborted) return;
 
-                let queryStr = `email.ilike.${playerData.email}`;
-                if (playerData.name) {
-                    queryStr += `,partner_name.ilike."${playerData.name}"`;
-                }
                 const localRegsRes = await supabase
                     .from('event_registrations')
                     .select('*, calendar(*)')
-                    .or(queryStr);
+                    .or(`email.ilike.${playerData.email},partner_email.ilike.${playerData.email}`)
+                    .neq('status', 'withdrawn');
                 const localRegs = localRegsRes.data || [];
+
+                const activeManualEventIds = new Set(
+                    localRegs.map((r) => r.event_id || r.calendar?.id).filter(Boolean),
+                );
+                const paidManualEventIds = new Set(
+                    localRegs
+                        .filter((r) => r.payment_status === 'paid')
+                        .map((r) => r.event_id || r.calendar?.id)
+                        .filter(Boolean),
+                );
 
                 const allEvents = rawEvents || [];
                 localRegs.forEach(reg => {
@@ -156,7 +163,8 @@ const Hero = () => {
                             end_date: cal.end_date,
                             event_name: cal.event_name,
                             state: 1,
-                            payment_status: reg.payment_status
+                            payment_status: reg.payment_status,
+                            isPaid: reg.payment_status === 'paid',
                         });
                     }
                 });
@@ -168,6 +176,9 @@ const Hero = () => {
 
                 const uniqueEventsMap = new Map();
                 allEvents.forEach(e => {
+                    if (e.id?.toString().startsWith('local_') && !activeManualEventIds.has(e.db_id)) {
+                        return;
+                    }
                     const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
                     if (!uniqueEventsMap.has(key)) {
                         uniqueEventsMap.set(key, e);
@@ -195,23 +206,18 @@ const Hero = () => {
                 }
 
                 if (filtered.length > 0) {
-                    // Run all enrichment queries in parallel
-                    const [dbEventsRes, paidParticipantsRes, directPaymentsRes] = await Promise.all([
+                    const [dbEventsRes, paidParticipantsRes] = await Promise.all([
                         supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees'),
                         supabase.from('tournament_participants').select('event_id')
                             .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
                             .eq('is_paid', true),
-                        supabase.from('payments').select('event_id')
-                            .eq('player_id', playerData.id)
-                            .eq('status', 'success')
-                            .eq('payment_type', 'event_entry_fee'),
                     ]);
 
                     if (signal.aborted) return;
 
                     const paidEventIds = new Set([
+                        ...paidManualEventIds,
                         ...(paidParticipantsRes.data || []).map(p => p.event_id),
-                        ...(directPaymentsRes.data || []).map(p => p.event_id),
                     ]);
 
                     if (dbEventsRes.data) {
@@ -225,14 +231,16 @@ const Hero = () => {
                                 e.sapa_status = match.sapa_status;
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
-                                e.isPaid = paidEventIds.has(match.id);
+                                e.isPaid = e.id?.toString().startsWith('local_')
+                                    ? paidManualEventIds.has(match.id)
+                                    : paidEventIds.has(match.id);
                             }
                         });
                     }
                 }
 
                 // Filter & sort matches in ascending chronological order to find next match
-                let validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
+                const validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
                 const parseDate = (dateStr) => {
                     if (!dateStr) return new Date(0);
                     if (dateStr.includes('T') || dateStr.includes('-')) {
@@ -242,15 +250,6 @@ const Hero = () => {
                     const [day, month, year] = datePart.split('/');
                     return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
                 };
-                
-                // Remove matches that are more than 24 hours in the past
-                const now = new Date();
-                const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-                validMatches = validMatches.filter(m => {
-                    const matchDate = parseDate(m.Info?.Date);
-                    return matchDate > oneDayAgo;
-                });
-                
                 validMatches.sort((a, b) => parseDate(a.Info?.Date) - parseDate(b.Info?.Date));
                 const firstNextMatch = validMatches[0] || null;
 
@@ -294,29 +293,13 @@ const Hero = () => {
         try {
             const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
             if (cachedMatch) {
-                let { ts, match, count } = JSON.parse(cachedMatch);
+                const { ts, match, count } = JSON.parse(cachedMatch);
                 if (match) {
-                    // Check if the cached match is already in the past
-                    const parseDate = (dateStr) => {
-                        if (!dateStr) return new Date(0);
-                        if (dateStr.includes('T') || dateStr.includes('-')) return new Date(dateStr);
-                        const [datePart, timePart] = dateStr.split(' ');
-                        const [day, month, year] = datePart.split('/');
-                        return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
-                    };
-                    const matchDate = parseDate(match.Info?.Date);
-                    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                    
-                    if (matchDate > oneDayAgo) {
-                        setNextMatch(match);
-                        setMatchesCount(count || 1);
-                        hasCachedData = true;
-                        if (Date.now() - ts < CACHE_TTL) {
-                            isCacheExpired = false;
-                        }
-                    } else {
-                        // Cached match is stale, force a refetch
-                        isCacheExpired = true;
+                    setNextMatch(match);
+                    setMatchesCount(count || 1);
+                    hasCachedData = true;
+                    if (Date.now() - ts < CACHE_TTL) {
+                        isCacheExpired = false;
                     }
                 }
             }
@@ -327,15 +310,26 @@ const Hero = () => {
             setEventsLoading(true);
         }
 
-        // ── Step 2: Background fetch if missing or expired ──
-        if (isCacheExpired || !hasCachedData) {
+        // ── Step 2: Always refresh in background (cache is display-only) ──
+        fetchPlayerEventsAndMatches();
+
+        const handleRegistrationsChanged = () => {
+            try {
+                localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(MATCH_CACHE_KEY);
+            } catch (_) { }
             fetchPlayerEventsAndMatches();
-        } else {
-            setEventsLoading(false);
-        }
+        };
+        const handleVisibility = () => {
+            if (document.visibilityState === 'visible') fetchPlayerEventsAndMatches();
+        };
+        window.addEventListener('4m:registrations-changed', handleRegistrationsChanged);
+        window.addEventListener('visibilitychange', handleVisibility);
 
         return () => {
             controller.abort();
+            window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
+            window.removeEventListener('visibilitychange', handleVisibility);
         };
     }, [session, getPlayerEventsAsync, getPlayerMatches]);
 

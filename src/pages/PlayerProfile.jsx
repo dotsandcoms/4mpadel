@@ -320,18 +320,16 @@ const PlayerProfile = () => {
             const fetchEvents = async () => {
                 const events = (player.rankedin_id ? await getPlayerEventsAsync(player.rankedin_id) : []) || [];
 
-                let queryStr = `email.ilike.${player.email}`;
-                if (player.name) {
-                    // Escape special characters for PostgREST if necessary, though ilike is generally safe with plain strings
-                    // Wrap the name in quotes to handle spaces safely
-                    queryStr += `,partner_name.ilike."${player.name}"`;
-                }
-
-                // Fetch local registrations
+                // Fetch local registrations (exclude withdrawn)
                 const { data: localRegs } = await supabase
                     .from('event_registrations')
                     .select('*, calendar(*)')
-                    .or(queryStr);
+                    .or(`email.ilike.${player.email},partner_email.ilike.${player.email}`)
+                    .neq('status', 'withdrawn');
+
+                const activeManualEventIds = new Set(
+                    (localRegs || []).map((r) => r.event_id || r.calendar?.id).filter(Boolean),
+                );
 
                 if (localRegs) {
                     localRegs.forEach(reg => {
@@ -361,6 +359,9 @@ const PlayerProfile = () => {
 
                 const uniqueEventsMap = new Map();
                 events.forEach(e => {
+                    if (e.id?.toString().startsWith('local_') && !activeManualEventIds.has(e.db_id)) {
+                        return;
+                    }
                     const key = e.id?.toString().startsWith('local_') ? `local_${e.db_id}` : `rankedin_${e.id}`;
                     if (!uniqueEventsMap.has(key)) {
                         uniqueEventsMap.set(key, e);
@@ -398,8 +399,9 @@ const PlayerProfile = () => {
                         const { data } = await supabase
                             .from('event_registrations')
                             .select('event_id')
-                            .ilike('email', player.email)
-                            .eq('payment_status', 'paid');
+                            .or(`email.ilike.${player.email},partner_email.ilike.${player.email}`)
+                            .eq('payment_status', 'paid')
+                            .neq('status', 'withdrawn');
                         paidRegs = data || [];
                     }
 
@@ -457,6 +459,10 @@ const PlayerProfile = () => {
                 setPastEvents(past);
             };
             fetchEvents();
+
+            const handleRegistrationsChanged = () => { fetchEvents(); };
+            window.addEventListener('4m:registrations-changed', handleRegistrationsChanged);
+            return () => window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
         }
     }, [player, player?.rankedin_id, player?.email, getPlayerEventsAsync]);
 

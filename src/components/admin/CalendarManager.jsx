@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
+import EventBuilder from './EventBuilder';
+import ManualEventRegistrations from './ManualEventRegistrations';
 import {
     PieChart,
     Pie,
@@ -90,6 +92,14 @@ const CalendarManager = () => {
     const [visibilityFilter, setVisibilityFilter] = useState('Visible');
     const [editingEvent, setEditingEvent] = useState(null);
     const [isSyncing, setIsSyncing] = useState(false);
+    const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+    const [builderEvent, setBuilderEvent] = useState(null);
+    const [regsEvent, setRegsEvent] = useState(null);
+
+    const openBuilder = (event = null) => {
+        setBuilderEvent(event);
+        setIsBuilderOpen(true);
+    };
 
     // Form State
     const [formData, setFormData] = useState({
@@ -951,6 +961,12 @@ const CalendarManager = () => {
                         {isSyncing ? 'Syncing...' : 'Sync Event List'}
                     </button>
                     <button
+                        onClick={() => openBuilder(null)}
+                        className="bg-padel-green/10 text-padel-green border border-padel-green/30 px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-padel-green hover:text-black transition-colors"
+                    >
+                        <Plus size={18} /> Create Manual Event
+                    </button>
+                    <button
                         onClick={openNewModal}
                         className="bg-padel-green text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors"
                     >
@@ -1182,10 +1198,19 @@ const CalendarManager = () => {
                                                 >
                                                     <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
                                                 </button>
+                                                {event.is_manual && (
+                                                    <button
+                                                        onClick={() => setRegsEvent(event)}
+                                                        className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black"
+                                                        title="View Registrations & Payments"
+                                                    >
+                                                        <Users size={14} />
+                                                    </button>
+                                                )}
                                                 <button
-                                                    onClick={() => handleEdit(event)}
+                                                    onClick={() => (event.is_manual ? openBuilder(event) : handleEdit(event))}
                                                     className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white"
-                                                    title="Edit Event"
+                                                    title={event.is_manual ? 'Edit Manual Event' : 'Edit Event'}
                                                 >
                                                     <Edit2 size={14} />
                                                 </button>
@@ -1809,6 +1834,19 @@ const CalendarManager = () => {
                     </>
                 )}
             </AnimatePresence>
+
+            <EventBuilder
+                isOpen={isBuilderOpen}
+                editingEvent={builderEvent}
+                onClose={() => { setIsBuilderOpen(false); setBuilderEvent(null); }}
+                onSaved={fetchEvents}
+            />
+
+            <ManualEventRegistrations
+                isOpen={!!regsEvent}
+                event={regsEvent || {}}
+                onClose={() => setRegsEvent(null)}
+            />
         </div>
     );
 };

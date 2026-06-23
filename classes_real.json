@@ -1,0 +1,57 @@
+[
+  {
+    "Id": 166383,
+    "Name": "Men's Open (Pro/Elite)",
+    "ShowDraws": true,
+    "IsPublished": true,
+    "TournamentDraws": [
+      {
+        "Id": 612601,
+        "Name": "Elimination",
+        "Stage": 0,
+        "Strength": 0
+      }
+    ]
+  },
+  {
+    "Id": 166384,
+    "Name": "Men's 40+",
+    "ShowDraws": false,
+    "IsPublished": true,
+    "TournamentDraws": []
+  },
+  {
+    "Id": 166385,
+    "Name": "Ladies Intermediates (0-3.5)",
+    "ShowDraws": true,
+    "IsPublished": true,
+    "TournamentDraws": [
+      {
+        "Id": 612764,
+        "Name": "RoundRobin",
+        "Stage": 0,
+        "Strength": 0
+      }
+    ]
+  },
+  {
+    "Id": 166386,
+    "Name": "Men's Intermediates (0-4.5)",
+    "ShowDraws": true,
+    "IsPublished": true,
+    "TournamentDraws": [
+      {
+        "Id": 612905,
+        "Name": "RR Qualifications",
+        "Stage": 0,
+        "Strength": 0
+      },
+      {
+        "Id": 612907,
+        "Name": "Playoffs",
+        "Stage": 1,
+        "Strength": 0
+      }
+    ]
+  }
+]

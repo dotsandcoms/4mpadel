@@ -1,11 +1,29 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
+export const SUPER_ADMIN_EMAILS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
+
+export async function canAccessHiddenEvents(email) {
+    const normalized = (email || '').toLowerCase().trim();
+    if (!normalized) return false;
+    if (SUPER_ADMIN_EMAILS.includes(normalized)) return true;
+
+    const { data } = await supabase
+        .from('admin_sidebar_permissions')
+        .select('role, allowed_tabs')
+        .ilike('email', normalized)
+        .maybeSingle();
+
+    if (!data) return false;
+    if (data.role === 'super_admin') return true;
+    return Array.isArray(data.allowed_tabs) && data.allowed_tabs.includes('calendar');
+}
+
 export const useAdminPermissions = (userEmail) => {
     const [permissions, setPermissions] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
+    const SUPER_ADMINS = SUPER_ADMIN_EMAILS;
 
     useEffect(() => {
         const fetchPermissions = async () => {

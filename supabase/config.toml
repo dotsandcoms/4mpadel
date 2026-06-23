@@ -14,3 +14,23 @@ entrypoint = "./functions/expire-temp-licenses/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/seo-preview/index.ts"
+
+[functions.paystack-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/paystack-webhook/index.ts"
+
+[functions.confirm-manual-payment]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/confirm-manual-payment/index.ts"
+
+[functions.send-email]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-email/index.ts"
+
+[functions.payment-reminders]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/payment-reminders/index.ts"

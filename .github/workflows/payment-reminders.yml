@@ -1,0 +1,22 @@
+name: Process Payment Reminders
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # Runs every day at 09:00 UTC / 11:00 SAST
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+permissions:
+  contents: read
+
+jobs:
+  process_reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Payment Reminders Edge Function
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          curl -i -X POST "${SUPABASE_URL}/functions/v1/payment-reminders" \
+          -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+          -H "Content-Type: application/json"

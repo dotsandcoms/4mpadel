@@ -101,6 +101,20 @@ const getSubjectForTemplate = (template, vars) => {
             return `Sanction Update: ${vars.eventName}`;
         case 'draws_ready': 
             return `Draws Published: ${vars.eventName}! 🎾`;
+        case 'event_registration':
+            return `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
+        case 'payment_confirmation':
+            return `Payment Confirmed: ${vars.eventName || 'Tournament'} ✅`;
+        case 'partner_entry_paid':
+            return vars.pendingPayment
+                ? `You're entered: ${vars.eventName || 'Tournament'} 🎾`
+                : `Entry paid: ${vars.eventName || 'Tournament'} ✅`;
+        case 'entry_withdrawn':
+            return vars.recipientRole === 'partner'
+                ? `${vars.withdrawnPlayerName || 'Your partner'} withdrew from ${vars.eventName || 'Tournament'}`
+                : `Withdrawal confirmed: ${vars.eventName || 'Tournament'}`;
+        case 'partner_invite':
+            return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
         default: 
             return vars.subject || 'Notification from 4M Padel';
     }

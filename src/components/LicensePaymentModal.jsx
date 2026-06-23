@@ -5,20 +5,14 @@ import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
-
-const PAYSTACK_PUBLIC_KEY = String(import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '')
-    .trim()
-    .replace(/['"]/g, '')
-    .split(/\s+/)[0]
-    .replace(/[^a-zA-Z0-9_]/g, '');
+import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 
 console.log('Paystack Config Check (Modal):', {
     keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
     keyLength: PAYSTACK_PUBLIC_KEY.length,
-    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_')
+    isLive: PAYSTACK_PUBLIC_KEY.startsWith('pk_live_'),
+    isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
 });
-
-const isPaystackConfigured = () => PAYSTACK_PUBLIC_KEY.startsWith('pk_');
 
 const handlePaymentComplete = async (onDone, onSuccessCallback, setError, closeModal, licenseType = 'full') => {
     const { error: rpcError } = await supabase.rpc('mark_player_paid', { p_license_type: licenseType });

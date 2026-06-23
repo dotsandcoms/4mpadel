@@ -523,6 +523,17 @@ const EventDetails = () => {
         allRegistrationsPaid: false,
     });
     const manualRegActionsRef = React.useRef({});
+    const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
+    const refreshParticipants = useCallback(() => {
+        setParticipantsRefreshKey((k) => k + 1);
+        try {
+            if (manualUserEmail) {
+                localStorage.removeItem(`hero_events_${manualUserEmail}`);
+                localStorage.removeItem(`hero_match_${manualUserEmail}`);
+            }
+            window.dispatchEvent(new CustomEvent('4m:registrations-changed'));
+        } catch (_) { /* ignore */ }
+    }, [manualUserEmail]);
     useEffect(() => {
         let active = true;
         const applySession = (session) => {
@@ -1106,6 +1117,15 @@ const EventDetails = () => {
                         .eq('event_id', event.id)
                         .neq('status', 'withdrawn');
 
+                    const activeEmailsByDiv = new Map();
+                    (localRegs || []).forEach((reg) => {
+                        const div = divisions.find((d) => d.Name.toLowerCase() === (reg.division || '').toLowerCase())
+                            || (reg.division_id ? divisions.find((d) => d.Id === reg.division_id) : null);
+                        if (!div) return;
+                        if (!activeEmailsByDiv.has(div.Id)) activeEmailsByDiv.set(div.Id, new Set());
+                        if (reg.email) activeEmailsByDiv.get(div.Id).add(reg.email.toLowerCase());
+                    });
+
                     (localRegs || []).forEach((reg) => {
                         const div = divisions.find((d) => d.Name.toLowerCase() === (reg.division || '').toLowerCase())
                             || (reg.division_id ? divisions.find((d) => d.Id === reg.division_id) : null);
@@ -1122,20 +1142,30 @@ const EventDetails = () => {
                         });
 
                         if (!existing) {
+                            const activeEmails = activeEmailsByDiv.get(div.Id) || new Set();
                             const players = [{ Name: reg.full_name, Email: reg.email }];
-                            if (reg.partner_name) players.push({ Name: reg.partner_name });
+                            const partnerEmail = (reg.partner_email || '').toLowerCase();
+                            if (reg.partner_name && (!partnerEmail || activeEmails.has(partnerEmail))) {
+                                players.push({ Name: reg.partner_name, Email: reg.partner_email || null });
+                            }
                             participantsMap[div.Id].push({
                                 Participant: {
                                     Id: `local_${reg.id}`,
-                                    Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
+                                    Name: players.length > 1
+                                        ? `${reg.full_name} / ${reg.partner_name}`
+                                        : reg.full_name,
                                     Players: players,
                                 },
                             });
                         }
                     });
 
+                    divisions.forEach((d) => {
+                        if (!participantsMap[d.Id]) participantsMap[d.Id] = [];
+                    });
+
                     setPlayerDivisions(divisions);
-                    setParticipants((prev) => ({ ...prev, ...participantsMap }));
+                    setParticipants(participantsMap);
                 } else {
                 const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
@@ -1158,6 +1188,12 @@ const EventDetails = () => {
 
                 if (localRegs && localRegs.length > 0) {
                     localRegs.forEach(reg => {
+                        // For RankedIn events, only accept local registrations if they are paid.
+                        // This avoids displaying unpaid pending website registrations that are not on RankedIn.
+                        if (rId && reg.payment_status !== 'paid') {
+                            return;
+                        }
+
                         // Find division by name, case-insensitive
                         let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
 
@@ -1274,7 +1310,7 @@ const EventDetails = () => {
         };
 
         fetchParticipantsData();
-    }, [event, getTournamentParticipants, getTournamentPlayerTabs]);
+    }, [event, getTournamentParticipants, getTournamentPlayerTabs, participantsRefreshKey]);
 
     useEffect(() => {
         const fetchFourMPlayers = async () => {
@@ -1473,37 +1509,91 @@ const EventDetails = () => {
         const timeout = setTimeout(async () => {
             setDivisionPartners(prev => ({ ...prev, [division]: { ...prev[division], isLookingUpPartner: true } }));
             try {
-                const { data, error } = await supabase
-                    .from('players')
-                    .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
-                    .ilike('name', `%${name.trim()}%`)
-                    .limit(8);
+                let enrichedData = [];
 
-                if (data && data.length > 0) {
-                    const enrichedData = data.map(player => {
-                        if (player.license_type === 'temporary') {
-                            const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
-                            return { ...player, paid_registration: hasTempForEvent ? player.paid_registration : false };
+                if (event?.is_manual) {
+                    const { data, error } = await supabase
+                        .from('players')
+                        .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
+                        .ilike('name', `%${name.trim()}%`)
+                        .limit(8);
+
+                    if (data && data.length > 0) {
+                        enrichedData = data.map(player => {
+                            if (player.license_type === 'temporary') {
+                                const hasTempForEvent = player.temporary_licenses?.some(lic => lic.event_id === event?.id);
+                                return { ...player, paid_registration: hasTempForEvent ? player.paid_registration : false };
+                            }
+                            return player;
+                        }).filter(p => p.id !== playerProfileData?.id);
+                    }
+                } else {
+                    // RankedIn event: search tournament_participants registered for this event, in this division
+                    const { data: participants, error: pError } = await supabase
+                        .from('tournament_participants')
+                        .select('profile_id, full_name, email, class_name')
+                        .eq('event_id', event.id)
+                        .ilike('class_name', division.trim())
+                        .ilike('full_name', `%${name.trim()}%`)
+                        .limit(8);
+
+                    if (participants && participants.length > 0) {
+                        const profileIds = participants.map(p => p.profile_id).filter(Boolean);
+                        let playersMap = new Map();
+
+                        if (profileIds.length > 0) {
+                            const { data: players } = await supabase
+                                .from('players')
+                                .select('id, name, email, paid_registration, license_type, category, temporary_licenses(event_id)')
+                                .in('id', profileIds);
+
+                            if (players) {
+                                players.forEach(p => playersMap.set(p.id, p));
+                            }
                         }
-                        return player;
-                    }).filter(p => p.id !== playerProfileData?.id);
 
+                        enrichedData = participants.map(p => {
+                            const playerProfile = p.profile_id ? playersMap.get(p.profile_id) : null;
+                            if (playerProfile) {
+                                if (playerProfile.license_type === 'temporary') {
+                                    const hasTempForEvent = playerProfile.temporary_licenses?.some(lic => lic.event_id === event?.id);
+                                    return { ...playerProfile, paid_registration: hasTempForEvent ? playerProfile.paid_registration : false };
+                                }
+                                return playerProfile;
+                            }
+                            return {
+                                id: `temp-${p.email || p.full_name || Math.random().toString()}`,
+                                name: p.full_name,
+                                email: p.email || '',
+                                paid_registration: false,
+                                license_type: 'temporary',
+                                category: p.class_name
+                            };
+                        }).filter(p => p.id !== playerProfileData?.id);
+                    }
+                }
+
+                if (enrichedData.length > 0) {
                     setDivisionPartners(prev => ({
                         ...prev,
                         [division]: {
                             ...prev[division],
                             partnerSearchResults: enrichedData,
-                            partnerLookupError: enrichedData.length === 0 ? "Profile not found." : null,
+                            partnerLookupError: null,
                             isLookingUpPartner: false
                         }
                     }));
                 } else {
+                    const errorMsg = event?.is_manual
+                        ? "Profile not found. Partner must register to be paid for."
+                        : "Player not found. Partner must be registered for this division on RankedIn.";
+                    
                     setDivisionPartners(prev => ({
                         ...prev,
                         [division]: {
                             ...prev[division],
                             partnerSearchResults: [],
-                            partnerLookupError: "Profile not found. Partner must register to be paid for.",
+                            partnerLookupError: errorMsg,
                             isLookingUpPartner: false
                         }
                     }));
@@ -2756,6 +2846,7 @@ const EventDetails = () => {
                                                     theme={theme}
                                                     initialPlayer={loggedInPlayer}
                                                     onStatusChange={setManualRegStatus}
+                                                    onParticipantsChange={refreshParticipants}
                                                     registrationActionsRef={manualRegActionsRef}
                                                 />
                                             </div>

@@ -35,18 +35,31 @@ const Admin = () => {
     const { notifications } = useAdminFeedNotifications();
 
     useEffect(() => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            setSession(session);
-            setLoading(false);
-        });
+        supabase.auth.getSession()
+            .then(({ data: { session } }) => {
+                setSession(session);
+            })
+            .catch((err) => {
+                console.warn('getSession failed:', err);
+            })
+            .finally(() => {
+                setLoading(false);
+            });
 
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
             setSession(session);
+            setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        // Safety net: never leave the admin stuck on the loading screen.
+        const safety = setTimeout(() => setLoading(false), 5000);
+
+        return () => {
+            subscription.unsubscribe();
+            clearTimeout(safety);
+        };
     }, []);
 
     useEffect(() => {
