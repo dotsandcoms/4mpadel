@@ -36,7 +36,7 @@ const sapaBadgeClass = (status) => {
 const GENDERS = ['', 'Men', 'Ladies', 'Mixed'];
 const TOURNAMENT_TAGS = ['None', 'Broll', '360 Padel', 'SA Grand'];
 
-const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'AIzaSyDXLYI3XPSRAk69dOmCLy9oQNmbdhZZEEE';
+const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 let googleMapsPromise = null;
 const loadGoogleMaps = () => {
     if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
