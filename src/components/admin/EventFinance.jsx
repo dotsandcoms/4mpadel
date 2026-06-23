@@ -140,7 +140,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             try {
                 const { data: eData } = await supabase
                     .from('calendar')
-                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed')
+                    .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed, is_manual, allow_payments, slug')
                     .order('start_date', { ascending: false });
 
                 const { data: pData } = await supabase
@@ -205,6 +205,40 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     }
                 });
 
+                // ── Manual events: pull stats from event_registrations ──────────────────
+                const manualEventIds = (eData || []).filter(e => e.is_manual).map(e => e.id);
+                if (manualEventIds.length > 0) {
+                    const { data: manualRegs } = await supabase
+                        .from('event_registrations')
+                        .select('event_id, email, division, payment_status, partner_email, partner_payment_status, division_id, tournament_divisions(entry_fee)')
+                        .in('event_id', manualEventIds)
+                        .neq('status', 'withdrawn');
+
+                    (manualRegs || []).forEach(r => {
+                        const eid = r.event_id;
+                        if (!statsByEvent[eid]) {
+                            statsByEvent[eid] = {
+                                entries: 0, billed: 0, collected: 0, paidCount: 0,
+                                uniqueProfiles: new Set(),
+                                licenses: { full: 0, temp: 0, none: 0 },
+                                _manualCollected: 0, _manualBilled: 0,
+                            };
+                        }
+                        const es = statsByEvent[eid];
+                        const fee = Number(r.tournament_divisions?.entry_fee || 0);
+                        // Count registrant row
+                        es.entries++;
+                        es._manualBilled = (es._manualBilled || 0) + fee;
+                        if (r.payment_status === 'paid') {
+                            es.paidCount++;
+                            es._manualCollected = (es._manualCollected || 0) + fee;
+                        }
+                        const profileKey = (r.email || '').toLowerCase().trim();
+                        if (profileKey) es.uniqueProfiles.add(profileKey);
+                    });
+                }
+                // ────────────────────────────────────────────────────────────────────────
+
                 const eventsWithStats = (eData || []).map(event => {
                     const stats = statsByEvent[event.id] || { 
                         entries: 0, billed: 0, collected: 0, paidCount: 0,
@@ -214,8 +248,12 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     
                     let exactBilled = 0;
                     let exactCollected = 0;
-                    
-                    if (stats.entries > 0) {
+
+                    if (event.is_manual) {
+                        // Use pre-computed manual registration stats
+                        exactBilled   = stats._manualBilled   || 0;
+                        exactCollected = stats._manualCollected || 0;
+                    } else if (stats.entries > 0) {
                         const eventParts = allParts.filter(p => p.event_id === event.id);
                         eventParts.forEach(p => {
                             const divFee = event.category_fees?.[p.class_name] || event.entry_fee || 0;
@@ -253,6 +291,91 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!eventId) return;
         setLoading(prev => ({ ...prev, matching: true }));
         try {
+            // Determine if this is a manual event — query directly to avoid stale closure on `events`
+            const { data: evMeta } = await supabase
+                .from('calendar')
+                .select('is_manual')
+                .eq('id', eventId)
+                .maybeSingle();
+            const isManual = evMeta?.is_manual;
+
+            if (isManual) {
+                // ── Manual event: read from event_registrations ──────────────────────
+                const { data: regRows, error: regErr } = await supabase
+                    .from('event_registrations')
+                    .select('*, tournament_divisions(id, name, entry_fee, format)')
+                    .eq('event_id', eventId)
+                    .neq('status', 'withdrawn')
+                    .order('full_name');
+
+                if (regErr) throw regErr;
+
+                // Also fetch payments for this event
+                const { data: payData } = await supabase
+                    .from('payments')
+                    .select('*')
+                    .eq('event_id', eventId)
+                    .eq('status', 'success');
+
+                // Map registrations → participant shape
+                const mapped = (regRows || []).map(r => {
+                    const divFee = Number(r.tournament_divisions?.entry_fee || 0);
+                    const isPaid = r.payment_status === 'paid';
+                    const payment = (payData || []).find(pay =>
+                        pay.metadata?.registration_id === r.id ||
+                        (pay.metadata?.email?.toLowerCase() === r.email?.toLowerCase())
+                    ) || null;
+
+                    return {
+                        id: r.id,
+                        full_name: r.full_name || r.email || 'Unknown',
+                        class_name: r.division || r.tournament_divisions?.name || 'Unknown',
+                        is_paid: isPaid,
+                        email: r.email,
+                        profile_id: null,
+                        players: null, // will be populated below
+                        actual_payment: payment,
+                        paid_by_name: r.registered_by && r.registered_by.toLowerCase() !== r.email?.toLowerCase()
+                            ? (r.partner_name || r.registered_by)
+                            : null,
+                        registration_payment_method: r.payment_method || null,
+                        whatsapp_added: false,
+                        metadata: {},
+                        // extra manual fields
+                        _isManualReg: true,
+                        _divisionFee: divFee,
+                        _reg: r,
+                    };
+                });
+
+                // Try to link players profiles by email
+                const emails = [...new Set(mapped.map(m => m.email).filter(Boolean))];
+                if (emails.length > 0) {
+                    const { data: profiles } = await supabase
+                        .from('players')
+                        .select('id, name, email, contact_number, license_type, paid_registration, temporary_licenses(id, event_id)')
+                        .in('email', emails);
+
+                    const profileByEmail = {};
+                    (profiles || []).forEach(p => {
+                        profileByEmail[(p.email || '').toLowerCase()] = p;
+                    });
+
+                    mapped.forEach(m => {
+                        const profile = profileByEmail[(m.email || '').toLowerCase()];
+                        if (profile) {
+                            m.players = profile;
+                            m.profile_id = profile.id;
+                        }
+                    });
+                }
+
+                setLocalParticipants(mapped);
+                return;
+                // ─────────────────────────────────────────────────────────────────────
+            }
+
+            // ── Rankedin event: original logic ───────────────────────────────────────
             const [{ data: pData, error: pError }, { data: payData, error: payError }, { data: regData, error: regError }] = await Promise.all([
                 supabase
                     .from('tournament_participants')
