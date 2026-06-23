@@ -20,8 +20,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
   const { toggleSearch } = useSearch();
   const location = useLocation();
   const { pendingPayments } = usePendingPayments(
-    sessionStorage.getItem('admin_test_login_email') || session?.user?.email,
-    player?.rankedin_id
+    sessionStorage.getItem('admin_test_login_email') || session?.user?.email
   );
 
   const SUPER_ADMINS = [

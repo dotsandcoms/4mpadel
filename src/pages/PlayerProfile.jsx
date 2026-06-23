@@ -57,7 +57,7 @@ const PlayerProfile = () => {
     const [loadingMatches, setLoadingMatches] = useState(false);
     const [hasFetchedMatches, setHasFetchedMatches] = useState(false);
     const { getPlayerEventsAsync, getPlayerMatches, loading: loadingEvents } = useRankedin();
-    const { pendingPayments } = usePendingPayments(player?.email, player?.rankedin_id);
+    const { pendingPayments } = usePendingPayments(player?.email);
     const { clubs } = useClubs();
     const pendingPaymentEvents = upcomingEvents.filter(event => pendingPayments?.some(p => p.id === event.db_id));
     const currentTab = (eventViewTab === 'pending' && pendingPaymentEvents.length === 0) ? 'upcoming' : eventViewTab;
@@ -416,29 +416,51 @@ const PlayerProfile = () => {
                     let paidParticipants = [];
                     const participantQuery = supabase
                         .from('tournament_participants')
-                        .select('event_id')
-                        .eq('is_paid', true);
+                        .select('event_id, class_name, is_paid')
+                        .or(`email.ilike.${player.email},profile_id.eq.${player.id}`);
                         
-                    if (player?.email) {
-                        participantQuery.or(`email.ilike.${player.email},profile_id.eq.${player.id}`);
-                    } else {
-                        participantQuery.eq('profile_id', player.id);
-                    }
                     const { data: pData } = await participantQuery;
-                    paidParticipants = pData || [];
+                    paidParticipants = (pData || []).filter((p) => p.is_paid === true);
 
-                    const { data: directPayments } = await supabase
-                        .from('payments')
-                        .select('event_id')
-                        .eq('player_id', player.id)
-                        .eq('status', 'success')
-                        .eq('payment_type', 'event_entry_fee');
+                    const eventIdsForPayments = Array.from(new Set(allFiltered.map((e) => e.db_id).filter(Boolean)));
+                    let directPayments = [];
+                    if (eventIdsForPayments.length > 0) {
+                        let paymentsQuery = supabase
+                            .from('payments')
+                            .select('event_id, metadata, player_id')
+                            .eq('status', 'success')
+                            .eq('payment_type', 'event_entry_fee')
+                            .in('event_id', eventIdsForPayments);
 
-                    const paidManualEventIds = new Set((paidRegs || []).map(r => r.event_id));
+                        if (player.id) {
+                            paymentsQuery = paymentsQuery.or(`player_id.eq.${player.id},metadata->>email.ilike.${player.email}`);
+                        } else {
+                            paymentsQuery = paymentsQuery.filter('metadata->>email', 'ilike', player.email);
+                        }
+
+                        const { data: paymentRows } = await paymentsQuery;
+                        const profileName = player.name?.toLowerCase().trim();
+                        const normalizedEmail = player.email?.toLowerCase().trim();
+
+                        directPayments = (paymentRows || []).filter((pay) => {
+                            if (player.id && pay.player_id === player.id) return true;
+                            const meta = pay.metadata || {};
+                            if (normalizedEmail && meta.email?.toLowerCase().trim() === normalizedEmail) return true;
+                            if (profileName && Array.isArray(meta.line_items)) {
+                                return meta.line_items.some(
+                                    (item) =>
+                                        (item.type === 'entry_fee' || item.type === 'entry') &&
+                                        item.player?.toLowerCase().trim() === profileName,
+                                );
+                            }
+                            return false;
+                        });
+                    }
+
                     const paidEventIds = new Set([
-                        ...(paidRegs || []).map(r => r.event_id),
-                        ...(paidParticipants || []).map(p => p.event_id),
-                        ...(directPayments || []).map(p => p.event_id)
+                        ...(paidRegs || []).map((r) => r.event_id),
+                        ...(paidParticipants || []).map((p) => p.event_id),
+                        ...(directPayments || []).map((p) => p.event_id),
                     ]);
 
                     if (dbEvents) {
@@ -459,9 +481,10 @@ const PlayerProfile = () => {
                                 e.category_fees = match.category_fees;
                                 e.event_name = match.event_name || e.event_name;
                                 e.is_manual = match.is_manual;
-                                e.isPaid = e.id?.toString().startsWith('local_')
-                                    ? paidManualEventIds.has(match.id)
-                                    : paidEventIds.has(match.id);
+                                e.isPaid = paidEventIds.has(match.id);
+                                if (e.isPaid && e.payment_status === 'pending') {
+                                    e.payment_status = 'paid';
+                                }
                             }
                         });
                     }
@@ -1316,7 +1339,7 @@ const PlayerProfile = () => {
 
                                                 const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                 const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
-                                                const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
+                                                const needsPayment = currentTab !== 'past' && event.db_id && hasFee && !event.isPaid && (hasPending || event.payment_status === 'pending');
 
                                                 return (
                                                     <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex flex-col gap-3 shadow-lg backdrop-blur-xl relative overflow-hidden group">
@@ -3809,7 +3832,7 @@ const PlayerProfile = () => {
                                                                         const hasPending = pendingPayments?.some(p => p.id === event.db_id);
                                                                         const showPendingRibbon = currentTab !== 'past' && event.isPaid && hasPending;
                                                                         const hasFee = event.entry_fee > 0 || (event.category_fees && Object.keys(event.category_fees).length > 0) || event.is_manual === true;
-                                                                        const needsPayment = currentTab !== 'past' && event.db_id && hasFee && (hasPending || event.payment_status === 'pending' || !event.isPaid);
+                                                                        const needsPayment = currentTab !== 'past' && event.db_id && hasFee && !event.isPaid && (hasPending || event.payment_status === 'pending');
 
                                                                         return (
                                                                             <div key={event.id} className={`bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 ${hoverBorder} hover:bg-white/[0.08] hover:border-white/20 transition-all duration-300 group relative overflow-hidden flex flex-col justify-between`}>
