@@ -428,6 +428,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionMetaLine = (d) =>
         [d.format, fmtRWhole(d.entry_fee), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
 
+    const formatDivisionCloseLabel = (d) => {
+        const closeAt = d.entries_close_at || event?.registration_closes_at;
+        if (!closeAt) return 'Open';
+        const date = new Date(closeAt);
+        return `Registration Closes ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    };
+
     const restoreSelectedFromPending = useCallback(async () => {
         const pendingSelf = myRegs.filter((reg) => {
             if (reg.payment_status === 'paid') return false;
@@ -2942,22 +2949,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     return (
                                         <div
                                             key={d.id}
-                                            className={`flex items-center justify-between rounded-xl border px-4 py-3 ${closed ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-100'}`}
+                                            className={`rounded-xl border px-4 py-3 ${closed ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-100'}`}
                                         >
-                                            <div className="flex items-center gap-3">
-                                                <Users className="w-4 h-4 text-gray-400" />
-                                                <div>
-                                                    <p className="font-bold text-[#0F172A] text-sm">{d.name}</p>
-                                                    <p className="text-[11px] text-gray-500">{divisionMetaLine(d)}</p>
+                                            <div className="flex items-start gap-3 min-w-0">
+                                                <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-bold text-[#0F172A] text-sm leading-snug">{d.name}</p>
+                                                    <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{divisionMetaLine(d)}</p>
+                                                    <p className={`mt-1.5 text-[11px] font-semibold leading-snug ${closed ? 'text-gray-400 uppercase tracking-wide' : (theme?.accentText || 'text-gray-500')}`}>
+                                                        {closed ? 'Closed' : formatDivisionCloseLabel(d)}
+                                                    </p>
                                                 </div>
                                             </div>
-                                            {closed ? (
-                                                <span className="text-[11px] font-bold text-gray-400 uppercase">Closed</span>
-                                            ) : (
-                                                <span className={`text-[11px] font-semibold ${theme?.accentText || 'text-gray-400'}`}>
-                                                    {d.entries_close_at ? `Closes ${new Date(d.entries_close_at).toLocaleDateString()}` : 'Open'}
-                                                </span>
-                                            )}
                                         </div>
                                     );
                                 })}

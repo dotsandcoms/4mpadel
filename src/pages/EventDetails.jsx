@@ -346,6 +346,21 @@ const EventDetails = () => {
         return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
     }, [participants, event?.registered_players, event?.is_manual]);
 
+    const entryFeeStatLabel = useMemo(() => {
+        const fmt = (n) => `R${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+        if (event?.is_manual) {
+            const fees = playerDivisions
+                .map((d) => Number(d.EntryFee ?? 0))
+                .filter((f) => f > 0);
+            if (fees.length === 0) return '-';
+            const min = Math.min(...fees);
+            const max = Math.max(...fees);
+            if (min === max) return fmt(min);
+            return `${fmt(min)}–${fmt(max)}`;
+        }
+        return Number(event?.entry_fee || 0) > 0 ? fmt(event.entry_fee) : '-';
+    }, [event?.is_manual, event?.entry_fee, playerDivisions]);
+
     const isEventPassed = useMemo(() => {
         if (!event) return false;
         const compareDate = event.end_date || event.start_date;
@@ -1156,7 +1171,11 @@ const EventDetails = () => {
                         .eq('is_active', true)
                         .order('sort_order', { ascending: true });
 
-                    divisions = (manualDivs || []).map((d) => ({ Id: d.id, Name: d.name }));
+                    divisions = (manualDivs || []).map((d) => ({
+                        Id: d.id,
+                        Name: d.name,
+                        EntryFee: Number(d.entry_fee || 0),
+                    }));
 
                     const { data: localRegs } = await supabase
                         .from('event_registrations')
@@ -2816,7 +2835,7 @@ const EventDetails = () => {
                             })()}
                             {[
                                 { label: 'Players', value: totalPlayersCount, icon: Users },
-                                { label: 'Entry Fee', value: event.entry_fee > 0 ? `R${event.entry_fee}` : '-', icon: CreditCard },
+                                { label: 'Entry Fee', value: entryFeeStatLabel, icon: CreditCard },
                                 { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Trophy },
                                 { label: 'Points', value: event.points || '1000', icon: Trophy }
                             ].map(({ label, value, icon: Icon }, idx) => (
@@ -3098,7 +3117,7 @@ const EventDetails = () => {
                                         {/* Event Info */}
                                         <div className="space-y-5">
 
-                                            {/* Event Description */}
+                                            {/* About This Event */}
                                             {event.description && (
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
                                                     <div
@@ -3132,78 +3151,6 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
-                                            )}
-
-                                            {/* Prize Money */}
-                                            {(() => {
-                                                const prizeBreakdown = parsePrizeBreakdown(event.prize_money_breakdown);
-                                                const hasTotal = event.prize_money_total != null && Number(event.prize_money_total) > 0;
-                                                if (!hasTotal && prizeBreakdown.length === 0) return null;
-                                                return (
-                                                    <InfoSection title="Prize Money" icon={Trophy} accent={theme.fill} defaultOpen={false}>
-                                                        {hasTotal && (
-                                                            <p className="text-2xl font-semibold text-slate-900 mb-3">
-                                                                R {Number(event.prize_money_total).toLocaleString('en-ZA')}
-                                                            </p>
-                                                        )}
-                                                        {prizeBreakdown.length > 0 && (
-                                                            <div className={hasTotal ? 'pt-3 border-t border-gray-100' : ''}>
-                                                                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                                                                    Prize Pool Breakdown
-                                                                </p>
-                                                                <div className="divide-y divide-gray-100">
-                                                                    {prizeBreakdown.map((row, i) => (
-                                                                        <div key={i} className="flex items-center justify-between gap-4 py-2.5 text-sm first:pt-0">
-                                                                            <span className="text-slate-600 font-medium">{row.label}</span>
-                                                                            <span className="font-semibold text-[#0F172A] shrink-0">{formatPrizeAmount(row.amount)}</span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </InfoSection>
-                                                );
-                                            })()}
-
-                                            {/* Points Breakdown */}
-                                            {event.points_breakdown && (
-                                                <InfoSection title="Points Breakdown" icon={Award} accent={theme.fill} text={event.points_breakdown} />
-                                            )}
-
-                                            {/* Tournament Details */}
-                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
-                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
-                                                    <div className="divide-y divide-gray-100">
-                                                        {[
-                                                            ['Courts', event.courts],
-                                                            ['Balls', event.balls],
-                                                            ['Draw Released', event.draw_released],
-                                                            ['Cut-off Times', event.cut_off_times],
-                                                            ['Tournament Director', event.tournament_director],
-                                                            ['Referees', event.referees],
-                                                        ].filter(([, v]) => v).map(([label, value]) => (
-                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
-                                                                <span className="text-slate-500 font-medium">{label}</span>
-                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </InfoSection>
-                                            )}
-
-                                            {/* Sanctioning Details */}
-                                            {event.sanctioning_details && (
-                                                <InfoSection title="Sanctioning Details" icon={CheckCircle} accent={theme.fill} text={event.sanctioning_details} />
-                                            )}
-
-                                            {/* Rules & Regulations */}
-                                            {event.rules_regs && (
-                                                <InfoSection title="Rules & Regulations" icon={FileText} accent={theme.fill} text={event.rules_regs} />
-                                            )}
-
-                                            {/* Withdrawal & Substitution */}
-                                            {event.withdrawal_substitution && (
-                                                <InfoSection title="Withdrawal & Substitution" icon={AlertCircle} accent={theme.fill} text={event.withdrawal_substitution} />
                                             )}
 
                                             {/* Contact */}
@@ -3277,6 +3224,78 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
+                                            )}
+
+                                            {/* Points Breakdown */}
+                                            {event.points_breakdown && (
+                                                <InfoSection title="Points Breakdown" icon={Award} accent={theme.fill} text={event.points_breakdown} />
+                                            )}
+
+                                            {/* Prize Money */}
+                                            {(() => {
+                                                const prizeBreakdown = parsePrizeBreakdown(event.prize_money_breakdown);
+                                                const hasTotal = event.prize_money_total != null && Number(event.prize_money_total) > 0;
+                                                if (!hasTotal && prizeBreakdown.length === 0) return null;
+                                                return (
+                                                    <InfoSection title="Prize Money" icon={Trophy} accent={theme.fill} defaultOpen={false}>
+                                                        {hasTotal && (
+                                                            <p className="text-2xl font-semibold text-slate-900 mb-3">
+                                                                R {Number(event.prize_money_total).toLocaleString('en-ZA')}
+                                                            </p>
+                                                        )}
+                                                        {prizeBreakdown.length > 0 && (
+                                                            <div className={hasTotal ? 'pt-3 border-t border-gray-100' : ''}>
+                                                                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                                                                    Prize Pool Breakdown
+                                                                </p>
+                                                                <div className="divide-y divide-gray-100">
+                                                                    {prizeBreakdown.map((row, i) => (
+                                                                        <div key={i} className="flex items-center justify-between gap-4 py-2.5 text-sm first:pt-0">
+                                                                            <span className="text-slate-600 font-medium">{row.label}</span>
+                                                                            <span className="font-semibold text-[#0F172A] shrink-0">{formatPrizeAmount(row.amount)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </InfoSection>
+                                                );
+                                            })()}
+
+                                            {/* Rules & Regulations */}
+                                            {event.rules_regs && (
+                                                <InfoSection title="Rules & Regulations" icon={FileText} accent={theme.fill} text={event.rules_regs} />
+                                            )}
+
+                                            {/* Sanctioning Details */}
+                                            {event.sanctioning_details && (
+                                                <InfoSection title="Sanctioning Details" icon={CheckCircle} accent={theme.fill} text={event.sanctioning_details} />
+                                            )}
+
+                                            {/* Tournament Details */}
+                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
+                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
+                                                    <div className="divide-y divide-gray-100">
+                                                        {[
+                                                            ['Courts', event.courts],
+                                                            ['Balls', event.balls],
+                                                            ['Draw Released', event.draw_released],
+                                                            ['Cut-off Times', event.cut_off_times],
+                                                            ['Tournament Director', event.tournament_director],
+                                                            ['Referees', event.referees],
+                                                        ].filter(([, v]) => v).map(([label, value]) => (
+                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
+                                                                <span className="text-slate-500 font-medium">{label}</span>
+                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </InfoSection>
+                                            )}
+
+                                            {/* Withdrawal & Substitution */}
+                                            {event.withdrawal_substitution && (
+                                                <InfoSection title="Withdrawal & Substitution" icon={AlertCircle} accent={theme.fill} text={event.withdrawal_substitution} />
                                             )}
 
                                             {/* Sponsors */}
