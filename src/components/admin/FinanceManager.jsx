@@ -87,26 +87,57 @@ const FinanceManager = () => {
         }
     }, [activeTab, allowedTabs, permissions, permissionsLoading]);
 
+    const fetchAllRows = useCallback(async (buildQuery) => {
+        const pageSize = 1000;
+        let page = 0;
+        let allRows = [];
+
+        while (true) {
+            const { data, error } = await buildQuery(page * pageSize, (page + 1) * pageSize - 1);
+            if (error) throw error;
+            if (data?.length) {
+                allRows = [...allRows, ...data];
+                if (data.length < pageSize) break;
+                page++;
+            } else {
+                break;
+            }
+        }
+
+        return allRows;
+    }, []);
+
     const fetchPayments = useCallback(async () => {
-        const { data, error } = await supabase.from('payments').select('reference, metadata');
-        if (!error && data) {
+        try {
+            const data = await fetchAllRows((from, to) =>
+                supabase.from('payments').select('reference, metadata').range(from, to)
+            );
             const refs = new Set();
             data.forEach(p => {
                 if (p.reference) refs.add(p.reference);
-                // Also track the original Paystack reference stored in metadata to avoid duplicates
                 if (p.metadata?.paystack_ref) refs.add(p.metadata.paystack_ref);
                 if (p.metadata?.original_trx?.id) refs.add(p.metadata.original_trx.id);
             });
             setRecordedRefs(refs);
+        } catch (error) {
+            console.error('Error fetching payments:', error);
         }
-    }, []);
+    }, [fetchAllRows]);
 
     const fetchPlayers = useCallback(async () => {
-        const { data, error } = await supabase
-            .from('players')
-            .select('id, name, email, paid_registration, license_type');
-        if (!error) setPlayers(data);
-    }, []);
+        try {
+            const data = await fetchAllRows((from, to) =>
+                supabase
+                    .from('players')
+                    .select('id, name, email, paid_registration, license_type')
+                    .order('id', { ascending: true })
+                    .range(from, to)
+            );
+            setPlayers(data);
+        } catch (error) {
+            console.error('Error fetching players:', error);
+        }
+    }, [fetchAllRows]);
 
     const fetchTransactions = useCallback(async () => {
         try {
@@ -256,37 +287,75 @@ const FinanceManager = () => {
 
                 console.info(`Marking participants for Player ${player.name} in Event ${enrichedEventId} as PAID...`);
                 
-                // 1. Find the player's own registrations
+                const normalizeDivisionKey = (value) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+                const divisionMatches = (className, targetDivision) => {
+                    const normalizedDiv = normalizeDivisionKey(className);
+                    const normalizedTarget = normalizeDivisionKey(targetDivision);
+                    return normalizedDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedDiv);
+                };
+
+                // 1. Find the player's own registrations (linked by profile_id)
                 const { data: ownParticipants } = await supabase
                     .from('tournament_participants')
-                    .select('id, full_name, class_name, profile_id')
+                    .select('id, full_name, class_name, profile_id, email, is_paid, metadata')
                     .eq('event_id', enrichedEventId)
                     .eq('profile_id', player.id);
 
                 let allParticipants = ownParticipants ? [...ownParticipants] : [];
 
+                // 1a. Fallback: match unlinked tournament entries by payer name/email
+                if (allParticipants.length === 0) {
+                    const { data: regRows } = await supabase
+                        .from('event_registrations')
+                        .select('division')
+                        .eq('event_id', enrichedEventId)
+                        .ilike('email', email);
+
+                    const intendedDivisions = regRows?.map(r => r.division).filter(Boolean) || [];
+                    const playerNameKey = player.name?.toLowerCase().trim() || '';
+
+                    const { data: unlinkedParticipants } = await supabase
+                        .from('tournament_participants')
+                        .select('id, full_name, class_name, profile_id, email, is_paid, metadata')
+                        .eq('event_id', enrichedEventId)
+                        .is('profile_id', null);
+
+                    if (unlinkedParticipants?.length) {
+                        allParticipants = unlinkedParticipants.filter(p => {
+                            const participantName = p.full_name?.toLowerCase().trim() || '';
+                            const nameMatch = participantName === playerNameKey
+                                || participantName.includes(playerNameKey)
+                                || playerNameKey.includes(participantName);
+                            const emailMatch = p.email?.toLowerCase() === email;
+                            if (!nameMatch && !emailMatch) return false;
+
+                            if (enrichedDivision) {
+                                return divisionMatches(p.class_name, enrichedDivision);
+                            }
+                            if (intendedDivisions.length > 0) {
+                                return intendedDivisions.some(div => divisionMatches(p.class_name, div));
+                            }
+                            return true;
+                        });
+                    }
+                }
+
                 // Filter own registrations by division if specified in payment metadata
                 if (enrichedDivision && allParticipants.length > 0) {
-                    const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z0-9]/g, '');
-                    allParticipants = allParticipants.filter(p => {
-                        const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                        return normalizedDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedDiv);
-                    });
+                    allParticipants = allParticipants.filter(p => divisionMatches(p.class_name, enrichedDivision));
                 } else if (!enrichedDivision && allParticipants.length > 0) {
                     // 1b. If metadata is missing entirely, check event_registrations for what was intended
                     const { data: intentData } = await supabase
                         .from('event_registrations')
                         .select('division')
                         .eq('event_id', enrichedEventId)
-                        .ilike('email', email)
-                        .eq('payment_status', 'paid');
+                        .ilike('email', email);
                     
                     if (intentData && intentData.length > 0) {
-                        const intendedDivisions = intentData.map(d => d.division.toLowerCase().replace(/[^a-z0-9]/g, ''));
-                        allParticipants = allParticipants.filter(p => {
-                            const normalizedDiv = p.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            return intendedDivisions.some(target => normalizedDiv.includes(target) || target.includes(normalizedDiv));
-                        });
+                        const intendedDivisions = intentData.map(d => d.division).filter(Boolean);
+                        allParticipants = allParticipants.filter(p =>
+                            intendedDivisions.some(div => divisionMatches(p.class_name, div))
+                        );
                     }
                 }
 
@@ -301,11 +370,7 @@ const FinanceManager = () => {
                     // Also filter regData (partners) by division if specified
                     let filteredRegData = regData;
                     if (enrichedDivision) {
-                        const normalizedTarget = enrichedDivision.toLowerCase().replace(/[^a-z0-9]/g, '');
-                        filteredRegData = regData.filter(reg => {
-                            const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z0-9]/g, '');
-                            return normalizedRegDiv.includes(normalizedTarget) || normalizedTarget.includes(normalizedRegDiv);
-                        });
+                        filteredRegData = regData.filter(reg => divisionMatches(reg.division, enrichedDivision));
                     }
 
                     for (const reg of filteredRegData) {
@@ -313,20 +378,16 @@ const FinanceManager = () => {
                             // Search for the partner in the same event (fuzzy name and division match)
                             const { data: partners } = await supabase
                                 .from('tournament_participants')
-                                .select('id, full_name, class_name, profile_id')
+                                .select('id, full_name, class_name, profile_id, email, is_paid, metadata')
                                 .eq('event_id', enrichedEventId)
                                 .ilike('full_name', `%${reg.partner_name.trim()}%`);
                             
                             if (partners) {
                                 partners.forEach(partner => {
-                                    // Verify it's the same or similar division to avoid matching the same person in a different category
-                                    const normalizedDbDiv = partner.class_name.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                    const normalizedRegDiv = reg.division.toLowerCase().replace(/[^a-z0-9]/g, '');
-                                    
-                                    if (normalizedDbDiv.includes(normalizedRegDiv) || normalizedRegDiv.includes(normalizedDbDiv)) {
-                                        if (!allParticipants.some(p => p.id === partner.id)) {
-                                            allParticipants.push(partner);
-                                        }
+                                    if (partner.is_paid && partner.profile_id !== player.id) return;
+                                    if (!divisionMatches(partner.class_name, reg.division)) return;
+                                    if (!allParticipants.some(p => p.id === partner.id)) {
+                                        allParticipants.push(partner);
                                     }
                                 });
                             }
@@ -396,13 +457,19 @@ const FinanceManager = () => {
                         // Correctly identify a partner: They must have a profile_id AND it must be different from the payer
                         const isPartner = p.profile_id && p.profile_id !== player.id;
                         
-                        // Mark as paid in tournament_participants
+                        // Mark as paid in tournament_participants (link profile if missing)
                         await supabase
                             .from('tournament_participants')
                             .update({ 
-                                is_paid: true, 
+                                is_paid: true,
+                                profile_id: p.profile_id || player.id,
                                 is_test: trx.domain === 'test',
-                                last_synced_at: new Date().toISOString() 
+                                last_synced_at: new Date().toISOString(),
+                                metadata: {
+                                    ...(p.metadata || {}),
+                                    manual_unpaid: false,
+                                    payment_method: 'paystack',
+                                },
                             })
                             .eq('id', p.id);
                             
@@ -519,6 +586,15 @@ const FinanceManager = () => {
                         event_name: enrichedEventName
                     }
                 }, { onConflict: 'reference' });
+            }
+
+            if (isEventReg && enrichedEventId) {
+                await supabase
+                    .from('event_registrations')
+                    .update({ payment_status: 'paid', payment_method: 'paystack' })
+                    .eq('event_id', enrichedEventId)
+                    .ilike('email', email)
+                    .neq('payment_status', 'paid');
             }
 
             // CRITICAL: Ensure temporary license record exists to prevent scavenger cleanup
