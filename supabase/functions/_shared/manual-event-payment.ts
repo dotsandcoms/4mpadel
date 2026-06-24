@@ -8,6 +8,14 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 export type ManualRegistrationRow = Record<string, unknown>;
 export type ManualPaymentCover = { type: string; email: string; division?: string; license?: string };
+export type SoloLinkUpdate = {
+    id: string;
+    email: string;
+    division: string;
+    partner_name: string;
+    partner_email: string;
+    partner_payment_status?: string | null;
+};
 
 export function buildPersistedRegistrationRows(
     rows: ManualRegistrationRow[],
@@ -65,6 +73,14 @@ export async function persistManualEventRegistrations(
 
     const registrantEmail = String(meta.registrant_email || '').toLowerCase();
     const toUpsert = buildPersistedRegistrationRows(rows, covers, registrantEmail);
+    const entryCoverSet = new Set(
+        covers
+            .filter((c) => c.type === 'entry')
+            .map((c) => `${String(c.email).toLowerCase()}|${c.division}`),
+    );
+    const soloLinks = Array.isArray(meta.solo_link_updates)
+        ? (meta.solo_link_updates as SoloLinkUpdate[])
+        : [];
 
     const { data: savedRows, error } = await supabaseAdmin
         .from('event_registrations')
@@ -72,6 +88,23 @@ export async function persistManualEventRegistrations(
         .select('*');
 
     if (error) throw error;
+
+    for (const link of soloLinks) {
+        const updates: Record<string, unknown> = {
+            partner_name: link.partner_name,
+            partner_email: link.partner_email,
+            partner_payment_status: link.partner_payment_status ?? null,
+        };
+        const soloKey = `${String(link.email).toLowerCase()}|${link.division}`;
+        if (entryCoverSet.has(soloKey)) {
+            updates.payment_status = 'paid';
+        }
+        const { error: linkError } = await supabaseAdmin
+            .from('event_registrations')
+            .update(updates)
+            .eq('id', link.id);
+        if (linkError) throw linkError;
+    }
 
     await supabaseAdmin
         .from('payments')

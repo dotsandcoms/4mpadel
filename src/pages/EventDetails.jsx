@@ -33,6 +33,17 @@ const divisionsMatch = (a, b) => {
     return na === nb || na.includes(nb) || nb.includes(na);
 };
 
+const getManualEntryPaymentLabel = (reg, userEmail) => {
+    if (reg.payment_status !== 'paid') return 'Payment pending';
+    const selfEmail = (reg.email || userEmail || '').toLowerCase();
+    const registeredBy = (reg.registered_by || '').toLowerCase();
+    if (!registeredBy || registeredBy === selfEmail) return 'Paid';
+    const payerName = reg._payerName || (
+        (reg.partner_email || '').toLowerCase() === registeredBy ? reg.partner_name : null
+    );
+    return payerName ? `Paid for by ${payerName}` : 'Paid for by partner';
+};
+
 const playerNamesMatch = (profileName, rankedinName) => {
     const a = (profileName || '').trim().toLowerCase();
     const b = (rankedinName || '').trim().toLowerCase();
@@ -567,6 +578,9 @@ const EventDetails = () => {
         hasPendingPayment: false,
         hasRegistrations: false,
         allRegistrationsPaid: false,
+        hasAnyRegistration: false,
+        entries: [],
+        canAddDivision: false,
     });
     const manualRegActionsRef = React.useRef({});
     const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
@@ -593,6 +607,142 @@ const EventDetails = () => {
         const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => applySession(session));
         return () => { active = false; listener?.subscription?.unsubscribe?.(); };
     }, []);
+
+    const loadManualRegistrationSummary = useCallback(async () => {
+        if (!event?.is_manual || !manualUserEmail) {
+            setManualRegStatus({
+                hasPendingPayment: false,
+                hasRegistrations: false,
+                allRegistrationsPaid: false,
+                hasAnyRegistration: false,
+                entries: [],
+                canAddDivision: false,
+            });
+            return;
+        }
+
+        const [{ data: regs }, { data: divs }] = await Promise.all([
+            supabase
+                .from('event_registrations')
+                .select('*')
+                .eq('event_id', event.id)
+                .ilike('email', manualUserEmail)
+                .neq('status', 'withdrawn'),
+            supabase
+                .from('tournament_divisions')
+                .select('*')
+                .eq('event_id', event.id)
+                .eq('is_active', true)
+                .order('sort_order', { ascending: true }),
+        ]);
+
+        const myRegs = regs || [];
+        const divisions = divs || [];
+        if (myRegs.length === 0) {
+            setManualRegStatus({
+                hasPendingPayment: false,
+                hasRegistrations: false,
+                allRegistrationsPaid: false,
+                hasAnyRegistration: false,
+                entries: [],
+                canAddDivision: divisions.some((d) => {
+                    const closeAt = d.entries_close_at || event.registration_closes_at;
+                    if (!closeAt) return true;
+                    return new Date(closeAt).getTime() >= Date.now();
+                }),
+            });
+            return;
+        }
+
+        const payerEmails = [...new Set(
+            myRegs
+                .map((r) => (r.registered_by || '').toLowerCase())
+                .filter((em) => em && em !== manualUserEmail),
+        )];
+        const payerNames = {};
+        if (payerEmails.length > 0) {
+            const { data: payerRows } = await supabase
+                .from('event_registrations')
+                .select('email, full_name')
+                .eq('event_id', event.id)
+                .in('email', payerEmails);
+            for (const row of payerRows || []) {
+                const em = (row.email || '').toLowerCase();
+                if (em && row.full_name) payerNames[em] = row.full_name;
+            }
+        }
+
+        const enrichedRegs = myRegs.map((r) => {
+            const rb = (r.registered_by || '').toLowerCase();
+            if (!rb || rb === manualUserEmail) return r;
+            let name = r.partner_name;
+            if (!name || (r.partner_email || '').toLowerCase() !== rb) name = payerNames[rb] || null;
+            return { ...r, _payerName: name };
+        });
+
+        const registeredDivisionIds = new Set(
+            enrichedRegs
+                .filter((reg) => {
+                    if (reg.payment_status === 'paid') return true;
+                    const div = divisions.find((d) => d.id === reg.division_id);
+                    return div && Number(div.entry_fee || 0) === 0;
+                })
+                .map((r) => r.division_id),
+        );
+
+        const entries = enrichedRegs.map((reg) => {
+            const div = divisions.find((d) => d.id === reg.division_id);
+            const fee = Number(div?.entry_fee || 0);
+            const isPaid = reg.payment_status === 'paid' || fee === 0;
+            return {
+                id: reg.id,
+                division: reg.division,
+                partnerName: reg.partner_name?.trim() || null,
+                paymentLabel: getManualEntryPaymentLabel(reg, manualUserEmail),
+                isPaid,
+                statusText: isPaid ? 'Paid & Confirmed' : 'Payment Pending',
+                statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+            };
+        });
+
+        const canAddDivision = divisions.some((d) => {
+            if (registeredDivisionIds.has(d.id)) return false;
+            const closeAt = d.entries_close_at || event.registration_closes_at;
+            if (!closeAt) return true;
+            return new Date(closeAt).getTime() >= Date.now();
+        });
+
+        const confirmedRegs = enrichedRegs.filter((reg) => {
+            if (reg.payment_status === 'paid') return true;
+            const div = divisions.find((d) => d.id === reg.division_id);
+            return div && Number(div.entry_fee || 0) === 0;
+        });
+        const pendingPaymentRegs = enrichedRegs.filter((reg) => {
+            if (reg.payment_status === 'paid') return false;
+            const div = divisions.find((d) => d.id === reg.division_id);
+            return div && Number(div.entry_fee || 0) > 0;
+        });
+        const hasRegistrations = confirmedRegs.length > 0;
+        const hasPendingPayment = pendingPaymentRegs.length > 0;
+        const allRegistrationsPaid = hasRegistrations && confirmedRegs.every((reg) => {
+            if (reg.payment_status === 'paid') return true;
+            const div = divisions.find((d) => d.id === reg.division_id);
+            return !div || Number(div.entry_fee || 0) === 0;
+        });
+
+        setManualRegStatus({
+            hasPendingPayment,
+            hasRegistrations,
+            allRegistrationsPaid,
+            hasAnyRegistration: true,
+            entries,
+            canAddDivision,
+        });
+    }, [event?.is_manual, event?.id, event?.registration_closes_at, manualUserEmail]);
+
+    useEffect(() => {
+        loadManualRegistrationSummary();
+    }, [loadManualRegistrationSummary, participantsRefreshKey]);
 
     // Load logged-in player profile for manual-event registration (profile pic, license, points)
     useEffect(() => {
@@ -2401,6 +2551,53 @@ const EventDetails = () => {
         </div>
     );
 
+    const manualRegistrationBlock = event.is_manual && manualUserEmail && manualRegStatus.hasAnyRegistration && (
+        <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-4 sm:p-5 border border-green-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0 mt-0.5 sm:mt-0">
+                    <Check className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1.5">YOU ARE REGISTERED FOR</p>
+                    <div className="flex flex-col gap-2.5">
+                        {(manualRegStatus.entries || []).map((entry) => (
+                            <div key={entry.id} className="flex flex-col gap-0.5">
+                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                    <span className="text-sm font-semibold text-[#0F172A] leading-tight">
+                                        {entry.division}
+                                    </span>
+                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${entry.statusClassName}`}>
+                                        {entry.statusText}
+                                    </span>
+                                </div>
+                                {entry.partnerName && (
+                                    <p className="text-[11px] text-slate-600">
+                                        Partner: <span className="font-medium text-slate-800">{entry.partnerName}</span>
+                                    </p>
+                                )}
+                                <p className={`text-[11px] font-medium ${entry.isPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                    {entry.paymentLabel}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            {manualRegStatus.canAddDivision && (
+                <button
+                    type="button"
+                    onClick={() => manualRegActionsRef.current?.openRegistration?.()}
+                    className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap shrink-0 sm:self-center"
+                >
+                    <span className="text-lg leading-none">+</span> Add Division
+                </button>
+            )}
+        </div>
+    );
+
+    const activeRegistrationBlock = registrationBlock || manualRegistrationBlock;
+
     const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))));
@@ -2850,12 +3047,12 @@ const EventDetails = () => {
                         </div>
 
                         {/* Registration Status (If any) */}
-                        {registrationBlock && (
+                        {(activeRegistrationBlock) && (
                             <div className="mb-6 relative z-[60]">
-                                {registrationBlock}
+                                {activeRegistrationBlock}
                             </div>
                         )}
-                        {readyToCompeteBlock && !registrationBlock && (
+                        {readyToCompeteBlock && !activeRegistrationBlock && (
                             <div className="mb-6">
                                 {readyToCompeteBlock}
                             </div>

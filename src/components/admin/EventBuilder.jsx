@@ -10,14 +10,14 @@ import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
 
 const STANDARD_DIVISIONS = [
-    "Men's Open", "Men's Pro", "Men's Advanced", "Men's Intermediate", "Men's A", "Men's B", "Men's C", "Men's D",
-    "Ladies Open", "Ladies Pro", "Ladies Advanced", "Ladies Intermediate", "Ladies A", "Ladies B", "Ladies C",
+    "Men's Open", "Men's Advanced", "Men's Intermediate", "Men's A", "Men's B", "Men's C", "Men's D",
+    "Ladies Open", "Ladies Advanced", "Ladies Intermediate", "Ladies A", "Ladies B", "Ladies C",
     "Mixed Open", "Mixed Advanced", "Mixed A", "Mixed B", "Mixed C",
     "Men's 40+", "Men's 45+", "Men's 50+", "Ladies 40+", "Ladies 45+",
     "Juniors U12", "Juniors U14", "Juniors U16", "Juniors U18"
 ];
 
-const FORMATS = ['Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
+const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
 
 const safeISOString = (val) => {
@@ -240,6 +240,7 @@ const emptyDivision = () => ({
     license_required: false,
     age_category: '',
     gender: '',
+    details: '',
     is_active: true,
 });
 
@@ -461,6 +462,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                     license_required: !!d.license_required,
                     age_category: d.age_category || '',
                     gender: d.gender || '',
+                    details: d.details || '',
                     is_active: d.is_active !== false,
                 }))
             );
@@ -616,6 +618,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                 license_required: !!d.license_required,
                 age_category: d.age_category || null,
                 gender: d.gender || null,
+                details: d.details?.trim() || null,
                 sort_order: i,
                 is_active: d.is_active !== false,
             };
@@ -881,6 +884,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                                 <label className={labelClass}>Gender</label>
                                                 <SelectMenu value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
                                             </div>
+                                            <div className="md:col-span-3">
+                                                <label className={labelClass}>Division Details</label>
+                                                <RichTextEditor
+                                                    value={d.details ?? ''}
+                                                    onChange={(html) => updateDivision(d._key, { details: html })}
+                                                    placeholder="Optional notes about this division (format, eligibility, schedule, etc.)"
+                                                    minHeight={100}
+                                                />
+                                            </div>
                                         </div>
                                         <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
                                             <input type="checkbox" checked={d.license_required} onChange={(e) => updateDivision(d._key, { license_required: e.target.checked })} className="accent-padel-green w-4 h-4" />
@@ -969,7 +981,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                 </div>
                                 <div>
                                     <label className={labelClass}>Courts</label>
-                                    <SelectMenu value={form.courts} onChange={(v) => setField('courts', v)} options={['Indoor', 'Outdoor', 'Covered']} placeholder="Select court type" />
+                                    <SelectMenu value={form.courts} onChange={(v) => setField('courts', v)} options={['Indoor', 'Outdoor', 'Covered', 'Indoor & Outdoor']} placeholder="Select court type" />
                                 </div>
                                 <div>
                                     <label className={labelClass}>Draw Released</label>

@@ -95,6 +95,97 @@ const isClosed = (division, event) => {
     return new Date(closeAt).getTime() < Date.now();
 };
 
+const normEmail = (value) => (value || '').trim().toLowerCase();
+
+const resolveRegPartnerName = (divRegs, partnerEmail, fallbackName) => {
+    if (fallbackName?.trim()) return fallbackName.trim();
+    const em = normEmail(partnerEmail);
+    if (!em) return 'another player';
+    const match = divRegs.find((r) => normEmail(r.email) === em);
+    return match?.full_name || 'another player';
+};
+
+/** Whether a player can be selected as partner for a division (solo entries can be linked). */
+const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
+    const email = normEmail(player?.email);
+    const name = player?.name || player?.full_name || 'This player';
+    const divLabel = divisionName || 'this division';
+    if (!email || !divisionId) return { ok: true };
+
+    const divRegs = (regs || []).filter(
+        (r) => r.division_id === divisionId && r.status !== 'withdrawn',
+    );
+
+    const primary = divRegs.find((r) => normEmail(r.email) === email);
+    if (primary) {
+        const registeredBy = normEmail(primary.registered_by);
+        if (registeredBy && registeredBy !== email) {
+            const inviter = divRegs.find((r) => normEmail(r.email) === registeredBy);
+            return {
+                ok: false,
+                message: `${name} is already partnered with ${inviter?.full_name || 'another player'} for ${divLabel}`,
+            };
+        }
+        if (primary.partner_name?.trim() || primary.partner_email?.trim()) {
+            return {
+                ok: false,
+                message: `${name} is already partnered with ${resolveRegPartnerName(divRegs, primary.partner_email, primary.partner_name)} for ${divLabel}`,
+            };
+        }
+        return { ok: true, linkSoloRegId: primary.id, isSoloLink: true };
+    }
+
+    const asPartnerOn = divRegs.find((r) => normEmail(r.partner_email) === email);
+    if (asPartnerOn) {
+        return {
+            ok: false,
+            message: `${name} is already partnered with ${asPartnerOn.full_name || 'another player'} for ${divLabel}`,
+        };
+    }
+
+    return { ok: true };
+};
+
+const PartnerSearchOption = ({ player, onSelect, compact = false }) => {
+    if (player._unavailable) {
+        return (
+            <div className={`${compact ? 'px-3 py-2.5' : 'px-4 py-3'} text-xs bg-red-50 border-b border-red-100 last:border-0 cursor-not-allowed flex items-start gap-2.5`}>
+                <div className={`${compact ? 'w-8 h-8' : 'w-9 h-9'} rounded-full bg-red-100 overflow-hidden shrink-0 flex items-center justify-center`}>
+                    <User className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-red-400`} />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-900 truncate">{player.name}</p>
+                    <p className="text-red-700 leading-snug mt-0.5">{player._unavailableMessage}</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <button
+            type="button"
+            onClick={() => onSelect(player)}
+            className={`w-full text-left ${compact ? 'px-3 py-2.5 text-xs' : 'px-4 py-3 text-sm'} hover:bg-gray-50 flex items-center gap-2.5 border-b border-gray-50 last:border-0`}
+        >
+            <div className={`${compact ? 'w-8 h-8' : 'w-9 h-9'} rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center`}>
+                {player.image_url ? (
+                    <img src={player.image_url} alt="" className="w-full h-full object-cover" />
+                ) : (
+                    <User className={`${compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} text-gray-400`} />
+                )}
+            </div>
+            <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
+                <span className="font-medium text-slate-900 truncate">{player.name}</span>
+                {player._isSoloRegistrant ? (
+                    <span className="text-[10px] font-medium text-emerald-700 shrink-0">Solo entry</span>
+                ) : (
+                    !compact && <span className="text-slate-400 text-xs truncate">{player.email}</span>
+                )}
+            </div>
+        </button>
+    );
+};
+
 const Card = ({ children, className = '', allowOverflow = false }) => (
     <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm ${allowOverflow ? 'overflow-visible' : 'overflow-hidden'} ${className}`}>{children}</div>
 );
@@ -156,6 +247,7 @@ const ProgressBar = ({ step, theme }) => (
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
     const navigate = useNavigate();
     const [divisions, setDivisions] = useState([]);
+    const [divisionRegs, setDivisionRegs] = useState([]);
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState(null);
     const [myRegs, setMyRegs] = useState([]);
@@ -275,6 +367,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setLoading(false);
     }, [event.id]);
 
+    const loadDivisionRegs = useCallback(async () => {
+        const { data } = await supabase
+            .from('event_registrations')
+            .select('id, email, full_name, partner_name, partner_email, division_id, division, status, registered_by, payment_status')
+            .eq('event_id', event.id)
+            .neq('status', 'withdrawn');
+        setDivisionRegs(data || []);
+    }, [event.id]);
+
     const loadMyRegs = useCallback(async () => {
         if (!userEmail) { setMyRegs([]); return; }
         const { data } = await supabase
@@ -349,9 +450,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     useEffect(() => {
         loadDivisions();
+        loadDivisionRegs();
         loadProfile();
         loadMyRegs();
-    }, [loadDivisions, loadProfile, loadMyRegs]);
+    }, [loadDivisions, loadDivisionRegs, loadProfile, loadMyRegs]);
 
     useEffect(() => {
         if (profile?.rankedin_id) {
@@ -418,6 +520,25 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const div = divisions.find((d) => d.id === reg.division_id);
         return !div || Number(div.entry_fee || 0) === 0;
     });
+    const hasAnyRegistration = myRegs.length > 0;
+
+    const registrationEntries = useMemo(
+        () => myRegs.map((reg) => {
+            const div = divisions.find((d) => d.id === reg.division_id);
+            const fee = Number(div?.entry_fee || 0);
+            const isPaid = reg.payment_status === 'paid' || fee === 0;
+            return {
+                id: reg.id,
+                division: reg.division,
+                partnerName: reg.partner_name?.trim() || null,
+                paymentLabel: getEntryPaymentLabel(reg, userEmail),
+                isPaid,
+                statusText: isPaid ? 'Paid & Confirmed' : 'Payment Pending',
+                statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+            };
+        }),
+        [myRegs, divisions, userEmail],
+    );
 
     const divisionsAvailableToRegister = useMemo(
         () => divisions.filter((d) => !registeredDivisionIds.has(d.id) && !isClosed(d, event)),
@@ -508,6 +629,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             hasPendingPayment,
             hasRegistrations,
             allRegistrationsPaid,
+            hasAnyRegistration,
+            entries: registrationEntries,
+            canAddDivision: divisionsAvailableToRegister.length > 0,
         });
         if (registrationActionsRef) {
             registrationActionsRef.current = {
@@ -520,6 +644,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     setAgreeComplete(false);
                     setAgreeSapa(false);
                     loadProfile();
+                    loadDivisionRegs();
                     setShowWizard(true);
                 },
             };
@@ -528,10 +653,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         hasPendingPayment,
         hasRegistrations,
         allRegistrationsPaid,
+        hasAnyRegistration,
+        registrationEntries,
+        divisionsAvailableToRegister.length,
         onStatusChange,
         registrationActionsRef,
         openPayWizard,
         loadProfile,
+        loadDivisionRegs,
     ]);
 
     const resetWizardState = () => {
@@ -562,6 +691,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeComplete(false);
         setAgreeSapa(false);
         loadProfile();
+        loadDivisionRegs();
         setShowWizard(true);
     };
 
@@ -592,6 +722,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 payForPartner: true,
                 partnerLicenseChoice: null,
                 partnerPlaytomicLevel: '',
+                linkSoloRegId: null,
             };
             return next;
         });
@@ -668,13 +799,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const clearPartner = () => {
         partnerSearchSeq.current += 1;
         if (partnerSearchTimeout.current) clearTimeout(partnerSearchTimeout.current);
-        syncPartnerAll({ partnerName: '', partnerEmail: '', partnerId: null, partnerProfile: null });
+        syncPartnerAll({ partnerName: '', partnerEmail: '', partnerId: null, partnerProfile: null, linkSoloRegId: null });
         setPartnerSearch({ query: '', results: [] });
     };
 
     const runPartnerSearch = useCallback(async (searchTerm) => {
         if (!searchTerm || searchTerm.length < 2) {
-            setPartnerSearch((p) => ({ ...p, results: [] }));
+            setPartnerSearch((p) => ({ ...p, results: [], hasSearched: false }));
             return;
         }
 
@@ -684,20 +815,31 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             .from('players')
             .select('id, name, email, license_type, paid_registration, image_url, level')
             .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
-            .limit(6);
+            .limit(8);
         if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
 
         const { data } = await playerQuery;
         if (seq !== partnerSearchSeq.current) return;
 
-        setPartnerSearch((p) => (p.query === searchTerm ? { ...p, results: data || [] } : p));
-    }, [profile?.id, displayProfile?.id]);
+        const results = (data || []).map((p) => {
+            const divs = divisions.filter((d) => selected[d.id]);
+            for (const d of divs) {
+                const check = getPartnerAvailability(divisionRegs, d.id, p, d.name);
+                if (!check.ok) {
+                    return { ...p, _unavailable: true, _unavailableMessage: check.message };
+                }
+            }
+            return { ...p, _unavailable: false, _unavailableMessage: null };
+        });
+
+        setPartnerSearch((p) => (p.query === searchTerm ? { ...p, results, hasSearched: true } : p));
+    }, [profile?.id, displayProfile?.id, divisionRegs, divisions, selected]);
 
     const handlePartnerSearchInput = (value) => {
         setPartnerSearch((prev) => ({ ...prev, query: value, results: value.length < 2 ? [] : prev.results }));
 
         if (primaryPartner.partnerId) {
-            syncPartnerAll({ partnerName: '', partnerEmail: '', partnerId: null, partnerProfile: null });
+            syncPartnerAll({ partnerName: '', partnerEmail: '', partnerId: null, partnerProfile: null, linkSoloRegId: null });
         }
 
         if (partnerSearchTimeout.current) clearTimeout(partnerSearchTimeout.current);
@@ -718,8 +860,46 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, []);
 
     const selectPartner = (p) => {
-        syncPartnerAll({ partnerName: p.name, partnerEmail: p.email || '', partnerId: p.id, partnerProfile: p });
+        if (p._unavailable) {
+            toast.error(p._unavailableMessage || 'This player is not available for the selected divisions');
+            return;
+        }
+
+        for (const d of selectedDivisions) {
+            const check = getPartnerAvailability(divisionRegs, d.id, p, d.name);
+            if (!check.ok) {
+                toast.error(check.message);
+                return;
+            }
+        }
+
+        setSelected((prev) => {
+            const next = { ...prev };
+            Object.keys(next).forEach((divId) => {
+                const div = divisions.find((d) => d.id === divId);
+                const check = getPartnerAvailability(divisionRegs, divId, p, div?.name);
+                let inheritedLicenseChoice = null;
+                for (const id of Object.keys(prev)) {
+                    if (id !== divId && prev[id]?.partnerId === p.id && prev[id]?.partnerLicenseChoice) {
+                        inheritedLicenseChoice = prev[id].partnerLicenseChoice;
+                        break;
+                    }
+                }
+                next[divId] = {
+                    ...next[divId],
+                    partnerName: p.name,
+                    partnerEmail: p.email || '',
+                    partnerId: p.id,
+                    partnerProfile: p,
+                    partnerLicenseChoice: inheritedLicenseChoice,
+                    partnerPlaytomicLevel: p.level?.trim() || '',
+                    linkSoloRegId: check.linkSoloRegId || null,
+                };
+            });
+            return next;
+        });
         setPartnerSearch({ query: '', results: [] });
+        cachePartnerLicense(p);
     };
 
     const getDivisionMeta = (division) => {
@@ -742,6 +922,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [resolvePartnerLicense]);
 
     const setDivisionPartner = (divId, player) => {
+        if (player._unavailable) {
+            toast.error(player._unavailableMessage || 'This player is not available for this division');
+            return;
+        }
+
+        const div = divisions.find((d) => d.id === divId);
+        const check = getPartnerAvailability(divisionRegs, divId, player, div?.name);
+        if (!check.ok) {
+            toast.error(check.message);
+            return;
+        }
+
         setSelected((prev) => {
             let inheritedLicenseChoice = null;
             for (const id of Object.keys(prev)) {
@@ -760,11 +952,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     partnerProfile: player,
                     partnerLicenseChoice: inheritedLicenseChoice,
                     partnerPlaytomicLevel: player.level?.trim() || '',
+                    linkSoloRegId: check.linkSoloRegId || player._soloRegId || null,
                 },
             };
         });
         setDivisionPartnerSearch((prev) => ({ ...prev, [divId]: { query: '', results: [], open: false } }));
-        cachePartnerLicense(player);
+        if (player.id) cachePartnerLicense(player);
     };
 
     const clearDivisionPartner = (divId) => {
@@ -783,6 +976,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partnerLicenseChoice: null,
                 partnerPlaytomicLevel: '',
                 payForPartner: true,
+                linkSoloRegId: null,
             },
         }));
         setDivisionPartnerSearch((prev) => ({
@@ -829,7 +1023,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!searchTerm || searchTerm.length < 2) {
             setDivisionPartnerSearch((prev) => ({
                 ...prev,
-                [divId]: { ...(prev[divId] || {}), query: searchTerm, results: [], open: true },
+                [divId]: { ...(prev[divId] || {}), query: searchTerm, results: [], open: true, hasSearched: false },
             }));
             return;
         }
@@ -837,21 +1031,52 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const seq = (divisionPartnerSearchSeq.current[divId] || 0) + 1;
         divisionPartnerSearchSeq.current[divId] = seq;
         const excludeId = profile?.id || displayProfile?.id;
+        const term = searchTerm.trim().toLowerCase();
+        const div = divisions.find((d) => d.id === divId);
+
         let playerQuery = supabase
             .from('players')
             .select('id, name, email, license_type, paid_registration, image_url, level')
             .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
-            .limit(6);
+            .limit(8);
         if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
 
         const { data } = await playerQuery;
         if (seq !== divisionPartnerSearchSeq.current[divId]) return;
 
+        const regMatches = (divisionRegs || [])
+            .filter((r) => r.division_id === divId && r.status !== 'withdrawn')
+            .filter((r) => normEmail(r.email) !== normEmail(userEmail))
+            .filter((r) => `${r.full_name || ''} ${r.email || ''}`.toLowerCase().includes(term))
+            .map((r) => ({
+                id: null,
+                name: r.full_name,
+                email: r.email,
+                image_url: null,
+                level: '',
+            }));
+
+        const seen = new Set();
+        const merged = [];
+        for (const p of [...(data || []), ...regMatches]) {
+            const em = normEmail(p.email);
+            if (!em || seen.has(em)) continue;
+            seen.add(em);
+            const check = getPartnerAvailability(divisionRegs, divId, p, div?.name);
+            merged.push({
+                ...p,
+                _soloRegId: check.linkSoloRegId || null,
+                _isSoloRegistrant: !!check.isSoloLink,
+                _unavailable: !check.ok,
+                _unavailableMessage: check.ok ? null : check.message,
+            });
+        }
+
         setDivisionPartnerSearch((prev) => ({
             ...prev,
-            [divId]: { query: searchTerm, results: data || [], open: true },
+            [divId]: { query: searchTerm, results: merged.slice(0, 8), open: true, hasSearched: true },
         }));
-    }, [profile?.id, displayProfile?.id]);
+    }, [profile?.id, displayProfile?.id, divisionRegs, divisions, userEmail]);
 
     const handleDivisionPartnerSearch = (divId, value) => {
         setDivisionPartnerSearch((prev) => ({
@@ -870,6 +1095,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     partnerProfile: null,
                     partnerLicenseChoice: null,
                     partnerPlaytomicLevel: '',
+                    linkSoloRegId: null,
                 },
             }));
         }
@@ -882,7 +1108,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             divisionPartnerSearchSeq.current[divId] = (divisionPartnerSearchSeq.current[divId] || 0) + 1;
             setDivisionPartnerSearch((prev) => ({
                 ...prev,
-                [divId]: { query: value, results: [], open: true },
+                [divId]: { query: value, results: [], open: true, hasSearched: false },
             }));
             return;
         }
@@ -1259,6 +1485,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const buildRegistrationRows = () => {
         const rows = [];
+        const soloLinks = [];
         const covers = [];
         const selfName = profile?.name || (userEmail ? userEmail.split('@')[0] : 'Player');
         for (const d of selectedDivisions) {
@@ -1285,20 +1512,37 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
             if (sel?.partnerName && sel?.partnerEmail) {
-                rows.push({
-                    event_id: event.id,
-                    division_id: d.id,
-                    division: d.name,
-                    full_name: sel.partnerName,
-                    email: sel.partnerEmail,
-                    phone: null,
-                    partner_name: selfName,
-                    partner_email: userEmail,
-                    payment_status: 'pending',
-                    status: 'registered',
-                    registered_by: userEmail,
-                });
-                if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
+                if (sel.linkSoloRegId) {
+                    soloLinks.push({
+                        id: sel.linkSoloRegId,
+                        email: sel.partnerEmail,
+                        division: d.name,
+                        partner_name: selfName,
+                        partner_email: userEmail,
+                        partner_payment_status: null,
+                    });
+                    if (partnerPays && fee > 0) {
+                        const soloReg = divisionRegs.find((r) => r.id === sel.linkSoloRegId);
+                        if (soloReg && soloReg.payment_status !== 'paid') {
+                            covers.push({ email: soloReg.email, division: d.name, type: 'entry' });
+                        }
+                    }
+                } else {
+                    rows.push({
+                        event_id: event.id,
+                        division_id: d.id,
+                        division: d.name,
+                        full_name: sel.partnerName,
+                        email: sel.partnerEmail,
+                        phone: null,
+                        partner_name: selfName,
+                        partner_email: userEmail,
+                        payment_status: 'pending',
+                        status: 'registered',
+                        registered_by: userEmail,
+                    });
+                    if (partnerPays && fee > 0) covers.push({ email: sel.partnerEmail, division: d.name, type: 'entry' });
+                }
             }
         }
         if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
@@ -1309,10 +1553,35 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 license: purchase.choice,
             });
         }
-        return { rows, covers };
+        return { rows, covers, soloLinks };
     };
 
-    const persistRegistrations = async (rows) => {
+    const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
+        const entryCoverSet = new Set(
+            covers
+                .filter((c) => c.type === 'entry')
+                .map((c) => `${String(c.email).toLowerCase()}|${c.division}`),
+        );
+
+        for (const link of soloLinks) {
+            const updates = {
+                partner_name: link.partner_name,
+                partner_email: link.partner_email,
+                partner_payment_status: link.partner_payment_status ?? null,
+            };
+            const soloKey = `${String(link.email).toLowerCase()}|${link.division}`;
+            if (entryCoverSet.has(soloKey)) {
+                updates.payment_status = 'paid';
+            }
+            const { error: linkError } = await supabase
+                .from('event_registrations')
+                .update(updates)
+                .eq('id', link.id);
+            if (linkError) throw linkError;
+        }
+
+        if (!rows.length) return [];
+
         const { data, error } = await supabase
             .from('event_registrations')
             .upsert(rows, { onConflict: 'event_id,email,division' })
@@ -1436,8 +1705,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setProcessing(false);
         setWizardStep(5);
         await loadMyRegs();
+        loadDivisionRegs();
         onParticipantsChange?.();
-    }, [loadMyRegs, onParticipantsChange]);
+    }, [loadMyRegs, loadDivisionRegs, onParticipantsChange]);
 
     const launchPaystackCheckout = useCallback(async (reference, amount) => {
         if (!isPaystackConfigured()) {
@@ -1530,7 +1800,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setProcessing(true);
         try {
-            const { rows, covers } = buildRegistrationRows();
+            for (const d of selectedDivisions) {
+                const sel = selected[d.id];
+                if (!sel?.partnerEmail) continue;
+                const check = getPartnerAvailability(
+                    divisionRegs,
+                    d.id,
+                    { email: sel.partnerEmail, name: sel.partnerName },
+                    d.name,
+                );
+                if (!check.ok) {
+                    toast.error(check.message);
+                    setProcessing(false);
+                    return;
+                }
+            }
+
+            const { rows, covers, soloLinks } = buildRegistrationRows();
 
             if (total > 0) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
@@ -1549,6 +1835,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     line_items: lineItems,
                     event_url: eventUrl,
                     registration_rows: rows,
+                    solo_link_updates: soloLinks,
                     division_names: selectedDivisions.map((d) => d.name).join(', '),
                     primary_partner_name: hasPartner ? (primaryPartner.partnerName || 'TBD') : 'TBD',
                     event_dates: event.event_dates || '',
@@ -1580,11 +1867,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                 await launchPaystackCheckout(reference, total);
             } else {
-                const savedRows = await persistRegistrations(rows);
+                const savedRows = await persistRegistrations(rows, soloLinks, covers);
                 await sendRegistrationEmails(savedRows, true);
                 setConfirmedPaidTotal(0);
                 setWizardStep(5);
                 loadMyRegs();
+                loadDivisionRegs();
                 onParticipantsChange?.();
             }
         } catch (err) {
@@ -1673,6 +1961,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             toast.success(`Withdrawn from ${reg.division}`);
             setWithdrawTarget(null);
             loadMyRegs();
+            loadDivisionRegs();
             onParticipantsChange?.();
         } catch (err) {
             toast.error('Failed to withdraw');
@@ -1692,6 +1981,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (selectedDivisions.length === 0) { toast.error('Select at least one division'); return; }
             for (const d of selectedDivisions) {
                 const sel = selected[d.id];
+                if (sel?.partnerEmail) {
+                    const check = getPartnerAvailability(
+                        divisionRegs,
+                        d.id,
+                        { email: sel.partnerEmail, name: sel.partnerName },
+                        d.name,
+                    );
+                    if (!check.ok) {
+                        toast.error(check.message);
+                        return;
+                    }
+                }
                 if (!sel?.partnerId || !sel?.partnerEmail) continue;
                 if (sel.payForPartner && d.license_required) {
                     const lic = getPartnerLicenseInfo(sel.partnerId);
@@ -2010,7 +2311,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const isExpanded = isSelected && expandedDivisions[d.id] !== false;
                                 const myReg = reged ? myRegs.find((r) => r.division_id === d.id) : null;
                                 const enteredByName = myReg?._payerName || null;
-                                const searchState = divisionPartnerSearch[d.id] || { query: '', results: [], open: false };
+                                const searchState = divisionPartnerSearch[d.id] || { query: '', results: [], open: false, hasSearched: false };
                                 const partnerLic = sel?.partnerId ? getPartnerLicenseInfo(sel.partnerId) : null;
                                 const payModeSelf = sel?.payForPartner !== false;
                                 const eventPartnerLicenseChoice = getEventPartnerLicenseChoice(sel?.partnerId);
@@ -2134,25 +2435,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                                     <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                                                                 )}
                                                             </div>
-                                                            {searchState.open && searchState.results.length > 0 && (
+                                                            {searchState.open && searchState.query.length >= 2 && searchState.hasSearched && (
                                                                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                                    {searchState.results.map((p) => (
-                                                                        <button
-                                                                            key={p.id}
-                                                                            type="button"
-                                                                            onClick={() => setDivisionPartner(d.id, p)}
-                                                                            className="w-full text-left px-3 py-2.5 text-xs hover:bg-gray-50 flex items-center gap-2.5"
-                                                                        >
-                                                                            <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                                                                                {p.image_url ? (
-                                                                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
-                                                                                ) : (
-                                                                                    <User className="w-3.5 h-3.5 text-gray-400" />
-                                                                                )}
-                                                                            </div>
-                                                                            <span className="font-medium text-slate-900 truncate">{p.name}</span>
-                                                                        </button>
-                                                                    ))}
+                                                                    {searchState.results.length === 0 ? (
+                                                                        <p className="px-3 py-2.5 text-xs text-gray-500">No matching players found</p>
+                                                                    ) : (
+                                                                        searchState.results.map((p) => (
+                                                                            <PartnerSearchOption
+                                                                                key={p.id || p.email}
+                                                                                player={p}
+                                                                                onSelect={(player) => setDivisionPartner(d.id, player)}
+                                                                                compact
+                                                                            />
+                                                                        ))
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2359,23 +2655,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 placeholder="Search by partner name, email or 4M profile"
                                                 className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-400 font-normal"
                                             />
-                                            {partnerSearch.results.length > 0 && (
+                                            {partnerSearch.hasSearched && partnerSearch.query.length >= 2 && (
                                                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                                                    {partnerSearch.results.map((p) => (
-                                                        <button key={p.id} type="button" onClick={() => selectPartner(p)} className="w-full text-left px-4 py-3 text-sm hover:bg-gray-50 flex items-center gap-3">
-                                                            <div className="w-9 h-9 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                                                                {p.image_url ? (
-                                                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
-                                                                ) : (
-                                                                    <User className="w-4 h-4 text-gray-400" />
-                                                                )}
-                                                            </div>
-                                                            <div className="flex-1 min-w-0 flex justify-between gap-2">
-                                                                <span className="font-medium text-slate-900 truncate">{p.name}</span>
-                                                                <span className="text-slate-400 text-xs truncate">{p.email}</span>
-                                                            </div>
-                                                        </button>
-                                                    ))}
+                                                    {partnerSearch.results.length === 0 ? (
+                                                        <p className="px-4 py-3 text-xs text-gray-500">No matching players found</p>
+                                                    ) : (
+                                                        partnerSearch.results.map((p) => (
+                                                            <PartnerSearchOption
+                                                                key={p.id || p.email}
+                                                                player={p}
+                                                                onSelect={selectPartner}
+                                                            />
+                                                        ))
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -2889,6 +3181,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     <p className="font-semibold text-slate-900 text-sm">{reg.division}</p>
                                                     {div && (
                                                         <p className="text-[11px] text-gray-500 truncate">{divisionMetaLine(div)}</p>
+                                                    )}
+                                                    {reg.partner_name?.trim() && (
+                                                        <p className="text-[11px] text-slate-600 font-normal mt-0.5">
+                                                            Partner: <span className="font-medium text-slate-800">{reg.partner_name}</span>
+                                                        </p>
                                                     )}
                                                     <span className={`text-[11px] font-medium ${reg.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
                                                         {getEntryPaymentLabel(reg, userEmail)}
