@@ -5,6 +5,7 @@
 export const FEES = {
     FULL_LICENSE: 450,
     TEMPORARY_LICENSE: 120,
+    SERVICE_FEE: 75,
 };
 
 /**

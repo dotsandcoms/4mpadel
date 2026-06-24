@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+type CalendarRow = {
+  id: number;
+  event_name: string;
+  registration_closes_at: string | null;
+  slug: string | null;
+  entry_fee: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  is_manual: boolean | null;
+  allow_payments: boolean | null;
+};
+
 async function sendEmailViaEdge(payload: {
   to: string;
   template: string;
@@ -31,27 +43,63 @@ async function sendEmailViaEdge(payload: {
     }
     return true;
   } catch (err) {
-    console.error(`Error fetching send-email function:`, err);
+    console.error('Error fetching send-email function:', err);
     return false;
   }
 }
 
+function isEventStillOpen(cal: CalendarRow | null | undefined, now: Date): boolean {
+  if (!cal) return false;
+  const compareDate = cal.end_date || cal.start_date;
+  if (!compareDate) return true;
+  const eventEnd = new Date(compareDate);
+  if (Number.isNaN(eventEnd.getTime())) return false;
+  eventEnd.setHours(23, 59, 59, 999);
+  return now <= eventEnd;
+}
+
+function isManualEventRegistration(reg: {
+  division_id?: string | null;
+  pay_token?: string | null;
+  calendar?: CalendarRow | null;
+}): boolean {
+  const cal = reg.calendar;
+  if (!cal?.is_manual) return false;
+  if (cal.allow_payments === false) return false;
+  // Manual checkout flow always creates division_id + pay_token rows.
+  if (!reg.division_id || !reg.pay_token) return false;
+  return true;
+}
+
 serve(async (req: Request) => {
-  // Handle CORS Preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Safety kill switch — must be explicitly enabled in Supabase secrets.
+  if (Deno.env.get('PAYMENT_REMINDERS_ENABLED') !== 'true') {
+    console.warn('Payment reminders are disabled (PAYMENT_REMINDERS_ENABLED != true). No emails sent.');
+    return new Response(
+      JSON.stringify({
+        success: true,
+        disabled: true,
+        message: 'Payment reminders are disabled. Set PAYMENT_REMINDERS_ENABLED=true after deploying the manual-only fix.',
+        generalSent: 0,
+        deadlineSent: 0,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
+    );
   }
 
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
     const now = new Date();
 
-    // 1. Fetch pending registrations that are active ('registered') and unpaid ('pending')
-    // We join the calendar event details to evaluate deadlines
+    // ONLY manual events with payments enabled — never Rankedin / legacy imports.
     const { data: registrations, error: fetchRegError } = await supabaseAdmin
       .from('event_registrations')
       .select(`
@@ -71,11 +119,18 @@ serve(async (req: Request) => {
           registration_closes_at,
           slug,
           entry_fee,
-          start_date
+          start_date,
+          end_date,
+          is_manual,
+          allow_payments
         )
       `)
       .eq('payment_status', 'pending')
-      .eq('status', 'registered');
+      .eq('status', 'registered')
+      .eq('calendar.is_manual', true)
+      .eq('calendar.allow_payments', true)
+      .not('division_id', 'is', null)
+      .not('pay_token', 'is', null);
 
     if (fetchRegError) {
       throw new Error(`Failed to fetch pending registrations: ${fetchRegError.message}`);
@@ -83,55 +138,69 @@ serve(async (req: Request) => {
 
     if (!registrations || registrations.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, message: 'No pending registrations found.', generalSent: 0, deadlineSent: 0 }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+        JSON.stringify({
+          success: true,
+          message: 'No eligible manual-event pending registrations found.',
+          generalSent: 0,
+          deadlineSent: 0,
+          skipped: 0,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
       );
     }
 
-    // 2. Fetch division fees for any division_ids found in registrations to determine exact amount due
-    const divisionIds = registrations
-      .map(r => r.division_id)
-      .filter(Boolean);
+    const divisionIds = registrations.map((r) => r.division_id).filter(Boolean);
     const divisionFees: Record<string, number> = {};
 
     if (divisionIds.length > 0) {
-      const { data: divisionsData, error: fetchDivError } = await supabaseAdmin
+      const { data: divisionsData } = await supabaseAdmin
         .from('tournament_divisions')
         .select('id, entry_fee')
         .in('id', divisionIds);
 
-      if (!fetchDivError && divisionsData) {
-        divisionsData.forEach(d => {
-          divisionFees[d.id] = Number(d.entry_fee || 0);
-        });
+      for (const d of divisionsData || []) {
+        divisionFees[d.id] = Number(d.entry_fee || 0);
       }
     }
 
     let generalSent = 0;
     let deadlineSent = 0;
+    let skipped = 0;
 
-    // 3. Process registrations and check thresholds
     for (const reg of registrations) {
-      if (!reg.email) continue;
+      const cal = reg.calendar as CalendarRow | null;
 
-      // Skip past events (events starting today or already started)
-      if (reg.calendar?.start_date) {
-        const todayStr = now.toISOString().split('T')[0];
-        if (todayStr >= reg.calendar.start_date) {
-          continue;
-        }
+      if (!reg.email) {
+        skipped++;
+        continue;
+      }
+
+      if (!isManualEventRegistration(reg)) {
+        console.info(`SKIP non-manual registration id=${reg.id} event=${cal?.id}`);
+        skipped++;
+        continue;
+      }
+
+      if (!isEventStillOpen(cal, now)) {
+        console.info(`SKIP past event id=${cal?.id} name="${cal?.event_name}" reg=${reg.id}`);
+        skipped++;
+        continue;
+      }
+
+      const fee = reg.division_id ? (divisionFees[reg.division_id] ?? 0) : Number(cal?.entry_fee || 0);
+      if (fee <= 0) {
+        console.info(`SKIP zero-fee registration id=${reg.id} event=${cal?.id}`);
+        skipped++;
+        continue;
       }
 
       const createdAt = new Date(reg.created_at);
-      const closesAt = reg.calendar?.registration_closes_at ? new Date(reg.calendar.registration_closes_at) : null;
-      
+      const closesAt = cal?.registration_closes_at ? new Date(cal.registration_closes_at) : null;
       const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-      
+
       let shouldSendGeneral = false;
       let shouldSendDeadline = false;
 
-      // Rule A: Deadline Reminder
-      // If the event closes within the next 24 hours, registration is unpaid, and close_reminder_sent_at is null
       if (closesAt && !reg.close_reminder_sent_at) {
         const hoursToClose = (closesAt.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursToClose > 0 && hoursToClose <= 24) {
@@ -139,34 +208,32 @@ serve(async (req: Request) => {
         }
       }
 
-      // Rule B: General Reminder
-      // If the registration is at least 24 hours old, reminder_sent_at is null, and the registration closing hasn't already passed
       if (!shouldSendDeadline && hoursSinceCreation >= 24 && !reg.reminder_sent_at) {
         if (!closesAt || now < closesAt) {
           shouldSendGeneral = true;
         }
       }
 
-      // Skip if neither condition matches
       if (!shouldSendGeneral && !shouldSendDeadline) {
+        skipped++;
         continue;
       }
 
-      // Resolve the fee amount
-      const fee = reg.division_id ? (divisionFees[reg.division_id] ?? 0) : Number(reg.calendar?.entry_fee || 0);
-      const amountString = `R ${Number(fee || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
-
-      // Resolve payment URLs
-      const eventUrl = `https://4mpadel.co.za/calendar/${reg.calendar?.slug || reg.calendar?.id}`;
-      const payUrl = reg.pay_token ? `${eventUrl}?pay_token=${reg.pay_token}` : eventUrl;
-
+      const amountString = `R ${Number(fee).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+      const eventUrl = `https://4mpadel.co.za/calendar/${cal?.slug || cal?.id}`;
+      const payUrl = `${eventUrl}?pay_token=${reg.pay_token}`;
       const template = shouldSendDeadline ? 'payment_reminder_deadline' : 'payment_reminder_general';
 
-      const emailPayload = {
+      console.info(
+        `SEND [${template}] to=${reg.email} event="${cal?.event_name}" id=${cal?.id} amount=${amountString}`,
+      );
+
+      const success = await sendEmailViaEdge({
         to: reg.email,
         template,
         variables: {
-          eventId: reg.calendar.id,
+          eventId: cal?.id,
+          eventName: cal?.event_name || 'Tournament',
           playerName: reg.full_name,
           division: reg.division,
           partnerName: reg.partner_name || 'TBD',
@@ -174,13 +241,9 @@ serve(async (req: Request) => {
           payUrl,
           eventUrl,
         },
-      };
+      });
 
-      console.info(`Triggering [${template}] reminder to: ${reg.email} | Event ID: ${reg.calendar.id} | Amount: ${amountString}`);
-      
-      const success = await sendEmailViaEdge(emailPayload);
       if (success) {
-        // Update database log timestamp
         const updateField = shouldSendDeadline ? 'close_reminder_sent_at' : 'reminder_sent_at';
         const { error: updateError } = await supabaseAdmin
           .from('event_registrations')
@@ -188,24 +251,31 @@ serve(async (req: Request) => {
           .eq('id', reg.id);
 
         if (updateError) {
-          console.error(`Failed to update registration status in DB for id: ${reg.id}`, updateError.message);
+          console.error(`Failed to update registration id=${reg.id}:`, updateError.message);
+        } else if (shouldSendDeadline) {
+          deadlineSent++;
         } else {
-          if (shouldSendDeadline) deadlineSent++;
-          else generalSent++;
+          generalSent++;
         }
       }
     }
 
     return new Response(
-      JSON.stringify({ success: true, message: 'Reminders processed successfully.', generalSent, deadlineSent }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      JSON.stringify({
+        success: true,
+        message: 'Manual-event reminders processed.',
+        generalSent,
+        deadlineSent,
+        skipped,
+        scanned: registrations.length,
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 },
     );
-
-  } catch (error: any) {
-    console.error('Edge Function Error:', error.message);
+  } catch (error) {
+    console.error('Edge Function Error:', (error as Error).message);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      JSON.stringify({ error: (error as Error).message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 },
     );
   }
 });

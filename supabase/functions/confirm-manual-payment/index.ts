@@ -5,6 +5,7 @@ import {
     resolvePaystackVerifySecrets,
     verifyPaystackReference,
 } from './paystack.ts';
+import { persistManualEventRegistrations } from './manual-event-payment.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -52,6 +53,13 @@ async function finalizeManualEventPayment(
     const eventId = (meta.event_id as string) || (payment.event_id as string);
     const covers: Array<{ type: string; email: string; division?: string; license?: string }> =
         Array.isArray(meta.covers) ? meta.covers : [];
+
+    const { savedRows, persisted } = await persistManualEventRegistrations(
+        supabaseAdmin,
+        payment,
+        meta,
+        covers,
+    );
 
     await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', paymentId);
 
@@ -105,6 +113,28 @@ async function finalizeManualEventPayment(
         : '';
 
     const registrantEmail = String(meta.registrant_email || '').toLowerCase();
+    const eventUrl = (meta.event_url as string) || 'https://4mpadel.co.za/calendar';
+    const divisionEntryFees = (meta.division_entry_fees || {}) as Record<string, number>;
+    const fmtRWhole = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+
+    if (persisted && meta.registrant_email) {
+        await sendEmailViaEdge({
+            to: meta.registrant_email as string,
+            template: 'event_registration',
+            variables: {
+                eventId: eventId,
+                playerName: meta.registrant_name || 'Player',
+                eventName: meta.event_name || 'Tournament',
+                division: meta.division_names || '',
+                partnerName: meta.primary_partner_name || 'TBD',
+                eventDates: meta.event_dates || '',
+                venue: meta.event_venue || '',
+                paid: true,
+                amountDue: 'R 0.00',
+                eventUrl,
+            },
+        });
+    }
 
     if (meta.registrant_email) {
         await sendEmailViaEdge({
@@ -149,6 +179,29 @@ async function finalizeManualEventPayment(
                 eventName: meta.event_name || 'Tournament',
                 division: divs.join(', '),
                 eventUrl: meta.event_url || 'https://4mpadel.co.za/calendar',
+            },
+        });
+    }
+
+    for (const row of savedRows) {
+        const email = String(row.email || '').toLowerCase();
+        if (email === registrantEmail || row.payment_status === 'paid') continue;
+        const division = String(row.division || '');
+        const fee = Number(divisionEntryFees[division] || 0);
+        if (fee <= 0) continue;
+        const payUrl = row.pay_token ? `${eventUrl}?pay_token=${row.pay_token}` : eventUrl;
+        await sendEmailViaEdge({
+            to: row.email as string,
+            template: 'partner_invite',
+            variables: {
+                eventId: eventId,
+                playerName: row.full_name || 'Player',
+                inviterName: meta.registrant_name || 'Your partner',
+                eventName: meta.event_name || 'Tournament',
+                division,
+                eventDates: meta.event_dates || '',
+                amountDue: fmtRWhole(fee),
+                payUrl,
             },
         });
     }

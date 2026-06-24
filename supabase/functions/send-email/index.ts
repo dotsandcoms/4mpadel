@@ -6,6 +6,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const SITE_URL = 'https://4mpadel.co.za';
+const EMAIL_LOGO_URL = `${SITE_URL}/images/4m-padel-event-management-logo.png`;
+
 // Unified Brand Wrapper for premium emails
 function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: string, actionLabel?: string) {
   const buttonHtml = actionUrl && actionLabel ? `
@@ -34,9 +37,9 @@ function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: s
               <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color: #111827; border: 1px solid rgba(154,233,0,0.12); border-top: 5px solid #9AE900; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.75);">
                 <!-- Header Banner -->
                 <tr>
-                  <td style="background: linear-gradient(135deg, #111827, #0B0F19); padding: 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03);">
-                    <a href="https://4mpadel.co.za" target="_blank" style="text-decoration: none; display: inline-block;">
-                      <img src="https://4mpadel.co.za/favicon.png" alt="4M Padel Logo" style="height: 48px; width: auto; display: block; margin: 0 auto; border: 0;" />
+                  <td style="background: linear-gradient(135deg, #111827, #0B0F19); padding: 32px 40px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.03);">
+                    <a href="${SITE_URL}" target="_blank" style="text-decoration: none; display: inline-block;">
+                      <img src="${EMAIL_LOGO_URL}" alt="4M Padel Event Management" width="280" style="max-width: 280px; width: 100%; height: auto; display: block; margin: 0 auto; border: 0;" />
                     </a>
                   </td>
                 </tr>
@@ -441,13 +444,52 @@ async function generateEmailBody(
       actionLabel = 'View Live Bracket';
       break;
 
-    case 'event_registration':
-      subject = `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
-      contentHtml = `
-        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Registration Received!</h2>
+    case 'registration_pending_payment':
+      subject = `Complete payment: ${vars.eventName || 'Tournament'} — registration not confirmed`;
+      contentHtml = vars.recipientRole === 'partner' ? `
+        <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Registration Not Yet Confirmed</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
-          Hi ${vars.playerName || 'Player'}, we have recorded your registration for <strong style="color: #FFFFFF;">${vars.eventName}</strong>.
-          ${!vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' ? `<br/>There is an outstanding entry fee balance of <strong style="color:#F59E0B;">${vars.amountDue}</strong>. You can settle it anytime from your dashboard.` : ''}
+          Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.inviterName || 'Your partner'}</strong> has started registering you for <strong style="color: #FFFFFF;">${vars.eventName}</strong>.
+        </p>
+        <div style="background-color: rgba(245, 158, 11, 0.08); border-left: 4px solid #F59E0B; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <p style="font-size: 13.5px; line-height: 1.6; color: #FCD34D; margin: 0; font-weight: 600;">
+            Your registration is <strong>not confirmed</strong> until payment is complete.
+            ${vars.userPaysForPartner
+              ? ` ${vars.inviterName || 'Your partner'} is paying for your entry — you will be confirmed once their payment of <strong style="color:#FFFFFF;">${vars.registrantAmountDue || vars.amountDue || 'the entry fee'}</strong> is successful.`
+              : ` ${vars.inviterName || 'Your partner'} must complete their payment first. You will then receive a separate email with a link to pay your entry fee${vars.amountDue && vars.amountDue !== 'R 0.00' ? ` of <strong style="color:#FFFFFF;">${vars.amountDue}</strong>` : ''}.`}
+          </p>
+        </div>
+        ${eventCardHtml}
+      ` : `
+        <h2 style="font-size: 24px; font-weight: 800; color: #F59E0B; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Registration Not Yet Confirmed</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${vars.playerName || 'Player'}, you started registering for <strong style="color: #FFFFFF;">${vars.eventName}</strong>.
+          ${vars.partnerName ? ` Your partner <strong style="color: #FFFFFF;">${vars.partnerName}</strong> has been notified.` : ''}
+        </p>
+        <div style="background-color: rgba(245, 158, 11, 0.08); border-left: 4px solid #F59E0B; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <p style="font-size: 13.5px; line-height: 1.6; color: #FCD34D; margin: 0; font-weight: 600;">
+            Your registration is <strong>not confirmed</strong> until payment of <strong style="color:#FFFFFF;">${vars.amountDue || 'your entry fee'}</strong> is complete. If you leave before paying, you will not be entered in the tournament.
+          </p>
+        </div>
+        ${eventCardHtml}
+      `;
+      actionUrl = vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar';
+      actionLabel = vars.recipientRole === 'partner' && !vars.userPaysForPartner
+        ? 'View Event Details'
+        : (vars.recipientRole === 'partner' ? 'View Event Details' : 'Complete Payment');
+      break;
+
+    case 'event_registration':
+      subject = vars.paid
+        ? `Registration Confirmed: ${vars.eventName || 'Tournament'}! ✅`
+        : `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: ${vars.paid ? '#9AE900' : '#FFFFFF'}; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">${vars.paid ? 'Registration Confirmed!' : 'Registration Received!'}</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${vars.playerName || 'Player'}, ${vars.paid
+            ? `your registration for <strong style="color: #FFFFFF;">${vars.eventName}</strong> is now fully confirmed.`
+            : `we have recorded your registration for <strong style="color: #FFFFFF;">${vars.eventName}</strong>.`}
+          ${!vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' ? `<br/>There is an outstanding entry fee balance of <strong style="color:#F59E0B;">${vars.amountDue}</strong>. Your registration is not confirmed until payment is complete.` : ''}
         </p>
         ${eventCardHtml}
       `;

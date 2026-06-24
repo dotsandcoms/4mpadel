@@ -17,7 +17,7 @@ import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/
 
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
-import { getEventImage } from '../utils/imageUtils';
+import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -379,6 +379,7 @@ const EventDetails = () => {
     // Registration Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
+    const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
     const [loggedInPlayer, setLoggedInPlayer] = useState(null);
     const [isRegistered, setIsRegistered] = useState(false);
@@ -1234,9 +1235,7 @@ const EventDetails = () => {
 
                 if (localRegs && localRegs.length > 0) {
                     localRegs.forEach(reg => {
-                        // For RankedIn events, only accept local registrations if they are paid.
-                        // This avoids displaying unpaid pending website registrations that are not on RankedIn.
-                        if (rId && reg.payment_status !== 'paid') {
+                        if (reg.status === 'withdrawn' || reg.payment_status !== 'paid') {
                             return;
                         }
 
@@ -2243,6 +2242,78 @@ const EventDetails = () => {
         }
     };
 
+    const openManualRegistration = () => {
+        manualRegActionsRef.current?.openRegistration?.();
+    };
+
+    const openManualPayFlow = () => {
+        manualRegActionsRef.current?.openPayFlow?.();
+    };
+
+    const heroBackgroundUrl = getDefaultEventBackground(event);
+    const eventPosterUrl = event.custom_image_url || event.image_url || '';
+
+    const renderCalendarButton = (wrapperClass = '') => (
+        <div className={`relative ${wrapperClass}`}>
+            <button
+                type="button"
+                onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
+                className="w-full flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
+            >
+                <CalendarIcon className="w-4 h-4 shrink-0" />
+                <span className="text-xs font-semibold tracking-normal truncate">Add to Calendar</span>
+            </button>
+            <AnimatePresence>
+                {isCalendarMenuOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                        className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-50 animate-scale-up"
+                    >
+                        {[
+                            {
+                                label: 'Google Calendar', fn: handleGoogleCalendar, icon: (
+                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0">
+                                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
+                                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.16v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
+                                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.16C1.43 8.55 1 10.22 1 12s.43 3.45 1.16 4.93l3.68-2.84z" fill="#FBBC05" />
+                                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.16 7.07l3.68 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
+                                    </svg>
+                                )
+                            },
+                            {
+                                label: 'Apple Calendar', fn: handleAppleCalendar, icon: (
+                                    <svg viewBox="0 0 384 512" className="w-3.5 h-3.5 flex-shrink-0" fill="#94a3b8">
+                                        <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+                                    </svg>
+                                )
+                            },
+                            {
+                                label: 'Outlook / Other', fn: handleOutlookCalendar, icon: (
+                                    <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-[#0078D4]" fill="currentColor">
+                                        <path d="M1 4.5l8.7-2.6v19.4L1 18.5V4.5z" />
+                                        <path d="M10.4 2.8h12v18.4h-12V2.8zM14 9c0-.9.7-1.6 1.6-1.6h.8c.9 0 1.6.7 1.6 1.6v6c0 .9-.7 1.6-1.6 1.6h-.8c-.9 0-1.6-.7-1.6-1.6V9z" />
+                                    </svg>
+                                )
+                            },
+                        ].map(({ label, icon, fn }) => (
+                            <button
+                                key={label}
+                                type="button"
+                                onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
+                                className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-white hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
+                            >
+                                {icon}
+                                {label}
+                            </button>
+                        ))}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+
     const eventAllowsPayments = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0);
 
     const getDivisionStatus = (divName) => {
@@ -2418,9 +2489,9 @@ const EventDetails = () => {
                 {/* ── HERO ── */}
                 <div className="relative w-full bg-[#0F172A]">
                     {/* Full width foreground flyer image */}
-                    <div className="absolute inset-0 z-0 h-[65vw] max-h-[520px] min-h-[320px] overflow-hidden">
+                    <div className="absolute inset-0 z-0 h-[55vw] max-h-[480px] min-h-[280px] overflow-hidden">
                         <img
-                            src={getEventImage(event)}
+                            src={heroBackgroundUrl}
                             alt={event.event_name}
                             className="w-full h-full object-cover object-center animate-fade-in"
                         />
@@ -2438,32 +2509,152 @@ const EventDetails = () => {
                     )}
 
                     {/* Hero text overlay & Action Buttons */}
-                    <div className="relative z-50 pt-[55vw] sm:pt-[350px] pb-8">
-                        <div className="max-w-5xl mx-auto px-5 w-full flex flex-col md:items-center md:text-center">
+                    <div className={`relative z-50 pb-10 ${eventPosterUrl ? 'pt-[36vw] sm:pt-[215px]' : 'pt-[38vw] sm:pt-[250px]'}`}>
+                        <div className="max-w-5xl mx-auto px-5 w-full">
+                            {eventPosterUrl ? (
+                                <>
+                                    <div className="flex gap-3 items-start w-full mt-2">
+                                        <div className="flex-1 min-w-0">
+                                            {event.sapa_status && event.sapa_status !== 'None' && (
+                                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
+                                                    {event.sapa_status}
+                                                </span>
+                                            )}
+                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg truncate whitespace-nowrap">
+                                                {event.event_name}
+                                            </h1>
+                                            <div className="flex items-center gap-2 text-white/90 text-sm font-normal">
+                                                <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
+                                                <span className="truncate">{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPosterPreviewOpen(true)}
+                                            className="w-14 h-[4.5rem] shrink-0 rounded-lg overflow-hidden border-2 border-white/40 shadow-lg hover:scale-105 transition-transform bg-[#0F172A] mt-1"
+                                            aria-label="View event poster"
+                                        >
+                                            <img
+                                                src={eventPosterUrl}
+                                                alt="Event poster preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-2 mt-4 w-full">
+                                        {(() => {
+                                            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                            if (event.is_manual) {
+                                                if (!isEventPassed) {
+                                                    if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={openManualRegistration}
+                                                                className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                                style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                            >
+                                                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                                                <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                            </button>
+                                                        );
+                                                    }
+                                                    if (manualRegStatus.hasPendingPayment) {
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={openManualPayFlow}
+                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            >
+                                                                <CreditCard className="w-4 h-4" />
+                                                                Pay Entry
+                                                            </button>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={openManualRegistration}
+                                                            className="flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                        >
+                                                            Register Now <ArrowRight className="w-4 h-4" />
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
+                                            }
+                                            if (!isEventPassed) {
+                                                if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
+                                                            className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                            style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                        >
+                                                            <CheckCircle className="w-4 h-4 shrink-0" />
+                                                            <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                        </button>
+                                                    );
+                                                }
+                                                return (
+                                                    <>
+                                                        {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleRankedinRedirect}
+                                                                className="flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                            >
+                                                                Register Now <ArrowRight className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            >
+                                                                <CreditCard className="w-4 h-4" />
+                                                                Pay Fee
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            }
+                                            if ((hasResults || hasDraw) && (rId || event.slug)) {
+                                                return (
+                                                    <Link
+                                                        to={`/draws/${event.slug || rId}`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                    >
+                                                        <GitBranch className="w-4 h-4" />
+                                                        Draws & Results
+                                                    </Link>
+                                                );
+                                            }
+                                            return null;
+                                        })()}
+                                        {renderCalendarButton('flex-1')}
+                                    </div>
+                                </>
+                            ) : (
+                        <div className="w-full flex flex-col md:items-center md:text-center mt-2">
                             {event.sapa_status && event.sapa_status !== 'None' && (
-                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-4 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
+                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-3 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
                                     {event.sapa_status}
                                 </span>
                             )}
-                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-5 drop-shadow-lg w-full md:text-center text-left">
+                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left truncate whitespace-nowrap">
                                 {event.event_name}
                             </h1>
 
-                            <div className="flex flex-col gap-3 mb-8 md:items-center w-full">
-                                <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
-                                    <CalendarIcon className="w-5 h-5 text-white/70" />
-                                    <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
-                                </div>
-                                {(event.city || event.venue) && (
-                                    <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
-                                        <MapPin className="w-5 h-5 text-white/70" />
-                                        <span>{event.venue ? `${event.venue}, ` : ''}{event.city}</span>
-                                    </div>
-                                )}
-                                <div className="flex items-center gap-3 text-white/90 text-sm font-normal">
-                                    <Users className="w-5 h-5 text-white/70" />
-                                    <span>{totalPlayersCount} Players Registered</span>
-                                </div>
+                            <div className="flex items-center gap-3 text-white/90 text-sm font-normal mb-8 md:justify-center w-full">
+                                <CalendarIcon className="w-5 h-5 text-white/70 shrink-0" />
+                                <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
                             </div>
 
                             {/* Action Buttons Row */}
@@ -2476,7 +2667,7 @@ const EventDetails = () => {
                                                 return (
                                                     <button
                                                         type="button"
-                                                        onClick={() => document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                                        onClick={openManualRegistration}
                                                         className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
                                                         style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
                                                     >
@@ -2489,10 +2680,7 @@ const EventDetails = () => {
                                                 return (
                                                     <button
                                                         type="button"
-                                                        onClick={() => {
-                                                            document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                            manualRegActionsRef.current?.openPayFlow?.();
-                                                        }}
+                                                        onClick={openManualPayFlow}
                                                         className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                     >
@@ -2504,7 +2692,7 @@ const EventDetails = () => {
                                             return (
                                                 <button
                                                     type="button"
-                                                    onClick={() => document.getElementById('manual-registration')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                                                    onClick={openManualRegistration}
                                                     className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
                                                 >
                                                     Register Now <ArrowRight className="w-4 h-4" />
@@ -2563,65 +2751,42 @@ const EventDetails = () => {
                                     }
                                     return null;
                                 })()}
-
-                                {/* Add to Calendar Menu Toggle */}
-                                <button
-                                    onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                                    className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
-                                >
-                                    <CalendarIcon className="w-4 h-4 shrink-0" />
-                                    <span className="text-xs font-semibold tracking-normal truncate">Add to Calendar</span>
-                                </button>
-                                <AnimatePresence>
-                                    {isCalendarMenuOpen && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -8, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                                            className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-50 animate-scale-up"
-                                        >
-                                            {[
-                                                {
-                                                    label: 'Google Calendar', fn: handleGoogleCalendar, icon: (
-                                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0">
-                                                            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                                                            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.16v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                                            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.16C1.43 8.55 1 10.22 1 12s.43 3.45 1.16 4.93l3.68-2.84z" fill="#FBBC05" />
-                                                            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.16 7.07l3.68 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                                        </svg>
-                                                    )
-                                                },
-                                                {
-                                                    label: 'Apple Calendar', fn: handleAppleCalendar, icon: (
-                                                        <svg viewBox="0 0 384 512" className="w-3.5 h-3.5 flex-shrink-0" fill="#94a3b8">
-                                                            <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
-                                                        </svg>
-                                                    )
-                                                },
-                                                {
-                                                    label: 'Outlook / Other', fn: handleOutlookCalendar, icon: (
-                                                        <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 flex-shrink-0 text-[#0078D4]" fill="currentColor">
-                                                            <path d="M1 4.5l8.7-2.6v19.4L1 18.5V4.5z" />
-                                                            <path d="M10.4 2.8h12v18.4h-12V2.8zM14 9c0-.9.7-1.6 1.6-1.6h.8c.9 0 1.6.7 1.6 1.6v6c0 .9-.7 1.6-1.6 1.6h-.8c-.9 0-1.6-.7-1.6-1.6V9z" />
-                                                        </svg>
-                                                    )
-                                                },
-                                            ].map(({ label, icon, fn }) => (
-                                                <button
-                                                    key={label}
-                                                    onClick={() => { fn(); setIsCalendarMenuOpen(false); }}
-                                                    className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-white hover:bg-white/5 transition-colors text-left border-b border-white/5 last:border-0"
-                                                >
-                                                    {icon}
-                                                    {label}
-                                                </button>
-                                            ))}
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                {renderCalendarButton('flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none')}
                             </div>
                         </div>
+                            )}
+                        </div>
                     </div>
+
+                    <AnimatePresence>
+                        {posterPreviewOpen && eventPosterUrl && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
+                                onClick={() => setPosterPreviewOpen(false)}
+                            >
+                                <button
+                                    type="button"
+                                    onClick={() => setPosterPreviewOpen(false)}
+                                    className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
+                                    aria-label="Close poster preview"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                                <motion.img
+                                    initial={{ scale: 0.95, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0.95, opacity: 0 }}
+                                    src={eventPosterUrl}
+                                    alt={`${event.event_name} poster`}
+                                    className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 {/* ── WHITE BACKGROUND AREA ── */}

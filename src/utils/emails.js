@@ -101,8 +101,12 @@ const getSubjectForTemplate = (template, vars) => {
             return `Sanction Update: ${vars.eventName}`;
         case 'draws_ready': 
             return `Draws Published: ${vars.eventName}! 🎾`;
+        case 'registration_pending_payment':
+            return `Complete payment: ${vars.eventName || 'Tournament'} — registration not confirmed`;
         case 'event_registration':
-            return `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
+            return vars.paid
+                ? `Registration Confirmed: ${vars.eventName || 'Tournament'}! ✅`
+                : `You're Registered: ${vars.eventName || 'Tournament'}! 🎾`;
         case 'payment_confirmation':
             return `Payment Confirmed: ${vars.eventName || 'Tournament'} ✅`;
         case 'partner_entry_paid':

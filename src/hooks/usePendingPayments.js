@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import { useRankedin } from './useRankedin';
 
-export const usePendingPayments = (email, rankedinId) => {
+export const usePendingPayments = (email) => {
     const [pendingPayments, setPendingPayments] = useState([]);
     const [loading, setLoading] = useState(true);
-    const { getPlayerEventsAsync } = useRankedin();
 
     useEffect(() => {
         const fetchPending = async () => {
@@ -27,49 +25,18 @@ export const usePendingPayments = (email, rankedinId) => {
                 // 0. Fetch profile to get profile_id for more accurate matching
                 const { data: profile } = await supabase
                     .from('players')
-                    .select('id, rankedin_id')
+                    .select('id, rankedin_id, name')
                     .ilike('email', email)
                     .maybeSingle();
                 
                 const profileId = profile?.id;
-                const pRankedinId = rankedinId || profile?.rankedin_id;
+                const profileName = profile?.name?.toLowerCase().trim();
+                const normalizedEmail = email.toLowerCase().trim();
 
-                // 1. Fetch from Rankedin API if rankedinId is provided
-                if (pRankedinId) {
-                    const rEvents = await getPlayerEventsAsync(pRankedinId);
-                    const upcomingREvents = (rEvents || []).filter(e => {
-                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
-                        eventEnd.setHours(23, 59, 59, 999);
-                        return eventEnd >= today && e.state !== 2;
-                    });
+                // Do NOT bulk-add Rankedin API events as unpaid — Rankedin registration ≠ 4M payment status.
+                // Unpaid entries come only from local DB rows below, then we subtract confirmed payments.
 
-                    if (upcomingREvents.length > 0) {
-                        const { data: dbEvents } = await supabase
-                            .from('calendar')
-                            .select('id, event_name, start_date, slug, rankedin_url, entry_fee, category_fees, allow_payments');
-                        
-                        if (dbEvents) {
-                            upcomingREvents.forEach(re => {
-                                const match = dbEvents.find(dbE => dbE.rankedin_url && dbE.rankedin_url.includes(`/tournament/${re.id}/`));
-                                if (match) {
-                                    const hasFee = match.entry_fee > 0 || (match.category_fees && Object.keys(match.category_fees).length > 0);
-                                    if (hasFee && match.allow_payments) {
-                                        const division = (re.class_name || 'N/A').trim();
-                                        unpaidEvents.set(`${match.id}_${division}`, {
-                                            id: match.id,
-                                            name: match.event_name,
-                                            division: re.class_name,
-                                            slug: match.slug || match.id,
-                                            start_date: match.start_date
-                                        });
-                                    }
-                                }
-                            });
-                        }
-                    }
-                }
-
-                // 2. Fetch unpaid participants
+                // 1. Fetch unpaid participants
                 const { data: participants, error: pError } = await supabase
                     .from('tournament_participants')
                     .select(`
@@ -100,10 +67,28 @@ export const usePendingPayments = (email, rankedinId) => {
                 const registrations = (rawRegistrations || []).filter(r => {
                     const isRegistrant = r.email?.toLowerCase() === email.toLowerCase();
                     const isPartner = r.partner_email?.toLowerCase() === email.toLowerCase();
-                    if (isRegistrant && ['pending', 'failed'].includes(r.payment_status)) return true;
-                    if (isPartner && ['pending', 'failed'].includes(r.partner_payment_status)) return true;
-                    return false;
+                    const userPending =
+                        (isRegistrant && ['pending', 'failed'].includes(r.payment_status)) ||
+                        (isPartner && ['pending', 'failed'].includes(r.partner_payment_status));
+                    return userPending;
                 });
+
+                // Paid participant rows override stale pending registration status
+                const { data: paidParticipantRows } = await supabase
+                    .from('tournament_participants')
+                    .select('event_id, class_name, calendar!inner(start_date)')
+                    .or(profileId ? `email.ilike.${email},profile_id.eq.${profileId}` : `email.ilike.${email}`)
+                    .eq('is_paid', true)
+                    .gte('calendar.start_date', todayStr);
+
+                const normalizeDivision = (name) => {
+                    if (!name || name === 'N/A' || name === 'null' || name === 'undefined') return '';
+                    return name.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+                };
+
+                const paidParticipantKeys = new Set(
+                    (paidParticipantRows || []).map((p) => `${p.event_id}_${normalizeDivision(p.class_name)}`),
+                );
 
                 if (pError) console.error("Error fetching participants:", pError);
                 if (rError) console.error("Error fetching registrations:", rError);
@@ -128,7 +113,14 @@ export const usePendingPayments = (email, rankedinId) => {
                 };
 
                 if (participants) participants.forEach(processEvent);
-                if (registrations) registrations.forEach(processEvent);
+                if (registrations) {
+                    registrations.forEach((record) => {
+                        const division = (record.division || 'N/A').trim();
+                        const paidKey = `${record.event_id}_${normalizeDivision(division)}`;
+                        if (paidParticipantKeys.has(paidKey)) return;
+                        processEvent(record);
+                    });
+                }
 
                 // Now we need to make sure they haven't actually paid for these events in the other tables
                 // e.g. they might be in tournament_participants with is_paid=false, but event_registrations payment_status='paid'
@@ -158,23 +150,24 @@ export const usePendingPayments = (email, rankedinId) => {
                         .in('event_id', eventIds);
 
                     // Also check the payments table directly for robustness
-                    const { data: directPayments } = await supabase
+                    let paymentsQuery = supabase
                         .from('payments')
-                        .select('event_id, metadata')
+                        .select('event_id, metadata, player_id')
                         .eq('status', 'success')
                         .eq('payment_type', 'event_entry_fee')
-                        .in('event_id', eventIds)
-                        .or(profileId ? `player_id.eq.${profileId},metadata->>email.ilike.${email}` : `metadata->>email.ilike.${email}`);
+                        .in('event_id', eventIds);
 
-                    const normalizeDivision = (name) => {
-                        if (!name || name === 'N/A' || name === 'null' || name === 'undefined') return '';
-                        return name.toString().toLowerCase().replace(/[^a-z0-9]/g, '');
-                    };
+                    if (profileId) {
+                        paymentsQuery = paymentsQuery.or(`player_id.eq.${profileId},metadata->>email.ilike.${normalizedEmail}`);
+                    } else {
+                        paymentsQuery = paymentsQuery.filter('metadata->>email', 'ilike', normalizedEmail);
+                    }
+
+                    const { data: directPayments } = await paymentsQuery;
 
                     const findAndRemove = (eventId, divisionName) => {
                         const normTarget = normalizeDivision(divisionName);
                         if (!normTarget) {
-                            // General payment: remove all divisions for this event
                             const keysToRemove = [];
                             for (const [key, val] of unpaidEvents.entries()) {
                                 if (val.id === eventId) keysToRemove.push(key);
@@ -183,11 +176,10 @@ export const usePendingPayments = (email, rankedinId) => {
                             return;
                         }
 
-                        // Specific division payment: find and remove only the matching division
                         for (const [key, val] of unpaidEvents.entries()) {
                             if (val.id === eventId) {
                                 const normVal = normalizeDivision(val.division);
-                                if (normVal === normTarget) {
+                                if (normVal === normTarget || normVal.includes(normTarget) || normTarget.includes(normVal)) {
                                     unpaidEvents.delete(key);
                                 }
                             }
@@ -218,16 +210,56 @@ export const usePendingPayments = (email, rankedinId) => {
                     }
                     if (directPayments) {
                         directPayments.forEach(p => {
-                            if (p.metadata?.covers && Array.isArray(p.metadata.covers)) {
-                                p.metadata.covers.forEach(c => {
-                                    if (c.type === 'entry' && c.email?.toLowerCase() === email.toLowerCase() && c.division) {
+                            const meta = p.metadata || {};
+                            const paymentBelongsToUser =
+                                (profileId && p.player_id === profileId) ||
+                                (meta.email && String(meta.email).toLowerCase().trim() === normalizedEmail) ||
+                                (meta.registrant_email && String(meta.registrant_email).toLowerCase().trim() === normalizedEmail);
+
+                            if (!paymentBelongsToUser && meta.line_items && Array.isArray(meta.line_items)) {
+                                const lineMatch = meta.line_items.some((item) => {
+                                    const player = String(item.player || item.label || '').toLowerCase();
+                                    return profileName && player.includes(profileName);
+                                });
+                                if (lineMatch) {
+                                    meta.line_items.forEach((item) => {
+                                        const div = item.division || meta.division;
+                                        if (div) findAndRemove(p.event_id, div);
+                                    });
+                                    if (!meta.line_items.some((item) => item.division || meta.division)) {
+                                        findAndRemove(p.event_id, null);
+                                    }
+                                    return;
+                                }
+                            }
+
+                            if (!paymentBelongsToUser) return;
+
+                            if (meta.covers && Array.isArray(meta.covers)) {
+                                meta.covers.forEach((c) => {
+                                    if (c.type === 'entry' && c.email?.toLowerCase() === normalizedEmail && c.division) {
                                         findAndRemove(p.event_id, c.division);
                                     }
                                 });
-                            } else {
-                                const division = p.metadata?.division;
-                                findAndRemove(p.event_id, division);
+                                return;
                             }
+
+                            if (meta.line_items && Array.isArray(meta.line_items)) {
+                                let removedSpecific = false;
+                                meta.line_items.forEach((item) => {
+                                    if (item.type === 'entry_fee' || item.type === 'entry') {
+                                        const div = item.division || meta.division;
+                                        if (div) {
+                                            findAndRemove(p.event_id, div);
+                                            removedSpecific = true;
+                                        }
+                                    }
+                                });
+                                if (!removedSpecific) findAndRemove(p.event_id, meta.division);
+                                return;
+                            }
+
+                            findAndRemove(p.event_id, meta.division);
                         });
                     }
                 }
@@ -266,7 +298,7 @@ export const usePendingPayments = (email, rankedinId) => {
         };
 
         fetchPending();
-    }, [email, rankedinId]);
+    }, [email]);
 
     return { pendingPayments, loading };
 };

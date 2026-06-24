@@ -17,6 +17,8 @@ jobs:
           SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
+          # SAFETY: function only emails manual events (is_manual=true) and is disabled
+          # unless PAYMENT_REMINDERS_ENABLED=true is set in Supabase Edge Function secrets.
           curl -i -X POST "${SUPABASE_URL}/functions/v1/payment-reminders" \
           -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
           -H "Content-Type: application/json"

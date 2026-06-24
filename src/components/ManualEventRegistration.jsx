@@ -1,16 +1,18 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     X, Check, CreditCard, Loader2, Users, Calendar as CalendarIcon, Trophy,
-    AlertCircle, ChevronRight, ArrowRight, Award, MapPin, User,
-    Search, ShieldCheck, ChevronLeft, Info, Layout
+    AlertCircle, ChevronRight, ChevronDown, ChevronUp, ArrowRight, Award, MapPin, User,
+    Search, ChevronLeft, Info, Layout
 } from 'lucide-react';
 import PaystackPop from '@paystack/inline-js';
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import { getEventImage } from '../utils/imageUtils';
+import sapaLogo from '../assets/sapa-logo.svg';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
 
@@ -18,8 +20,8 @@ const STEPS = [
     { id: 1, label: 'Profile' },
     { id: 2, label: 'Division' },
     { id: 3, label: 'Partner' },
-    { id: 4, label: 'Payment' },
-    { id: 5, label: 'Confirm' },
+    { id: 4, label: 'Review & Pay' },
+    { id: 5, label: 'Confirmed' },
 ];
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -69,28 +71,39 @@ const WizardStepTitle = ({ title, subtitle }) => (
 );
 
 const ProgressBar = ({ step, theme }) => (
-    <div className="flex items-center justify-between gap-1 px-1">
-        {STEPS.map((s) => {
+    <div className="flex items-start px-1">
+        {STEPS.map((s, i) => {
             const active = step === s.id;
             const done = step > s.id;
+            const accentColor = theme.fill || '#CCFF00';
+            const activeTextColor = theme.primaryText?.includes('text-white') ? '#fff' : '#0F172A';
             return (
-                <div key={s.id} className="flex-1 flex flex-col items-center min-w-0">
-                    <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${done || active ? '' : 'bg-gray-100 text-gray-400'}`}
-                        style={done || active ? { backgroundColor: theme.fill, color: theme.primaryText?.includes('text-white') ? '#fff' : '#0F172A' } : undefined}
-                    >
-                        {done ? <Check size={14} /> : s.id}
+                <React.Fragment key={s.id}>
+                    <div className="flex flex-col items-center min-w-0 shrink-0" style={{ width: `${100 / STEPS.length}%` }}>
+                        <div
+                            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black shrink-0 transition-colors ${done || active ? '' : 'bg-gray-100 text-gray-400'}`}
+                            style={done || active ? { backgroundColor: accentColor, color: activeTextColor } : undefined}
+                        >
+                            {done ? <Check size={14} /> : s.id}
+                        </div>
+                        <span className={`text-[9px] font-bold mt-1 truncate w-full text-center leading-tight ${active ? 'text-slate-900' : 'text-gray-400'}`}>
+                            {s.label}
+                        </span>
                     </div>
-                    <span className={`text-[9px] font-bold mt-1 truncate w-full text-center ${active ? theme.accentText : 'text-gray-400'}`}>
-                        {s.label}
-                    </span>
-                </div>
+                    {i < STEPS.length - 1 && (
+                        <div
+                            className="h-px flex-1 mt-3.5 mx-0.5"
+                            style={{ backgroundColor: done || active ? accentColor : '#E5E7EB' }}
+                        />
+                    )}
+                </React.Fragment>
             );
         })}
     </div>
 );
 
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
+    const navigate = useNavigate();
     const [divisions, setDivisions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [profile, setProfile] = useState(null);
@@ -113,6 +126,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [licenseInfo, setLicenseInfo] = useState({ active: false, label: 'No active license' });
 
     const [hasRankedinAccount, setHasRankedinAccount] = useState(null);
+    const [selfPlaytomicLevel, setSelfPlaytomicLevel] = useState('');
 
     const [agreeRules, setAgreeRules] = useState(false);
     const [agreeComplete, setAgreeComplete] = useState(false);
@@ -120,9 +134,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [showRulesModal, setShowRulesModal] = useState(false);
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
+    const [expandedDivisions, setExpandedDivisions] = useState({});
+    const [divisionPartnerSearch, setDivisionPartnerSearch] = useState({});
+    const [partnerLicenseCache, setPartnerLicenseCache] = useState({});
     const partnerSearchSeq = useRef(0);
     const partnerSearchTimeout = useRef(null);
+    const divisionPartnerSearchSeq = useRef({});
+    const divisionPartnerSearchTimeout = useRef({});
     const paymentRetryRef = useRef(false);
+    const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
 
     const accent = theme?.fill || '#CCFF00';
     const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0F172A';
@@ -133,6 +153,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const profileImageUrl = displayProfile?.image_url?.trim() || null;
 
     const sapaPoints = displayProfile?.points ?? null;
+
+    useEffect(() => {
+        const level = displayProfile?.level?.trim();
+        if (level) setSelfPlaytomicLevel((prev) => prev || level);
+    }, [displayProfile?.level]);
 
     const resolveLicense = useCallback(async (player, eventId) => {
         if (!player) return { active: false, label: 'No active license' };
@@ -250,7 +275,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         const { data, error } = await supabase
             .from('players')
-            .select('id, name, contact_number, email, license_type, paid_registration, image_url, points, approved, rankedin_id, temporary_licenses(event_id, event_date)')
+            .select('id, name, contact_number, email, license_type, paid_registration, image_url, points, level, approved, rankedin_id, temporary_licenses(event_id, event_date)')
             .ilike('email', userEmail)
             .maybeSingle();
         if (error) {
@@ -306,7 +331,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [event.id]);
 
-    const registeredDivisionIds = useMemo(() => new Set(myRegs.map((r) => r.division_id)), [myRegs]);
+    const registeredDivisionIds = useMemo(() => new Set(
+        myRegs
+            .filter((reg) => {
+                if (reg.payment_status === 'paid') return true;
+                const div = divisions.find((d) => d.id === reg.division_id);
+                return div && Number(div.entry_fee || 0) === 0;
+            })
+            .map((r) => r.division_id),
+    ), [myRegs, divisions]);
+
+    const confirmedRegs = useMemo(
+        () => myRegs.filter((reg) => {
+            if (reg.payment_status === 'paid') return true;
+            const div = divisions.find((d) => d.id === reg.division_id);
+            return div && Number(div.entry_fee || 0) === 0;
+        }),
+        [myRegs, divisions],
+    );
 
     const pendingPaymentRegs = useMemo(
         () => myRegs.filter((reg) => {
@@ -318,8 +360,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     );
 
     const hasPendingPayment = pendingPaymentRegs.length > 0;
-    const hasRegistrations = myRegs.length > 0;
-    const allRegistrationsPaid = hasRegistrations && myRegs.every((reg) => {
+    const hasRegistrations = confirmedRegs.length > 0;
+    const allRegistrationsPaid = hasRegistrations && confirmedRegs.every((reg) => {
         if (reg.payment_status === 'paid') return true;
         const div = divisions.find((d) => d.id === reg.division_id);
         return !div || Number(div.entry_fee || 0) === 0;
@@ -433,10 +475,29 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         loadProfile,
     ]);
 
+    const resetWizardState = () => {
+        setWizardStep(1);
+        setSelected({});
+        setHasPartner(false);
+        setConfirmedPaidTotal(null);
+        setAgreeRules(false);
+        setAgreeComplete(false);
+        setAgreeSapa(false);
+        setBuyLicenseSelf(false);
+        setBuyLicensePartner(false);
+        setPartnerLicenseOption('none');
+        setPayMode('both');
+        setExpandedDivisions({});
+        setDivisionPartnerSearch({});
+        paymentRetryRef.current = false;
+    };
+
     const openWizard = () => {
         paymentRetryRef.current = false;
+        setConfirmedPaidTotal(null);
         setWizardStep(1);
         setHasRankedinAccount(null);
+        setSelfPlaytomicLevel('');
         setAgreeRules(false);
         setAgreeComplete(false);
         setAgreeSapa(false);
@@ -446,7 +507,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const closeWizard = () => {
         if (processing) return;
+        resetWizardState();
         setShowWizard(false);
+    };
+
+    const finishRegistrationWizard = () => {
+        resetWizardState();
+        setShowWizard(false);
+        navigate('/profile?tab=events');
     };
 
     const toggleDivision = (div) => {
@@ -455,7 +523,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setSelected((prev) => {
             const next = { ...prev };
             if (next[div.id]) delete next[div.id];
-            else next[div.id] = { partnerName: '', partnerEmail: '', partnerId: null, partnerProfile: null, payForSelf: true, payForPartner: payMode === 'both' };
+            else next[div.id] = {
+                partnerName: '',
+                partnerEmail: '',
+                partnerId: null,
+                partnerProfile: null,
+                payForSelf: true,
+                payForPartner: true,
+                partnerLicenseChoice: null,
+                partnerPlaytomicLevel: '',
+            };
+            return next;
+        });
+        setExpandedDivisions((prev) => {
+            const next = { ...prev };
+            if (next[div.id]) delete next[div.id];
+            else next[div.id] = true;
             return next;
         });
     };
@@ -539,7 +622,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const excludeId = profile?.id || displayProfile?.id;
         let playerQuery = supabase
             .from('players')
-            .select('id, name, email, license_type, paid_registration, image_url')
+            .select('id, name, email, license_type, paid_registration, image_url, level')
             .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
             .limit(6);
         if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
@@ -579,10 +662,189 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setPartnerSearch({ query: '', results: [] });
     };
 
+    const getDivisionMeta = (division) => {
+        const parts = [];
+        const fee = Number(division.entry_fee || 0);
+        if (fee > 0) parts.push(`Entry fee: ${fmtRWhole(fee)} per player`);
+        if (division.format) parts.push(`Format: ${division.format}`);
+        if (division.license_required) parts.push('SAPA license required');
+        return parts.join(' • ');
+    };
+
+    const getPartnerLicenseInfo = (partnerId) =>
+        (partnerId ? partnerLicenseCache[partnerId] : null) || { active: false, label: 'No active license' };
+
+    const cachePartnerLicense = useCallback(async (player) => {
+        if (!player?.id) return { active: false, label: 'No active license' };
+        const lic = await resolvePartnerLicense(player);
+        setPartnerLicenseCache((prev) => (prev[player.id] ? prev : { ...prev, [player.id]: lic }));
+        return lic;
+    }, [resolvePartnerLicense]);
+
+    const setDivisionPartner = (divId, player) => {
+        setSelected((prev) => {
+            let inheritedLicenseChoice = null;
+            for (const id of Object.keys(prev)) {
+                if (id !== divId && prev[id]?.partnerId === player.id && prev[id]?.partnerLicenseChoice) {
+                    inheritedLicenseChoice = prev[id].partnerLicenseChoice;
+                    break;
+                }
+            }
+            return {
+                ...prev,
+                [divId]: {
+                    ...prev[divId],
+                    partnerName: player.name,
+                    partnerEmail: player.email || '',
+                    partnerId: player.id,
+                    partnerProfile: player,
+                    partnerLicenseChoice: inheritedLicenseChoice,
+                    partnerPlaytomicLevel: player.level?.trim() || '',
+                },
+            };
+        });
+        setDivisionPartnerSearch((prev) => ({ ...prev, [divId]: { query: '', results: [], open: false } }));
+        cachePartnerLicense(player);
+    };
+
+    const clearDivisionPartner = (divId) => {
+        divisionPartnerSearchSeq.current[divId] = (divisionPartnerSearchSeq.current[divId] || 0) + 1;
+        if (divisionPartnerSearchTimeout.current[divId]) {
+            clearTimeout(divisionPartnerSearchTimeout.current[divId]);
+        }
+        setSelected((prev) => ({
+            ...prev,
+            [divId]: {
+                ...prev[divId],
+                partnerName: '',
+                partnerEmail: '',
+                partnerId: null,
+                partnerProfile: null,
+                partnerLicenseChoice: null,
+                partnerPlaytomicLevel: '',
+                payForPartner: true,
+            },
+        }));
+        setDivisionPartnerSearch((prev) => ({
+            ...prev,
+            [divId]: { query: '', results: [], open: false },
+        }));
+    };
+
+    const setDivisionPayMode = (divId, mode) => {
+        setSelected((prev) => ({
+            ...prev,
+            [divId]: {
+                ...prev[divId],
+                payForPartner: mode === 'self',
+                partnerLicenseChoice: mode === 'self' ? prev[divId]?.partnerLicenseChoice : null,
+            },
+        }));
+    };
+
+    const setDivisionPartnerLicenseChoice = (divId, choice) => {
+        setSelected((prev) => {
+            const partnerId = prev[divId]?.partnerId;
+            if (!partnerId) {
+                return { ...prev, [divId]: { ...prev[divId], partnerLicenseChoice: choice } };
+            }
+            const next = { ...prev };
+            for (const id of Object.keys(next)) {
+                if (next[id]?.partnerId === partnerId) {
+                    next[id] = { ...next[id], partnerLicenseChoice: choice };
+                }
+            }
+            return next;
+        });
+    };
+
+    const setDivisionPartnerPlaytomicLevel = (divId, value) => {
+        setSelected((prev) => ({
+            ...prev,
+            [divId]: { ...prev[divId], partnerPlaytomicLevel: value },
+        }));
+    };
+
+    const runDivisionPartnerSearch = useCallback(async (divId, searchTerm) => {
+        if (!searchTerm || searchTerm.length < 2) {
+            setDivisionPartnerSearch((prev) => ({
+                ...prev,
+                [divId]: { ...(prev[divId] || {}), query: searchTerm, results: [], open: true },
+            }));
+            return;
+        }
+
+        const seq = (divisionPartnerSearchSeq.current[divId] || 0) + 1;
+        divisionPartnerSearchSeq.current[divId] = seq;
+        const excludeId = profile?.id || displayProfile?.id;
+        let playerQuery = supabase
+            .from('players')
+            .select('id, name, email, license_type, paid_registration, image_url, level')
+            .or(`name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%`)
+            .limit(6);
+        if (excludeId) playerQuery = playerQuery.neq('id', excludeId);
+
+        const { data } = await playerQuery;
+        if (seq !== divisionPartnerSearchSeq.current[divId]) return;
+
+        setDivisionPartnerSearch((prev) => ({
+            ...prev,
+            [divId]: { query: searchTerm, results: data || [], open: true },
+        }));
+    }, [profile?.id, displayProfile?.id]);
+
+    const handleDivisionPartnerSearch = (divId, value) => {
+        setDivisionPartnerSearch((prev) => ({
+            ...prev,
+            [divId]: { ...(prev[divId] || {}), query: value, open: true, results: value.length < 2 ? [] : (prev[divId]?.results || []) },
+        }));
+
+        if (selected[divId]?.partnerId) {
+            setSelected((prev) => ({
+                ...prev,
+                [divId]: {
+                    ...prev[divId],
+                    partnerName: '',
+                    partnerEmail: '',
+                    partnerId: null,
+                    partnerProfile: null,
+                    partnerLicenseChoice: null,
+                    partnerPlaytomicLevel: '',
+                },
+            }));
+        }
+
+        if (divisionPartnerSearchTimeout.current[divId]) {
+            clearTimeout(divisionPartnerSearchTimeout.current[divId]);
+        }
+
+        if (!value || value.length < 2) {
+            divisionPartnerSearchSeq.current[divId] = (divisionPartnerSearchSeq.current[divId] || 0) + 1;
+            setDivisionPartnerSearch((prev) => ({
+                ...prev,
+                [divId]: { query: value, results: [], open: true },
+            }));
+            return;
+        }
+
+        divisionPartnerSearchTimeout.current[divId] = setTimeout(() => {
+            runDivisionPartnerSearch(divId, value);
+        }, 350);
+    };
+
     const selectedDivisions = useMemo(
         () => divisions.filter((d) => selected[d.id]),
         [divisions, selected]
     );
+
+    useEffect(() => {
+        selectedDivisions.forEach((d) => {
+            const sel = selected[d.id];
+            if (sel?.partnerProfile?.id && !partnerLicenseCache[sel.partnerProfile.id]) {
+                cachePartnerLicense(sel.partnerProfile);
+            }
+        });
+    }, [selectedDivisions, selected, partnerLicenseCache, cachePartnerLicense]);
 
     const anySelectedRequiresLicense = useMemo(
         () => selectedDivisions.some((d) => d.license_required),
@@ -638,6 +900,51 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const licenseFee = (choice) => (choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE);
 
+    const partnerLicensePurchases = useMemo(() => {
+        const byPartnerId = new Map();
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            if (!sel?.payForPartner || !sel?.partnerLicenseChoice || !sel?.partnerId) continue;
+            const lic = getPartnerLicenseInfo(sel.partnerId);
+            if (lic.active) continue;
+            const choice = sel.partnerLicenseChoice === 'full' ? 'full' : 'temporary';
+            const existing = byPartnerId.get(sel.partnerId);
+            if (!existing) {
+                byPartnerId.set(sel.partnerId, {
+                    partnerId: sel.partnerId,
+                    partnerName: sel.partnerName,
+                    partnerEmail: sel.partnerEmail,
+                    choice,
+                });
+            } else if (choice === 'full') {
+                existing.choice = 'full';
+            }
+        }
+        return Array.from(byPartnerId.values());
+    }, [selectedDivisions, selected, partnerLicenseCache]);
+
+    const getEventPartnerLicenseChoice = (partnerId) => {
+        if (!partnerId) return null;
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            if (sel?.partnerId === partnerId && sel?.partnerLicenseChoice) {
+                return sel.partnerLicenseChoice;
+            }
+        }
+        return null;
+    };
+
+    const getPrimaryPartnerLicenseDivisionId = (partnerId) => {
+        if (!partnerId) return null;
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            if (sel?.partnerId !== partnerId || sel?.payForPartner === false || !d.license_required) continue;
+            const lic = getPartnerLicenseInfo(sel.partnerId);
+            if (!lic.active) return d.id;
+        }
+        return null;
+    };
+
     const subtotal = useMemo(() => {
         let t = 0;
         for (const d of selectedDivisions) {
@@ -647,23 +954,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (sel?.partnerName && sel?.payForPartner) t += fee;
         }
         if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
-        const anyPartnerPaid = selectedDivisions.some((d) => selected[d.id]?.partnerName && selected[d.id]?.payForPartner);
-        if (anyPartnerPaid && buyLicensePartner) t += licenseFee(licensePartnerChoice);
+        for (const purchase of partnerLicensePurchases) {
+            t += licenseFee(purchase.choice);
+        }
         return t;
-    }, [selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice, buyLicensePartner, licensePartnerChoice, userEmail]);
+    }, [selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail]);
 
     const total = subtotal;
 
     const entrySummary = useMemo(() => {
         const selfName = displayProfile?.name || profile?.name || 'You';
         const selfDivisions = [];
-        const partnerDivisions = [];
 
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
             const fee = Number(d.entry_fee || 0);
             if (isSelfPayingDivision(d.id, sel)) selfDivisions.push({ name: d.name, fee });
-            if (sel?.partnerName && sel?.payForPartner) partnerDivisions.push({ name: d.name, fee });
         }
 
         const players = [];
@@ -675,12 +981,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 total: selfDivisions.reduce((sum, div) => sum + div.fee, 0),
             });
         }
-        if (primaryPartner.partnerName && partnerDivisions.length > 0) {
+        const partnerGroups = {};
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            const fee = Number(d.entry_fee || 0);
+            if (sel?.partnerName && sel?.payForPartner) {
+                const key = sel.partnerEmail || sel.partnerName;
+                if (!partnerGroups[key]) {
+                    partnerGroups[key] = { name: sel.partnerName, divisions: [] };
+                }
+                partnerGroups[key].divisions.push({ name: d.name, fee });
+            }
+        }
+        for (const group of Object.values(partnerGroups)) {
             players.push({
-                name: primaryPartner.partnerName,
+                name: group.name,
                 role: 'Partner',
-                divisions: partnerDivisions,
-                total: partnerDivisions.reduce((sum, div) => sum + div.fee, 0),
+                divisions: group.divisions,
+                total: group.divisions.reduce((sum, div) => sum + div.fee, 0),
             });
         }
 
@@ -691,21 +1009,82 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 amount: licenseFee(licenseSelfChoice),
             });
         }
-        const anyPartnerPaid = partnerDivisions.length > 0;
-        if (anyPartnerPaid && buyLicensePartner) {
+        for (const purchase of partnerLicensePurchases) {
             extras.push({
-                label: licensePartnerChoice === 'full'
-                    ? `Partner annual license — ${primaryPartner.partnerName}`
-                    : `Partner temporary license — ${primaryPartner.partnerName}`,
-                amount: licenseFee(licensePartnerChoice),
+                label: purchase.choice === 'full'
+                    ? `Partner annual license — ${purchase.partnerName}`
+                    : `Partner temporary license — ${purchase.partnerName}`,
+                amount: licenseFee(purchase.choice),
             });
         }
 
         return { players, extras };
     }, [
         selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice,
-        buyLicensePartner, licensePartnerChoice, profile?.name, displayProfile?.name,
-        primaryPartner.partnerName,
+        partnerLicenseCache, partnerLicensePurchases, profile?.name, displayProfile?.name,
+    ]);
+
+    const reviewPaySummary = useMemo(() => {
+        const selfName = displayProfile?.name || profile?.name || 'You';
+        const entries = selectedDivisions.map((d) => {
+            const sel = selected[d.id];
+            const fee = Number(d.entry_fee || 0);
+            const selfPays = isSelfPayingDivision(d.id, sel);
+            const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
+            const payerCount = (selfPays ? 1 : 0) + (userPaysPartner ? 1 : 0);
+
+            const hasPartner = !!(sel?.partnerName && sel?.partnerEmail);
+            const payTag = !hasPartner
+                ? 'Your Entry'
+                : userPaysPartner
+                    ? 'You Paying both Entries'
+                    : 'Partner Pays Their Entry';
+
+            return {
+                id: d.id,
+                divisionName: d.name,
+                selfName,
+                partnerName: sel?.partnerName || null,
+                partnerImageUrl: sel?.partnerProfile?.image_url?.trim() || null,
+                hasPartner,
+                payTag,
+                payerCount,
+                fee,
+                entryTotal: payerCount * fee,
+            };
+        });
+
+        const entryFeesTotal = entries.reduce((sum, entry) => sum + entry.entryTotal, 0);
+
+        const licenseLines = [];
+        if (buyLicenseSelf || (!hasLicense && anySelectedRequiresLicense)) {
+            licenseLines.push({
+                label: licenseSelfChoice === 'full' ? 'Your SAPA annual license' : 'Your SAPA temporary license',
+                amount: licenseFee(licenseSelfChoice),
+            });
+        }
+        for (const purchase of partnerLicensePurchases) {
+            licenseLines.push({
+                label: purchase.choice === 'full'
+                    ? `${purchase.partnerName} annual SAPA license`
+                    : `${purchase.partnerName} temporary SAPA license`,
+                amount: licenseFee(purchase.choice),
+            });
+        }
+
+        const licensesSubtotal = licenseLines.reduce((sum, line) => sum + line.amount, 0);
+
+        return {
+            entries,
+            entryFeesTotal,
+            licenseLines,
+            licensesSubtotal,
+            totalPayable: entryFeesTotal + licensesSubtotal,
+        };
+    }, [
+        selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice,
+        hasLicense, anySelectedRequiresLicense, partnerLicenseCache, partnerLicensePurchases,
+        profile?.name, displayProfile?.name, profileImageUrl,
     ]);
 
     const lineItems = useMemo(() => {
@@ -789,16 +1168,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 full_name: selfName,
                 email: userEmail,
                 phone: profile?.contact_number || null,
-                partner_name: hasPartner ? (sel?.partnerName || null) : null,
-                partner_email: hasPartner ? (sel?.partnerEmail || null) : null,
+                partner_name: sel?.partnerName || null,
+                partner_email: sel?.partnerEmail || null,
                 payment_status: selfAlreadyPaid ? 'paid' : fee === 0 ? 'paid' : 'pending',
-                partner_payment_status: hasPartner && sel?.partnerName ? 'pending' : null,
+                partner_payment_status: sel?.partnerName ? 'pending' : null,
                 status: 'registered',
                 registered_by: userEmail,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
-            if (hasPartner && sel?.partnerName && sel?.partnerEmail) {
+            if (sel?.partnerName && sel?.partnerEmail) {
                 rows.push({
                     event_id: event.id,
                     division_id: d.id,
@@ -816,9 +1195,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
         }
         if (buyLicenseSelf) covers.push({ email: userEmail, type: 'license', license: licenseSelfChoice });
-        if (buyLicensePartner) {
-            const partnerEmail = primaryPartner.partnerEmail;
-            if (partnerEmail) covers.push({ email: partnerEmail, type: 'license', license: licensePartnerChoice });
+        for (const purchase of partnerLicensePurchases) {
+            covers.push({
+                email: purchase.partnerEmail,
+                type: 'license',
+                license: purchase.choice,
+            });
         }
         return { rows, covers };
     };
@@ -830,6 +1212,62 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             .select('*');
         if (error) throw error;
         return data || [];
+    };
+
+    const sendPendingRegistrationEmails = async (payUrl) => {
+        const selfName = profile?.name || 'Player';
+        const divisionNames = selectedDivisions.map((d) => d.name).join(', ');
+        const venue = [event.venue, event.city].filter(Boolean).join(', ');
+
+        await sendEmail(userEmail, 'registration_pending_payment', {
+            eventId: event.id,
+            playerName: selfName,
+            eventName: event.event_name,
+            division: divisionNames,
+            partnerName: hasPartner ? (primaryPartner.partnerName || '') : '',
+            eventDates: event.event_dates || '',
+            venue,
+            amountDue: fmtR(total),
+            payUrl,
+            eventUrl,
+            recipientRole: 'registrant',
+        });
+
+        const partnersNotified = new Set();
+        for (const d of selectedDivisions) {
+            const sel = selected[d.id];
+            if (!sel?.partnerEmail) continue;
+            const partnerEmail = sel.partnerEmail.toLowerCase();
+            if (partnersNotified.has(partnerEmail)) continue;
+            partnersNotified.add(partnerEmail);
+
+            const userPaysForPartner = !!sel.payForPartner;
+            let partnerAmountDue = 0;
+            if (!userPaysForPartner) {
+                for (const div of selectedDivisions) {
+                    const divSel = selected[div.id];
+                    if (divSel?.partnerEmail?.toLowerCase() === partnerEmail && !divSel?.payForPartner) {
+                        partnerAmountDue += Number(div.entry_fee || 0);
+                    }
+                }
+            }
+
+            await sendEmail(sel.partnerEmail, 'registration_pending_payment', {
+                eventId: event.id,
+                playerName: sel.partnerName,
+                inviterName: selfName,
+                eventName: event.event_name,
+                division: divisionNames,
+                eventDates: event.event_dates || '',
+                venue,
+                amountDue: partnerAmountDue > 0 ? fmtR(partnerAmountDue) : fmtR(0),
+                registrantAmountDue: fmtR(total),
+                payUrl: eventUrl,
+                eventUrl,
+                recipientRole: 'partner',
+                userPaysForPartner,
+            });
+        }
     };
 
     const sendRegistrationEmails = async (savedRows, paid) => {
@@ -877,6 +1315,102 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
+    const handlePaymentSuccess = useCallback(async (paidRef, paidAmount) => {
+        try {
+            const data = await confirmManualPayment(paidRef);
+            if (!data?.processed && !data?.alreadyProcessed) {
+                toast.success('Payment received — confirming your registration...');
+            }
+        } catch (confirmErr) {
+            console.error('Payment confirmation error:', confirmErr);
+            toast.error(confirmErr.message || 'Payment received but confirmation failed. Try refreshing or contact support.');
+        }
+        setConfirmedPaidTotal(paidAmount ?? 0);
+        setProcessing(false);
+        setWizardStep(5);
+        await loadMyRegs();
+        onParticipantsChange?.();
+    }, [loadMyRegs, onParticipantsChange]);
+
+    const launchPaystackCheckout = useCallback(async (reference, amount) => {
+        if (!isPaystackConfigured()) {
+            toast.error('Payments not configured');
+            return;
+        }
+        const pop = new PaystackPop();
+        await pop.checkout({
+            key: PAYSTACK_PUBLIC_KEY,
+            reference,
+            email: userEmail,
+            amount: toPaystackAmount(amount),
+            currency: 'ZAR',
+            metadata: { event_id: event.id, event_name: event.event_name, reference, source: 'manual_event' },
+            onSuccess: async (response) => {
+                const paidRef = resolvePaystackReference(response, reference);
+                await handlePaymentSuccess(paidRef, amount);
+            },
+            onCancel: () => toast.info('Payment cancelled. You have not been registered.'),
+        });
+    }, [userEmail, event.id, event.event_name, handlePaymentSuccess]);
+
+    const resumePaymentByReference = useCallback(async (reference) => {
+        if (!userEmail) {
+            toast.error('Please log in to complete payment');
+            return;
+        }
+        const { data: payment, error } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('reference', reference)
+            .eq('event_id', event.id)
+            .maybeSingle();
+        if (error || !payment) {
+            toast.error('Payment not found');
+            return;
+        }
+        if (payment.status === 'success') {
+            toast.info('This payment has already been completed');
+            return;
+        }
+        const meta = typeof payment.metadata === 'string'
+            ? JSON.parse(payment.metadata)
+            : (payment.metadata || {});
+        if (String(meta.registrant_email || '').toLowerCase() !== userEmail.toLowerCase()) {
+            toast.error('This payment link belongs to a different account');
+            return;
+        }
+        setProcessing(true);
+        try {
+            toast.info('Complete your payment to confirm registration');
+            await launchPaystackCheckout(reference, Number(payment.amount));
+        } finally {
+            setProcessing(false);
+        }
+    }, [userEmail, event.id, launchPaystackCheckout]);
+
+    const pendingPayRefRef = useRef(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const payRef = params.get('pay_ref');
+        if (!payRef) return;
+        pendingPayRefRef.current = payRef;
+        params.delete('pay_ref');
+        const newSearch = params.toString();
+        window.history.replaceState(
+            {},
+            '',
+            `${window.location.pathname}${newSearch ? `?${newSearch}` : ''}${window.location.hash || ''}`,
+        );
+    }, [event.id]);
+
+    useEffect(() => {
+        if (!pendingPayRefRef.current || !userEmail) return;
+        const payRef = pendingPayRefRef.current;
+        pendingPayRefRef.current = null;
+        resumePaymentByReference(payRef);
+    }, [userEmail, resumePaymentByReference]);
+
     const handleRegister = async () => {
         if (!userEmail) { toast.error('Please log in to register'); return; }
         if (selectedDivisions.length === 0) { toast.error('Select at least one division'); return; }
@@ -886,9 +1420,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!agreeRules || !agreeComplete || !agreeSapa) {
             toast.error('Please accept all agreements'); return;
         }
-        if (hasPartner && !paymentRetryRef.current && (!primaryPartner.partnerId || !primaryPartner.partnerEmail)) {
-            toast.error('Search and select your partner from their 4M profile'); return;
-        }
 
         setProcessing(true);
         try {
@@ -897,7 +1428,27 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             if (total > 0) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
                 const reference = `MANUAL-${event.id}-${Date.now()}`;
-                const savedRows = await persistRegistrations(rows);
+                const divisionEntryFees = Object.fromEntries(
+                    selectedDivisions.map((d) => [d.name, Number(d.entry_fee || 0)]),
+                );
+                const paymentMetadata = {
+                    source: 'manual_event',
+                    is_test: isPaystackTestMode,
+                    event_id: event.id,
+                    event_name: event.event_name,
+                    registrant_email: userEmail,
+                    registrant_name: profile?.name || '',
+                    covers,
+                    line_items: lineItems,
+                    event_url: eventUrl,
+                    registration_rows: rows,
+                    division_names: selectedDivisions.map((d) => d.name).join(', '),
+                    primary_partner_name: hasPartner ? (primaryPartner.partnerName || 'TBD') : 'TBD',
+                    event_dates: event.event_dates || '',
+                    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
+                    division_entry_fees: divisionEntryFees,
+                };
+                const payUrl = `${eventUrl}?pay_ref=${encodeURIComponent(reference)}`;
 
                 await supabase.from('payments').insert([{
                     player_id: profile?.id || null,
@@ -909,59 +1460,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     payment_method: 'paystack',
                     reference,
                     is_test: isPaystackTestMode,
-                    metadata: {
-                        source: 'manual_event',
-                        is_test: isPaystackTestMode,
-                        event_id: event.id,
-                        event_name: event.event_name,
-                        registrant_email: userEmail,
-                        registrant_name: profile?.name || '',
-                        covers,
-                        line_items: lineItems,
-                        event_url: eventUrl,
-                    },
+                    metadata: paymentMetadata,
                 }]);
 
-                const isRetry = paymentRetryRef.current;
-                paymentRetryRef.current = false;
-                if (!isRetry) {
-                    await sendRegistrationEmails(savedRows, false);
-                }
+                await sendPendingRegistrationEmails(payUrl);
+                await supabase
+                    .from('payments')
+                    .update({ metadata: { ...paymentMetadata, pending_emails_sent: true } })
+                    .eq('reference', reference);
 
-                const pop = new PaystackPop();
-                await pop.checkout({
-                    key: PAYSTACK_PUBLIC_KEY,
-                    reference,
-                    email: userEmail,
-                    amount: toPaystackAmount(total),
-                    currency: 'ZAR',
-                    metadata: { event_id: event.id, event_name: event.event_name, reference, source: 'manual_event' },
-                    onSuccess: async (response) => {
-                        const paidRef = resolvePaystackReference(response, reference);
-                        try {
-                            const data = await confirmManualPayment(paidRef);
-                            if (data?.processed || data?.alreadyProcessed) {
-                                toast.success('Payment confirmed — you\'re all set!');
-                            } else {
-                                toast.success('Payment received — confirming your entry...');
-                            }
-                        } catch (confirmErr) {
-                            console.error('Payment confirmation error:', confirmErr);
-                            toast.error(confirmErr.message || 'Payment received but confirmation failed. Try refreshing or contact support.');
-                        }
-                        closeWizard();
-                        setSelected({});
-                        await loadMyRegs();
-                        onParticipantsChange?.();
-                    },
-                    onCancel: () => toast.info('Payment cancelled. Your registration is saved as pending.'),
-                });
+                paymentRetryRef.current = false;
+
+                await launchPaystackCheckout(reference, total);
             } else {
                 const savedRows = await persistRegistrations(rows);
                 await sendRegistrationEmails(savedRows, true);
-                toast.success('Registered successfully!');
-                closeWizard();
-                setSelected({});
+                setConfirmedPaidTotal(0);
+                setWizardStep(5);
                 loadMyRegs();
                 onParticipantsChange?.();
             }
@@ -1056,7 +1571,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         if (wizardStep === 2) {
             if (selectedDivisions.length === 0) { toast.error('Select at least one division'); return; }
-            setWizardStep(3);
+            for (const d of selectedDivisions) {
+                const sel = selected[d.id];
+                if (!sel?.partnerId || !sel?.partnerEmail) continue;
+                if (sel.payForPartner && d.license_required) {
+                    const lic = getPartnerLicenseInfo(sel.partnerId);
+                    if (!lic.active && !getEventPartnerLicenseChoice(sel.partnerId)) {
+                        toast.error(`Select a SAPA license for ${sel.partnerName}`);
+                        return;
+                    }
+                }
+            }
+            const anyPartner = selectedDivisions.some((d) => {
+                const sel = selected[d.id];
+                return !!(sel?.partnerId && sel?.partnerEmail);
+            });
+            setHasPartner(anyPartner);
+            setWizardStep(4);
             return;
         }
         if (wizardStep === 3 && hasPartner && (!primaryPartner.partnerId || !primaryPartner.partnerEmail)) {
@@ -1079,6 +1610,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const goBack = () => {
+        if (wizardStep === 4) {
+            setWizardStep(2);
+            return;
+        }
         setWizardStep((s) => Math.max(1, s - 1));
     };
 
@@ -1086,6 +1621,44 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const EventSummaryCard = ({ compact = false, variant = 'default' }) => {
         const accentClass = theme?.accentBg || 'bg-[#CCFF00]/10 border-[#CCFF00]/20';
+        const venueLabel = [event.venue, event.city].filter(Boolean).join(', ') || 'Venue TBC';
+        const organiserLabel = event.organizer_name || '4M Padel';
+        const courtsLabel = event.courts ? `${event.courts} Indoor Courts` : null;
+
+        if (variant === 'profile') {
+            return (
+                <Card className="shadow-sm bg-[#FAF7F2] border-[#F0EBE3]">
+                    <CardHeader title="Event Summary" soft />
+                    <CardBody>
+                        <div className="flex items-start gap-3">
+                            <div className="space-y-2 text-xs text-slate-700 min-w-0 flex-1 font-normal leading-snug">
+                                <p className="flex items-center gap-2.5">
+                                    <CalendarIcon size={15} className="text-slate-500 shrink-0" />
+                                    {event.event_dates || 'Dates TBC'}
+                                </p>
+                                <p className="flex items-center gap-2.5">
+                                    <MapPin size={15} className="text-slate-500 shrink-0" />
+                                    {venueLabel}
+                                </p>
+                                {courtsLabel && (
+                                    <p className="flex items-center gap-2.5">
+                                        <Layout size={15} className="text-slate-500 shrink-0" />
+                                        {courtsLabel}
+                                    </p>
+                                )}
+                                <p className="flex items-center gap-2.5">
+                                    <Users size={15} className="text-slate-500 shrink-0" />
+                                    Organised by {organiserLabel}
+                                </p>
+                            </div>
+                            <div className="w-24 shrink-0 rounded-xl overflow-hidden bg-[#0F172A] aspect-[3/4]">
+                                <img src={eventPoster} alt={event.event_name} className="w-full h-full object-cover" />
+                            </div>
+                        </div>
+                    </CardBody>
+                </Card>
+            );
+        }
 
         if (variant === 'confirm') {
             return (
@@ -1160,7 +1733,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`w-full font-black uppercase tracking-wider text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 ${theme.glow || ''} ${className}`}
+            className={`w-full font-bold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 ${theme.glow || ''} ${className}`}
             style={{ backgroundColor: accent, color: btnTextColor }}
         >
             {children}
@@ -1172,15 +1745,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             case 1:
                 return (
                     <WizardStepWrap>
-                        <WizardStepTitle
-                            title={`Register for ${event.event_name || 'this tournament'}`}
-                            subtitle="Complete your entry directly on 4M Padel"
-                        />
+                        <EventSummaryCard variant="profile" />
 
-                        <EventSummaryCard />
-
-                        <Card>
-                            <CardHeader title="4M Profile" subtitle="Your registered player profile" soft />
+                        <Card className="border-2" style={{ borderColor: accent }}>
+                            <CardHeader title="My 4M Profile" soft />
                             <CardBody>
                                 {!userEmail ? (
                                     <div className="flex items-start gap-2.5 text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs font-normal">
@@ -1188,91 +1756,120 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         <p>Please log in to register. Your 4M profile is required to enter this tournament.</p>
                                     </div>
                                 ) : (
-                                    <>
-                                        <div className="flex gap-3">
-                                            <div className="w-16 h-16 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center ring-2 ring-gray-100">
-                                                {profileImageUrl ? (
-                                                    <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <User className="w-7 h-7 text-gray-400" />
-                                                )}
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="font-semibold text-slate-900 text-sm">{displayProfile?.name || userEmail.split('@')[0]}</p>
-                                                <p className="text-[11px] text-slate-500 truncate font-normal">{userEmail}</p>
-                                                {displayProfile && displayProfile.approved !== false && (
-                                                    <span className="inline-flex items-center gap-1 mt-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                                        <ShieldCheck size={11} /> 4M Profile Verified
-                                                    </span>
-                                                )}
-                                            </div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-14 h-14 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                            {profileImageUrl ? (
+                                                <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <User className="w-6 h-6 text-gray-400" />
+                                            )}
                                         </div>
-
-                                        <div className="mt-3 pt-3 border-t border-gray-50 flex items-end justify-between gap-3">
-                                            <div>
-                                                <p className="text-[11px] text-slate-500 font-normal">Current SAPA Points</p>
-                                                <p className="text-xl font-semibold text-slate-900 tabular-nums leading-tight">
-                                                    {sapaPoints != null ? Number(sapaPoints).toLocaleString() : '—'}
-                                                </p>
-                                            </div>
-                                            <div
-                                                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium ${hasLicense ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-50 text-slate-600 border border-slate-200'}`}
-                                            >
-                                                {hasLicense ? <Check size={14} className="text-emerald-600 shrink-0" /> : <AlertCircle size={14} className="text-slate-400 shrink-0" />}
-                                                {licenseInfo.label}
-                                            </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-900 text-sm">{displayProfile?.name || userEmail.split('@')[0]}</p>
+                                            <p className="text-[11px] text-slate-500 font-normal">SAPA Points</p>
                                         </div>
-                                    </>
+                                        <div className="shrink-0 min-w-[4.5rem] px-3 py-2 rounded-lg border border-gray-200 bg-white text-center">
+                                            <span className="text-sm font-semibold text-slate-900 tabular-nums">
+                                                {sapaPoints != null ? Number(sapaPoints).toLocaleString() : '—'}
+                                            </span>
+                                        </div>
+                                    </div>
                                 )}
                             </CardBody>
                         </Card>
 
                         {userEmail && (
-                            <Card>
-                                <CardHeader title="Rankedin Account" soft />
-                                <CardBody className="space-y-3">
-                                    <p className="text-xs text-slate-600 font-normal">Do you have a Rankedin account?</p>
-                                    <div className="flex gap-2">
-                                        {[
-                                            [true, 'Yes'],
-                                            [false, 'No'],
-                                        ].map(([val, label]) => {
-                                            const isSelected = hasRankedinAccount === val;
-                                            return (
-                                                <button
-                                                    key={String(val)}
-                                                    type="button"
-                                                    onClick={() => setHasRankedinAccount(val)}
-                                                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-xs font-semibold border transition-colors ${isSelected ? 'border-transparent' : 'border-gray-200 bg-white text-slate-600'}`}
-                                                    style={isSelected ? { backgroundColor: accent, color: btnTextColor, borderColor: accent } : undefined}
-                                                >
-                                                    <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${isSelected ? 'border-current' : 'border-gray-300'}`}>
-                                                        {isSelected && <span className="w-2 h-2 rounded-full bg-current" />}
-                                                    </span>
-                                                    {label}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-
-                                    {hasRankedinAccount === false && (
-                                        <div className="flex items-start gap-2.5 text-blue-800 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs font-normal leading-snug">
-                                            <Info size={16} className="shrink-0 mt-0.5 text-blue-600" />
-                                            <p>If you do not have a Rankedin account, please create one if you want to earn ranking points.</p>
+                            <>
+                                <Card>
+                                    <CardBody className="flex items-center justify-between gap-3 py-3.5">
+                                        <p className="text-xs text-slate-700 font-normal leading-snug">
+                                            What is your current Playtomic level?
+                                        </p>
+                                        <div className="shrink-0 w-16 px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-center">
+                                            <input
+                                                type="text"
+                                                inputMode="decimal"
+                                                value={selfPlaytomicLevel}
+                                                onChange={(e) => setSelfPlaytomicLevel(e.target.value)}
+                                                placeholder="—"
+                                                className="w-full text-sm font-semibold text-slate-900 tabular-nums text-center bg-transparent outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                            />
                                         </div>
-                                    )}
+                                    </CardBody>
+                                </Card>
 
-                                    {hasRankedinAccount === true && displayProfile?.rankedin_id && (
-                                        <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug">
-                                            <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
-                                            <p>
-                                                Rankedin ID linked to your 4M profile:{' '}
-                                                <span className="font-mono font-medium">{displayProfile.rankedin_id}</span>
-                                            </p>
+                                <Card>
+                                    <CardHeader title="SAPA license status" soft />
+                                    <CardBody>
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-[5.5rem] h-[5.5rem] rounded-full bg-white border border-gray-100 flex items-center justify-center shrink-0">
+                                                <img src={sapaLogo} alt="SAPA" className="w-[4.5rem] h-[4.5rem] object-contain" />
+                                            </div>
+                                            {hasLicense ? (
+                                                <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug flex-1 min-w-0">
+                                                    <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                                                    <p>{licenseInfo.label}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="flex-1 min-w-0 rounded-xl border border-red-200 bg-red-50 p-3 text-xs leading-snug">
+                                                    <div className="flex items-start gap-2 text-red-700">
+                                                        <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
+                                                        <p className="font-semibold text-red-800">
+                                                            You do not have an active SAPA license.
+                                                        </p>
+                                                    </div>
+                                                    <p className="mt-2 text-slate-700 font-normal pl-6">
+                                                        If a license is required for this tournament, you will be prompted at checkout to purchase either a temporary or annual SAPA license.
+                                                    </p>
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </CardBody>
-                            </Card>
+                                    </CardBody>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader title="Rankedin Account" soft />
+                                    <CardBody className="space-y-3">
+                                        <p className="text-xs text-slate-600 font-normal">Do you have a Rankedin account?</p>
+                                        <div className="flex rounded-full border border-gray-200 overflow-hidden p-0.5 bg-white">
+                                            {[
+                                                [true, 'Yes'],
+                                                [false, 'No'],
+                                            ].map(([val, label]) => {
+                                                const isSelected = hasRankedinAccount === val;
+                                                return (
+                                                    <button
+                                                        key={String(val)}
+                                                        type="button"
+                                                        onClick={() => setHasRankedinAccount(val)}
+                                                        className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${isSelected ? '' : 'bg-white text-slate-600'}`}
+                                                        style={isSelected ? { backgroundColor: accent, color: btnTextColor } : undefined}
+                                                    >
+                                                        {label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {hasRankedinAccount === false && (
+                                            <div className="flex items-start gap-2.5 text-blue-800 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                <Info size={16} className="shrink-0 mt-0.5 text-blue-600" />
+                                                <p>If you do not have a Rankedin account, please create one if you want ranking points.</p>
+                                            </div>
+                                        )}
+
+                                        {hasRankedinAccount === true && displayProfile?.rankedin_id && (
+                                            <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                                                <p>
+                                                    Rankedin ID linked to your 4M profile:{' '}
+                                                    <span className="font-mono font-medium">{displayProfile.rankedin_id}</span>
+                                                </p>
+                                            </div>
+                                        )}
+                                    </CardBody>
+                                </Card>
+                            </>
                         )}
                     </WizardStepWrap>
                 );
@@ -1281,91 +1878,266 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return (
                     <WizardStepWrap>
                         <WizardStepTitle
-                            title="Choose your division"
-                            subtitle={`Select the division(s) you want to enter for ${event.event_name || 'this tournament'}`}
+                            title="Choose your division(s)"
+                            subtitle="Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own."
                         />
 
-                        <EventSummaryCard compact />
+                        <div className="space-y-2">
+                            {divisions.map((d) => {
+                                const closed = isClosed(d, event);
+                                const reged = registeredDivisionIds.has(d.id);
+                                const sel = selected[d.id];
+                                const isSelected = !!sel;
+                                const isExpanded = isSelected && expandedDivisions[d.id] !== false;
+                                const myReg = reged ? myRegs.find((r) => r.division_id === d.id) : null;
+                                const enteredByName = myReg?._payerName || null;
+                                const searchState = divisionPartnerSearch[d.id] || { query: '', results: [], open: false };
+                                const partnerLic = sel?.partnerId ? getPartnerLicenseInfo(sel.partnerId) : null;
+                                const payModeSelf = sel?.payForPartner !== false;
+                                const eventPartnerLicenseChoice = getEventPartnerLicenseChoice(sel?.partnerId);
+                                const primaryPartnerLicenseDivisionId = sel?.partnerId
+                                    ? getPrimaryPartnerLicenseDivisionId(sel.partnerId)
+                                    : null;
+                                const isPrimaryPartnerLicenseDivision = primaryPartnerLicenseDivisionId === d.id;
+                                const showPartnerLicenseWarning = isSelected
+                                    && payModeSelf
+                                    && d.license_required
+                                    && sel?.partnerName
+                                    && partnerLic
+                                    && !partnerLic.active;
+                                const showPartnerLicensePicker = showPartnerLicenseWarning && isPrimaryPartnerLicenseDivision;
+                                const showPartnerLicenseAlreadySelected = showPartnerLicenseWarning
+                                    && !isPrimaryPartnerLicenseDivision
+                                    && !!eventPartnerLicenseChoice;
 
-                        <Card>
-                            <CardHeader title="Select Division" soft />
-                            <CardBody className="space-y-2.5">
-                                <div>
-                                    <p className="text-[11px] text-slate-500 font-normal">Event</p>
-                                    <p className="text-sm font-semibold text-slate-900 leading-snug">{event.event_name || 'Tournament'}</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-1.5">
-                                    {divisions.map((d) => {
-                                        const closed = isClosed(d, event);
-                                        const sel = !!selected[d.id];
-                                        const reged = registeredDivisionIds.has(d.id);
-                                        // Find the registration to get payer info
-                                        const myReg = reged ? myRegs.find((r) => r.division_id === d.id) : null;
-                                        const enteredByName = myReg?._payerName || null;
-                                        return (
-                                            <button
-                                                key={d.id}
-                                                type="button"
-                                                disabled={closed || reged}
-                                                title={
-                                                    closed
-                                                        ? 'Registration is closed for this division'
-                                                        : reged
-                                                        ? enteredByName
-                                                            ? `Entered by ${enteredByName}`
-                                                            : 'You are already entered in this division'
-                                                        : undefined
-                                                }
-                                                onClick={() => {
-                                                    if (closed || reged) return;
-                                                    toggleDivision(d);
-                                                }}
-                                                className={`relative px-3 py-2.5 rounded-lg text-xs font-medium border text-left transition-colors ${
-                                                    closed
-                                                        ? 'cursor-not-allowed border-red-100 bg-red-50/60 text-slate-400'
-                                                        : reged
-                                                        ? 'cursor-not-allowed border-emerald-200 bg-emerald-50 text-emerald-800'
-                                                        : sel
-                                                        ? 'border-transparent shadow-sm'
-                                                        : 'border-gray-200 bg-white text-slate-700 hover:border-gray-300'
-                                                }`}
-                                                style={sel && !closed && !reged ? { backgroundColor: accent, color: btnTextColor, borderColor: accent } : undefined}
-                                            >
-                                                {/* Top-right badge */}
-                                                {sel && !closed && !reged && <Check size={14} className="absolute top-2 right-2" />}
-                                                {reged && <Check size={12} className="absolute top-2 right-2 text-emerald-600" />}
-                                                {closed && (
-                                                    <span className="absolute top-1.5 right-2 text-[9px] font-bold uppercase tracking-wide text-red-400">
-                                                        Closed
-                                                    </span>
-                                                )}
+                                return (
+                                    <Card
+                                        key={d.id}
+                                        className={`${isSelected ? 'border-2' : ''} ${closed ? 'opacity-70' : ''}`}
+                                        style={isSelected ? { borderColor: accent } : undefined}
+                                        allowOverflow={isExpanded}
+                                    >
+                                        <div className="px-4 py-3">
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    type="button"
+                                                    disabled={closed || reged}
+                                                    onClick={() => {
+                                                        if (closed || reged) return;
+                                                        toggleDivision(d);
+                                                    }}
+                                                    className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors ${closed || reged ? 'cursor-not-allowed border-gray-200 bg-gray-50' : isSelected ? 'border-transparent' : 'border-gray-300 bg-white'}`}
+                                                    style={isSelected && !closed && !reged ? { backgroundColor: accent, borderColor: accent } : undefined}
+                                                    aria-label={`Select ${d.name}`}
+                                                >
+                                                    {isSelected && !reged && <Check size={12} style={{ color: btnTextColor }} />}
+                                                </button>
 
-                                                {/* Division name — no text ✓, icon handles it */}
-                                                <span className="block pr-8">{d.name}</span>
+                                                <button
+                                                    type="button"
+                                                    disabled={closed || reged}
+                                                    onClick={() => {
+                                                        if (closed || reged) return;
+                                                        if (!isSelected) toggleDivision(d);
+                                                        else setExpandedDivisions((prev) => ({ ...prev, [d.id]: prev[d.id] === false }));
+                                                    }}
+                                                    className="flex-1 min-w-0 text-left"
+                                                >
+                                                    <p className="font-semibold text-slate-900 text-sm leading-snug">{d.name}</p>
+                                                    {reged && (
+                                                        <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                                                            {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
+                                                        </p>
+                                                    )}
+                                                    {closed && !reged && (
+                                                        <p className="text-[10px] text-red-400 font-normal mt-0.5">Registration closed</p>
+                                                    )}
+                                                </button>
 
-                                                {/* Sub-label */}
-                                                {reged && (
-                                                    <span className="block text-[10px] font-normal mt-0.5 text-emerald-600">
-                                                        {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
-                                                    </span>
+                                                {isSelected && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setExpandedDivisions((prev) => ({ ...prev, [d.id]: prev[d.id] === false }))}
+                                                        className="p-1 text-slate-400 hover:text-slate-600 shrink-0"
+                                                        aria-label={isExpanded ? 'Collapse division' : 'Expand division'}
+                                                    >
+                                                        {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                                                    </button>
                                                 )}
-                                                {closed && (
-                                                    <span className="block text-[10px] text-red-400 font-normal mt-0.5">
-                                                        Registration closed
-                                                    </span>
+                                                {!isSelected && !closed && !reged && (
+                                                    <ChevronDown size={18} className="text-slate-300 shrink-0" />
                                                 )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                {divisions.some((d) => d.license_required) && (
-                                    <p className="text-[11px] text-slate-500 flex items-center gap-1 font-normal">
-                                        <AlertCircle size={12} className="shrink-0" />
-                                        Some divisions require a valid SAPA license.
-                                    </p>
-                                )}
-                            </CardBody>
-                        </Card>
+                                            </div>
+
+                                            {isExpanded && (
+                                                <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+                                                    {getDivisionMeta(d) && (
+                                                        <p className="text-[11px] text-slate-500 leading-snug font-normal">
+                                                            {getDivisionMeta(d)}
+                                                        </p>
+                                                    )}
+
+                                                    {!sel?.partnerName && (
+                                                        <p className="text-[11px] text-slate-500 font-normal leading-snug">
+                                                            Entering solo — only your entry will be registered for this division.
+                                                        </p>
+                                                    )}
+
+                                                    <div className="flex items-end gap-3">
+                                                        <div className="relative flex-1 min-w-0">
+                                                            <label className="block text-[11px] text-slate-500 font-normal mb-1">Add a partner (optional)</label>
+                                                            <div className="relative">
+                                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                                                                <input
+                                                                    value={searchState.open ? searchState.query : (sel?.partnerName || '')}
+                                                                    onChange={(e) => handleDivisionPartnerSearch(d.id, e.target.value)}
+                                                                    onFocus={() => setDivisionPartnerSearch((prev) => ({
+                                                                        ...prev,
+                                                                        [d.id]: {
+                                                                            query: sel?.partnerName || prev[d.id]?.query || '',
+                                                                            results: prev[d.id]?.results || [],
+                                                                            open: true,
+                                                                        },
+                                                                    }))}
+                                                                    placeholder="Search partner name or email (optional)"
+                                                                    className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-400 font-normal"
+                                                                />
+                                                                {sel?.partnerName ? (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => clearDivisionPartner(d.id)}
+                                                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-50"
+                                                                        aria-label="Remove partner"
+                                                                    >
+                                                                        <X size={14} />
+                                                                    </button>
+                                                                ) : (
+                                                                    <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                                                                )}
+                                                            </div>
+                                                            {searchState.open && searchState.results.length > 0 && (
+                                                                <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                                                    {searchState.results.map((p) => (
+                                                                        <button
+                                                                            key={p.id}
+                                                                            type="button"
+                                                                            onClick={() => setDivisionPartner(d.id, p)}
+                                                                            className="w-full text-left px-3 py-2.5 text-xs hover:bg-gray-50 flex items-center gap-2.5"
+                                                                        >
+                                                                            <div className="w-8 h-8 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                                                                                {p.image_url ? (
+                                                                                    <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                                                                ) : (
+                                                                                    <User className="w-3.5 h-3.5 text-gray-400" />
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="font-medium text-slate-900 truncate">{p.name}</span>
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {sel?.partnerName && (
+                                                            <div className="shrink-0 w-20">
+                                                                <label className="block text-[11px] text-slate-500 font-normal mb-1 leading-tight">Playtomic level</label>
+                                                                <input
+                                                                    type="text"
+                                                                    inputMode="decimal"
+                                                                    value={sel?.partnerPlaytomicLevel ?? ''}
+                                                                    onChange={(e) => setDivisionPartnerPlaytomicLevel(d.id, e.target.value)}
+                                                                    placeholder="—"
+                                                                    className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs text-slate-900 bg-white tabular-nums text-center outline-none placeholder:text-slate-400"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {sel?.partnerName && (
+                                                        <div>
+                                                            <div className="flex w-full rounded-full border border-gray-200 overflow-hidden p-0.5 bg-white">
+                                                                {[
+                                                                    ['self', 'I pay'],
+                                                                    ['partner', 'Partner pays'],
+                                                                ].map(([mode, label]) => {
+                                                                    const active = mode === 'self' ? payModeSelf : !payModeSelf;
+                                                                    return (
+                                                                        <button
+                                                                            key={mode}
+                                                                            type="button"
+                                                                            onClick={() => setDivisionPayMode(d.id, mode)}
+                                                                            className={`flex-1 px-4 py-2 rounded-full text-xs font-semibold transition-colors ${active ? '' : 'bg-white text-slate-600'}`}
+                                                                            style={active ? { backgroundColor: accent, color: btnTextColor } : undefined}
+                                                                        >
+                                                                            {label}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {showPartnerLicensePicker && (
+                                                        <div className="rounded-xl border border-red-200 bg-red-50 p-3 space-y-2.5">
+                                                            <div className="flex items-start gap-2">
+                                                                <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
+                                                                <p className="text-xs leading-snug font-normal text-slate-700">
+                                                                    <span className="font-semibold text-slate-900">{sel.partnerName} does not have an active SAPA license.</span>
+                                                                    {' '}Because you are paying for this partner, add one temporary ({fmtRWhole(FEES.TEMPORARY_LICENSE)}) or annual ({fmtRWhole(FEES.FULL_LICENSE)}) SAPA license for this event — it covers all divisions they enter with you.
+                                                                </p>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-6">
+                                                                {[
+                                                                    ['temporary', `Temporary SAPA license (${fmtRWhole(FEES.TEMPORARY_LICENSE)})`],
+                                                                    ['full', `Annual SAPA license (${fmtRWhole(FEES.FULL_LICENSE)})`],
+                                                                ].map(([val, label]) => (
+                                                                    <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
+                                                                        <input
+                                                                            type="radio"
+                                                                            name={`partner-license-${sel.partnerId}`}
+                                                                            checked={eventPartnerLicenseChoice === val}
+                                                                            onChange={() => setDivisionPartnerLicenseChoice(d.id, val)}
+                                                                            className="w-3.5 h-3.5 shrink-0"
+                                                                            style={{ accentColor: accent }}
+                                                                        />
+                                                                        {label}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {showPartnerLicenseAlreadySelected && (
+                                                        <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                            <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                                                            <p>
+                                                                SAPA license already selected for {sel.partnerName}
+                                                                {' '}({eventPartnerLicenseChoice === 'full' ? `annual — ${fmtRWhole(FEES.FULL_LICENSE)}` : `temporary — ${fmtRWhole(FEES.TEMPORARY_LICENSE)}`}).
+                                                                {' '}One license covers all divisions for this event.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {!payModeSelf && sel?.partnerName && partnerLic?.active && (
+                                                        <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                            <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                                                            <p>Partner has an active SAPA license</p>
+                                                        </div>
+                                                    )}
+
+                                                    {!payModeSelf && sel?.partnerName && (
+                                                        <div className="flex items-start gap-2.5 text-blue-800 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                            <Check size={16} className="shrink-0 mt-0.5 text-blue-600" />
+                                                            <p>A payment request will be sent to your partner</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </Card>
+                                );
+                            })}
+                        </div>
                     </WizardStepWrap>
                 );
 
@@ -1571,311 +2343,138 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     </WizardStepWrap>
                 );
 
-            case 4:
+            case 4: {
+                const sapaHighlightClass = theme?.accentBg || 'bg-[#CCFF00]/10 border-[#CCFF00]/20';
+
                 return (
                     <WizardStepWrap>
-                        <WizardStepTitle title="Payment" subtitle="Choose what to pay for and review your entry total" />
+                        <WizardStepTitle
+                            title="Review & Pay"
+                            subtitle="Please review your entries and fees below. Registration is only confirmed once payment is completed successfully."
+                        />
 
-                        <EventSummaryCard compact />
+                        <div className={`rounded-2xl border px-4 py-3 flex items-center justify-between ${sapaHighlightClass}`}>
+                            <span className="text-xs text-slate-700 font-normal">Your current SAPA Points</span>
+                            <span className="text-sm font-bold text-slate-900 tabular-nums">
+                                {sapaPoints != null ? Number(sapaPoints).toLocaleString() : '—'}
+                            </span>
+                        </div>
 
-                        {hasPartner && primaryPartner.partnerName && (
-                            <Card>
-                                <CardHeader title="Payment Preference" soft />
-                                <CardBody className="space-y-2">
-                                    {[
-                                        ['both', 'Pay for both players', 'You will complete payment for both entries.'],
-                                        ['self', 'Pay only my entry', 'Your partner will receive a notification to complete payment and registration.'],
-                                    ].map(([val, label, description]) => {
-                                        const anyPartnerPaid = selectedDivisions.some(d => isPartnerDivisionPaid(d.id));
-                                        const isDisabled = val === 'both' && anyPartnerPaid;
-                                        return (
-                                            <label
-                                                key={val}
-                                                className={`flex items-start gap-2.5 p-3 rounded-lg border transition-colors ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-50 border-gray-200' : payMode === val ? 'border-2 cursor-pointer' : 'border-gray-200 hover:bg-gray-50 cursor-pointer'}`}
-                                                style={!isDisabled && payMode === val ? { borderColor: accent, backgroundColor: `${accent}10` } : undefined}
-                                            >
-                                                <input
-                                                    type="radio"
-                                                    name="payMode"
-                                                    disabled={isDisabled}
-                                                    checked={payMode === val}
-                                                    onChange={() => !isDisabled && setPayMode(val)}
-                                                    className="w-3.5 h-3.5 mt-0.5 shrink-0"
-                                                    style={{ accentColor: accent }}
-                                                />
-                                                <div className="min-w-0">
-                                                    <span className="text-xs font-semibold text-slate-900">
-                                                        {label}
-                                                        {isDisabled && <span className="ml-2 text-[10px] font-medium text-emerald-600">(Partner already paid)</span>}
-                                                    </span>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5 leading-snug font-normal">{description}</p>
+                        <Card className={sapaHighlightClass}>
+                            <CardHeader title="Entries" soft />
+                            <CardBody className="space-y-0">
+                                {reviewPaySummary.entries.map((entry) => (
+                                    <div key={entry.id} className="py-3 border-b border-gray-100 last:border-b-0">
+                                        <div className="flex items-start gap-3">
+                                            <div className="flex shrink-0 -space-x-2 pt-0.5">
+                                                <div
+                                                    className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center ring-2 ring-white relative z-10"
+                                                    style={profileImageUrl ? undefined : { backgroundColor: accent }}
+                                                >
+                                                    {profileImageUrl ? (
+                                                        <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <User className="w-4 h-4" style={{ color: btnTextColor }} />
+                                                    )}
                                                 </div>
-                                            </label>
-                                        );
-                                    })}
-                                </CardBody>
-                            </Card>
-                        )}
-
-                        <Card>
-                            <CardHeader title="Select entries to pay" subtitle="Choose which divisions to include in this payment" soft />
-                            <CardBody className="space-y-2">
-                                {selectedDivisions.map((d) => {
-                                    const sel = selected[d.id];
-                                    const fee = Number(d.entry_fee || 0);
-                                    const selfPaid = isSelfDivisionPaid(d.id);
-                                    const partnerPaid = isPartnerDivisionPaid(d.id);
-                                    const showPartnerOption = hasPartner && primaryPartner.partnerName && payMode === 'both';
-                                    const payerSelfName = displayProfile?.name || profile?.name || 'You';
-                                    return (
-                                        <div key={d.id} className="rounded-lg border border-gray-200 p-3">
-                                            <div className="flex justify-between items-start gap-2 mb-2">
-                                                <p className="font-semibold text-slate-900 text-xs">{d.name}</p>
-                                                <span className="text-xs font-medium text-slate-900 shrink-0 tabular-nums">{fmtR(fee)}</span>
+                                                {entry.partnerName && (
+                                                    <div
+                                                        className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center ring-2 ring-white bg-gray-100 relative z-0"
+                                                        style={!entry.partnerImageUrl ? { backgroundColor: `${accent}40` } : undefined}
+                                                    >
+                                                        {entry.partnerImageUrl ? (
+                                                            <img src={entry.partnerImageUrl} alt="" className="w-full h-full object-cover" />
+                                                        ) : (
+                                                            <User className="w-4 h-4 text-slate-500" />
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <label className={`flex items-center gap-2 text-xs font-normal ${selfPaid ? 'opacity-60' : 'cursor-pointer'}`}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selfPaid || sel?.payForSelf !== false}
-                                                        disabled={selfPaid || fee === 0}
-                                                        onChange={(e) => setDivisionPayFlag(d.id, 'payForSelf', e.target.checked)}
-                                                        className="w-3.5 h-3.5 shrink-0"
-                                                        style={{ accentColor: accent }}
-                                                    />
-                                                    <span className="text-slate-900">
-                                                        Pay for {payerSelfName} (You)
-                                                        {selfPaid && <span className="ml-2 text-xs font-medium text-emerald-600">Already paid</span>}
-                                                        {!selfPaid && fee === 0 && <span className="ml-2 text-xs text-slate-500">Free entry</span>}
-                                                    </span>
-                                                </label>
-                                                {showPartnerOption && (
-                                                    <label className={`flex items-center gap-2 text-xs font-normal ${partnerPaid ? 'opacity-60' : 'cursor-pointer'}`}>
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={partnerPaid || !!sel?.payForPartner}
-                                                            disabled={partnerPaid || fee === 0}
-                                                            onChange={(e) => setDivisionPayFlag(d.id, 'payForPartner', e.target.checked)}
-                                                            className="w-3.5 h-3.5 shrink-0"
-                                                            style={{ accentColor: accent }}
-                                                        />
-                                                        <span className="text-slate-900">
-                                                            Pay for {primaryPartner.partnerName}
-                                                            {partnerPaid && <span className="ml-2 text-xs font-medium text-emerald-600">Already paid</span>}
-                                                            {!partnerPaid && fee === 0 && <span className="ml-2 text-xs text-slate-500">Free entry</span>}
-                                                        </span>
-                                                    </label>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-slate-900 text-sm leading-snug truncate whitespace-nowrap">{entry.divisionName}</p>
+                                                <p className="text-[11px] text-slate-500 mt-1 font-normal truncate whitespace-nowrap">
+                                                    {entry.selfName}{entry.partnerName ? `, ${entry.partnerName}` : ''}
+                                                </p>
+                                            </div>
+                                            <div className="shrink-0 flex flex-col items-end gap-1 self-center min-w-[5.5rem]">
+                                                <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap ${
+                                                    entry.payTag === 'You Paying both Entries'
+                                                        ? 'bg-red-50 border-red-200 text-red-700'
+                                                        : entry.payTag === 'Partner Pays Their Entry'
+                                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                                                            : 'bg-slate-50 border-slate-200 text-slate-700'
+                                                }`}>
+                                                    {entry.payTag}
+                                                </span>
+                                                <p className="font-semibold text-slate-900 text-sm tabular-nums leading-tight">{fmtR(entry.entryTotal)}</p>
+                                                {entry.fee > 0 && entry.payerCount > 0 && (
+                                                    <p className="text-[10px] text-slate-500 font-normal tabular-nums">
+                                                        ({entry.payerCount} x {fmtRWhole(entry.fee)})
+                                                    </p>
                                                 )}
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </CardBody>
-                        </Card>
-
-                        <Card className={`shadow-sm ${theme?.accentBg || 'bg-[#CCFF00]/10 border-[#CCFF00]/20'}`}>
-                            <CardHeader title="Entry Summary" soft />
-                            <CardBody>
-                                <div className="space-y-0 divide-y divide-black/5">
-                                    {entrySummary.players.length === 0 && entrySummary.extras.length === 0 ? (
-                                        <p className="py-2 text-xs text-slate-500 font-normal">No entries selected for payment.</p>
-                                    ) : (
-                                        <>
-                                            {entrySummary.players.map((player, i) => (
-                                                <div key={`player-${i}`} className="flex justify-between gap-3 py-2 text-xs">
-                                                    <div className="min-w-0">
-                                                        <p className="font-semibold text-slate-900 leading-snug">
-                                                            {player.name}
-                                                            <span className="font-normal text-slate-500"> ({player.role})</span>
-                                                        </p>
-                                                        <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
-                                                            {player.divisions.map((div) => div.name).join(', ')}
-                                                        </p>
-                                                    </div>
-                                                    <span className="font-medium text-slate-900 shrink-0 tabular-nums">{fmtR(player.total)}</span>
-                                                </div>
-                                            ))}
-                                            {entrySummary.extras.map((extra, i) => (
-                                                <div key={`extra-${i}`} className="flex justify-between py-2 text-xs font-normal">
-                                                    <span className="text-slate-600">{extra.label}</span>
-                                                    <span className="font-medium text-slate-900 tabular-nums">{fmtR(extra.amount)}</span>
-                                                </div>
-                                            ))}
-                                        </>
-                                    )}
-                                </div>
-                                <div
-                                    className="flex justify-between items-center py-2.5 px-4 -mx-4 -mb-3 mt-2 border-t border-dashed border-slate-300/70"
-                                    style={{ backgroundColor: `${accent}30` }}
-                                >
-                                    <span className="font-semibold text-slate-900 text-sm">Total</span>
-                                    <span className="font-bold text-slate-900 text-base tabular-nums">{fmtR(total)}</span>
-                                </div>
-                            </CardBody>
-                        </Card>
-                    </WizardStepWrap>
-                );
-
-            case 5: {
-                const selfLicenseLabel = hasLicense
-                    ? licenseInfo.label
-                    : buyLicenseSelf
-                        ? (licenseSelfChoice === 'full' ? 'Annual license added' : 'Temporary license added')
-                        : 'No active license';
-                const selfLicenseOk = hasLicense || buyLicenseSelf;
-                const partnerLicenseStatusLabel = buyLicensePartner
-                    ? (licensePartnerChoice === 'full' ? 'Annual license added' : 'Temporary license added')
-                    : partnerLicenseInfo.active
-                        ? partnerLicenseInfo.label
-                        : null;
-                const partnerLicenseOptionLabel = {
-                    annual: 'Annual SAPA license',
-                    temporary: 'Temporary SAPA license',
-                    none: 'Per-entry authorisation',
-                }[partnerLicenseOption] || 'Per-entry authorisation';
-                const anyPartnerPaidEntries = selectedDivisions.some((d) => selected[d.id]?.partnerName && selected[d.id]?.payForPartner);
-                const selfPayingEntries = selectedDivisions.some((d) => isSelfPayingDivision(d.id, selected[d.id]));
-                const paymentIncludes = [];
-                if (selfPayingEntries && anyPartnerPaidEntries) {
-                    paymentIncludes.push("both players' entry fees");
-                } else if (selfPayingEntries) {
-                    paymentIncludes.push('your entry fee');
-                } else if (anyPartnerPaidEntries) {
-                    paymentIncludes.push("your partner's entry fee");
-                }
-                if (buyLicenseSelf) {
-                    paymentIncludes.push(licenseSelfChoice === 'full' ? 'your annual SAPA license' : 'your temporary SAPA license');
-                }
-                if (anyPartnerPaidEntries && buyLicensePartner) {
-                    paymentIncludes.push(
-                        licensePartnerChoice === 'full'
-                            ? "your partner's annual SAPA license"
-                            : "your partner's temporary SAPA license"
-                    );
-                }
-                const paymentMethodTitle = hasPartner && primaryPartner.partnerName
-                    ? (payMode === 'both' ? 'Paying for both players' : 'Paying for my entry only')
-                    : 'Paying for my entry';
-                const paymentMethodSubtitle = (() => {
-                    if (hasPartner && primaryPartner.partnerName && payMode === 'self' && paymentIncludes.length === 0) {
-                        return 'Your partner will receive a notification to complete payment and registration.';
-                    }
-                    if (paymentIncludes.length === 0) {
-                        return 'You will complete payment for your registration.';
-                    }
-                    if (paymentIncludes.length === 1) {
-                        return `You will complete payment for ${paymentIncludes[0]}.`;
-                    }
-                    const last = paymentIncludes[paymentIncludes.length - 1];
-                    return `You will complete payment for ${paymentIncludes.slice(0, -1).join(', ')} and ${last}.`;
-                })();
-                const partnerImageUrl = primaryPartner.partnerProfile?.image_url?.trim() || null;
-
-                return (
-                    <WizardStepWrap>
-                        <WizardStepTitle title="Review & Confirm" subtitle="Check your details before submitting" />
-
-                        <Card>
-                            <CardHeader title="Your Details" soft />
-                            <CardBody>
-                                <div className="flex items-center gap-2.5 mb-2.5">
-                                    <div className="w-9 h-9 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                                        {profileImageUrl ? (
-                                            <img src={profileImageUrl} alt="" className="w-full h-full object-cover" />
-                                        ) : (
-                                            <User className="w-4 h-4 text-gray-400" />
-                                        )}
                                     </div>
-                                    <p className="font-semibold text-slate-900 text-sm">{displayProfile?.name || '—'}</p>
-                                </div>
-                                <div className="space-y-2 text-xs">
-                                    <div className="flex justify-between items-center gap-3">
-                                        <span className="text-slate-500">Current SAPA Points</span>
-                                        <span className="font-medium text-slate-900 tabular-nums">
-                                            {sapaPoints != null ? Number(sapaPoints).toLocaleString() : '—'}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between items-center gap-3">
-                                        <span className="text-slate-500 shrink-0">License</span>
-                                        <span className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full border text-right whitespace-nowrap ${selfLicenseOk
-                                            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                            : 'bg-orange-50 border-orange-200 text-orange-800'
-                                            }`}>
-                                            {selfLicenseLabel}
-                                        </span>
-                                    </div>
-                                    <div className="flex justify-between gap-3">
-                                        <span className="text-slate-500 shrink-0">Division</span>
-                                        <span className="font-medium text-slate-900 text-right">{selectedDivisions.map((d) => d.name).join(', ') || '—'}</span>
-                                    </div>
+                                ))}
+                                <div className="flex justify-between items-center pt-3 mt-1 border-t border-dashed border-gray-200">
+                                    <span className="text-xs font-semibold text-slate-900">Total entry fees</span>
+                                    <span className="text-sm font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.entryFeesTotal)}</span>
                                 </div>
                             </CardBody>
                         </Card>
 
-                        {hasPartner && primaryPartner.partnerName && (
+                        {reviewPaySummary.licenseLines.length > 0 && (
                             <Card>
-                                <CardHeader title="Partner Details" soft />
-                                <CardBody>
-                                    <div className="flex items-center gap-2.5 mb-2.5">
-                                        <div className="w-9 h-9 rounded-full bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                                            {partnerImageUrl ? (
-                                                <img src={partnerImageUrl} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                                <User className="w-4 h-4 text-gray-400" />
-                                            )}
-                                        </div>
-                                        <p className="font-semibold text-slate-900 text-sm truncate">{primaryPartner.partnerName}</p>
-                                    </div>
-                                    <div className="space-y-2 text-xs">
-                                        {partnerLicenseStatusLabel && (
-                                            <div className="flex justify-between items-center gap-3">
-                                                <span className="text-slate-500 shrink-0">License Status</span>
-                                                <span className={`inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 whitespace-nowrap ${buyLicensePartner || !partnerLicenseInfo.active
-                                                    ? 'bg-orange-50 border-orange-200 text-orange-800'
-                                                    : 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                                                    }`}>
-                                                    {partnerLicenseStatusLabel}
-                                                </span>
+                                <CardHeader title="Licenses" soft />
+                                <CardBody className="space-y-0">
+                                    {!hasLicense && anySelectedRequiresLicense && (
+                                        <div className="pb-3 mb-3 border-b border-gray-100">
+                                            <p className="text-[11px] text-slate-500 font-normal mb-2">Your SAPA license</p>
+                                            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                                                {[
+                                                    ['temporary', `Temporary SAPA license (${fmtRWhole(FEES.TEMPORARY_LICENSE)})`],
+                                                    ['full', `Annual SAPA license (${fmtRWhole(FEES.FULL_LICENSE)})`],
+                                                ].map(([val, label]) => (
+                                                    <label key={val} className="flex items-center gap-2 text-xs text-slate-900 cursor-pointer font-normal whitespace-nowrap">
+                                                        <input
+                                                            type="radio"
+                                                            name="self-license-choice"
+                                                            checked={licenseSelfChoice === val}
+                                                            onChange={() => {
+                                                                setLicenseSelfChoice(val);
+                                                                setBuyLicenseSelf(true);
+                                                            }}
+                                                            className="w-3.5 h-3.5 shrink-0"
+                                                            style={{ accentColor: accent }}
+                                                        />
+                                                        {label}
+                                                    </label>
+                                                ))}
                                             </div>
-                                        )}
-                                        {(showPartnerLicenseOptions || buyLicensePartner) && (
-                                            <div className="flex justify-between gap-3">
-                                                <span className="text-slate-500 shrink-0">License Option</span>
-                                                <span className="font-medium text-slate-900 text-right">{partnerLicenseOptionLabel}</span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between gap-3">
-                                            <span className="text-slate-500 shrink-0">Payment</span>
-                                            <span className="font-medium text-slate-900 text-right">
-                                                {payMode === 'both' ? 'Included in your payment' : 'Partner pays separately'}
-                                            </span>
                                         </div>
+                                    )}
+                                    {reviewPaySummary.licenseLines.map((line, i) => (
+                                        <div key={`${line.label}-${i}`} className="flex justify-between items-center py-2 text-xs">
+                                            <span className="text-slate-700 font-normal">{line.label}</span>
+                                            <span className="font-medium text-slate-900 tabular-nums">{fmtR(line.amount)}</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between items-center pt-3 mt-1 border-t border-dashed border-gray-200">
+                                        <span className="text-xs font-medium text-slate-600">Subtotal</span>
+                                        <span className="text-sm font-semibold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.licensesSubtotal)}</span>
                                     </div>
                                 </CardBody>
                             </Card>
                         )}
 
-                        <Card>
-                            <CardHeader title="Payment Method" soft />
-                            <CardBody>
-                                <div className="flex items-start gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center shrink-0">
-                                        <CreditCard size={16} className="text-slate-400" />
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="font-semibold text-slate-900 text-xs">{paymentMethodTitle}</p>
-                                        <p className="text-[11px] text-slate-500 mt-0.5 leading-snug font-normal">{paymentMethodSubtitle}</p>
-                                        {total > 0 && (
-                                            <p className="text-sm font-semibold text-slate-900 mt-1.5 tabular-nums">{fmtR(total)}</p>
-                                        )}
-                                    </div>
-                                </div>
+                        <Card className={`border-2 ${sapaHighlightClass}`} style={{ borderColor: accent }}>
+                            <CardBody className="flex justify-between items-center py-4">
+                                <span className="text-sm font-semibold text-slate-900">Total payable</span>
+                                <span className="text-xl font-bold text-slate-900 tabular-nums">{fmtR(reviewPaySummary.totalPayable)}</span>
                             </CardBody>
                         </Card>
 
-                        <EventSummaryCard variant="confirm" />
-
-                        <div className="space-y-2">
+                        <div className="space-y-2.5 pt-1">
                             {[
                                 [
                                     agreeRules,
@@ -1913,17 +2512,137 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 );
             }
 
+            case 5: {
+                const confirmSelfName = displayProfile?.name || profile?.name || 'You';
+                const confirmEntries = selectedDivisions.map((d) => {
+                    const sel = selected[d.id];
+                    const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
+                    const partnerPaysSelf = !!(sel?.partnerName && !sel?.payForPartner);
+                    const namesLine = sel?.partnerName
+                        ? `${confirmSelfName} + ${sel.partnerName}`
+                        : confirmSelfName;
+                    return {
+                        id: d.id,
+                        divisionName: d.name,
+                        namesLine,
+                        partnerName: sel?.partnerName || null,
+                        payBadge: !sel?.partnerName || userPaysPartner ? 'You Pay' : 'Partner Pays',
+                        payBadgeVariant: partnerPaysSelf ? 'partner' : 'you',
+                        showPartnerReminder: partnerPaysSelf,
+                    };
+                });
+                const paidAmount = confirmedPaidTotal ?? 0;
+                const hasPaid = paidAmount > 0;
+
+                return (
+                    <WizardStepWrap>
+                        <div className="flex flex-col items-center text-center pt-2 pb-1">
+                            <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-4">
+                                <Check size={32} className="text-white" strokeWidth={2.5} />
+                            </div>
+                            <h2 className="text-lg font-bold text-slate-900 tracking-normal">Registration Confirmed!</h2>
+                            <p className="text-xs text-slate-500 mt-1.5 font-normal leading-snug max-w-sm">
+                                {hasPaid
+                                    ? 'Your registration and payment were successful. We can\'t wait to see you on court!'
+                                    : 'Your registration was successful. We can\'t wait to see you on court!'}
+                            </p>
+                        </div>
+
+                        <Card>
+                            <CardHeader title="Your entries" soft />
+                            <CardBody className="space-y-0">
+                                {confirmEntries.map((entry) => (
+                                    <div key={entry.id} className="py-3 border-b border-gray-100 last:border-b-0">
+                                        <div className="flex items-start gap-3">
+                                            <div
+                                                className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center shrink-0"
+                                                style={{ backgroundColor: accent }}
+                                            >
+                                                <User className="w-4 h-4" style={{ color: btnTextColor }} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0 text-left">
+                                                        <p className="font-semibold text-slate-900 text-sm leading-snug">{entry.divisionName}</p>
+                                                        <p className="text-[11px] text-slate-500 mt-0.5 font-normal truncate">{entry.namesLine}</p>
+                                                    </div>
+                                                    <span className={`inline-flex shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap ${
+                                                        entry.payBadgeVariant === 'partner'
+                                                            ? 'bg-orange-50 border-orange-200 text-orange-700'
+                                                            : 'bg-red-50 border-red-200 text-red-700'
+                                                    }`}>
+                                                        {entry.payBadge}
+                                                    </span>
+                                                </div>
+                                                {entry.showPartnerReminder && entry.partnerName && (
+                                                    <div className="mt-2.5 rounded-xl border border-orange-100 bg-orange-50 px-3 py-2.5 text-left">
+                                                        <p className="text-[11px] text-orange-900 font-normal leading-snug">
+                                                            Reminder: please remind your partner ({entry.partnerName}) to complete their registration by paying their entry fee.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </CardBody>
+                        </Card>
+
+                        {hasPaid && (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
+                                    <Check size={16} className="text-white" />
+                                </div>
+                                <div className="min-w-0 text-left">
+                                    <p className="text-sm font-semibold text-emerald-800">Payment successful</p>
+                                    <p className="text-sm font-bold text-slate-900 tabular-nums mt-0.5">Total paid: {fmtR(paidAmount)}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <Card>
+                            <CardHeader title="What's next" soft />
+                            <CardBody className="space-y-3">
+                                {[
+                                    'A confirmation email has been sent to your email address.',
+                                    'You\'ll receive event updates on WhatsApp.',
+                                    'Draws will be published closer to the event.',
+                                    'See you on court!',
+                                ].map((line) => (
+                                    <div key={line} className="flex items-start gap-2.5">
+                                        <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5">
+                                            <Check size={11} className="text-white" strokeWidth={3} />
+                                        </div>
+                                        <p className="text-xs text-slate-700 font-normal leading-snug text-left">{line}</p>
+                                    </div>
+                                ))}
+                            </CardBody>
+                        </Card>
+                    </WizardStepWrap>
+                );
+            }
+
             default:
                 return null;
         }
     };
 
     const stepCtaLabel = () => {
-        if (wizardStep === 5) return processing ? 'Processing...' : total > 0 ? 'Submit Registration' : 'Confirm Registration';
-        if (wizardStep === 4) return 'Review & Confirm';
+        if (wizardStep === 5) return 'Back to My Events';
+        if (wizardStep === 4) return processing ? 'Processing...' : total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
         if (wizardStep === 3) return 'Continue to Payment';
-        if (wizardStep === 2) return 'Continue to Partner';
+        if (wizardStep === 2) return 'Continue to Review & Pay';
         return 'Continue to Division';
+    };
+
+    const handleWizardPrimaryAction = () => {
+        if (wizardStep === 5) {
+            finishRegistrationWizard();
+            return;
+        }
+        if (wizardStep === 4) {
+            handleRegister();
+        }
     };
 
     if (loading) {
@@ -1943,14 +2662,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-3">
                     <Trophy className="w-5 h-5 text-slate-700" />
                     <h2 className="text-base font-semibold text-slate-900">
-                        {hasRegistrations ? 'You are Registered for this Event' : 'Register for this Event'}
+                        {hasRegistrations ? 'You are Registered for this Event' : hasPendingPayment ? 'Complete Your Registration' : 'Register for this Event'}
                     </h2>
                 </div>
 
                 <div className="px-6 py-4">
-                    {hasRegistrations ? (
+                    {hasRegistrations || hasPendingPayment ? (
                         <>
-                            <p className="text-xs font-medium text-slate-500 mb-3">Your Entries</p>
+                            <p className="text-xs font-medium text-slate-500 mb-3">
+                                {hasRegistrations ? 'Your Entries' : 'Outstanding payment'}
+                            </p>
                             <div className="space-y-2 mb-4">
                                 {myRegs.map((reg) => {
                                     const div = divisions.find((d) => d.id === reg.division_id);
@@ -2095,7 +2816,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             {/* Wizard footer */}
                             <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3">
                                 <div className="max-w-xl mx-auto flex gap-3">
-                                    {wizardStep > 1 && (
+                                    {wizardStep > 1 && wizardStep < 5 && (
                                         <button
                                             type="button"
                                             onClick={goBack}
@@ -2107,14 +2828,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     )}
                                     <div className="flex-1">
                                         <PrimaryBtn
-                                            onClick={wizardStep === 5 ? handleRegister : goNext}
-                                            disabled={processing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 5 && (!agreeRules || !agreeComplete || !agreeSapa))}
+                                            onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : goNext}
+                                            disabled={processing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 4 && (!agreeRules || !agreeComplete || !agreeSapa))}
                                         >
-                                            {processing ? <Loader2 className="animate-spin w-5 h-5" /> : (
+                                            {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                                 <>
                                                     {stepCtaLabel()}
-                                                    {wizardStep < 5 && <ChevronRight size={16} />}
-                                                    {wizardStep === 5 && !processing && <Check size={16} />}
+                                                    {wizardStep > 1 && wizardStep < 4 && <ChevronRight size={16} />}
                                                 </>
                                             )}
                                         </PrimaryBtn>
