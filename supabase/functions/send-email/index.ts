@@ -8,6 +8,7 @@ const corsHeaders = {
 
 const SITE_URL = 'https://4mpadel.co.za';
 const EMAIL_LOGO_URL = `${SITE_URL}/images/4m-padel-event-management-logo.png`;
+const fmtR = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
 // Unified Brand Wrapper for premium emails
 function wrapBrandTemplate(contentHtml: string, titleText: string, actionUrl?: string, actionLabel?: string) {
@@ -76,6 +77,7 @@ function generateEventCardHtml(
   vars: {
     division?: string;
     partnerName?: string;
+    formerPartnerName?: string;
     amount?: string;
     amountDue?: string;
     paid?: boolean;
@@ -93,7 +95,10 @@ function generateEventCardHtml(
   // Determine payment status badge
   let statusBadge = '';
   const isWithdrawn = vars.statusOverride?.toLowerCase() === 'withdrawn';
-  const isPaid = vars.paid === true || (vars.amount && !vars.amountDue && !vars.payUrl);
+  const isPaid = !isWithdrawn && (
+    vars.paid === true
+    || (!vars.formerPartnerName && vars.paid !== false && Boolean(vars.amount) && !vars.amountDue && !vars.payUrl)
+  );
   
   if (isWithdrawn) {
     statusBadge = `<span style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #FCA5A5; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 20px; display: inline-block;">Withdrawn</span>`;
@@ -147,8 +152,16 @@ function generateEventCardHtml(
         </tr>
         ` : ''}
         
-        <!-- Partner -->
-        ${vars.partnerName ? `
+        <!-- Partner / former partner -->
+        ${vars.formerPartnerName ? `
+        <tr>
+          <td width="30" valign="top" style="padding: 10px 0; font-size: 18px;">👥</td>
+          <td valign="top" style="padding: 10px 0; color: #CBD5E1;">
+            <strong style="color: #FFFFFF;">Former partner (withdrawn):</strong><br/>
+            <span style="font-size: 13px; color: #94A3B8;">${vars.formerPartnerName}</span>
+          </td>
+        </tr>
+        ` : vars.partnerName ? `
         <tr>
           <td width="30" valign="top" style="padding: 10px 0; font-size: 18px;">👥</td>
           <td valign="top" style="padding: 10px 0; color: #CBD5E1;">
@@ -159,6 +172,7 @@ function generateEventCardHtml(
         ` : ''}
         
         <!-- Status / Cost -->
+        ${!isWithdrawn ? `
         <tr>
           <td width="30" valign="top" style="padding: 10px 0; font-size: 18px;">💵</td>
           <td valign="top" style="padding: 10px 0; color: #CBD5E1;">
@@ -167,6 +181,15 @@ function generateEventCardHtml(
             <div style="margin-top: 6px;">${statusBadge}</div>
           </td>
         </tr>
+        ` : `
+        <tr>
+          <td width="30" valign="top" style="padding: 10px 0; font-size: 18px;">💵</td>
+          <td valign="top" style="padding: 10px 0; color: #CBD5E1;">
+            <strong style="color: #FFFFFF;">Registration status:</strong><br/>
+            <div style="margin-top: 6px;">${statusBadge}</div>
+          </td>
+        </tr>
+        `}
 
         <!-- Organizer -->
         ${eventInfo.organizer_name ? `
@@ -545,31 +568,82 @@ async function generateEmailBody(
       actionLabel = 'View Event Details';
       break;
 
-    case 'entry_withdrawn':
+    case 'entry_withdrawn': {
       const isPartnerRole = vars.recipientRole === 'partner';
       subject = isPartnerRole
         ? `${vars.withdrawnPlayerName || 'Your partner'} withdrew from ${vars.eventName || 'Tournament'}`
         : `Withdrawal confirmed: ${vars.eventName || 'Tournament'}`;
+
+      let partnerPaid = vars.paid === true;
+      let entryFee = Number(vars.entryFee || 0);
+
+      if (isPartnerRole && vars.recipientEmail && eventId) {
+        try {
+          const { data: recipientReg } = await supabaseAdmin
+            .from('event_registrations')
+            .select('payment_status, division_id')
+            .eq('event_id', eventId)
+            .ilike('email', String(vars.recipientEmail))
+            .eq('division', vars.division)
+            .neq('status', 'withdrawn')
+            .maybeSingle();
+
+          if (recipientReg) {
+            partnerPaid = recipientReg.payment_status === 'paid';
+            if (recipientReg.division_id) {
+              const { data: divRow } = await supabaseAdmin
+                .from('tournament_divisions')
+                .select('entry_fee')
+                .eq('id', recipientReg.division_id)
+                .maybeSingle();
+              entryFee = Number(divRow?.entry_fee || entryFee);
+            }
+          }
+        } catch (err) {
+          console.error('Withdrawal email registration lookup failed:', err);
+        }
+      }
+
+      const partnerCardVars = {
+        division: vars.division,
+        formerPartnerName: vars.withdrawnPlayerName,
+        paid: partnerPaid,
+        amount: partnerPaid && entryFee > 0 ? fmtR(entryFee) : (partnerPaid ? 'R 0' : undefined),
+        amountDue: !partnerPaid && entryFee > 0 ? fmtR(entryFee) : undefined,
+        payUrl: !partnerPaid && entryFee > 0 ? vars.eventUrl : undefined,
+      };
+
+      const partnerPaymentNote = partnerPaid
+        ? 'Your entry fee is paid and your registration remains active.'
+        : entryFee > 0
+          ? `Your entry fee of <strong style="color:#F59E0B;">${fmtR(entryFee)}</strong> is still outstanding. Complete payment to secure your spot.`
+          : 'Your registration for this division remains active.';
+
       contentHtml = isPartnerRole ? `
         <h2 style="font-size: 24px; font-weight: 800; color: #EF4444; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Partner Withdrawal</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, <strong style="color: #FFFFFF;">${vars.withdrawnPlayerName || 'Your partner'}</strong> has withdrawn from <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
         </p>
         <p style="font-size: 14px; line-height: 1.6; color: #64748B; margin-bottom: 24px;">
-          Your paired entry for this division has also been withdrawn. You can register again with a different partner or division if slots are available.
+          Your registration for this division is still active. ${partnerPaymentNote} You can continue as a solo entry or register with a different partner if slots are available.
         </p>
-        ${generateEventCardHtml(eventInfo, { ...vars, statusOverride: 'withdrawn' })}
+        ${eventInfo ? generateEventCardHtml(eventInfo, partnerCardVars) : ''}
       ` : `
         <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Withdrawal Confirmed</h2>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, you have successfully withdrawn from <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
-          ${vars.partnerName ? `<br/>Your partner <strong style="color: #FFFFFF;">${vars.partnerName}</strong> has been notified and their paired entry was withdrawn.` : ''}
+          ${vars.partnerName ? `<br/>Your partner <strong style="color: #FFFFFF;">${vars.partnerName}</strong> has been notified. Their registration remains active.` : ''}
         </p>
-        ${generateEventCardHtml(eventInfo, { ...vars, statusOverride: 'withdrawn' })}
+        ${eventInfo ? generateEventCardHtml(eventInfo, {
+          division: vars.division,
+          partnerName: vars.partnerName,
+          statusOverride: 'withdrawn',
+        }) : ''}
       `;
       actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
-      actionLabel = 'View Event Calendar';
+      actionLabel = isPartnerRole && !partnerPaid && entryFee > 0 ? 'Complete Payment' : 'View Event Calendar';
       break;
+    }
 
     case 'partner_invite':
       subject = `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;

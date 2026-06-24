@@ -2549,15 +2549,14 @@ const EventDetails = () => {
                                                 if (!isEventPassed) {
                                                     if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                         return (
-                                                            <button
-                                                                type="button"
-                                                                onClick={openManualRegistration}
-                                                                className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                            <div
+                                                                className="flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
                                                                 style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                                aria-label="Registered for this event"
                                                             >
                                                                 <CheckCircle className="w-4 h-4 shrink-0" />
                                                                 <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                            </button>
+                                                            </div>
                                                         );
                                                     }
                                                     if (manualRegStatus.hasPendingPayment) {
@@ -2665,15 +2664,14 @@ const EventDetails = () => {
                                         if (!isEventPassed) {
                                             if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
                                                 return (
-                                                    <button
-                                                        type="button"
-                                                        onClick={openManualRegistration}
-                                                        className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                    <div
+                                                        className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
                                                         style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                        aria-label="Registered for this event"
                                                     >
                                                         <CheckCircle className="w-4 h-4 shrink-0" />
                                                         <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                    </button>
+                                                    </div>
                                                 );
                                             }
                                             if (manualRegStatus.hasPendingPayment) {
