@@ -119,6 +119,8 @@ const getSubjectForTemplate = (template, vars) => {
                 : `Withdrawal confirmed: ${vars.eventName || 'Tournament'}`;
         case 'partner_invite':
             return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
+        case 'profile_invite':
+            return `${vars.inviterName || 'A 4M Padel player'} invited you to join 4M Padel 🎾`;
         default: 
             return vars.subject || 'Notification from 4M Padel';
     }

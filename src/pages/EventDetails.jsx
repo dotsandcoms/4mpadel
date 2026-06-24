@@ -12,6 +12,7 @@ import ManualEventRegistration from '../components/ManualEventRegistration';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
 import { canAccessHiddenEvents } from '../hooks/useAdminPermissions';
+import { useMembersOnly } from '../context/MembersOnlyContext';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/paystackConfig';
 
@@ -569,6 +570,7 @@ const EventDetails = () => {
     };
 
     const theme = getTierTheme();
+    const { promptMembersOnly } = useMembersOnly();
 
     // Resolve the effective logged-in (or impersonated) user email for manual-event registration.
     // NOTE: never call supabase.auth.getSession() inside onAuthStateChange — that deadlocks the
@@ -2412,11 +2414,28 @@ const EventDetails = () => {
     };
 
     const openManualRegistration = () => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
         manualRegActionsRef.current?.openRegistration?.();
     };
 
     const openManualPayFlow = () => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
         manualRegActionsRef.current?.openPayFlow?.();
+    };
+
+    const openRegistrationModal = () => {
+        if (!manualUserEmail) {
+            promptMembersOnly();
+            return;
+        }
+        setRegStep(1);
+        setIsModalOpen(true);
     };
 
     const heroBackgroundUrl = getDefaultEventBackground(event);
@@ -2620,7 +2639,7 @@ const EventDetails = () => {
                 )}
                 {needsPayment && (
                     <button
-                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                        onClick={openRegistrationModal}
                         className={`w-full text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                     >
@@ -2828,7 +2847,7 @@ const EventDetails = () => {
                                                         {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
                                                             <button
                                                                 type="button"
-                                                                onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                                onClick={openRegistrationModal}
                                                                 className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                             >
@@ -2941,7 +2960,7 @@ const EventDetails = () => {
                                                 )}
                                                 {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
                                                     <button
-                                                        onClick={() => { setRegStep(1); setIsModalOpen(true); }}
+                                                        onClick={openRegistrationModal}
                                                         className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                     >

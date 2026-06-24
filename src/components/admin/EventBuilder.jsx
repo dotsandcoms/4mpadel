@@ -609,6 +609,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
         const rows = divisions.filter((d) => d.name.trim());
         for (let i = 0; i < rows.length; i++) {
             const d = rows[i];
+            const detailsHtml = d.details?.trim() || '';
             const record = {
                 event_id: eventId,
                 name: d.name.trim(),
@@ -618,14 +619,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                 license_required: !!d.license_required,
                 age_category: d.age_category || null,
                 gender: d.gender || null,
-                details: d.details?.trim() || null,
+                details: detailsHtml || null,
                 sort_order: i,
                 is_active: d.is_active !== false,
             };
             if (d.id) {
-                await supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                const { error } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                if (error) throw error;
             } else {
-                await supabase.from('tournament_divisions').insert([record]);
+                const { error } = await supabase.from('tournament_divisions').insert([record]);
+                if (error) throw error;
             }
         }
     };

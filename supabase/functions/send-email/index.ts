@@ -661,6 +661,31 @@ async function generateEmailBody(
       actionLabel = 'Pay My Entry Fee';
       break;
 
+    case 'profile_invite': {
+      const searchedFor = vars.searchName ? ` (they searched for “${vars.searchName}”)` : '';
+      const divisionLine = vars.division
+        ? `<p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 16px;">Division: <strong style="color: #FFFFFF;">${vars.division}</strong></p>`
+        : '';
+      subject = `${vars.inviterName || 'A 4M Padel player'} invited you to join 4M Padel 🎾`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #FFFFFF; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">You're Invited to 4M Padel!</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi there, <strong style="color: #FFFFFF;">${vars.inviterName || 'A 4M Padel player'}</strong> would like you as their partner for <strong style="color: #FFFFFF;">${vars.eventName || 'an upcoming tournament'}</strong>${searchedFor}.
+        </p>
+        ${divisionLine}
+        <p style="font-size: 14px; line-height: 1.6; color: #E2E8F0; margin-bottom: 24px;">
+          To enter this event, you'll first need a free 4M Padel player profile. Registration takes just a few minutes — then you can view the event and complete your entry.
+        </p>
+        ${eventCardHtml}
+        <p style="font-size: 13.5px; line-height: 1.6; color: #64748B; margin-top: 24px; margin-bottom: 0;">
+          Once your profile is created, visit the event page to register and link up with your partner.
+        </p>
+      `;
+      actionUrl = vars.profileUrl || 'https://4mpadel.co.za/';
+      actionLabel = 'Create Your Free Profile';
+      break;
+    }
+
     case 'payment_reminder_general':
       subject = `Payment Reminder: ${vars.eventName || 'Tournament'} 🎾`;
       contentHtml = `

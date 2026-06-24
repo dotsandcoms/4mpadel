@@ -3,6 +3,7 @@ const PUBLIC_EXACT = ['/reset-password', '/contact', '/rankings'];
 /** Routes accessible without signing in */
 export function isPublicRoute(pathname) {
     if (pathname === '/') return true;
+    if (pathname === '/calendar' || pathname.startsWith('/calendar/')) return true;
     return PUBLIC_EXACT.includes(pathname);
 }
 

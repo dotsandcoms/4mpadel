@@ -15,6 +15,8 @@ import { getEventImage } from '../utils/imageUtils';
 import sapaLogo from '../assets/sapa-logo.svg';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
+import PartnerProfileInvite from './PartnerProfileInvite';
+import { useMembersOnly } from '../context/MembersOnlyContext';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -29,10 +31,18 @@ const fmtRWhole = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFr
 
 const stripHtml = (html) => {
     if (!html) return '';
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || '';
+    const raw = String(html);
+    if (typeof document !== 'undefined') {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = raw;
+        const text = (tmp.textContent || tmp.innerText || '').replace(/\u00a0/g, ' ').trim();
+        if (text) return text;
+    }
+    return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 };
+
+const getDivisionSavedDetails = (division) =>
+    stripHtml(division?.details ?? division?.Details ?? '').trim();
 
 const getEventCalendarData = (ev) => {
     if (!ev) return null;
@@ -179,7 +189,7 @@ const PartnerSearchOption = ({ player, onSelect, compact = false }) => {
                 {player._isSoloRegistrant ? (
                     <span className="text-[10px] font-medium text-emerald-700 shrink-0">Solo entry</span>
                 ) : (
-                    !compact && <span className="text-slate-400 text-xs truncate">{player.email}</span>
+                    !compact && <span className="text-slate-600 text-xs truncate">{player.email}</span>
                 )}
             </div>
         </button>
@@ -193,7 +203,7 @@ const Card = ({ children, className = '', allowOverflow = false }) => (
 const CardHeader = ({ title, subtitle, soft = false }) => (
     <div className="px-4 py-2.5 border-b border-gray-50">
         <h3 className={`text-sm text-slate-900 ${soft ? 'font-semibold tracking-normal' : 'font-bold'}`}>{title}</h3>
-        {subtitle && <p className="text-[11px] text-slate-500 mt-0.5 font-normal leading-snug">{subtitle}</p>}
+        {subtitle && <p className="text-[11px] text-slate-600 mt-0.5 font-normal leading-snug">{subtitle}</p>}
     </div>
 );
 
@@ -208,7 +218,7 @@ const WizardStepWrap = ({ children }) => (
 const WizardStepTitle = ({ title, subtitle }) => (
     <div className="pb-0.5">
         <h2 className="text-base font-semibold text-slate-900 tracking-normal">{title}</h2>
-        {subtitle && <p className="text-xs text-slate-500 mt-0.5 font-normal leading-snug">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-slate-600 mt-0.5 font-normal leading-snug">{subtitle}</p>}
     </div>
 );
 
@@ -228,7 +238,7 @@ const ProgressBar = ({ step, theme }) => (
                         >
                             {done ? <Check size={14} /> : s.id}
                         </div>
-                        <span className={`text-[9px] font-bold mt-1 truncate w-full text-center leading-tight ${active ? 'text-slate-900' : 'text-gray-400'}`}>
+                        <span className={`text-[9px] font-bold mt-1 truncate w-full text-center leading-tight ${active ? 'text-slate-900' : 'text-slate-500'}`}>
                             {s.label}
                         </span>
                     </div>
@@ -246,6 +256,7 @@ const ProgressBar = ({ step, theme }) => (
 
 const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
     const navigate = useNavigate();
+    const { promptMembersOnly } = useMembersOnly();
     const [divisions, setDivisions] = useState([]);
     const [divisionRegs, setDivisionRegs] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -294,6 +305,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const hasLicense = licenseInfo.active;
 
     const displayProfile = profile || initialPlayer;
+    const inviterDisplayName = useMemo(
+        () => profile?.name || displayProfile?.name || (userEmail ? userEmail.split('@')[0] : 'A 4M Padel player'),
+        [profile?.name, displayProfile?.name, userEmail],
+    );
     const profileImageUrl = displayProfile?.image_url?.trim() || null;
 
     const sapaPoints = displayProfile?.points ?? null;
@@ -357,12 +372,15 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const loadDivisions = useCallback(async () => {
         setLoading(true);
-        const { data } = await supabase
+        const { data, error } = await supabase
             .from('tournament_divisions')
-            .select('*')
+            .select('id, event_id, name, entry_fee, format, entries_close_at, license_required, age_category, gender, sort_order, is_active, details')
             .eq('event_id', event.id)
             .eq('is_active', true)
             .order('sort_order', { ascending: true });
+        if (error) {
+            console.error('[ManualEventRegistration] loadDivisions failed:', error.message);
+        }
         setDivisions(data || []);
         setLoading(false);
     }, [event.id]);
@@ -546,8 +564,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     );
     const canAddDivision = divisionsAvailableToRegister.length > 0;
 
-    const divisionMetaLine = (d) =>
-        [d.format, fmtRWhole(d.entry_fee), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
+    const divisionMetaLine = (d) => {
+        const saved = getDivisionSavedDetails(d);
+        if (saved) return saved;
+        return [d.format, fmtRWhole(d.entry_fee), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
+    };
 
     const formatDivisionCloseLabel = (d) => {
         const closeAt = d.entries_close_at || event?.registration_closes_at;
@@ -612,7 +633,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     }, [myRegs, divisions, event.id, userEmail]);
 
     const openPayWizard = useCallback(async () => {
-        if (!userEmail) { toast.error('Please log in to continue'); return; }
+        if (!userEmail) { promptMembersOnly(); return; }
         const restored = await restoreSelectedFromPending();
         if (!restored) { toast.error('No outstanding payment found'); return; }
         paymentRetryRef.current = true;
@@ -622,7 +643,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         await loadProfile();
         setWizardStep(4);
         setShowWizard(true);
-    }, [userEmail, restoreSelectedFromPending, loadProfile]);
+    }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly]);
 
     useEffect(() => {
         onStatusChange?.({
@@ -637,6 +658,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             registrationActionsRef.current = {
                 openPayFlow: openPayWizard,
                 openRegistration: () => {
+                    if (!userEmail) {
+                        promptMembersOnly();
+                        return;
+                    }
                     paymentRetryRef.current = false;
                     setWizardStep(1);
                     setHasRankedinAccount(null);
@@ -645,6 +670,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                     setAgreeSapa(false);
                     loadProfile();
                     loadDivisionRegs();
+                    loadDivisions();
                     setShowWizard(true);
                 },
             };
@@ -661,6 +687,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         openPayWizard,
         loadProfile,
         loadDivisionRegs,
+        loadDivisions,
+        promptMembersOnly,
+        userEmail,
     ]);
 
     const resetWizardState = () => {
@@ -682,6 +711,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const openWizard = () => {
+        if (!userEmail) {
+            promptMembersOnly();
+            return;
+        }
         paymentRetryRef.current = false;
         setConfirmedPaidTotal(null);
         setWizardStep(1);
@@ -692,6 +725,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setAgreeSapa(false);
         loadProfile();
         loadDivisionRegs();
+        loadDivisions();
         setShowWizard(true);
     };
 
@@ -908,7 +942,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (fee > 0) parts.push(`Entry fee: ${fmtRWhole(fee)} per player`);
         if (division.format) parts.push(`Format: ${division.format}`);
         if (division.license_required) parts.push('SAPA license required');
-        return parts.join(' • ');
+        return parts.join(' · ');
     };
 
     const getPartnerLicenseInfo = (partnerId) =>
@@ -2053,21 +2087,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         <div className="flex items-start gap-3">
                             <div className="space-y-2 text-xs text-slate-700 min-w-0 flex-1 font-normal leading-snug">
                                 <p className="flex items-center gap-2.5">
-                                    <CalendarIcon size={15} className="text-slate-500 shrink-0" />
+                                    <CalendarIcon size={15} className="text-slate-600 shrink-0" />
                                     {event.event_dates || 'Dates TBC'}
                                 </p>
                                 <p className="flex items-center gap-2.5">
-                                    <MapPin size={15} className="text-slate-500 shrink-0" />
+                                    <MapPin size={15} className="text-slate-600 shrink-0" />
                                     {venueLabel}
                                 </p>
                                 {courtsLabel && (
                                     <p className="flex items-center gap-2.5">
-                                        <Layout size={15} className="text-slate-500 shrink-0" />
+                                        <Layout size={15} className="text-slate-600 shrink-0" />
                                         {courtsLabel}
                                     </p>
                                 )}
                                 <p className="flex items-center gap-2.5">
-                                    <Users size={15} className="text-slate-500 shrink-0" />
+                                    <Users size={15} className="text-slate-600 shrink-0" />
                                     Organised by {organiserLabel}
                                 </p>
                             </div>
@@ -2186,7 +2220,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-slate-900 text-sm">{displayProfile?.name || userEmail.split('@')[0]}</p>
-                                            <p className="text-[11px] text-slate-500 font-normal">SAPA Points</p>
+                                            <p className="text-[11px] text-slate-600 font-normal">SAPA Points</p>
                                         </div>
                                         <div className="shrink-0 min-w-[4.5rem] px-3 py-2 rounded-lg border border-gray-200 bg-white text-center">
                                             <span className="text-sm font-semibold text-slate-900 tabular-nums">
@@ -2212,7 +2246,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 value={selfPlaytomicLevel}
                                                 onChange={(e) => setSelfPlaytomicLevel(e.target.value)}
                                                 placeholder="—"
-                                                className="w-full text-sm font-semibold text-slate-900 tabular-nums text-center bg-transparent outline-none placeholder:text-slate-400 placeholder:font-normal"
+                                                className="w-full text-sm font-semibold text-slate-900 tabular-nums text-center bg-transparent outline-none placeholder:text-slate-500 placeholder:font-normal"
                                             />
                                         </div>
                                     </CardBody>
@@ -2329,6 +2363,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const showPartnerLicenseAlreadySelected = showPartnerLicenseWarning
                                     && !isPrimaryPartnerLicenseDivision
                                     && !!eventPartnerLicenseChoice;
+                                const savedDetails = getDivisionSavedDetails(d);
 
                                 return (
                                     <Card
@@ -2363,7 +2398,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     }}
                                                     className="flex-1 min-w-0 text-left"
                                                 >
-                                                    <p className="font-semibold text-slate-900 text-sm leading-snug">{d.name}</p>
+                                                    <p className="font-semibold text-slate-900 text-sm leading-snug">
+                                                        {d.name}
+                                                        {savedDetails && (
+                                                            <span className="font-normal text-slate-700">{` - ${savedDetails}`}</span>
+                                                        )}
+                                                    </p>
                                                     {reged && (
                                                         <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
                                                             {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
@@ -2392,20 +2432,20 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             {isExpanded && (
                                                 <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
                                                     {getDivisionMeta(d) && (
-                                                        <p className="text-[11px] text-slate-500 leading-snug font-normal">
+                                                        <p className="text-[11px] text-slate-600 leading-snug font-normal">
                                                             {getDivisionMeta(d)}
                                                         </p>
                                                     )}
 
                                                     {!sel?.partnerName && (
-                                                        <p className="text-[11px] text-slate-500 font-normal leading-snug">
+                                                        <p className="text-[11px] text-slate-600 font-normal leading-snug">
                                                             Entering solo — only your entry will be registered for this division.
                                                         </p>
                                                     )}
 
                                                     <div className="flex items-end gap-3">
                                                         <div className="relative flex-1 min-w-0">
-                                                            <label className="block text-[11px] text-slate-500 font-normal mb-1">Add a partner (optional)</label>
+                                                            <label className="block text-[11px] text-slate-600 font-normal mb-1">Add a partner (optional)</label>
                                                             <div className="relative">
                                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                                                 <input
@@ -2420,7 +2460,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                                         },
                                                                     }))}
                                                                     placeholder="Search partner name or email (optional)"
-                                                                    className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-400 font-normal"
+                                                                    className="w-full border border-gray-200 rounded-lg pl-9 pr-8 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-500 font-normal"
                                                                 />
                                                                 {sel?.partnerName ? (
                                                                     <button
@@ -2438,7 +2478,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                             {searchState.open && searchState.query.length >= 2 && searchState.hasSearched && (
                                                                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                                                     {searchState.results.length === 0 ? (
-                                                                        <p className="px-3 py-2.5 text-xs text-gray-500">No matching players found</p>
+                                                                        <PartnerProfileInvite
+                                                                            compact
+                                                                            event={event}
+                                                                            inviterName={inviterDisplayName}
+                                                                            inviterEmail={userEmail}
+                                                                            searchName={searchState.query}
+                                                                            divisionName={d.name}
+                                                                        />
                                                                     ) : (
                                                                         searchState.results.map((p) => (
                                                                             <PartnerSearchOption
@@ -2455,14 +2502,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                                                         {sel?.partnerName && (
                                                             <div className="shrink-0 w-20">
-                                                                <label className="block text-[11px] text-slate-500 font-normal mb-1 leading-tight">Playtomic level</label>
+                                                                <label className="block text-[11px] text-slate-600 font-normal mb-1 leading-tight">Playtomic level</label>
                                                                 <input
                                                                     type="text"
                                                                     inputMode="decimal"
                                                                     value={sel?.partnerPlaytomicLevel ?? ''}
                                                                     onChange={(e) => setDivisionPartnerPlaytomicLevel(d.id, e.target.value)}
                                                                     placeholder="—"
-                                                                    className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs text-slate-900 bg-white tabular-nums text-center outline-none placeholder:text-slate-400"
+                                                                    className="w-full border border-gray-200 rounded-lg px-2 py-2 text-xs text-slate-900 bg-white tabular-nums text-center outline-none placeholder:text-slate-500"
                                                                 />
                                                             </div>
                                                         )}
@@ -2571,7 +2618,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <p className="font-semibold text-slate-900 text-sm leading-tight">Your license is valid.</p>
-                                            <p className="text-xs text-slate-500 font-normal leading-snug">You are eligible for this division.</p>
+                                            <p className="text-xs text-slate-600 font-normal leading-snug">You are eligible for this division.</p>
                                         </div>
                                         <span className="inline-flex shrink-0 text-[10px] font-medium px-2 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 whitespace-nowrap">
                                             {licenseInfo.label}
@@ -2591,7 +2638,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         </div>
                                         <div className="min-w-0">
                                             <p className="font-semibold text-slate-900 text-sm leading-tight">A SAPA license is required.</p>
-                                            <p className="text-xs text-slate-500 font-normal leading-snug">Add a license to enter this division.</p>
+                                            <p className="text-xs text-slate-600 font-normal leading-snug">Add a license to enter this division.</p>
                                         </div>
                                     </div>
                                     <label className="flex items-center gap-2 text-xs cursor-pointer text-slate-900 font-normal">
@@ -2636,7 +2683,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         clearPartner();
                                                     }
                                                 }}
-                                                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${hasPartner === val ? '' : 'bg-gray-100 text-slate-500'}`}
+                                                className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${hasPartner === val ? '' : 'bg-gray-100 text-slate-600'}`}
                                                 style={hasPartner === val ? { backgroundColor: accent, color: btnTextColor } : undefined}
                                             >
                                                 {label}
@@ -2653,12 +2700,17 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 value={partnerSearch.query}
                                                 onChange={(e) => handlePartnerSearchInput(e.target.value)}
                                                 placeholder="Search by partner name, email or 4M profile"
-                                                className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-400 font-normal"
+                                                className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-xs text-slate-900 bg-white placeholder:text-slate-500 font-normal"
                                             />
                                             {partnerSearch.hasSearched && partnerSearch.query.length >= 2 && (
                                                 <div className="absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
                                                     {partnerSearch.results.length === 0 ? (
-                                                        <p className="px-4 py-3 text-xs text-gray-500">No matching players found</p>
+                                                        <PartnerProfileInvite
+                                                            event={event}
+                                                            inviterName={inviterDisplayName}
+                                                            inviterEmail={userEmail}
+                                                            searchName={partnerSearch.query}
+                                                        />
                                                     ) : (
                                                         partnerSearch.results.map((p) => (
                                                             <PartnerSearchOption
@@ -2693,7 +2745,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                     <div className="min-w-0 flex-1">
                                                         <p className="font-semibold text-slate-900 text-sm leading-tight">{primaryPartner.partnerName}</p>
                                                         {primaryPartner.partnerEmail && (
-                                                            <p className="text-[11px] text-slate-500 truncate font-normal">{primaryPartner.partnerEmail}</p>
+                                                            <p className="text-[11px] text-slate-600 truncate font-normal">{primaryPartner.partnerEmail}</p>
                                                         )}
                                                     </div>
                                                     {primaryPartner.partnerId && (
@@ -2796,14 +2848,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         {entry.partnerImageUrl ? (
                                                             <img src={entry.partnerImageUrl} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <User className="w-4 h-4 text-slate-500" />
+                                                            <User className="w-4 h-4 text-slate-600" />
                                                         )}
                                                     </div>
                                                 )}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="font-semibold text-slate-900 text-sm leading-snug truncate whitespace-nowrap">{entry.divisionName}</p>
-                                                <p className="text-[11px] text-slate-500 mt-1 font-normal truncate whitespace-nowrap">
+                                                <p className="text-[11px] text-slate-600 mt-1 font-normal truncate whitespace-nowrap">
                                                     {entry.selfName}{entry.partnerName ? `, ${entry.partnerName}` : ''}
                                                 </p>
                                             </div>
@@ -2819,7 +2871,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 </span>
                                                 <p className="font-semibold text-slate-900 text-sm tabular-nums leading-tight">{fmtR(entry.entryTotal)}</p>
                                                 {entry.fee > 0 && entry.payerCount > 0 && (
-                                                    <p className="text-[10px] text-slate-500 font-normal tabular-nums">
+                                                    <p className="text-[10px] text-slate-600 font-normal tabular-nums">
                                                         ({entry.payerCount} x {fmtRWhole(entry.fee)})
                                                     </p>
                                                 )}
@@ -2840,7 +2892,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <CardBody className="space-y-0">
                                     {!hasLicense && anySelectedRequiresLicense && (
                                         <div className="pb-3 mb-3 border-b border-gray-100">
-                                            <p className="text-[11px] text-slate-500 font-normal mb-2">Your SAPA license</p>
+                                            <p className="text-[11px] text-slate-600 font-normal mb-2">Your SAPA license</p>
                                             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                                 {[
                                                     ['temporary', `Temporary SAPA license (${fmtRWhole(FEES.TEMPORARY_LICENSE)})`],
@@ -2989,7 +3041,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <Check size={32} className="text-white" strokeWidth={2.5} />
                             </div>
                             <h2 className="text-lg font-bold text-slate-900 tracking-normal">Registration Confirmed!</h2>
-                            <p className="text-xs text-slate-500 mt-1.5 font-normal leading-snug max-w-sm">
+                            <p className="text-xs text-slate-600 mt-1.5 font-normal leading-snug max-w-sm">
                                 {hasPaid
                                     ? 'Your registration and payment were successful. We can\'t wait to see you on court!'
                                     : 'Your registration was successful. We can\'t wait to see you on court!'}
@@ -3021,7 +3073,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         {entry.partnerImageUrl ? (
                                                             <img src={entry.partnerImageUrl} alt="" className="w-full h-full object-cover" />
                                                         ) : (
-                                                            <User className="w-4 h-4 text-slate-500" />
+                                                            <User className="w-4 h-4 text-slate-600" />
                                                         )}
                                                     </div>
                                                 )}
@@ -3029,7 +3081,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
                                                 <div className="min-w-0 text-left">
                                                     <p className="font-semibold text-slate-900 text-sm leading-snug">{entry.divisionName}</p>
-                                                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal truncate">{entry.namesLine}</p>
+                                                    <p className="text-[11px] text-slate-600 mt-0.5 font-normal truncate">{entry.namesLine}</p>
                                                 </div>
                                                 <span className={`inline-flex shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-md border whitespace-nowrap ${
                                                     entry.payBadgeVariant === 'partner'
@@ -3166,7 +3218,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 <div className="px-6 py-4">
                     {hasRegistrations || hasPendingPayment ? (
                         <>
-                            <p className="text-xs font-medium text-slate-500 mb-3">
+                            <p className="text-xs font-medium text-slate-600 mb-3">
                                 {hasRegistrations ? 'Your Entries' : 'Outstanding payment'}
                             </p>
                             <div className="space-y-2 mb-4">
@@ -3179,8 +3231,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 <Users className="w-4 h-4 text-gray-400 shrink-0" />
                                                 <div className="min-w-0">
                                                     <p className="font-semibold text-slate-900 text-sm">{reg.division}</p>
-                                                    {div && (
-                                                        <p className="text-[11px] text-gray-500 truncate">{divisionMetaLine(div)}</p>
+                                                    {div && divisionMetaLine(div) && (
+                                                        <p className="text-[11px] text-slate-600 truncate mt-0.5">{divisionMetaLine(div)}</p>
                                                     )}
                                                     {reg.partner_name?.trim() && (
                                                         <p className="text-[11px] text-slate-600 font-normal mt-0.5">
@@ -3239,10 +3291,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         </>
                     ) : (
                         <>
-                            <p className="text-xs font-medium text-slate-500 mb-3">Available Divisions</p>
+                            <p className="text-xs font-medium text-slate-600 mb-3">Available Divisions</p>
                             <div className="space-y-2 mb-4">
                                 {divisions.map((d) => {
                                     const closed = isClosed(d, event);
+                                    const savedDetails = getDivisionSavedDetails(d);
                                     return (
                                         <div
                                             key={d.id}
@@ -3251,9 +3304,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             <div className="flex items-start gap-3 min-w-0">
                                                 <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="font-bold text-[#0F172A] text-sm leading-snug">{d.name}</p>
-                                                    <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">{divisionMetaLine(d)}</p>
-                                                    <p className={`mt-1.5 text-[11px] font-semibold leading-snug ${closed ? 'text-gray-400 uppercase tracking-wide' : (theme?.accentText || 'text-gray-500')}`}>
+                                                    <p className="font-bold text-[#0F172A] text-sm leading-snug">
+                                                        {d.name}
+                                                        {savedDetails && (
+                                                            <span className="font-normal text-slate-700">{` - ${savedDetails}`}</span>
+                                                        )}
+                                                    </p>
+                                                    <p className={`mt-1.5 text-[11px] font-semibold leading-snug ${closed ? 'text-slate-500 uppercase tracking-wide' : (theme?.accentText || 'text-slate-600')}`}>
                                                         {closed ? 'Closed' : formatDivisionCloseLabel(d)}
                                                     </p>
                                                 </div>
@@ -3370,7 +3427,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <h3 className="text-base font-semibold text-slate-900">
                                         Withdraw from {withdrawTarget.division}?
                                     </h3>
-                                    <p className="text-xs text-slate-500 mt-1 font-normal leading-snug">
+                                    <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
                                         {withdrawTarget.partner_name
                                             ? `Your partner ${withdrawTarget.partner_name} will be notified. Their entry will remain active — only your registration will be withdrawn.`
                                             : 'This will remove your entry from the event.'}
@@ -3444,7 +3501,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         <h3 className="text-base font-semibold text-slate-900">
                                             Rules & Regulations
                                         </h3>
-                                        <p className="text-xs text-slate-500 font-normal leading-snug">
+                                        <p className="text-xs text-slate-600 font-normal leading-snug">
                                             {event?.event_name}
                                         </p>
                                     </div>
@@ -3463,7 +3520,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 {event?.rules_regs ? (
                                     <div dangerouslySetInnerHTML={{ __html: event.rules_regs }} />
                                 ) : (
-                                    <p className="text-slate-500 italic">No rules and regulations specified for this event.</p>
+                                    <p className="text-slate-600 italic">No rules and regulations specified for this event.</p>
                                 )}
                             </div>
 

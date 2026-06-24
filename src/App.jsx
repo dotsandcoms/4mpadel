@@ -39,6 +39,7 @@ import SearchPalette from './components/SearchPalette';
 
 import MembersOnlyModal from './components/MembersOnlyModal';
 import MobileBottomNav from './components/MobileBottomNav';
+import { MembersOnlyProvider } from './context/MembersOnlyContext';
 
 import { requiresAuth } from './utils/routeAccess';
 
@@ -111,6 +112,7 @@ function AppContent() {
   }, [location.pathname]);
 
   return (
+    <MembersOnlyProvider promptMembersOnly={() => setMembersOnlyPrompt(true)}>
     <div className="bg-gray-900 min-h-screen text-white font-sans overflow-x-hidden">
       <GoogleAnalytics />
       <Analytics />
@@ -165,6 +167,7 @@ function AppContent() {
       />
 
     </div>
+    </MembersOnlyProvider>
   );
 }
 
