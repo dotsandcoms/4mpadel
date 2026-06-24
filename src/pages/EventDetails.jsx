@@ -3239,7 +3239,7 @@ const EventDetails = () => {
                                                                 href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
                                                                 target="_blank"
                                                                 rel="noopener noreferrer"
-                                                                className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors hidden sm:inline-block ${theme.primary}`}
+                                                                className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors shrink-0 ${theme.primary}`}
                                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                                 onClick={(e) => e.stopPropagation()}
                                                             >
@@ -3257,17 +3257,8 @@ const EventDetails = () => {
                                                                 transition={{ duration: 0.2 }}
                                                                 className="overflow-hidden"
                                                             >
-                                                                <div className="px-6 py-3 bg-gray-50/30 flex justify-between items-center border-b border-gray-100">
+                                                                <div className="px-6 py-3 bg-gray-50/30 border-b border-gray-100">
                                                                     <p className="text-sm font-semibold text-slate-700">{[event.venue, event.address, event.city].filter(Boolean).join(' · ')}</p>
-                                                                    <a
-                                                                        href={`https://maps.google.com/?q=${encodeURIComponent(`${event.venue || ''} ${event.address || ''} ${event.city || ''}`.trim())}`}
-                                                                        target="_blank"
-                                                                        rel="noopener noreferrer"
-                                                                        className={`text-[10px] font-semibold uppercase tracking-wide px-3 py-1.5 rounded-lg transition-colors sm:hidden ${theme.primary}`}
-                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                                    >
-                                                                        Directions
-                                                                    </a>
                                                                 </div>
                                                                 <div className="h-[220px] w-full relative">
                                                                     <iframe
