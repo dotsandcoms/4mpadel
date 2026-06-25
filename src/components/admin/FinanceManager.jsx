@@ -222,7 +222,8 @@ const FinanceManager = () => {
             
             // 1. Identify if it's an Event Registration (REGEV) or a standalone Membership
             const reference = trx.id || '';
-            const isEventReg = reference.startsWith('REGEV-');
+            const isEventReg = reference.startsWith('REGEV-')
+                || (reference.startsWith('MANUAL-') && !reference.startsWith('MANUAL-ADMIN-'));
             
             // Fallback Metadata Recovery: If Paystack API didn't return metadata, try to find an existing local record
             let localMetadata = null;
@@ -868,7 +869,8 @@ const FinanceManager = () => {
                                                                 if (!p) return <span className="text-[10px] text-gray-600">No Profile</span>;
                                                                 
                                                                 // Allow re-syncing if it's an event registration that might have been misidentified
-                                                                const isEventReg = trx.id?.startsWith('REGEV-');
+                                                                const isEventReg = trx.id?.startsWith('REGEV-')
+                                                                    || (trx.id?.startsWith('MANUAL-') && !trx.id?.startsWith('MANUAL-ADMIN-'));
                                                                 if (isRecorded && !isEventReg) return <CheckCircle size={14} className="text-padel-green ml-auto" />;
                                                                 
                                                                 return (

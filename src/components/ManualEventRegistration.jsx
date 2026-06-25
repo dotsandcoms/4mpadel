@@ -1873,7 +1873,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
             if (total > 0) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
-                const reference = `MANUAL-${event.id}-${Date.now()}`;
+                const reference = `REGEV-${event.id}-${Date.now()}`;
                 const divisionEntryFees = Object.fromEntries(
                     selectedDivisions.map((d) => [d.name, Number(d.entry_fee || 0)]),
                 );
