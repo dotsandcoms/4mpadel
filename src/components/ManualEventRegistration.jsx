@@ -2080,36 +2080,58 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const courtsLabel = event.courts ? `${event.courts} Indoor Courts` : null;
 
         if (variant === 'profile') {
+            const eventDetailLines = (
+                <>
+                    <p className="flex items-center gap-2.5">
+                        <CalendarIcon size={15} className="text-slate-600 shrink-0" />
+                        {event.event_dates || 'Dates TBC'}
+                    </p>
+                    <p className="flex items-center gap-2.5">
+                        <MapPin size={15} className="text-slate-600 shrink-0" />
+                        {venueLabel}
+                    </p>
+                    {courtsLabel && (
+                        <p className="flex items-center gap-2.5">
+                            <Layout size={15} className="text-slate-600 shrink-0" />
+                            {courtsLabel}
+                        </p>
+                    )}
+                    <p className="flex items-center gap-2.5">
+                        <Users size={15} className="text-slate-600 shrink-0" />
+                        Organised by {organiserLabel}
+                    </p>
+                </>
+            );
+            const eventPosterImage = (className = '') => (
+                <div className={`shrink-0 rounded-xl overflow-hidden bg-[#0F172A] aspect-[3/4] ${className}`}>
+                    <img src={eventPoster} alt={event.event_name} className="w-full h-full object-cover" />
+                </div>
+            );
+
             return (
                 <Card className="shadow-sm bg-[#FAF7F2] border-[#F0EBE3]">
-                    <CardHeader title="Event Summary" soft />
-                    <CardBody>
+                    <div className="md:hidden px-4 py-3">
                         <div className="flex items-start gap-3">
-                            <div className="space-y-2 text-xs text-slate-700 min-w-0 flex-1 font-normal leading-snug">
-                                <p className="flex items-center gap-2.5">
-                                    <CalendarIcon size={15} className="text-slate-600 shrink-0" />
-                                    {event.event_dates || 'Dates TBC'}
-                                </p>
-                                <p className="flex items-center gap-2.5">
-                                    <MapPin size={15} className="text-slate-600 shrink-0" />
-                                    {venueLabel}
-                                </p>
-                                {courtsLabel && (
-                                    <p className="flex items-center gap-2.5">
-                                        <Layout size={15} className="text-slate-600 shrink-0" />
-                                        {courtsLabel}
-                                    </p>
-                                )}
-                                <p className="flex items-center gap-2.5">
-                                    <Users size={15} className="text-slate-600 shrink-0" />
-                                    Organised by {organiserLabel}
-                                </p>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm text-slate-900 font-semibold tracking-normal mb-2">Event Summary</h3>
+                                <div className="space-y-2 text-xs text-slate-700 font-normal leading-snug">
+                                    {eventDetailLines}
+                                </div>
                             </div>
-                            <div className="w-24 shrink-0 rounded-xl overflow-hidden bg-[#0F172A] aspect-[3/4]">
-                                <img src={eventPoster} alt={event.event_name} className="w-full h-full object-cover" />
-                            </div>
+                            {eventPosterImage('w-20')}
                         </div>
-                    </CardBody>
+                    </div>
+                    <div className="hidden md:block">
+                        <CardHeader title="Event Summary" soft />
+                        <CardBody>
+                            <div className="flex items-start gap-3">
+                                <div className="space-y-2 text-xs text-slate-700 min-w-0 flex-1 font-normal leading-snug">
+                                    {eventDetailLines}
+                                </div>
+                                {eventPosterImage('w-24')}
+                            </div>
+                        </CardBody>
+                    </div>
                 </Card>
             );
         }
