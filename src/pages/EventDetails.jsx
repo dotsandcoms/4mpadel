@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
@@ -406,6 +406,7 @@ const EventDetails = () => {
     // Registration Modal State
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
+    const calendarMenuRef = useRef(null);
     const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
     const [loggedInPlayer, setLoggedInPlayer] = useState(null);
@@ -587,6 +588,18 @@ const EventDetails = () => {
     });
     const manualRegActionsRef = React.useRef({});
     const [participantsRefreshKey, setParticipantsRefreshKey] = useState(0);
+
+    useEffect(() => {
+        if (!isCalendarMenuOpen) return;
+        const handleClickOutside = (event) => {
+            if (calendarMenuRef.current && !calendarMenuRef.current.contains(event.target)) {
+                setIsCalendarMenuOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isCalendarMenuOpen]);
+
     const refreshParticipants = useCallback(() => {
         setParticipantsRefreshKey((k) => k + 1);
         try {
@@ -2443,7 +2456,7 @@ const EventDetails = () => {
     const eventPosterUrl = event.custom_image_url || event.image_url || '';
 
     const renderCalendarButton = (wrapperClass = '', iconOnly = false) => (
-        <div className={`relative ${wrapperClass}`}>
+        <div ref={calendarMenuRef} className={`relative ${wrapperClass}`}>
             <button
                 type="button"
                 onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
