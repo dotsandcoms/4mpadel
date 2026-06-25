@@ -14,7 +14,8 @@ import { toPaystackAmount, FEES } from '../constants/fees';
 import { getEventImage } from '../utils/imageUtils';
 import sapaLogo from '../assets/sapa-logo.svg';
 
-import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
+import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
+import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
 import PartnerProfileInvite from './PartnerProfileInvite';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 
@@ -316,6 +317,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const divisionPartnerSearchSeq = useRef({});
     const divisionPartnerSearchTimeout = useRef({});
     const paymentRetryRef = useRef(false);
+    const checkoutPrepRef = useRef(null);
+    const [checkoutPreparing, setCheckoutPreparing] = useState(false);
     const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
 
@@ -727,6 +730,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setDivisionPartnerSearch({});
         setIsCalendarMenuOpen(false);
         paymentRetryRef.current = false;
+        checkoutPrepRef.current = null;
+        setCheckoutPreparing(false);
     };
 
     const openWizard = () => {
@@ -1609,6 +1614,63 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return { rows, covers, soloLinks };
     };
 
+    const buildManualPaymentPayload = useCallback(() => {
+        const { rows, covers, soloLinks } = buildRegistrationRows();
+        const reference = `REGEV-${event.id}-${Date.now()}`;
+        const divisionEntryFees = Object.fromEntries(
+            selectedDivisions.map((d) => [d.name, Number(d.entry_fee || 0)]),
+        );
+        const paymentMetadata = {
+            source: 'manual_event',
+            is_test: isPaystackTestMode,
+            event_id: event.id,
+            event_name: event.event_name,
+            registrant_email: userEmail,
+            registrant_name: profile?.name || '',
+            covers,
+            line_items: lineItems,
+            event_url: eventUrl,
+            registration_rows: rows,
+            solo_link_updates: soloLinks,
+            division_names: selectedDivisions.map((d) => d.name).join(', '),
+            primary_partner_name: hasPartner ? (primaryPartner.partnerName || 'TBD') : 'TBD',
+            event_dates: event.event_dates || '',
+            event_venue: [event.venue, event.city].filter(Boolean).join(', '),
+            division_entry_fees: divisionEntryFees,
+            reference,
+        };
+        const payUrl = `${eventUrl}?pay_ref=${encodeURIComponent(reference)}`;
+        return {
+            reference,
+            paymentMetadata,
+            payUrl,
+            rows,
+            covers,
+            soloLinks,
+            amount: total,
+        };
+    }, [
+        event.id,
+        event.event_name,
+        event.event_dates,
+        event.venue,
+        event.city,
+        eventUrl,
+        userEmail,
+        profile?.name,
+        profile?.contact_number,
+        lineItems,
+        total,
+        hasPartner,
+        primaryPartner.partnerName,
+        selectedDivisions,
+        selected,
+        divisionRegs,
+        buyLicenseSelf,
+        licenseSelfChoice,
+        partnerLicensePurchases,
+    ]);
+
     const persistRegistrations = async (rows, soloLinks = [], covers = []) => {
         const entryCoverSet = new Set(
             covers
@@ -1762,26 +1824,118 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         onParticipantsChange?.();
     }, [loadMyRegs, loadDivisionRegs, onParticipantsChange]);
 
-    const launchPaystackCheckout = useCallback(async (reference, amount) => {
+    const launchPaystackCheckout = useCallback(async (reference, amount, paymentMetadata) => {
         if (!isPaystackConfigured()) {
             toast.error('Payments not configured');
             return;
         }
         const pop = new PaystackPop();
-        await pop.checkout({
-            key: PAYSTACK_PUBLIC_KEY,
+        const checkoutConfig = buildPaystackCheckoutConfig({
             reference,
             email: userEmail,
-            amount: toPaystackAmount(amount),
-            currency: 'ZAR',
-            metadata: { event_id: event.id, event_name: event.event_name, reference, source: 'manual_event' },
+            amount,
+            fullName: profile?.name || displayProfile?.name,
+            metadata: paymentMetadata || {
+                event_id: event.id,
+                event_name: event.event_name,
+                reference,
+                source: 'manual_event',
+            },
+        });
+        await pop.checkout({
+            ...checkoutConfig,
             onSuccess: async (response) => {
                 const paidRef = resolvePaystackReference(response, reference);
                 await handlePaymentSuccess(paidRef, amount);
             },
-            onCancel: () => toast.info('Payment cancelled. You have not been registered.'),
+            onCancel: () => {
+                setProcessing(false);
+                toast.info('Payment cancelled. You have not been registered.');
+            },
         });
-    }, [userEmail, event.id, event.event_name, handlePaymentSuccess]);
+    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess]);
+
+    useEffect(() => {
+        if (wizardStep !== 4 || total <= 0 || !userEmail || !isPaystackConfigured()) {
+            checkoutPrepRef.current = null;
+            setCheckoutPreparing(false);
+            return;
+        }
+
+        let cancelled = false;
+        setCheckoutPreparing(true);
+        checkoutPrepRef.current = null;
+
+        const prepareCheckout = async () => {
+            const payload = buildManualPaymentPayload();
+            const { error: insertError } = await supabase.from('payments').insert([{
+                player_id: profile?.id || null,
+                event_id: event.id,
+                amount: payload.amount,
+                currency: 'ZAR',
+                status: 'processing',
+                payment_type: 'event_entry_fee',
+                payment_method: 'paystack',
+                reference: payload.reference,
+                is_test: isPaystackTestMode,
+                metadata: payload.paymentMetadata,
+            }]);
+
+            if (cancelled) return;
+            if (insertError) {
+                console.error('Payment prep insert failed:', insertError);
+                setCheckoutPreparing(false);
+                return;
+            }
+
+            try {
+                const pop = new PaystackPop();
+                const checkoutConfig = buildPaystackCheckoutConfig({
+                    reference: payload.reference,
+                    email: userEmail,
+                    amount: payload.amount,
+                    fullName: profile?.name || displayProfile?.name,
+                    metadata: payload.paymentMetadata,
+                });
+                const launcher = pop.preloadTransaction({
+                    ...checkoutConfig,
+                    onSuccess: async (response) => {
+                        const paidRef = resolvePaystackReference(response, payload.reference);
+                        await handlePaymentSuccess(paidRef, payload.amount);
+                    },
+                    onCancel: () => {
+                        setProcessing(false);
+                        toast.info('Payment cancelled. You have not been registered.');
+                    },
+                });
+                if (!cancelled) {
+                    checkoutPrepRef.current = { ...payload, launcher };
+                    setCheckoutPreparing(false);
+                }
+            } catch (err) {
+                console.error('Paystack preload failed:', err);
+                if (!cancelled) setCheckoutPreparing(false);
+            }
+        };
+
+        prepareCheckout();
+
+        return () => {
+            cancelled = true;
+            checkoutPrepRef.current = null;
+            setCheckoutPreparing(false);
+        };
+    }, [
+        wizardStep,
+        total,
+        userEmail,
+        event.id,
+        profile?.id,
+        profile?.name,
+        displayProfile?.name,
+        buildManualPaymentPayload,
+        handlePaymentSuccess,
+    ]);
 
     const resumePaymentByReference = useCallback(async (reference) => {
         if (!userEmail) {
@@ -1873,52 +2027,50 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
             if (total > 0) {
                 if (!isPaystackConfigured()) { toast.error('Payments not configured'); setProcessing(false); return; }
-                const reference = `REGEV-${event.id}-${Date.now()}`;
-                const divisionEntryFees = Object.fromEntries(
-                    selectedDivisions.map((d) => [d.name, Number(d.entry_fee || 0)]),
-                );
-                const paymentMetadata = {
-                    source: 'manual_event',
-                    is_test: isPaystackTestMode,
-                    event_id: event.id,
-                    event_name: event.event_name,
-                    registrant_email: userEmail,
-                    registrant_name: profile?.name || '',
-                    covers,
-                    line_items: lineItems,
-                    event_url: eventUrl,
-                    registration_rows: rows,
-                    solo_link_updates: soloLinks,
-                    division_names: selectedDivisions.map((d) => d.name).join(', '),
-                    primary_partner_name: hasPartner ? (primaryPartner.partnerName || 'TBD') : 'TBD',
-                    event_dates: event.event_dates || '',
-                    event_venue: [event.venue, event.city].filter(Boolean).join(', '),
-                    division_entry_fees: divisionEntryFees,
-                };
-                const payUrl = `${eventUrl}?pay_ref=${encodeURIComponent(reference)}`;
-
-                await supabase.from('payments').insert([{
-                    player_id: profile?.id || null,
-                    event_id: event.id,
-                    amount: total,
-                    currency: 'ZAR',
-                    status: 'processing',
-                    payment_type: 'event_entry_fee',
-                    payment_method: 'paystack',
-                    reference,
-                    is_test: isPaystackTestMode,
-                    metadata: paymentMetadata,
-                }]);
-
-                await sendPendingRegistrationEmails(payUrl);
-                await supabase
-                    .from('payments')
-                    .update({ metadata: { ...paymentMetadata, pending_emails_sent: true } })
-                    .eq('reference', reference);
-
                 paymentRetryRef.current = false;
 
-                await launchPaystackCheckout(reference, total);
+                const prep = checkoutPrepRef.current;
+                if (prep?.launcher) {
+                    void sendPendingRegistrationEmails(prep.payUrl).then(() =>
+                        supabase
+                            .from('payments')
+                            .update({ metadata: { ...prep.paymentMetadata, pending_emails_sent: true } })
+                            .eq('reference', prep.reference),
+                    );
+                    prep.launcher();
+                    return;
+                }
+
+                try {
+                    const payload = buildManualPaymentPayload();
+                    const { error: insertError } = await supabase.from('payments').insert([{
+                        player_id: profile?.id || null,
+                        event_id: event.id,
+                        amount: payload.amount,
+                        currency: 'ZAR',
+                        status: 'processing',
+                        payment_type: 'event_entry_fee',
+                        payment_method: 'paystack',
+                        reference: payload.reference,
+                        is_test: isPaystackTestMode,
+                        metadata: payload.paymentMetadata,
+                    }]);
+                    if (insertError) throw insertError;
+
+                    void sendPendingRegistrationEmails(payload.payUrl).then(() =>
+                        supabase
+                            .from('payments')
+                            .update({ metadata: { ...payload.paymentMetadata, pending_emails_sent: true } })
+                            .eq('reference', payload.reference),
+                    );
+
+                    await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
+                } catch (err) {
+                    console.error('Manual registration error:', err);
+                    toast.error(`Registration failed: ${err.message}`);
+                    setProcessing(false);
+                }
+                return;
             } else {
                 const savedRows = await persistRegistrations(rows, soloLinks, covers);
                 await sendRegistrationEmails(savedRows, true);
@@ -1931,8 +2083,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         } catch (err) {
             console.error('Manual registration error:', err);
             toast.error(`Registration failed: ${err.message}`);
-        } finally {
             setProcessing(false);
+        } finally {
+            if (total <= 0) setProcessing(false);
         }
     };
 
@@ -3216,7 +3369,11 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const stepCtaLabel = () => {
         if (wizardStep === 5) return 'Back to My Events';
-        if (wizardStep === 4) return processing ? 'Processing...' : total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
+        if (wizardStep === 4) {
+            if (processing) return 'Processing...';
+            if (checkoutPreparing && total > 0) return 'Preparing payment...';
+            return total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
+        }
         if (wizardStep === 3) return 'Continue to Payment';
         if (wizardStep === 2) return 'Continue to Review & Pay';
         return 'Continue to Division';
@@ -3433,7 +3590,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                             {/* Wizard footer */}
                             <div className="sticky bottom-0 bg-white border-t border-gray-100 px-4 py-3">
-                                <div className="max-w-xl mx-auto flex gap-3">
+                                <div className="max-w-xl mx-auto flex flex-col gap-3">
+                                    {wizardStep === 4 && total > 0 && isInAppBrowser() && (
+                                        <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-[11px] leading-snug">
+                                            <span className="font-bold block mb-1">Apple Pay unavailable in this browser</span>
+                                            Open this page in <span className="font-bold">Safari</span> (tap the menu and choose &quot;Open in Browser&quot;) to use Apple Pay.
+                                        </div>
+                                    )}
+                                    <div className="flex gap-3">
                                     {wizardStep > 1 && wizardStep < 5 && (
                                         <button
                                             type="button"
@@ -3447,7 +3611,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     <div className="flex-1">
                                         <PrimaryBtn
                                             onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : goNext}
-                                            disabled={processing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 4 && (!agreeRules || !agreeComplete || !agreeSapa))}
+                                            disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 4 && (!agreeRules || !agreeComplete || !agreeSapa))}
                                         >
                                             {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
                                                 <>
@@ -3456,6 +3620,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 </>
                                             )}
                                         </PrimaryBtn>
+                                    </div>
                                     </div>
                                 </div>
                             </div>
