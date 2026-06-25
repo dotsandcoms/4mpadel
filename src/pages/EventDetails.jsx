@@ -188,6 +188,49 @@ const formatPrizeAmount = (amount) => {
     return `R ${raw}`;
 };
 
+const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false }) => {
+    const logoUrl = event?.organizer_logo_url?.trim();
+    const badgeText = event?.organizer_badge_text?.trim();
+    const hasOrgBranding = logoUrl || badgeText;
+
+    if (variant === 'nav') {
+        if (!hasOrgBranding) return null;
+        return (
+            <div className="flex items-center gap-2.5 min-w-0">
+                {logoUrl && (
+                    <img
+                        src={logoUrl}
+                        alt=""
+                        className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover border border-white/30 bg-white shrink-0"
+                    />
+                )}
+                {badgeText && (
+                    <span
+                        className="text-xs md:text-sm font-bold uppercase tracking-wide truncate drop-shadow-md"
+                        style={{ color: theme.fill }}
+                    >
+                        {badgeText}
+                    </span>
+                )}
+            </div>
+        );
+    }
+
+    if (hasOrgBranding) return null;
+
+    if (event?.sapa_status && event.sapa_status !== 'None') {
+        return (
+            <span
+                className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${centered ? 'md:mx-auto' : ''} ${theme.badgeBg}`}
+                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+            >
+                {event.sapa_status}
+            </span>
+        );
+    }
+    return null;
+};
+
 const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = false, text = null, children }) => {
     const [open, setOpen] = useState(defaultOpen);
     return (
@@ -2700,15 +2743,20 @@ const EventDetails = () => {
 
                 {/* Floating nav bar */}
                 <div className="absolute top-0 left-0 right-0 z-[100] pt-safe pt-24 md:pt-28 pointer-events-none">
-                    <div className="max-w-5xl mx-auto px-5 w-full flex items-center justify-between">
-                        <button
-                            onClick={() => window.history.back()}
-                            className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
-                        >
-                            <ArrowLeft className="w-5 h-5" />
-                        </button>
+                    <div className="max-w-5xl mx-auto px-5 w-full flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 md:gap-6 min-w-0 flex-1">
+                            <button
+                                onClick={() => window.history.back()}
+                                className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer shrink-0"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                            <div className="pointer-events-none min-w-0 md:ml-2">
+                                <EventHeroBranding event={event} theme={theme} variant="nav" />
+                            </div>
+                        </div>
 
-                        <div className="flex items-center gap-2 pointer-events-auto">
+                        <div className="flex items-center gap-2 pointer-events-auto shrink-0">
                             {renderCalendarButton('', true)}
                             <button
                                 onClick={async () => {
@@ -2770,12 +2818,8 @@ const EventDetails = () => {
                                 <>
                                     <div className="flex gap-3 sm:gap-4 items-end w-full mt-2 relative z-20">
                                         <div className="flex-1 min-w-0 flex flex-col">
-                                            {event.sapa_status && event.sapa_status !== 'None' && (
-                                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
-                                                    {event.sapa_status}
-                                                </span>
-                                            )}
-                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg">
+                                            <EventHeroBranding event={event} theme={theme} />
+                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg md:max-w-md lg:max-w-lg">
                                                 {event.event_name}
                                             </h1>
                                             <div className="flex items-center gap-2 text-white/90 text-sm font-normal mb-4">
@@ -2897,12 +2941,8 @@ const EventDetails = () => {
                                 </>
                             ) : (
                         <div className="w-full flex flex-col md:items-center md:text-center mt-2">
-                            {event.sapa_status && event.sapa_status !== 'None' && (
-                                <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-3 shadow-md w-fit md:mx-auto ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
-                                    {event.sapa_status}
-                                </span>
-                            )}
-                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left">
+                            <EventHeroBranding event={event} theme={theme} centered />
+                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left md:max-w-3xl md:mx-auto">
                                 {event.event_name}
                             </h1>
 

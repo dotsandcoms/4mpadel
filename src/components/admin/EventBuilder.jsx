@@ -307,6 +307,8 @@ const blankForm = {
     event_name: '',
     slug: '',
     organizer_name: 'SAPA',
+    organizer_logo_url: '',
+    organizer_badge_text: '',
     city: '',
     venue: '',
     address: '',
@@ -357,6 +359,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
+    const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
 
     const { clubs } = useClubs();
@@ -542,6 +545,23 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             setUploadingPoster(false);
         }
     };
+
+    const handleOrgLogoUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            setUploadingOrgLogo(true);
+            const url = await uploadToGallery(file, 'org-logos');
+            setField('organizer_logo_url', url);
+            toast.success('Organisation logo uploaded');
+        } catch (err) {
+            toast.error('Failed to upload organisation logo');
+        } finally {
+            setUploadingOrgLogo(false);
+        }
+    };
+
+    const removeOrgLogo = () => setField('organizer_logo_url', '');
 
     const handleSponsorUpload = async (e) => {
         const files = Array.from(e.target.files || []);
@@ -729,6 +749,40 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                 <div>
                                     <label className={labelClass}>Organiser</label>
                                     <input name="organizer_name" value={form.organizer_name} onChange={handleInput} className={inputClass} />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className={labelClass}>Organisation Logo</label>
+                                    <p className="text-[11px] text-gray-500 mb-2">Shown above the event title on the public event page.</p>
+                                    <div className="flex items-center gap-4">
+                                        {form.organizer_logo_url && (
+                                            <div className="relative group">
+                                                <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
+                                                <button
+                                                    type="button"
+                                                    onClick={removeOrgLogo}
+                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        )}
+                                        <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-4 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                            {uploadingOrgLogo ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                            <span className="text-xs font-bold">{uploadingOrgLogo ? 'Uploading...' : 'Upload Logo'}</span>
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleOrgLogoUpload} disabled={uploadingOrgLogo} />
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className={labelClass}>Organisation Label</label>
+                                    <input
+                                        name="organizer_badge_text"
+                                        value={form.organizer_badge_text}
+                                        onChange={handleInput}
+                                        placeholder="e.g. SAPA GOLD 1000"
+                                        className={inputClass}
+                                    />
+                                    <p className="text-[11px] text-gray-500 mt-1">Displayed next to the logo above the event title.</p>
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className={labelClass}>Address</label>
@@ -1160,16 +1214,29 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                         >
                             <ChevronLeft size={16} /> Back
                         </button>
-                        {step < 5 ? (
-                            <button onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
-                                Next <ChevronRight size={16} />
-                            </button>
-                        ) : (
-                            <button onClick={handleSave} disabled={saving} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50">
-                                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                {saving ? 'Saving...' : editingEvent ? 'Update Event' : 'Create Event'}
-                            </button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {step < 5 && (
+                                <button
+                                    type="button"
+                                    onClick={handleSave}
+                                    disabled={saving}
+                                    className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
+                                >
+                                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                    {saving ? 'Saving...' : 'Save'}
+                                </button>
+                            )}
+                            {step < 5 ? (
+                                <button type="button" onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
+                                    Next <ChevronRight size={16} />
+                                </button>
+                            ) : (
+                                <button type="button" onClick={handleSave} disabled={saving} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50">
+                                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                    {saving ? 'Saving...' : editingEvent ? 'Update Event' : 'Create Event'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </motion.div>
             </motion.div>
