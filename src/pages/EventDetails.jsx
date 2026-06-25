@@ -570,6 +570,7 @@ const EventDetails = () => {
     };
 
     const theme = getTierTheme();
+    const registerNowStyle = { color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' };
     const { promptMembersOnly } = useMembersOnly();
 
     // Resolve the effective logged-in (or impersonated) user email for manual-event registration.
@@ -2441,15 +2442,20 @@ const EventDetails = () => {
     const heroBackgroundUrl = getDefaultEventBackground(event);
     const eventPosterUrl = event.custom_image_url || event.image_url || '';
 
-    const renderCalendarButton = (wrapperClass = '') => (
+    const renderCalendarButton = (wrapperClass = '', iconOnly = false) => (
         <div className={`relative ${wrapperClass}`}>
             <button
                 type="button"
                 onClick={() => setIsCalendarMenuOpen(!isCalendarMenuOpen)}
-                className="w-full flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all"
+                className={iconOnly
+                    ? 'pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer'
+                    : 'w-full flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all'}
+                aria-label="Add to calendar"
             >
                 <CalendarIcon className="w-4 h-4 shrink-0" />
-                <span className="text-xs font-semibold tracking-normal truncate">Add to Calendar</span>
+                {!iconOnly && (
+                    <span className="text-xs font-semibold tracking-normal truncate">Add to Calendar</span>
+                )}
             </button>
             <AnimatePresence>
                 {isCalendarMenuOpen && (
@@ -2457,7 +2463,7 @@ const EventDetails = () => {
                         initial={{ opacity: 0, y: -8, scale: 0.95 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.95 }}
-                        className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-50 animate-scale-up"
+                        className="absolute top-full mt-2 right-0 left-auto w-56 bg-[#1E293B] rounded-2xl shadow-2xl border border-white/10 overflow-hidden z-[110] animate-scale-up"
                     >
                         {[
                             {
@@ -2631,8 +2637,8 @@ const EventDetails = () => {
                     <button
                         type="button"
                         onClick={handleRankedinRedirect}
-                        className="w-full block text-center text-[10px] font-semibold tracking-normal px-4 py-3 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
-                        style={{ color: '#0F172A' }}
+                        className={`w-full block text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all font-bold ${theme.primary} ${theme.glow}`}
+                        style={registerNowStyle}
                     >
                         Register Now
                     </button>
@@ -2690,6 +2696,7 @@ const EventDetails = () => {
                         </button>
 
                         <div className="flex items-center gap-2 pointer-events-auto">
+                            {renderCalendarButton('', true)}
                             <button
                                 onClick={async () => {
                                     if (navigator.share) {
@@ -2745,10 +2752,22 @@ const EventDetails = () => {
 
                     {/* Hero text overlay & Action Buttons */}
                     <div className={`relative z-50 pb-10 ${eventPosterUrl ? 'pt-[36vw] sm:pt-[215px]' : 'pt-[38vw] sm:pt-[250px]'}`}>
-                        <div className="max-w-5xl mx-auto px-5 w-full">
+                        <div className="max-w-5xl mx-auto px-5 w-full relative">
                             {eventPosterUrl ? (
                                 <>
-                                    <div className="flex gap-3 items-start w-full mt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setPosterPreviewOpen(true)}
+                                        className="hidden md:block absolute right-5 top-0 z-10 -translate-y-10 lg:-translate-y-14 w-32 lg:w-40 aspect-[3/4] rounded-xl overflow-hidden border-2 border-white/40 shadow-2xl hover:scale-105 transition-transform bg-[#0F172A] pointer-events-auto"
+                                        aria-label="View event poster"
+                                    >
+                                        <img
+                                            src={eventPosterUrl}
+                                            alt="Event poster preview"
+                                            className="w-full h-full object-cover"
+                                        />
+                                    </button>
+                                    <div className="flex gap-3 items-start w-full mt-2 md:pr-36 lg:pr-44 relative z-20">
                                         <div className="flex-1 min-w-0">
                                             {event.sapa_status && event.sapa_status !== 'None' && (
                                                 <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
@@ -2766,7 +2785,7 @@ const EventDetails = () => {
                                         <button
                                             type="button"
                                             onClick={() => setPosterPreviewOpen(true)}
-                                            className="w-14 h-[4.5rem] shrink-0 rounded-lg overflow-hidden border-2 border-white/40 shadow-lg hover:scale-105 transition-transform bg-[#0F172A] mt-1"
+                                            className="md:hidden w-14 h-[4.5rem] shrink-0 rounded-lg overflow-hidden border-2 border-white/40 shadow-lg hover:scale-105 transition-transform bg-[#0F172A] mt-1"
                                             aria-label="View event poster"
                                         >
                                             <img
@@ -2777,7 +2796,7 @@ const EventDetails = () => {
                                         </button>
                                     </div>
 
-                                    <div className="flex gap-2 mt-4 w-full">
+                                    <div className="relative z-20 flex gap-2 mt-4 w-full md:pr-36 lg:pr-44">
                                         {(() => {
                                             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                             if (event.is_manual) {
@@ -2811,7 +2830,8 @@ const EventDetails = () => {
                                                         <button
                                                             type="button"
                                                             onClick={openManualRegistration}
-                                                            className="flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                            className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                            style={registerNowStyle}
                                                         >
                                                             Register Now <ArrowRight className="w-4 h-4" />
                                                         </button>
@@ -2839,7 +2859,8 @@ const EventDetails = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={handleRankedinRedirect}
-                                                                className="flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                                style={registerNowStyle}
                                                             >
                                                                 Register Now <ArrowRight className="w-4 h-4" />
                                                             </button>
@@ -2872,7 +2893,6 @@ const EventDetails = () => {
                                             }
                                             return null;
                                         })()}
-                                        {renderCalendarButton('flex-1')}
                                     </div>
                                 </>
                             ) : (
@@ -2926,7 +2946,8 @@ const EventDetails = () => {
                                                 <button
                                                     type="button"
                                                     onClick={openManualRegistration}
-                                                    className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                    className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                    style={registerNowStyle}
                                                 >
                                                     Register Now <ArrowRight className="w-4 h-4" />
                                                 </button>
@@ -2953,7 +2974,8 @@ const EventDetails = () => {
                                                     <button
                                                         type="button"
                                                         onClick={handleRankedinRedirect}
-                                                        className="flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 bg-white text-[#0F172A] rounded-xl hover:bg-gray-100 transition-all font-bold"
+                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                        style={registerNowStyle}
                                                     >
                                                         Register Now <ArrowRight className="w-4 h-4" />
                                                     </button>
@@ -2984,7 +3006,6 @@ const EventDetails = () => {
                                     }
                                     return null;
                                 })()}
-                                {renderCalendarButton('flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none')}
                             </div>
                         </div>
                             )}
@@ -3488,32 +3509,6 @@ const EventDetails = () => {
                                                 <InfoSection title="Sanctioning Details" icon={CheckCircle} accent={theme.fill} text={event.sanctioning_details} />
                                             )}
 
-                                            {/* Tournament Details */}
-                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
-                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
-                                                    <div className="divide-y divide-gray-100">
-                                                        {[
-                                                            ['Courts', event.courts],
-                                                            ['Balls', event.balls],
-                                                            ['Draw Released', event.draw_released],
-                                                            ['Cut-off Times', event.cut_off_times],
-                                                            ['Tournament Director', event.tournament_director],
-                                                            ['Referees', event.referees],
-                                                        ].filter(([, v]) => v).map(([label, value]) => (
-                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
-                                                                <span className="text-slate-500 font-medium">{label}</span>
-                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </InfoSection>
-                                            )}
-
-                                            {/* Withdrawal & Substitution */}
-                                            {event.withdrawal_substitution && (
-                                                <InfoSection title="Withdrawal & Substitution" icon={AlertCircle} accent={theme.fill} text={event.withdrawal_substitution} />
-                                            )}
-
                                             {/* Sponsors */}
                                             {event.sponsor_logos && event.sponsor_logos.length > 0 && (
                                                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
@@ -3549,6 +3544,27 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
+                                            )}
+
+                                            {/* Tournament Details */}
+                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
+                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
+                                                    <div className="divide-y divide-gray-100">
+                                                        {[
+                                                            ['Courts', event.courts],
+                                                            ['Balls', event.balls],
+                                                            ['Draw Released', event.draw_released],
+                                                            ['Cut-off Times', event.cut_off_times],
+                                                            ['Tournament Director', event.tournament_director],
+                                                            ['Referees', event.referees],
+                                                        ].filter(([, v]) => v).map(([label, value]) => (
+                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
+                                                                <span className="text-slate-500 font-medium">{label}</span>
+                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </InfoSection>
                                             )}
 
                                             {/* Weather Forecast */}
@@ -3589,6 +3605,11 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
+                                            )}
+
+                                            {/* Withdrawal & Substitution */}
+                                            {event.withdrawal_substitution && (
+                                                <InfoSection title="Withdrawal & Substitution" icon={AlertCircle} accent={theme.fill} text={event.withdrawal_substitution} />
                                             )}
                                         </div>
 
