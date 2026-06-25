@@ -17,6 +17,7 @@ import sapaLogo from '../assets/sapa-logo.svg';
 import { isPaystackConfigured, isPaystackTestMode } from '../utils/paystackConfig';
 import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCheckout';
 import PartnerProfileInvite from './PartnerProfileInvite';
+import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import { useMembersOnly } from '../context/MembersOnlyContext';
 
 const STEPS = [
@@ -319,6 +320,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const paymentRetryRef = useRef(false);
     const checkoutPrepRef = useRef(null);
     const [checkoutPreparing, setCheckoutPreparing] = useState(false);
+    const [wizardMode, setWizardMode] = useState('register'); // register | addPartner | payOnly
+    const [addPartnerTarget, setAddPartnerTarget] = useState(null);
     const [confirmedPaidTotal, setConfirmedPaidTotal] = useState(null);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
 
@@ -568,18 +571,60 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const div = divisions.find((d) => d.id === reg.division_id);
             const fee = Number(div?.entry_fee || 0);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
+            const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
+            const partnerReg = hasPartner && reg.partner_email
+                ? divisionRegs.find((r) =>
+                    r.division_id === reg.division_id
+                    && normEmail(r.email) === normEmail(reg.partner_email)
+                    && r.status !== 'withdrawn',
+                )
+                : null;
+            const partnerPaid = hasPartner && (
+                reg.partner_payment_status === 'paid' || partnerReg?.payment_status === 'paid'
+            );
+            const canAddPartner = isPaid
+                && !hasPartner
+                && reg.status !== 'withdrawn'
+                && div
+                && !isClosed(div, event);
+            const selfEm = normEmail(userEmail);
+            const registeredBy = normEmail(reg.registered_by);
+            const wasAddedByPartner = !!(registeredBy && registeredBy !== selfEm);
+            const addedByName = wasAddedByPartner
+                ? (reg._payerName || reg.partner_name || 'your partner')
+                : null;
             return {
                 id: reg.id,
                 division: reg.division,
+                divisionId: reg.division_id,
                 partnerName: reg.partner_name?.trim() || null,
+                partnerEmail: reg.partner_email?.trim() || null,
+                hasPartner,
+                partnerPaid,
+                wasAddedByPartner,
+                addedByName,
+                partnerPaymentLabel: !hasPartner
+                    ? null
+                    : partnerPaid
+                        ? 'Paid & Confirmed'
+                        : 'Payment Pending',
                 paymentLabel: getEntryPaymentLabel(reg, userEmail),
                 isPaid,
                 statusText: isPaid ? 'Paid & Confirmed' : 'Payment Pending',
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+                partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+                canAddPartner,
             };
         }),
-        [myRegs, divisions, userEmail],
+        [myRegs, divisions, divisionRegs, userEmail, event],
     );
+
+    const panelEntries = useMemo(
+        () => registrationEntries.filter((e) => !e.wasAddedByPartner),
+        [registrationEntries],
+    );
+    const onlyPartnerAddedEntries = registrationEntries.length > 0
+        && registrationEntries.every((e) => e.wasAddedByPartner);
 
     const divisionsAvailableToRegister = useMemo(
         () => divisions.filter((d) => !registeredDivisionIds.has(d.id) && !isClosed(d, event)),
@@ -658,6 +703,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (!userEmail) { promptMembersOnly(); return; }
         const restored = await restoreSelectedFromPending();
         if (!restored) { toast.error('No outstanding payment found'); return; }
+        setWizardMode('payOnly');
+        setAddPartnerTarget(null);
         paymentRetryRef.current = true;
         setAgreeRules(false);
         setAgreeComplete(false);
@@ -666,6 +713,53 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         setWizardStep(4);
         setShowWizard(true);
     }, [userEmail, restoreSelectedFromPending, loadProfile, promptMembersOnly]);
+
+    const openAddPartnerWizard = useCallback(async (reg) => {
+        if (!userEmail) { promptMembersOnly(); return; }
+        const div = divisions.find((d) => d.id === reg.division_id);
+        if (!div) {
+            toast.error('Division not found');
+            return;
+        }
+        if (isClosed(div, event)) {
+            toast.error('Entries have closed for this division');
+            return;
+        }
+        if (reg.partner_name?.trim() || reg.partner_email?.trim()) {
+            toast.error('This entry already has a partner');
+            return;
+        }
+
+        setWizardMode('addPartner');
+        setAddPartnerTarget(reg);
+        paymentRetryRef.current = false;
+        setHasPartner(true);
+        setPayMode('both');
+        setPartnerLicenseOption('none');
+        setBuyLicenseSelf(false);
+        setBuyLicensePartner(false);
+        setSelected({
+            [reg.division_id]: {
+                partnerName: '',
+                partnerEmail: '',
+                partnerId: null,
+                partnerProfile: null,
+                payForSelf: false,
+                payForPartner: true,
+                partnerLicenseChoice: null,
+                partnerPlaytomicLevel: '',
+                linkSoloRegId: null,
+            },
+        });
+        setExpandedDivisions({ [reg.division_id]: true });
+        setAgreeRules(false);
+        setAgreeComplete(false);
+        setAgreeSapa(false);
+        await loadProfile();
+        await loadDivisionRegs();
+        setWizardStep(2);
+        setShowWizard(true);
+    }, [userEmail, divisions, event, loadProfile, loadDivisionRegs, promptMembersOnly]);
 
     useEffect(() => {
         onStatusChange?.({
@@ -679,11 +773,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (registrationActionsRef) {
             registrationActionsRef.current = {
                 openPayFlow: openPayWizard,
+                openAddPartner: (regId) => {
+                    const reg = myRegs.find((r) => r.id === regId);
+                    if (reg) openAddPartnerWizard(reg);
+                },
+                openWithdraw: (regId) => {
+                    const reg = myRegs.find((r) => r.id === regId);
+                    if (reg) setWithdrawTarget(reg);
+                },
                 openRegistration: () => {
                     if (!userEmail) {
                         promptMembersOnly();
                         return;
                     }
+                    setWizardMode('register');
+                    setAddPartnerTarget(null);
                     paymentRetryRef.current = false;
                     setWizardStep(1);
                     setHasRankedinAccount(null);
@@ -707,6 +811,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         onStatusChange,
         registrationActionsRef,
         openPayWizard,
+        openAddPartnerWizard,
+        myRegs,
         loadProfile,
         loadDivisionRegs,
         loadDivisions,
@@ -732,6 +838,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         paymentRetryRef.current = false;
         checkoutPrepRef.current = null;
         setCheckoutPreparing(false);
+        setWizardMode('register');
+        setAddPartnerTarget(null);
     };
 
     const openWizard = () => {
@@ -739,6 +847,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             promptMembersOnly();
             return;
         }
+        setWizardMode('register');
+        setAddPartnerTarget(null);
         paymentRetryRef.current = false;
         setConfirmedPaidTotal(null);
         setWizardStep(1);
@@ -760,9 +870,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const finishRegistrationWizard = () => {
+        const wasAddPartner = wizardMode === 'addPartner';
         resetWizardState();
         setShowWizard(false);
-        navigate('/profile?tab=events');
+        if (!wasAddPartner) {
+            navigate('/profile?tab=events');
+        }
     };
 
     const toggleDivision = (div) => {
@@ -2073,7 +2186,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return;
             } else {
                 const savedRows = await persistRegistrations(rows, soloLinks, covers);
-                await sendRegistrationEmails(savedRows, true);
+                await sendRegistrationEmails(savedRows, wizardMode === 'addPartner' ? total > 0 : true);
                 setConfirmedPaidTotal(0);
                 setWizardStep(5);
                 loadMyRegs();
@@ -2177,6 +2290,35 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const goNext = () => {
+        if (wizardMode === 'addPartner' && wizardStep === 2) {
+            if (selectedDivisions.length === 0) { toast.error('Division not found'); return; }
+            for (const d of selectedDivisions) {
+                const sel = selected[d.id];
+                if (!sel?.partnerName || !sel?.partnerEmail) {
+                    toast.error('Search and select your partner');
+                    return;
+                }
+                const check = getPartnerAvailability(
+                    divisionRegs,
+                    d.id,
+                    { email: sel.partnerEmail, name: sel.partnerName },
+                    d.name,
+                );
+                if (!check.ok) {
+                    toast.error(check.message);
+                    return;
+                }
+                if (sel.payForPartner && d.license_required) {
+                    const lic = getPartnerLicenseInfo(sel.partnerId);
+                    if (!lic.active && !getEventPartnerLicenseChoice(sel.partnerId)) {
+                        toast.error(`Select a SAPA license for ${sel.partnerName}`);
+                        return;
+                    }
+                }
+            }
+            setWizardStep(4);
+            return;
+        }
         if (wizardStep === 1) {
             if (!userEmail) { toast.error('Please log in to continue'); return; }
             if (hasRankedinAccount === null) { toast.error('Please confirm whether you have a Rankedin account'); return; }
@@ -2236,8 +2378,12 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const goBack = () => {
+        if (wizardMode === 'addPartner' && wizardStep === 2) {
+            closeWizard();
+            return;
+        }
         if (wizardStep === 4) {
-            setWizardStep(2);
+            setWizardStep(wizardMode === 'addPartner' ? 2 : 2);
             return;
         }
         setWizardStep((s) => Math.max(1, s - 1));
@@ -2526,17 +2672,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 return (
                     <WizardStepWrap>
                         <WizardStepTitle
-                            title="Choose your division(s)"
-                            subtitle="Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own."
+                            title={wizardMode === 'addPartner' ? `Add partner — ${addPartnerTarget?.division || 'your entry'}` : 'Choose your division(s)'}
+                            subtitle={wizardMode === 'addPartner'
+                                ? 'Search for your partner and choose who pays their entry fee.'
+                                : 'Select one or more divisions. Adding a partner is optional — leave it blank to enter on your own.'}
                         />
 
                         <div className="space-y-2">
-                            {divisions.map((d) => {
+                            {(wizardMode === 'addPartner'
+                                ? divisions.filter((d) => d.id === addPartnerTarget?.division_id)
+                                : divisions
+                            ).map((d) => {
                                 const closed = isClosed(d, event);
                                 const reged = registeredDivisionIds.has(d.id);
                                 const sel = selected[d.id];
-                                const isSelected = !!sel;
-                                const isExpanded = isSelected && expandedDivisions[d.id] !== false;
+                                const addPartnerLocked = wizardMode === 'addPartner';
+                                const isSelected = addPartnerLocked ? true : !!sel;
+                                const isExpanded = addPartnerLocked ? true : (isSelected && expandedDivisions[d.id] !== false);
                                 const myReg = reged ? myRegs.find((r) => r.division_id === d.id) : null;
                                 const enteredByName = myReg?._payerName || null;
                                 const searchState = divisionPartnerSearch[d.id] || { query: '', results: [], open: false, hasSearched: false };
@@ -2561,12 +2713,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 return (
                                     <Card
                                         key={d.id}
-                                        className={`${isSelected ? 'border-2' : ''} ${closed ? 'opacity-70' : ''}`}
+                                        className={`${isSelected ? 'border-2' : ''} ${closed && !addPartnerLocked ? 'opacity-70' : ''}`}
                                         style={isSelected ? { borderColor: accent } : undefined}
                                         allowOverflow={isExpanded}
                                     >
                                         <div className="px-4 py-3">
                                             <div className="flex items-center gap-3">
+                                                {!addPartnerLocked && (
                                                 <button
                                                     type="button"
                                                     disabled={closed || reged}
@@ -2580,6 +2733,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 >
                                                     {isSelected && !reged && <Check size={12} style={{ color: btnTextColor }} />}
                                                 </button>
+                                                )}
 
                                                 <button
                                                     type="button"
@@ -2636,7 +2790,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                                                     <div className="flex items-end gap-3">
                                                         <div className="relative flex-1 min-w-0">
-                                                            <label className="block text-[11px] text-slate-600 font-normal mb-1">Add a partner (optional)</label>
+                                                            <label className="block text-[11px] text-slate-600 font-normal mb-1">{addPartnerLocked ? 'Search for your partner' : 'Add a partner (optional)'}</label>
                                                             <div className="relative">
                                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                                                 <input
@@ -3231,11 +3385,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <div className="w-16 h-16 rounded-full bg-emerald-500 flex items-center justify-center mb-4">
                                 <Check size={32} className="text-white" strokeWidth={2.5} />
                             </div>
-                            <h2 className="text-lg font-bold text-slate-900 tracking-normal">Registration Confirmed!</h2>
+                            <h2 className="text-lg font-bold text-slate-900 tracking-normal">
+                                {wizardMode === 'addPartner' ? 'Partner Added!' : 'Registration Confirmed!'}
+                            </h2>
                             <p className="text-xs text-slate-600 mt-1.5 font-normal leading-snug max-w-sm">
-                                {hasPaid
-                                    ? 'Your registration and payment were successful. We can\'t wait to see you on court!'
-                                    : 'Your registration was successful. We can\'t wait to see you on court!'}
+                                {wizardMode === 'addPartner'
+                                    ? (hasPaid
+                                        ? 'Your partner has been linked and payment was successful.'
+                                        : confirmEntries.some((e) => e.showPartnerReminder)
+                                            ? 'Your partner has been linked. Ask them to complete their payment.'
+                                            : 'Your partner has been linked to your entry.')
+                                    : (hasPaid
+                                        ? 'Your registration and payment were successful. We can\'t wait to see you on court!'
+                                        : 'Your registration was successful. We can\'t wait to see you on court!')}
                             </p>
                         </div>
 
@@ -3312,7 +3474,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <CardBody className="space-y-3">
                                 {[
                                     'A confirmation email has been sent to your email address.',
-                                    'You\'ll receive event updates on WhatsApp.',
                                     'Draws will be published closer to the event.',
                                     'See you on court!',
                                 ].map((line) => (
@@ -3368,10 +3529,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     };
 
     const stepCtaLabel = () => {
-        if (wizardStep === 5) return 'Back to My Events';
+        if (wizardStep === 5) return wizardMode === 'addPartner' ? 'Done' : 'Back to My Events';
+        if (wizardMode === 'addPartner' && wizardStep === 2) return 'Continue to Review';
         if (wizardStep === 4) {
             if (processing) return 'Processing...';
             if (checkoutPreparing && total > 0) return 'Preparing payment...';
+            if (wizardMode === 'addPartner') {
+                return total > 0 ? 'Pay & Add Partner' : 'Add Partner';
+            }
             return total > 0 ? 'Pay & Complete Registration' : 'Complete Registration';
         }
         if (wizardStep === 3) return 'Continue to Payment';
@@ -3386,6 +3551,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         if (wizardStep === 4) {
             handleRegister();
+            return;
+        }
+        if (wizardMode === 'addPartner' && wizardStep === 2) {
+            goNext();
         }
     };
 
@@ -3412,7 +3581,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <Trophy className="w-4 h-4 text-[#0F172A]" />
                         </div>
                         <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
-                            {hasRegistrations ? 'You are Registered for this Event' : hasPendingPayment ? 'Complete Your Registration' : 'Divisions'}
+                            {onlyPartnerAddedEntries
+                                ? 'Your Registration'
+                                : hasRegistrations
+                                    ? 'You are Registered for this Event'
+                                    : hasPendingPayment
+                                        ? 'Complete Your Registration'
+                                        : 'Divisions'}
                         </h2>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 shrink-0 ${divisionsBlockOpen ? '' : '-rotate-90'}`} />
@@ -3430,57 +3605,53 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <div className="px-6 py-4">
                     {hasRegistrations || hasPendingPayment ? (
                         <>
-                            <p className="text-xs font-medium text-slate-600 mb-3">
-                                {hasRegistrations ? 'Your Entries' : 'Outstanding payment'}
-                            </p>
-                            <div className="space-y-2 mb-4">
-                                {myRegs.map((reg) => {
-                                    const div = divisions.find((d) => d.id === reg.division_id);
-                                    const needsPay = reg.payment_status !== 'paid' && Number(div?.entry_fee || 0) > 0;
+                            {hasPendingPayment && !onlyPartnerAddedEntries && (
+                                <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
+                                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-amber-900 leading-relaxed">
+                                        {hasRegistrations
+                                            ? 'You have an outstanding payment to complete your registration.'
+                                            : 'Complete your payment to secure your spot.'}
+                                    </p>
+                                </div>
+                            )}
+                            {onlyPartnerAddedEntries && (
+                                <p className="text-xs text-slate-500 mb-4">
+                                    Your partner entry is shown at the top of the page — pay, decline, or add another division below.
+                                </p>
+                            )}
+                            {!hasPendingPayment && hasRegistrations && panelEntries.length > 0 && (
+                                <p className="text-xs font-medium text-slate-500 mb-3">Your entries</p>
+                            )}
+                            {panelEntries.length > 0 && (
+                            <div className="space-y-3 mb-5">
+                                {panelEntries.map((entry) => {
+                                    const reg = myRegs.find((r) => r.id === entry.id);
+                                    const div = divisions.find((d) => d.id === entry.divisionId);
+                                    const needsPay = reg && reg.payment_status !== 'paid' && Number(div?.entry_fee || 0) > 0;
                                     return (
-                                        <div key={reg.id} className="flex items-center justify-between rounded-xl border border-gray-100 bg-white px-4 py-3">
-                                            <div className="flex items-center gap-3 min-w-0">
-                                                <Users className="w-4 h-4 text-gray-400 shrink-0" />
-                                                <div className="min-w-0">
-                                                    <p className="font-semibold text-slate-900 text-sm">{reg.division}</p>
-                                                    {div && divisionMetaLine(div) && (
-                                                        <p className="text-[11px] text-slate-600 truncate mt-0.5">{divisionMetaLine(div)}</p>
-                                                    )}
-                                                    {reg.partner_name?.trim() && (
-                                                        <p className="text-[11px] text-slate-600 font-normal mt-0.5">
-                                                            Partner: <span className="font-medium text-slate-800">{reg.partner_name}</span>
-                                                        </p>
-                                                    )}
-                                                    <span className={`text-[11px] font-medium ${reg.payment_status === 'paid' ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                                        {getEntryPaymentLabel(reg, userEmail)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0 ml-3">
-                                                {needsPay && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={openPayWizard}
-                                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-lg text-white"
-                                                        style={{ backgroundColor: accent, color: btnTextColor }}
-                                                    >
-                                                        Pay
-                                                    </button>
-                                                )}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setWithdrawTarget(reg)}
-                                                    className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
-                                                >
-                                                    Withdraw
-                                                </button>
-                                            </div>
-                                        </div>
+                                        <ManualRegistrationEntryCard
+                                            key={entry.id}
+                                            entry={entry}
+                                            playerName={profile?.name || displayProfile?.name || 'You'}
+                                            variant="panel"
+                                            accent={accent}
+                                            btnTextColor={btnTextColor}
+                                            showActions={!!reg}
+                                            onAddPartner={() => openAddPartnerWizard(reg)}
+                                            onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
+                                            onWithdraw={reg ? () => setWithdrawTarget(reg) : undefined}
+                                            withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
+                                        />
                                     );
                                 })}
                             </div>
-                            <div className="flex flex-col gap-2">
-                                {hasPendingPayment && (
+                            )}
+                            {panelEntries.some((e) => e.canAddPartner) && (
+                                <p className="text-xs text-slate-500 mb-4 -mt-2">You can add a partner to any solo entry at any time.</p>
+                            )}
+                            <div className="flex flex-col gap-2.5 pt-1">
+                                {hasPendingPayment && !onlyPartnerAddedEntries && (
                                     <PrimaryBtn onClick={openPayWizard}>
                                         Pay Entry <CreditCard className="w-4 h-4" />
                                     </PrimaryBtn>
@@ -3610,7 +3781,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     )}
                                     <div className="flex-1">
                                         <PrimaryBtn
-                                            onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : goNext}
+                                            onClick={wizardStep === 4 || wizardStep === 5 ? handleWizardPrimaryAction : (wizardMode === 'addPartner' && wizardStep === 2 ? goNext : goNext)}
                                             disabled={processing || checkoutPreparing || (wizardStep === 1 && (!userEmail || hasRankedinAccount === null)) || (wizardStep === 4 && (!agreeRules || !agreeComplete || !agreeSapa))}
                                         >
                                             {processing && wizardStep === 4 ? <Loader2 className="animate-spin w-5 h-5" /> : (
@@ -3656,9 +3827,19 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                         Withdraw from {withdrawTarget.division}?
                                     </h3>
                                     <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
-                                        {withdrawTarget.partner_name
-                                            ? `Your partner ${withdrawTarget.partner_name} will be notified. Their entry will remain active — only your registration will be withdrawn.`
-                                            : 'This will remove your entry from the event.'}
+                                        {(() => {
+                                            const selfEm = normEmail(userEmail);
+                                            const addedBy = normEmail(withdrawTarget.registered_by);
+                                            const wasAdded = addedBy && addedBy !== selfEm;
+                                            const addedByName = withdrawTarget._payerName || withdrawTarget.partner_name || 'your partner';
+                                            if (wasAdded) {
+                                                return `${addedByName} added you to this division. Withdrawing removes your entry only — they stay registered and can partner with someone else.`;
+                                            }
+                                            if (withdrawTarget.partner_name) {
+                                                return `Your partner ${withdrawTarget.partner_name} will be notified. Their entry will remain active — only your registration will be withdrawn.`;
+                                            }
+                                            return 'This will remove your entry from the event.';
+                                        })()}
                                     </p>
                                 </div>
                                 <button

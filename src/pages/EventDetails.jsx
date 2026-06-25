@@ -9,6 +9,7 @@ import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
 import ManualEventRegistration from '../components/ManualEventRegistration';
+import ManualRegistrationEntryCard from '../components/ManualRegistrationEntryCard';
 import { toast } from 'sonner';
 import { sendEmail } from '../utils/emails';
 import { canAccessHiddenEvents } from '../hooks/useAdminPermissions';
@@ -680,7 +681,7 @@ const EventDetails = () => {
             return;
         }
 
-        const [{ data: regs }, { data: divs }] = await Promise.all([
+        const [{ data: regs }, { data: divs }, { data: divisionRegs }] = await Promise.all([
             supabase
                 .from('event_registrations')
                 .select('*')
@@ -693,6 +694,11 @@ const EventDetails = () => {
                 .eq('event_id', event.id)
                 .eq('is_active', true)
                 .order('sort_order', { ascending: true }),
+            supabase
+                .from('event_registrations')
+                .select('email, full_name, division_id, payment_status, partner_email, status')
+                .eq('event_id', event.id)
+                .neq('status', 'withdrawn'),
         ]);
 
         const myRegs = regs || [];
@@ -753,14 +759,43 @@ const EventDetails = () => {
             const div = divisions.find((d) => d.id === reg.division_id);
             const fee = Number(div?.entry_fee || 0);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
+            const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
+            const partnerReg = hasPartner && reg.partner_email
+                ? (divisionRegs || []).find((r) =>
+                    r.division_id === reg.division_id
+                    && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase()
+                    && r.status !== 'withdrawn',
+                )
+                : null;
+            const partnerPaid = hasPartner && (
+                reg.partner_payment_status === 'paid' || partnerReg?.payment_status === 'paid'
+            );
+            const registeredBy = (reg.registered_by || '').toLowerCase();
+            const wasAddedByPartner = !!(registeredBy && registeredBy !== manualUserEmail);
+            const addedByName = wasAddedByPartner
+                ? (reg._payerName || reg.partner_name || 'your partner')
+                : null;
             return {
                 id: reg.id,
                 division: reg.division,
+                divisionId: reg.division_id,
                 partnerName: reg.partner_name?.trim() || null,
+                partnerEmail: reg.partner_email?.trim() || null,
+                hasPartner,
+                partnerPaid,
+                wasAddedByPartner,
+                addedByName,
+                partnerPaymentLabel: !hasPartner
+                    ? null
+                    : partnerPaid
+                        ? 'Paid & Confirmed'
+                        : 'Payment Pending',
                 paymentLabel: getManualEntryPaymentLabel(reg, manualUserEmail),
                 isPaid,
                 statusText: isPaid ? 'Paid & Confirmed' : 'Payment Pending',
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+                partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
+                canAddPartner: false,
             };
         });
 
@@ -2632,52 +2667,143 @@ const EventDetails = () => {
         </div>
     );
 
-    const manualRegistrationBlock = event.is_manual && manualUserEmail && manualRegStatus.hasAnyRegistration && (
-        <div className="bg-[#F4FAEC] rounded-2xl shadow-sm overflow-hidden p-4 sm:p-5 border border-green-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div className="flex items-start gap-3 sm:gap-4 w-full sm:w-auto">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full border-2 border-green-600 flex items-center justify-center bg-white shadow-sm shrink-0 mt-0.5 sm:mt-0">
-                    <Check className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-                </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest mb-1.5">YOU ARE REGISTERED FOR</p>
-                    <div className="flex flex-col gap-2.5">
-                        {(manualRegStatus.entries || []).map((entry) => (
-                            <div key={entry.id} className="flex flex-col gap-0.5">
-                                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                                    <span className="text-sm font-semibold text-[#0F172A] leading-tight">
-                                        {entry.division}
-                                    </span>
-                                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded-md ${entry.statusClassName}`}>
-                                        {entry.statusText}
-                                    </span>
-                                </div>
-                                {entry.partnerName && (
-                                    <p className="text-[11px] text-slate-600">
-                                        Partner: <span className="font-medium text-slate-800">{entry.partnerName}</span>
-                                    </p>
-                                )}
-                                <p className={`text-[11px] font-medium ${entry.isPaid ? 'text-emerald-600' : 'text-amber-600'}`}>
-                                    {entry.paymentLabel}
-                                </p>
-                            </div>
-                        ))}
+    const partnerAddedEntries = (manualRegStatus.entries || []).filter((e) => e.wasAddedByPartner);
+    const selfRegisteredPaidEntries = (manualRegStatus.entries || []).filter((e) => e.isPaid && !e.wasAddedByPartner);
+    const partnerAddedNeedsPayment = partnerAddedEntries.some((e) => !e.isPaid);
+    const partnerAddedByName = partnerAddedEntries[0]?.addedByName || 'Your partner';
+    const partnerAddedPaymentConfirmed = partnerAddedEntries.length > 0 && !partnerAddedNeedsPayment;
+
+    const manualPartnerAddedBlock = event.is_manual && manualUserEmail && partnerAddedEntries.length > 0 && (
+        <div className={`rounded-2xl shadow-sm overflow-hidden ${
+            partnerAddedPaymentConfirmed
+                ? 'border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC]'
+                : 'border border-amber-200/80 bg-gradient-to-br from-amber-50 to-[#FFFBEB]'
+        }`}>
+            <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className={`w-11 h-11 rounded-full bg-white border-2 flex items-center justify-center shadow-sm shrink-0 ${
+                        partnerAddedPaymentConfirmed ? 'border-emerald-500' : 'border-amber-500'
+                    }`}>
+                        {partnerAddedPaymentConfirmed ? (
+                            <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
+                        ) : (
+                            <AlertCircle className="w-5 h-5 text-amber-600" strokeWidth={2.5} />
+                        )}
+                    </div>
+                    <div className="min-w-0">
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                            partnerAddedPaymentConfirmed ? 'text-emerald-700' : 'text-amber-700'
+                        }`}>
+                            Your partner entered you
+                        </p>
+                        <p className={`text-xs leading-relaxed mt-1 ${
+                            partnerAddedPaymentConfirmed ? 'text-emerald-900/90' : 'text-amber-900/90'
+                        }`}>
+                            {partnerAddedNeedsPayment
+                                ? `${partnerAddedByName} added you to this event. Pay your entry fee to confirm your spot, or decline if you don't want to play.`
+                                : `${partnerAddedByName} added you to this event. You're confirmed — decline below if your plans have changed.`}
+                        </p>
                     </div>
                 </div>
-            </div>
 
-            {manualRegStatus.canAddDivision && (
-                <button
-                    type="button"
-                    onClick={() => manualRegActionsRef.current?.openRegistration?.()}
-                    className="flex w-full sm:w-auto items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border border-green-600 text-green-700 hover:bg-green-50 transition-colors font-medium text-sm whitespace-nowrap shrink-0 sm:self-center"
-                >
-                    <span className="text-lg leading-none">+</span> Add Division
-                </button>
-            )}
+                <div className="space-y-3">
+                    {partnerAddedEntries.map((entry) => (
+                        <ManualRegistrationEntryCard
+                            key={entry.id}
+                            entry={entry}
+                            playerName={loggedInPlayer?.name || 'You'}
+                            variant="banner"
+                            accent={theme?.fill || '#CCFF00'}
+                            showActions
+                            withdrawLabel="Decline"
+                            onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
+                        />
+                    ))}
+                </div>
+
+                {(partnerAddedNeedsPayment || manualRegStatus.canAddDivision) && (
+                    <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${
+                        partnerAddedPaymentConfirmed ? 'border-emerald-200/60' : 'border-amber-200/60'
+                    }`}>
+                        {partnerAddedNeedsPayment && (
+                            <button
+                                type="button"
+                                onClick={() => manualRegActionsRef.current?.openPayFlow?.()}
+                                className="flex w-full items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-opacity hover:opacity-90"
+                                style={{ backgroundColor: theme?.fill || '#CCFF00', color: theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0F172A' }}
+                            >
+                                Pay Entry <CreditCard className="w-4 h-4" />
+                            </button>
+                        )}
+                        {manualRegStatus.canAddDivision && (
+                            <button
+                                type="button"
+                                onClick={() => manualRegActionsRef.current?.openRegistration?.()}
+                                className={`flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ${
+                                    partnerAddedPaymentConfirmed
+                                        ? 'border border-emerald-600 text-emerald-700 bg-white/80 hover:bg-white'
+                                        : 'border border-amber-600/60 text-amber-800 bg-white hover:bg-amber-50/50'
+                                }`}
+                            >
+                                <span className="text-base leading-none">+</span> Add Division
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
         </div>
     );
 
-    const activeRegistrationBlock = registrationBlock || manualRegistrationBlock;
+    const manualRegistrationBlock = event.is_manual && manualUserEmail && selfRegisteredPaidEntries.length > 0 && (
+        <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC] shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-3 mb-4">
+                    <div className="w-11 h-11 rounded-full bg-white border-2 border-emerald-500 flex items-center justify-center shadow-sm shrink-0">
+                        <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
+                            You are registered for
+                        </p>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                    {(manualRegStatus.entries || [])
+                        .filter((entry) => entry.isPaid && !entry.wasAddedByPartner)
+                        .map((entry) => (
+                            <ManualRegistrationEntryCard
+                                key={entry.id}
+                                entry={entry}
+                                playerName="You"
+                                variant="banner"
+                                accent={theme?.fill || '#CCFF00'}
+                                showActions
+                                withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
+                                onAddPartner={entry.canAddPartner
+                                    ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
+                                    : undefined}
+                                onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
+                            />
+                        ))}
+                </div>
+
+                {manualRegStatus.canAddDivision && (
+                    <div className="mt-4 pt-4 border-t border-emerald-200/60">
+                        <button
+                            type="button"
+                            onClick={() => manualRegActionsRef.current?.openRegistration?.()}
+                            className="flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-emerald-600 text-emerald-700 bg-white/80 hover:bg-white transition-colors font-semibold text-sm"
+                        >
+                            <span className="text-base leading-none">+</span> Add Division
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    const activeRegistrationBlock = registrationBlock || manualPartnerAddedBlock || manualRegistrationBlock;
 
     const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
