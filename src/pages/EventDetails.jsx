@@ -2699,8 +2699,8 @@ const EventDetails = () => {
                 )}
 
                 {/* Floating nav bar */}
-                <div className="absolute top-0 left-0 right-0 z-[100] flex justify-center px-4 pt-safe pt-24 md:pt-28 pointer-events-none">
-                    <div className="w-full max-w-7xl flex items-center justify-between">
+                <div className="absolute top-0 left-0 right-0 z-[100] pt-safe pt-24 md:pt-28 pointer-events-none">
+                    <div className="max-w-5xl mx-auto px-5 w-full flex items-center justify-between">
                         <button
                             onClick={() => window.history.back()}
                             className="pointer-events-auto w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
@@ -2768,48 +2768,21 @@ const EventDetails = () => {
                         <div className="max-w-5xl mx-auto px-5 w-full relative">
                             {eventPosterUrl ? (
                                 <>
-                                    <button
-                                        type="button"
-                                        onClick={() => setPosterPreviewOpen(true)}
-                                        className="hidden md:block absolute right-5 top-0 z-10 -translate-y-10 lg:-translate-y-14 w-32 lg:w-40 aspect-[3/4] rounded-xl overflow-hidden border-2 border-white/40 shadow-2xl hover:scale-105 transition-transform bg-[#0F172A] pointer-events-auto"
-                                        aria-label="View event poster"
-                                    >
-                                        <img
-                                            src={eventPosterUrl}
-                                            alt="Event poster preview"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </button>
-                                    <div className="flex gap-3 items-start w-full mt-2 md:pr-36 lg:pr-44 relative z-20">
-                                        <div className="flex-1 min-w-0">
+                                    <div className="flex gap-3 sm:gap-4 items-end w-full mt-2 relative z-20">
+                                        <div className="flex-1 min-w-0 flex flex-col">
                                             {event.sapa_status && event.sapa_status !== 'None' && (
                                                 <span className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${theme.badgeBg}`} style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}>
                                                     {event.sapa_status}
                                                 </span>
                                             )}
-                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg truncate whitespace-nowrap">
+                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg">
                                                 {event.event_name}
                                             </h1>
-                                            <div className="flex items-center gap-2 text-white/90 text-sm font-normal">
+                                            <div className="flex items-center gap-2 text-white/90 text-sm font-normal mb-4">
                                                 <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
-                                                <span className="truncate">{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                                <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
                                             </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPosterPreviewOpen(true)}
-                                            className="md:hidden w-14 h-[4.5rem] shrink-0 rounded-lg overflow-hidden border-2 border-white/40 shadow-lg hover:scale-105 transition-transform bg-[#0F172A] mt-1"
-                                            aria-label="View event poster"
-                                        >
-                                            <img
-                                                src={eventPosterUrl}
-                                                alt="Event poster preview"
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </button>
-                                    </div>
-
-                                    <div className="relative z-20 flex gap-2 mt-4 w-full md:pr-36 lg:pr-44">
+                                            <div className="flex gap-2 w-full">
                                         {(() => {
                                             const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
                                             if (event.is_manual) {
@@ -2906,6 +2879,20 @@ const EventDetails = () => {
                                             }
                                             return null;
                                         })()}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPosterPreviewOpen(true)}
+                                            className="shrink-0 w-[5.5rem] sm:w-24 md:w-32 lg:w-36 aspect-[3/4] rounded-xl overflow-hidden border-2 border-white/40 shadow-2xl hover:scale-105 transition-transform bg-[#0F172A] mb-0.5"
+                                            aria-label="View event poster"
+                                        >
+                                            <img
+                                                src={eventPosterUrl}
+                                                alt="Event poster preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </button>
                                     </div>
                                 </>
                             ) : (
@@ -2915,7 +2902,7 @@ const EventDetails = () => {
                                     {event.sapa_status}
                                 </span>
                             )}
-                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left truncate whitespace-nowrap">
+                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left">
                                 {event.event_name}
                             </h1>
 

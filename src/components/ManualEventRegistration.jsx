@@ -41,8 +41,27 @@ const stripHtml = (html) => {
     return raw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').replace(/\u00a0/g, ' ').trim();
 };
 
+const getDivisionDetailsHtml = (division) => {
+    const raw = (division?.details ?? division?.Details ?? '').trim();
+    return raw || null;
+};
+
 const getDivisionSavedDetails = (division) =>
     stripHtml(division?.details ?? division?.Details ?? '').trim();
+
+const DivisionDetails = ({ division, className = 'text-xs text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none' }) => {
+    const html = getDivisionDetailsHtml(division);
+    if (html) {
+        return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    const fallback = [
+        division.format,
+        fmtRWhole(division.entry_fee),
+        division.license_required ? 'License req.' : null,
+    ].filter(Boolean).join(' · ');
+    if (!fallback) return null;
+    return <p className={className.replace(' rich-text max-w-none', '')}>{fallback}</p>;
+};
 
 const getEventCalendarData = (ev) => {
     if (!ev) return null;
@@ -289,6 +308,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
     const [expandedDivisions, setExpandedDivisions] = useState({});
+    const [divisionsBlockOpen, setDivisionsBlockOpen] = useState(true);
     const [divisionPartnerSearch, setDivisionPartnerSearch] = useState({});
     const [partnerLicenseCache, setPartnerLicenseCache] = useState({});
     const partnerSearchSeq = useRef(0);
@@ -570,11 +590,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return [d.format, fmtRWhole(d.entry_fee), d.license_required ? 'License req.' : null].filter(Boolean).join(' · ');
     };
 
-    const formatDivisionCloseLabel = (d) => {
+    const formatDivisionCloseDate = (d) => {
         const closeAt = d.entries_close_at || event?.registration_closes_at;
-        if (!closeAt) return 'Open';
-        const date = new Date(closeAt);
-        return `Registration Closes ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+        if (!closeAt) return null;
+        return new Date(closeAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     const restoreSelectedFromPending = useCallback(async () => {
@@ -2385,7 +2404,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const showPartnerLicenseAlreadySelected = showPartnerLicenseWarning
                                     && !isPrimaryPartnerLicenseDivision
                                     && !!eventPartnerLicenseChoice;
-                                const savedDetails = getDivisionSavedDetails(d);
 
                                 return (
                                     <Card
@@ -2422,10 +2440,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 >
                                                     <p className="font-semibold text-slate-900 text-sm leading-snug">
                                                         {d.name}
-                                                        {savedDetails && (
-                                                            <span className="font-normal text-slate-700">{` - ${savedDetails}`}</span>
-                                                        )}
                                                     </p>
+                                                    <DivisionDetails division={d} className="text-[11px] text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none" />
                                                     {reged && (
                                                         <p className="text-[10px] text-emerald-600 font-normal mt-0.5">
                                                             {enteredByName ? `Entered by ${enteredByName}` : 'Already entered'}
@@ -3230,14 +3246,31 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         <>
             {/* Overview card on event page */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-50 flex items-center gap-3">
-                    <Trophy className="w-5 h-5 text-slate-700" />
-                    <h2 className="text-base font-semibold text-slate-900">
-                        {hasRegistrations ? 'You are Registered for this Event' : hasPendingPayment ? 'Complete Your Registration' : 'Register for this Event'}
-                    </h2>
+                <div
+                    onClick={() => setDivisionsBlockOpen((open) => !open)}
+                    className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${accent}20` }}>
+                            <Trophy className="w-4 h-4 text-[#0F172A]" />
+                        </div>
+                        <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
+                            {hasRegistrations ? 'You are Registered for this Event' : hasPendingPayment ? 'Complete Your Registration' : 'Divisions'}
+                        </h2>
+                    </div>
+                    <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 shrink-0 ${divisionsBlockOpen ? '' : '-rotate-90'}`} />
                 </div>
 
-                <div className="px-6 py-4">
+                <AnimatePresence initial={false}>
+                    {divisionsBlockOpen && (
+                        <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="px-6 py-4">
                     {hasRegistrations || hasPendingPayment ? (
                         <>
                             <p className="text-xs font-medium text-slate-600 mb-3">
@@ -3313,28 +3346,33 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         </>
                     ) : (
                         <>
-                            <p className="text-xs font-medium text-slate-600 mb-3">Available Divisions</p>
+                            <div className="flex items-center justify-between gap-4 mb-3">
+                                <p className="text-xs font-medium text-slate-600">Available Divisions</p>
+                                <p className="text-xs font-medium text-slate-600 shrink-0">Registration closes</p>
+                            </div>
                             <div className="space-y-2 mb-4">
                                 {divisions.map((d) => {
                                     const closed = isClosed(d, event);
-                                    const savedDetails = getDivisionSavedDetails(d);
+                                    const closeDate = formatDivisionCloseDate(d);
                                     return (
                                         <div
                                             key={d.id}
-                                            className={`rounded-xl border px-4 py-3 ${closed ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-100'}`}
+                                            className={`rounded-xl border px-4 py-3 ${closed ? 'border-gray-100 bg-gray-50 opacity-60' : 'border-gray-100 bg-white'}`}
                                         >
                                             <div className="flex items-start gap-3 min-w-0">
                                                 <Users className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="font-bold text-[#0F172A] text-sm leading-snug">
-                                                        {d.name}
-                                                        {savedDetails && (
-                                                            <span className="font-normal text-slate-700">{` - ${savedDetails}`}</span>
-                                                        )}
-                                                    </p>
-                                                    <p className={`mt-1.5 text-[11px] font-semibold leading-snug ${closed ? 'text-slate-500 uppercase tracking-wide' : (theme?.accentText || 'text-slate-600')}`}>
-                                                        {closed ? 'Closed' : formatDivisionCloseLabel(d)}
-                                                    </p>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <p className="font-bold text-[#0F172A] text-sm leading-snug min-w-0">
+                                                            {d.name}
+                                                        </p>
+                                                        <span
+                                                            className={`text-[11px] font-semibold shrink-0 text-right leading-snug ${closed ? 'text-slate-500 uppercase tracking-wide' : (theme?.accentText || 'text-amber-600')}`}
+                                                        >
+                                                            {closed ? 'Closed' : closeDate || 'Open'}
+                                                        </span>
+                                                    </div>
+                                                    <DivisionDetails division={d} />
                                                 </div>
                                             </div>
                                         </div>
@@ -3346,7 +3384,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             </PrimaryBtn>
                         </>
                     )}
-                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </div>
 
             {/* 5-step registration wizard */}
