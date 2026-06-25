@@ -158,6 +158,13 @@ const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
             };
         }
         if (primary.partner_name?.trim() || primary.partner_email?.trim()) {
+            const partnerEm = normEmail(primary.partner_email);
+            const mutualLink = partnerEm && divRegs.some(
+                (r) => normEmail(r.email) === partnerEm && normEmail(r.partner_email) === email,
+            );
+            if (mutualLink) {
+                return { ok: true };
+            }
             return {
                 ok: false,
                 message: `${name} is already partnered with ${resolveRegPartnerName(divRegs, primary.partner_email, primary.partner_name)} for ${divLabel}`,
@@ -168,6 +175,13 @@ const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
 
     const asPartnerOn = divRegs.find((r) => normEmail(r.partner_email) === email);
     if (asPartnerOn) {
+        const inviterEm = normEmail(asPartnerOn.email);
+        const mutualLink = inviterEm && divRegs.some(
+            (r) => normEmail(r.email) === email && normEmail(r.partner_email) === inviterEm,
+        );
+        if (mutualLink) {
+            return { ok: true };
+        }
         return {
             ok: false,
             message: `${name} is already partnered with ${asPartnerOn.full_name || 'another player'} for ${divLabel}`,
@@ -1661,29 +1675,45 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         const selfName = profile?.name || (userEmail ? userEmail.split('@')[0] : 'Player');
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
+            const fee = Number(d.entry_fee || 0);
             const partnerPays = !!(sel?.partnerName && sel?.payForPartner);
             const selfPays = isSelfPayingDivision(d.id, sel);
-            const fee = Number(d.entry_fee || 0);
             const selfAlreadyPaid = isSelfDivisionPaid(d.id);
+            const existingSelfReg = myRegs.find(
+                (r) => r.division_id === d.id
+                    && normEmail(r.email) === normEmail(userEmail)
+                    && r.status !== 'withdrawn',
+            );
 
             rows.push({
                 event_id: event.id,
                 division_id: d.id,
                 division: d.name,
-                full_name: selfName,
+                full_name: existingSelfReg?.full_name || selfName,
                 email: userEmail,
-                phone: profile?.contact_number || null,
-                partner_name: sel?.partnerName || null,
-                partner_email: sel?.partnerEmail || null,
+                phone: profile?.contact_number || existingSelfReg?.phone || null,
+                partner_name: sel?.partnerName || existingSelfReg?.partner_name || null,
+                partner_email: sel?.partnerEmail || existingSelfReg?.partner_email || null,
                 payment_status: selfAlreadyPaid ? 'paid' : fee === 0 ? 'paid' : 'pending',
-                partner_payment_status: sel?.partnerName ? 'pending' : null,
+                partner_payment_status: (sel?.partnerName || existingSelfReg?.partner_name)
+                    ? (existingSelfReg?.partner_payment_status || 'pending')
+                    : null,
                 status: 'registered',
-                registered_by: userEmail,
+                registered_by: existingSelfReg?.registered_by || userEmail,
             });
             if (selfPays && fee > 0) covers.push({ email: userEmail, division: d.name, type: 'entry' });
 
             if (sel?.partnerName && sel?.partnerEmail) {
-                if (sel.linkSoloRegId) {
+                const existingPartnerReg = divisionRegs.find(
+                    (r) => r.division_id === d.id
+                        && normEmail(r.email) === normEmail(sel.partnerEmail)
+                        && r.status !== 'withdrawn',
+                );
+                if (existingPartnerReg) {
+                    if (partnerPays && fee > 0 && existingPartnerReg.payment_status !== 'paid') {
+                        covers.push({ email: existingPartnerReg.email, division: d.name, type: 'entry' });
+                    }
+                } else if (sel.linkSoloRegId) {
                     soloLinks.push({
                         id: sel.linkSoloRegId,
                         email: sel.partnerEmail,
@@ -2120,19 +2150,21 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         setProcessing(true);
         try {
-            for (const d of selectedDivisions) {
-                const sel = selected[d.id];
-                if (!sel?.partnerEmail) continue;
-                const check = getPartnerAvailability(
-                    divisionRegs,
-                    d.id,
-                    { email: sel.partnerEmail, name: sel.partnerName },
-                    d.name,
-                );
-                if (!check.ok) {
-                    toast.error(check.message);
-                    setProcessing(false);
-                    return;
+            if (wizardMode !== 'payOnly') {
+                for (const d of selectedDivisions) {
+                    const sel = selected[d.id];
+                    if (!sel?.partnerEmail) continue;
+                    const check = getPartnerAvailability(
+                        divisionRegs,
+                        d.id,
+                        { email: sel.partnerEmail, name: sel.partnerName },
+                        d.name,
+                    );
+                    if (!check.ok) {
+                        toast.error(check.message);
+                        setProcessing(false);
+                        return;
+                    }
                 }
             }
 
