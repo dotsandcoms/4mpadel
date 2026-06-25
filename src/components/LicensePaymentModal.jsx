@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import { FEES, toPaystackAmount, formatCurrency } from '../constants/fees';
 import { useRankedin } from '../hooks/useRankedin';
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
+import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 
 console.log('Paystack Config Check (Modal):', {
     keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
@@ -47,15 +48,8 @@ const LicensePaymentModal = ({ isOpen, onClose, userEmail, userName, onPaymentSu
             const fetchEventsAndLicenses = async () => {
                 setEventsLoading(true);
                 try {
-                    const { data: events, error: eventsError } = await supabase
-                        .from('calendar')
-                        .select('id, event_name, start_date, end_date')
-                        .gte('start_date', new Date().toISOString())
-                        .order('start_date', { ascending: true });
-
-                    if (!eventsError && events) {
-                        setUpcomingEvents(events);
-                    }
+                    const events = await fetchUpcomingCalendarEvents(supabase);
+                    setUpcomingEvents(events);
 
                     if (userEmail) {
                         const { data: pData } = await supabase

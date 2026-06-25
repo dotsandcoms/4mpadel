@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, Search, Calendar, ChevronRight, Check } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PaystackPop from '@paystack/inline-js';
@@ -9,6 +9,7 @@ import { useRankedin } from '../hooks/useRankedin';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from './SearchableSelect';
 import { Trophy } from 'lucide-react';
+import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
 
@@ -57,23 +58,21 @@ const AuthModal = ({ isOpen, onClose }) => {
     // Temporary License Addition
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState('');
+    const [eventSearchQuery, setEventSearchQuery] = useState('');
     const [eventsLoading, setEventsLoading] = useState(false);
     const { clubs } = useClubs();
+
+    const filteredEvents = upcomingEvents.filter((event) =>
+        event.event_name?.toLowerCase().includes(eventSearchQuery.toLowerCase()),
+    );
 
     React.useEffect(() => {
         if (step === 3 && paymentOption === 'temporary' && upcomingEvents.length === 0) {
             const fetchEvents = async () => {
                 setEventsLoading(true);
                 try {
-                    const { data: events, error } = await supabase
-                        .from('calendar')
-                        .select('id, event_name, start_date')
-                        .gte('start_date', new Date().toISOString())
-                        .order('start_date', { ascending: true });
-
-                    if (!error && events) {
-                        setUpcomingEvents(events);
-                    }
+                    const events = await fetchUpcomingCalendarEvents(supabase);
+                    setUpcomingEvents(events);
                 } catch (e) {
                     console.error("Failed to load events", e);
                 } finally {
@@ -104,6 +103,8 @@ const AuthModal = ({ isOpen, onClose }) => {
         setAcceptTerms(false);
         setPaymentOption('pay_now');
         setSelectedEventId('');
+        setEventSearchQuery('');
+        setUpcomingEvents([]);
         setRegion('');
         setRacketBrand('');
         setCustomRacketBrand('');
@@ -832,19 +833,109 @@ const AuthModal = ({ isOpen, onClose }) => {
                                                                         <div className="w-5 h-5 border-2 border-padel-green border-t-transparent rounded-full animate-spin mx-auto"></div>
                                                                     </div>
                                                                 ) : upcomingEvents?.length > 0 ? (
-                                                                    <select
-                                                                        value={selectedEventId}
-                                                                        onChange={(e) => setSelectedEventId(e.target.value)}
-                                                                        className="w-full bg-black/50 border border-white/10 rounded-xl p-3 text-white text-sm focus:border-padel-green outline-none"
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                    >
-                                                                        <option value="">Select an upcoming event...</option>
-                                                                        {upcomingEvents.map((event, i) => (
-                                                                            <option key={event.id || i} value={event.id}>
-                                                                                {event.event_name} ({new Date(event.start_date).toLocaleDateString()})
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
+                                                                    selectedEventId ? (
+                                                                        (() => {
+                                                                            const selectedEvent = upcomingEvents.find(
+                                                                                (e) => e.id?.toString() === selectedEventId.toString(),
+                                                                            );
+                                                                            if (!selectedEvent) return null;
+                                                                            return (
+                                                                                <div className="bg-black/40 border border-padel-green/30 rounded-xl p-4 flex items-center justify-between gap-3">
+                                                                                    <div className="flex-1 min-w-0 text-left">
+                                                                                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-padel-green/10 border border-padel-green/20 text-[9px] font-bold text-padel-green uppercase tracking-wide mb-1.5">
+                                                                                            <Check size={10} className="stroke-[3]" /> Selected Event
+                                                                                        </span>
+                                                                                        <h4 className="text-white font-bold text-sm truncate">{selectedEvent.event_name}</h4>
+                                                                                        <p className="text-gray-400 text-[10px] mt-1 flex items-center gap-1">
+                                                                                            <Calendar size={12} className="text-gray-500" />
+                                                                                            {new Date(selectedEvent.start_date).toLocaleDateString(undefined, {
+                                                                                                day: 'numeric',
+                                                                                                month: 'short',
+                                                                                                year: 'numeric',
+                                                                                            })}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setSelectedEventId('');
+                                                                                            setEventSearchQuery('');
+                                                                                        }}
+                                                                                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-bold text-white transition-all whitespace-nowrap"
+                                                                                    >
+                                                                                        Change
+                                                                                    </button>
+                                                                                </div>
+                                                                            );
+                                                                        })()
+                                                                    ) : (
+                                                                        <div className="flex flex-col gap-2.5">
+                                                                            <div className="relative">
+                                                                                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                                                                                <input
+                                                                                    type="text"
+                                                                                    placeholder="Type to search events..."
+                                                                                    value={eventSearchQuery}
+                                                                                    onChange={(e) => setEventSearchQuery(e.target.value)}
+                                                                                    className="w-full bg-black/50 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white text-sm focus:border-padel-green outline-none placeholder:text-gray-500"
+                                                                                    onClick={(e) => e.stopPropagation()}
+                                                                                    autoFocus
+                                                                                />
+                                                                                {eventSearchQuery && (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            setEventSearchQuery('');
+                                                                                        }}
+                                                                                        className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 bg-white/5 hover:bg-white/10 rounded text-gray-400 hover:text-white"
+                                                                                    >
+                                                                                        <X size={14} />
+                                                                                    </button>
+                                                                                )}
+                                                                            </div>
+                                                                            <div className="max-h-[160px] overflow-y-auto flex flex-col gap-1.5 pr-0.5 custom-scrollbar">
+                                                                                {filteredEvents.length > 0 ? (
+                                                                                    filteredEvents.map((event, i) => (
+                                                                                        <button
+                                                                                            key={event.id || i}
+                                                                                            type="button"
+                                                                                            onClick={(e) => {
+                                                                                                e.stopPropagation();
+                                                                                                setSelectedEventId(event.id.toString());
+                                                                                                setEventSearchQuery('');
+                                                                                            }}
+                                                                                            className="w-full flex items-center justify-between p-3 rounded-xl border text-left transition-all group bg-black/30 border-white/5 hover:border-padel-green/30 hover:bg-padel-green/5 cursor-pointer"
+                                                                                        >
+                                                                                            <div className="min-w-0 flex-1 pr-3">
+                                                                                                <p className="font-bold text-xs truncate text-white group-hover:text-padel-green transition-colors">
+                                                                                                    {event.event_name}
+                                                                                                </p>
+                                                                                                <p className="text-[9px] text-gray-500 font-medium uppercase tracking-wider mt-0.5 flex items-center gap-1">
+                                                                                                    <Calendar size={10} className="text-gray-600" />
+                                                                                                    {new Date(event.start_date).toLocaleDateString(undefined, {
+                                                                                                        day: 'numeric',
+                                                                                                        month: 'short',
+                                                                                                        year: 'numeric',
+                                                                                                    })}
+                                                                                                </p>
+                                                                                            </div>
+                                                                                            <span className="inline-flex items-center gap-0.5 text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-padel-green/10 text-padel-green border border-padel-green/20 group-hover:bg-padel-green group-hover:text-black transition-all">
+                                                                                                Select <ChevronRight size={10} />
+                                                                                            </span>
+                                                                                        </button>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <div className="py-6 text-center text-gray-500 bg-black/20 rounded-xl border border-white/5">
+                                                                                        <Search className="w-5 h-5 mx-auto mb-1.5 opacity-20 text-padel-green" />
+                                                                                        <p className="text-[10px] font-medium text-white/60">No matching events found</p>
+                                                                                        <p className="text-[8px] mt-0.5 text-gray-600">Try typing a different name</p>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )
                                                                 ) : (
                                                                     <p className="text-[10px] text-yellow-500 bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/20 text-left">No upcoming events found. You must wait for an event to be posted to buy a temporary license.</p>
                                                                 )}
