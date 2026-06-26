@@ -378,6 +378,9 @@ const EventDetails = () => {
     const [participants, setParticipants] = useState({});
     const [playerDivisions, setPlayerDivisions] = useState([]);
     const [fourMPlayers, setFourMPlayers] = useState({});
+    // Total registered entries for manual events (incl. pending payment, counts
+    // each player's division entry separately; excludes withdrawn).
+    const [manualEntriesCount, setManualEntriesCount] = useState(0);
     const [globalRankings, setGlobalRankings] = useState(new Map());
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
@@ -401,6 +404,28 @@ const EventDetails = () => {
         });
         return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
     }, [participants, event?.registered_players, event?.is_manual]);
+
+    // Total registered entries for manual events — counts every active
+    // registration row (incl. pending payment; each player's division entry
+    // separately), matching the admin "Entries" total.
+    useEffect(() => {
+        if (!event?.id || !event?.is_manual) { setManualEntriesCount(0); return; }
+        let cancelled = false;
+        const countEntries = async () => {
+            const { count } = await supabase
+                .from('event_registrations')
+                .select('id', { count: 'exact', head: true })
+                .eq('event_id', event.id)
+                .neq('status', 'withdrawn');
+            if (!cancelled) setManualEntriesCount(count || 0);
+        };
+        countEntries();
+        window.addEventListener('4m:registrations-changed', countEntries);
+        return () => {
+            cancelled = true;
+            window.removeEventListener('4m:registrations-changed', countEntries);
+        };
+    }, [event?.id, event?.is_manual]);
 
     const entryFeeStatLabel = useMemo(() => {
         const fmt = (n) => `R${Number(n).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
@@ -3232,9 +3257,9 @@ const EventDetails = () => {
                                 );
                             })()}
                             {[
-                                { label: 'Players', value: totalPlayersCount, icon: Users },
+                                { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
                                 { label: 'Entry Fee', value: entryFeeStatLabel, icon: CreditCard },
-                                { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Trophy },
+                                { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Layout },
                                 { label: 'Points', value: event.points || '1000', icon: Trophy }
                             ].map(({ label, value, icon: Icon }, idx) => (
                                 <div key={idx} className="flex-1 py-4 flex flex-col items-center justify-center text-center">
