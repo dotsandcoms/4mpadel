@@ -1848,62 +1848,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return data || [];
     };
 
-    const sendPendingRegistrationEmails = async (payUrl) => {
-        const selfName = profile?.name || 'Player';
-        const divisionNames = selectedDivisions.map((d) => d.name).join(', ');
-        const venue = [event.venue, event.city].filter(Boolean).join(', ');
-
-        await sendEmail(userEmail, 'registration_pending_payment', {
-            eventId: event.id,
-            playerName: selfName,
-            eventName: event.event_name,
-            division: divisionNames,
-            partnerName: hasPartner ? (primaryPartner.partnerName || '') : '',
-            eventDates: event.event_dates || '',
-            venue,
-            amountDue: fmtR(total),
-            payUrl,
-            eventUrl,
-            recipientRole: 'registrant',
-        });
-
-        const partnersNotified = new Set();
-        for (const d of selectedDivisions) {
-            const sel = selected[d.id];
-            if (!sel?.partnerEmail) continue;
-            const partnerEmail = sel.partnerEmail.toLowerCase();
-            if (partnersNotified.has(partnerEmail)) continue;
-            partnersNotified.add(partnerEmail);
-
-            const userPaysForPartner = !!sel.payForPartner;
-            let partnerAmountDue = 0;
-            if (!userPaysForPartner) {
-                for (const div of selectedDivisions) {
-                    const divSel = selected[div.id];
-                    if (divSel?.partnerEmail?.toLowerCase() === partnerEmail && !divSel?.payForPartner) {
-                        partnerAmountDue += Number(div.entry_fee || 0);
-                    }
-                }
-            }
-
-            await sendEmail(sel.partnerEmail, 'registration_pending_payment', {
-                eventId: event.id,
-                playerName: sel.partnerName,
-                inviterName: selfName,
-                eventName: event.event_name,
-                division: divisionNames,
-                eventDates: event.event_dates || '',
-                venue,
-                amountDue: partnerAmountDue > 0 ? fmtR(partnerAmountDue) : fmtR(0),
-                registrantAmountDue: fmtR(total),
-                payUrl: eventUrl,
-                eventUrl,
-                recipientRole: 'partner',
-                userPaysForPartner,
-            });
-        }
-    };
-
     const sendRegistrationEmails = async (savedRows, paid) => {
         const selfName = profile?.name || 'Player';
         const divisionNames = selectedDivisions.map((d) => d.name).join(', ');
@@ -2176,12 +2120,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                 const prep = checkoutPrepRef.current;
                 if (prep?.launcher) {
-                    void sendPendingRegistrationEmails(prep.payUrl).then(() =>
-                        supabase
-                            .from('payments')
-                            .update({ metadata: { ...prep.paymentMetadata, pending_emails_sent: true } })
-                            .eq('reference', prep.reference),
-                    );
                     prep.launcher();
                     return;
                 }
@@ -2201,13 +2139,6 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                         metadata: payload.paymentMetadata,
                     }]);
                     if (insertError) throw insertError;
-
-                    void sendPendingRegistrationEmails(payload.payUrl).then(() =>
-                        supabase
-                            .from('payments')
-                            .update({ metadata: { ...payload.paymentMetadata, pending_emails_sent: true } })
-                            .eq('reference', payload.reference),
-                    );
 
                     await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
                 } catch (err) {
