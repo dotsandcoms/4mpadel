@@ -28,6 +28,9 @@ const STEPS = [
     { id: 5, label: 'Confirmed' },
 ];
 
+/** Incomplete Paystack checkouts older than this are marked abandoned. */
+const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
+
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const fmtRWhole = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -1940,7 +1943,37 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 toast.info('Payment cancelled. You have not been registered.');
             },
         });
-    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess]);
+    }, [userEmail, event.id, launchPaystackCheckout]);
+
+    const expireAbandonedCheckouts = useCallback(async () => {
+        const cutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
+        await supabase
+            .from('payments')
+            .update({ status: 'abandoned' })
+            .eq('event_id', event.id)
+            .eq('status', 'processing')
+            .lt('created_at', cutoff);
+    }, [event.id]);
+
+    useEffect(() => {
+        expireAbandonedCheckouts();
+    }, [expireAbandonedCheckouts]);
+
+    const insertProcessingPayment = useCallback(async (payload) => {
+        await expireAbandonedCheckouts();
+        return supabase.from('payments').insert([{
+            player_id: profile?.id || null,
+            event_id: event.id,
+            amount: payload.amount,
+            currency: 'ZAR',
+            status: 'processing',
+            payment_type: 'event_entry_fee',
+            payment_method: 'paystack',
+            reference: payload.reference,
+            is_test: isPaystackTestMode,
+            metadata: payload.paymentMetadata,
+        }]);
+    }, [event.id, profile?.id, expireAbandonedCheckouts]);
 
     useEffect(() => {
         if (wizardStep !== 4 || total <= 0 || !userEmail || !isPaystackConfigured()) {
@@ -1955,25 +1988,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         const prepareCheckout = async () => {
             const payload = buildManualPaymentPayload();
-            const { error: insertError } = await supabase.from('payments').insert([{
-                player_id: profile?.id || null,
-                event_id: event.id,
-                amount: payload.amount,
-                currency: 'ZAR',
-                status: 'processing',
-                payment_type: 'event_entry_fee',
-                payment_method: 'paystack',
-                reference: payload.reference,
-                is_test: isPaystackTestMode,
-                metadata: payload.paymentMetadata,
-            }]);
 
             if (cancelled) return;
-            if (insertError) {
-                console.error('Payment prep insert failed:', insertError);
-                setCheckoutPreparing(false);
-                return;
-            }
 
             try {
                 const pop = new PaystackPop();
@@ -2041,6 +2057,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
         if (payment.status === 'success') {
             toast.info('This payment has already been completed');
+            return;
+        }
+        if (payment.status === 'abandoned') {
+            toast.error('This payment link has expired. Please start registration again.');
             return;
         }
         const meta = typeof payment.metadata === 'string'
@@ -2119,26 +2139,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 paymentRetryRef.current = false;
 
                 const prep = checkoutPrepRef.current;
-                if (prep?.launcher) {
-                    prep.launcher();
-                    return;
-                }
+                const payload = prep?.reference ? prep : buildManualPaymentPayload();
 
                 try {
-                    const payload = buildManualPaymentPayload();
-                    const { error: insertError } = await supabase.from('payments').insert([{
-                        player_id: profile?.id || null,
-                        event_id: event.id,
-                        amount: payload.amount,
-                        currency: 'ZAR',
-                        status: 'processing',
-                        payment_type: 'event_entry_fee',
-                        payment_method: 'paystack',
-                        reference: payload.reference,
-                        is_test: isPaystackTestMode,
-                        metadata: payload.paymentMetadata,
-                    }]);
+                    const { error: insertError } = await insertProcessingPayment(payload);
                     if (insertError) throw insertError;
+
+                    if (prep?.launcher) {
+                        prep.launcher();
+                        return;
+                    }
 
                     await launchPaystackCheckout(payload.reference, payload.amount, payload.paymentMetadata);
                 } catch (err) {

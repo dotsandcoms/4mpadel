@@ -8,6 +8,9 @@ import { supabase } from '../../supabaseClient';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
+const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
+const ACTIVE_CHECKOUT_WINDOW_MS = 60 * 60 * 1000;
+
 const PAYMENT_METHOD_LABELS = {
     paystack: 'Paystack',
     manual: 'Manual',
@@ -43,6 +46,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const load = useCallback(async () => {
         if (!event?.id) return;
         setLoading(true);
+
+        const abandonCutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
+        await supabase
+            .from('payments')
+            .update({ status: 'abandoned' })
+            .eq('event_id', event.id)
+            .eq('status', 'processing')
+            .lt('created_at', abandonCutoff);
+
         const [regRes, payRes, divRes] = await Promise.all([
             supabase.from('event_registrations').select('*').eq('event_id', event.id).order('created_at', { ascending: false }),
             supabase.from('payments').select('*').eq('event_id', event.id),
@@ -81,8 +93,25 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
         const paid = active.filter((r) => r.payment_status === 'paid').length;
         const pending = active.filter((r) => r.payment_status !== 'paid').length;
         const revenue = payments.filter((p) => p.status === 'success').reduce((s, p) => s + Number(p.amount || 0), 0);
-        const processing = payments.filter((p) => p.status === 'processing').reduce((s, p) => s + Number(p.amount || 0), 0);
-        return { total: active.length, paid, pending, revenue, processing, withdrawn: registrations.length - active.length };
+        const now = Date.now();
+        const activeCheckouts = payments.filter((p) => {
+            if (p.status !== 'processing') return false;
+            return now - new Date(p.created_at).getTime() <= ACTIVE_CHECKOUT_WINDOW_MS;
+        });
+        const activeCheckoutTotal = activeCheckouts.reduce((s, p) => s + Number(p.amount || 0), 0);
+        const abandonedCheckouts = payments.filter((p) => p.status === 'abandoned');
+        const abandonedCheckoutTotal = abandonedCheckouts.reduce((s, p) => s + Number(p.amount || 0), 0);
+        return {
+            total: active.length,
+            paid,
+            pending,
+            revenue,
+            activeCheckoutTotal,
+            activeCheckoutCount: activeCheckouts.length,
+            abandonedCheckoutTotal,
+            abandonedCheckoutCount: abandonedCheckouts.length,
+            withdrawn: registrations.length - active.length,
+        };
     }, [registrations, payments]);
 
     const filtered = useMemo(() => {
@@ -353,9 +382,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                         )}
                     </div>
 
-                    {stats.processing > 0 && (
-                        <div className="px-6 py-2 border-t border-white/5 text-[11px] text-amber-400">
-                            {fmtR(stats.processing)} in payments awaiting webhook confirmation.
+                    {(stats.activeCheckoutCount > 0 || stats.abandonedCheckoutCount > 0) && (
+                        <div className="px-6 py-2 border-t border-white/5 text-[11px] space-y-1">
+                            {stats.activeCheckoutCount > 0 && (
+                                <p className="text-amber-400">
+                                    {fmtR(stats.activeCheckoutTotal)} in {stats.activeCheckoutCount} active checkout{stats.activeCheckoutCount === 1 ? '' : 's'} (last hour, not yet paid).
+                                </p>
+                            )}
+                            {stats.abandonedCheckoutCount > 0 && (
+                                <p className="text-gray-500">
+                                    {stats.abandonedCheckoutCount} abandoned checkout{stats.abandonedCheckoutCount === 1 ? '' : 's'} ({fmtR(stats.abandonedCheckoutTotal)} — not charged).
+                                </p>
+                            )}
                         </div>
                     )}
                 </motion.div>
