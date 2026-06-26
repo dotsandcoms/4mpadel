@@ -10,6 +10,7 @@ import { useRankedin } from '../../hooks/useRankedin';
 import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
+import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 
 const getParticipantEntryFee = (p, event) => {
     if (p?._divisionFee != null && p._divisionFee !== '') {
@@ -421,18 +422,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 // Try to link players profiles by email
                 const emails = [...new Set(mapped.map(m => m.email).filter(Boolean))];
                 if (emails.length > 0) {
-                    const { data: profiles } = await supabase
-                        .from('players')
-                        .select('id, name, email, contact_number, license_type, paid_registration, temporary_licenses(id, event_id)')
-                        .in('email', emails);
-
-                    const profileByEmail = {};
-                    (profiles || []).forEach(p => {
-                        profileByEmail[(p.email || '').toLowerCase()] = p;
-                    });
+                    const profiles = await fetchPlayersByEmails(supabase, emails);
+                    const profileByEmail = buildPlayersByEmailMap(profiles);
 
                     mapped.forEach(m => {
-                        const profile = profileByEmail[(m.email || '').toLowerCase()];
+                        const profile = profileByEmail.get((m.email || '').toLowerCase().trim());
                         if (profile) {
                             m.players = profile;
                             m.profile_id = profile.id;

@@ -5,6 +5,7 @@ import {
     X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -24,14 +25,7 @@ const labelPaymentMethod = (method) => {
     return PAYMENT_METHOD_LABELS[key] || method;
 };
 
-const buildPlayersByEmail = (players = []) => {
-    const map = new Map();
-    for (const p of players) {
-        const key = (p.email || '').toLowerCase();
-        if (key) map.set(key, p);
-    }
-    return map;
-};
+const buildPlayersByEmail = buildPlayersByEmailMap;
 
 const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const [registrations, setRegistrations] = useState([]);
@@ -65,13 +59,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
         setPayments(payRes.data || []);
         setDivisions(divRes.data || []);
 
-        const emails = [...new Set(regs.map((r) => (r.email || '').toLowerCase()).filter(Boolean))];
+        const emails = [...new Set(regs.map((r) => r.email).filter(Boolean))];
         if (emails.length > 0) {
-            const { data: players } = await supabase
-                .from('players')
-                .select('id, email, license_type, paid_registration, temporary_licenses(event_id, event_date)')
-                .in('email', emails);
-            setPlayersByEmail(buildPlayersByEmail(players || []));
+            const players = await fetchPlayersByEmails(
+                supabase,
+                emails,
+                'id, email, license_type, paid_registration, temporary_licenses(event_id, event_date)',
+            );
+            setPlayersByEmail(buildPlayersByEmail(players));
         } else {
             setPlayersByEmail(new Map());
         }
