@@ -348,8 +348,15 @@ export async function transferBookingOwnership(
 // ----------------------------------------------------------------------------
 
 /**
- * Delete the temporary license for (player, event) and revert the player's
- * license_type to 'none' only if no other temp/full license remains.
+ * Delete the temporary license for (player, event) and, if the player has no
+ * other temporary license remaining and no full annual license, reset their
+ * profile licence status back to "none".
+ *
+ * Resets BOTH license_type AND paid_registration: buying a temp license sets
+ * paid_registration = true (in confirm-manual-payment), and the booking flow's
+ * license check treats paid_registration === true as an active licence even when
+ * license_type is 'none'. Leaving it set would make a refunded/cancelled licence
+ * still read as active on re-booking.
  */
 export async function cancelEventTempLicense(
     supabaseAdmin: SupabaseClient,
@@ -369,17 +376,19 @@ export async function cancelEventTempLicense(
         .eq('player_id', player.id)
         .eq('event_id', eventId);
 
-    // Any other temp licenses still active for this player?
+    // Keep a full annual licence untouched.
+    if (String(player.license_type || '').toLowerCase() === 'full') return;
+
+    // Any other temporary licences still on file for this player?
     const { count: tempCount } = await supabaseAdmin
         .from('temporary_licenses')
         .select('id', { count: 'exact', head: true })
         .eq('player_id', player.id);
 
-    // Don't touch a full annual license.
-    if ((tempCount || 0) === 0 && player.license_type === 'temporary') {
+    if ((tempCount || 0) === 0) {
         await supabaseAdmin
             .from('players')
-            .update({ license_type: 'none' })
+            .update({ license_type: 'none', paid_registration: false })
             .eq('id', player.id);
     }
 }
