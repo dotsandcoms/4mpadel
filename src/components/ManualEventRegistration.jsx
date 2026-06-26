@@ -1943,7 +1943,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 toast.info('Payment cancelled. You have not been registered.');
             },
         });
-    }, [userEmail, event.id, launchPaystackCheckout]);
+    }, [userEmail, event.id, event.event_name, profile?.name, displayProfile?.name, handlePaymentSuccess]);
 
     const expireAbandonedCheckouts = useCallback(async () => {
         const cutoff = new Date(Date.now() - ABANDONED_CHECKOUT_AFTER_MS).toISOString();
