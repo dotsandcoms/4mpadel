@@ -2906,11 +2906,6 @@ const EventDetails = () => {
                             >
                                 <Share2 className="w-4 h-4" />
                             </button>
-                            <button
-                                className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center text-white hover:bg-white/40 transition-all shadow-lg cursor-pointer"
-                            >
-                                <Heart className="w-4 h-4" />
-                            </button>
                         </div>
                     </div>
                 </div>
