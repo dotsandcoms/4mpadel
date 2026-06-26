@@ -394,6 +394,82 @@ export async function cancelEventTempLicense(
 }
 
 // ----------------------------------------------------------------------------
+// 4b. switchRegistrationDivision
+// ----------------------------------------------------------------------------
+
+/**
+ * Move a registration from its current division to `target` (a solo move): the
+ * partner, if any, is unlinked and stays in the original division. The original
+ * payment's entry cover is rewritten from the old division to the new one so the
+ * entry stays "paid" and future refunds resolve to the new division.
+ *
+ * Fee differences (top-up charge / delta refund) are handled by the caller; this
+ * helper only performs the move + cover rewrite.
+ */
+export async function switchRegistrationDivision(
+    supabaseAdmin: SupabaseClient,
+    reg: RegistrationRow,
+    target: { id: string; name: string; fee: number },
+    payments: PaymentRow[],
+): Promise<void> {
+    const oldDivision = String(reg.division || '');
+    const regEmail = normEmail(reg.email);
+
+    // 1. Unlink partner relationships in the OLD division (solo move).
+    if (reg.partner_email) {
+        await supabaseAdmin
+            .from('event_registrations')
+            .update({ partner_name: null, partner_email: null, partner_payment_status: null })
+            .eq('event_id', reg.event_id)
+            .eq('division', oldDivision)
+            .ilike('email', reg.partner_email)
+            .eq('status', 'registered');
+    }
+    await supabaseAdmin
+        .from('event_registrations')
+        .update({ partner_name: null, partner_email: null, partner_payment_status: null })
+        .eq('event_id', reg.event_id)
+        .eq('division', oldDivision)
+        .ilike('partner_email', reg.email)
+        .eq('status', 'registered');
+
+    // 2. Move the registration row to the new division (solo, partner cleared).
+    const { error } = await supabaseAdmin
+        .from('event_registrations')
+        .update({
+            division_id: target.id,
+            division: target.name,
+            partner_name: null,
+            partner_email: null,
+            partner_payment_status: null,
+        })
+        .eq('id', reg.id);
+    if (error) throw error;
+
+    // 3. Rewrite the original payment's entry cover from old -> new division.
+    for (const payment of payments) {
+        if (payment.status !== 'success') continue;
+        const meta = parseMeta(payment.metadata);
+        const covers = Array.isArray(meta.covers) ? (meta.covers as Cover[]) : [];
+        const idx = covers.findIndex(
+            (c) =>
+                c.type === 'entry' &&
+                normEmail(c.email) === regEmail &&
+                String(c.division || '') === oldDivision,
+        );
+        if (idx === -1) continue;
+        const newCovers = covers.map((c, i) => (i === idx ? { ...c, division: target.name } : c));
+        const fees = { ...((meta.division_entry_fees as Record<string, number>) || {}) };
+        fees[target.name] = target.fee;
+        await supabaseAdmin
+            .from('payments')
+            .update({ metadata: { ...meta, covers: newCovers, division_entry_fees: fees } })
+            .eq('id', payment.id);
+        break; // one entry cover moved
+    }
+}
+
+// ----------------------------------------------------------------------------
 // 5. checkRefundEligibility
 // ----------------------------------------------------------------------------
 

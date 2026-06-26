@@ -1,6 +1,10 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getPaystackSecretForPayment } from './paystack.ts';
+import {
+    getPaystackSecretForPayment,
+    resolvePaystackVerifySecrets,
+    verifyPaystackReference,
+} from './paystack.ts';
 import {
     applyRegistrationWithdrawal,
     cancelEventTempLicense,
@@ -8,6 +12,7 @@ import {
     resolveIsAdmin,
     resolveRefundableItems,
     roundRands,
+    switchRegistrationDivision,
     toPaystackCents,
     transferBookingOwnership,
     type PaymentRow,
@@ -23,7 +28,7 @@ const corsHeaders = {
 const fmtR = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 const normEmail = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
-type Action = 'withdraw' | 'withdraw_all' | 'remove_partner' | 'admin_remove';
+type Action = 'withdraw' | 'withdraw_all' | 'remove_partner' | 'admin_remove' | 'switch_division';
 
 type RefundReason =
     | 'owner_withdraw'
@@ -213,6 +218,184 @@ async function processRegistration(
     };
 }
 
+function parseMeta(raw: unknown): Record<string, unknown> {
+    if (!raw) return {};
+    if (typeof raw === 'string') { try { return JSON.parse(raw); } catch { return {}; } }
+    if (typeof raw === 'object') return raw as Record<string, unknown>;
+    return {};
+}
+
+function divisionClosed(div: Record<string, unknown>, event: Record<string, unknown>): boolean {
+    const closeAt = (div?.entries_close_at as string) || (event?.registration_closes_at as string);
+    if (!closeAt) return false;
+    return new Date(closeAt).getTime() < Date.now();
+}
+
+/**
+ * Move a paid registration to another division instead of refunding+rebooking.
+ * Handles equal fee (free move), lower fee (refund the difference), and higher
+ * fee (requires a verified Paystack top-up of the difference). Solo move:
+ * the partner is unlinked and stays in the original division.
+ */
+async function handleSwitchDivision(
+    supabaseAdmin: SupabaseClient,
+    opts: {
+        registrationId?: string;
+        targetDivisionId?: string;
+        topUpReference?: string;
+        callerEmail: string;
+        isAdmin: boolean;
+        json: (status: number, body: unknown) => Response;
+    },
+): Promise<Response> {
+    const { registrationId, targetDivisionId, topUpReference, callerEmail, isAdmin, json } = opts;
+    if (!registrationId || !targetDivisionId) {
+        return json(400, { error: 'registration_id and target_division_id are required' });
+    }
+
+    const { data: reg } = await supabaseAdmin
+        .from('event_registrations')
+        .select('*')
+        .eq('id', registrationId)
+        .maybeSingle();
+    if (!reg) return json(404, { error: 'Registration not found' });
+    if (reg.status === 'withdrawn') return json(400, { error: 'Registration already withdrawn' });
+
+    const isOwnerOrSelf = normEmail(reg.registered_by) === callerEmail || normEmail(reg.email) === callerEmail;
+    if (!isAdmin && !isOwnerOrSelf) return json(403, { error: 'Not authorized for this registration' });
+
+    const eventId = reg.event_id;
+    const [{ data: event }, { data: divisions }] = await Promise.all([
+        supabaseAdmin.from('calendar').select('id, event_name, event_dates, slug, is_manual, registration_closes_at').eq('id', eventId).maybeSingle(),
+        supabaseAdmin.from('tournament_divisions').select('id, name, entry_fee, entries_close_at, is_active, gender').eq('event_id', eventId),
+    ]);
+    if (event?.is_manual === false) return json(400, { error: 'Not a manual event' });
+
+    const divList = divisions || [];
+    const currentDiv = divList.find((d) => d.id === reg.division_id || d.name === reg.division);
+    const targetDiv = divList.find((d) => d.id === targetDivisionId);
+    if (!targetDiv) return json(404, { error: 'Target division not found' });
+    if (targetDiv.is_active === false) return json(400, { error: 'Target division is not active' });
+    if (divisionClosed(targetDiv, event || {})) return json(400, { error: 'Target division entries have closed' });
+
+    // Eligibility: must not already be registered in the target division.
+    const { data: existingInTarget } = await supabaseAdmin
+        .from('event_registrations')
+        .select('id')
+        .eq('event_id', eventId)
+        .ilike('email', reg.email)
+        .eq('division', targetDiv.name)
+        .neq('status', 'withdrawn')
+        .maybeSingle();
+    if (existingInTarget) return json(400, { error: 'You are already entered in that division' });
+
+    const oldFee = Number(currentDiv?.entry_fee || 0);
+    const newFee = Number(targetDiv.entry_fee || 0);
+    const delta = roundRands(newFee - oldFee);
+
+    const { data: payments } = await supabaseAdmin.from('payments').select('*').eq('event_id', eventId);
+    const successPayments = (payments || []).filter((p) => p.status === 'success') as PaymentRow[];
+
+    let refundedRands = 0;
+    let chargedRands = 0;
+
+    // ---- Higher fee: verify the top-up payment before moving ----
+    if (delta > 0) {
+        if (!topUpReference) return json(402, { error: 'top_up_required', delta, message: 'A top-up payment is required for this division.' });
+        const { data: topPay } = await supabaseAdmin.from('payments').select('*').eq('reference', topUpReference).maybeSingle();
+        if (!topPay || Number(topPay.event_id) !== Number(eventId)) return json(404, { error: 'Top-up payment not found' });
+        if (parseMeta(topPay.metadata).source !== 'division_switch') return json(400, { error: 'Invalid top-up payment' });
+
+        if (topPay.status !== 'success') {
+            const { secrets, configError } = resolvePaystackVerifySecrets(topPay);
+            if (secrets.length === 0) return json(500, { error: configError || 'Payment verification not configured' });
+            const verification = await verifyPaystackReference(topUpReference, secrets);
+            if (!verification.ok) return json(200, { switched: false, retry: true, error: 'Top-up not verified', status: verification.status });
+            await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', topPay.id);
+        }
+        if (Number(topPay.amount) + 0.01 < delta) return json(400, { error: 'Top-up amount is less than the fee difference' });
+        chargedRands = Number(topPay.amount);
+        if (!successPayments.some((p) => p.id === topPay.id)) successPayments.push({ ...topPay, status: 'success' } as PaymentRow);
+    }
+
+    // ---- Lower fee: refund the difference from the original covering payment ----
+    if (delta < 0) {
+        const refundAmount = roundRands(Math.abs(delta));
+        const regEmail = normEmail(reg.email);
+        const oldName = String(reg.division || '');
+        const coveringPayment = successPayments.find((p) => {
+            const covers = parseMeta(p.metadata).covers;
+            return Array.isArray(covers) && covers.some((c: Record<string, unknown>) =>
+                c.type === 'entry' && normEmail(c.email) === regEmail && String(c.division || '') === oldName);
+        });
+        if (coveringPayment) {
+            const method = String((coveringPayment as unknown as Record<string, unknown>).payment_method || 'paystack');
+            const isCash = method === 'cash' || method === 'manual';
+            const { data: refundRow } = await supabaseAdmin.from('payment_refunds').insert([{
+                payment_id: coveringPayment.id,
+                event_registration_id: reg.id,
+                paystack_reference: coveringPayment.reference,
+                amount: refundAmount,
+                currency: 'ZAR',
+                status: isCash ? 'processed' : 'pending',
+                reason: 'division_switch',
+                initiated_by: isAdmin ? `admin:${callerEmail}` : callerEmail,
+                metadata: { cover_type: 'entry', kind: 'division_switch_delta', method },
+                processed_at: isCash ? new Date().toISOString() : null,
+            }]).select('id').maybeSingle();
+
+            if (!isCash) {
+                const secret = getPaystackSecretForPayment(coveringPayment as unknown as Record<string, unknown>);
+                const r = await paystackRefund(secret, coveringPayment.reference, toPaystackCents(refundAmount));
+                await supabaseAdmin.from('payment_refunds')
+                    .update({ paystack_refund_id: r.refundId, status: r.ok ? 'processing' : 'failed' })
+                    .eq('id', refundRow?.id);
+                if (r.ok) refundedRands = refundAmount;
+            } else {
+                refundedRands = refundAmount;
+            }
+        }
+    }
+
+    // ---- Perform the move ----
+    await switchRegistrationDivision(
+        supabaseAdmin,
+        reg as RegistrationRow,
+        { id: targetDiv.id, name: targetDiv.name, fee: newFee },
+        successPayments,
+    );
+
+    // ---- Confirmation email ----
+    const eventUrl = `https://4mpadel.co.za/calendar/${event?.slug || eventId}`;
+    try {
+        await sendEmailViaEdge({
+            to: reg.email,
+            template: 'event_registration',
+            variables: {
+                eventId,
+                playerName: reg.full_name || 'Player',
+                eventName: event?.event_name || 'Tournament',
+                division: targetDiv.name,
+                partnerName: 'TBD',
+                eventDates: event?.event_dates || '',
+                paid: true,
+                amount: fmtR(newFee),
+                amountDue: 'R 0.00',
+                eventUrl,
+            },
+        });
+    } catch (_e) { /* email best-effort */ }
+
+    return json(200, {
+        switched: true,
+        from_division: reg.division,
+        to_division: targetDiv.name,
+        delta,
+        charged_rands: chargedRands,
+        refunded_rands: refundedRands,
+    });
+}
+
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -232,12 +415,14 @@ serve(async (req: Request) => {
         const authHeader = req.headers.get('Authorization');
         if (!authHeader) return json(401, { error: 'Unauthorized' });
 
-        const { registration_id, action, event_id, skip_paystack, no_refund } = await req.json() as {
+        const { registration_id, action, event_id, skip_paystack, no_refund, target_division_id, top_up_reference } = await req.json() as {
             registration_id?: string;
             action?: Action;
             event_id?: string;
             skip_paystack?: boolean;
             no_refund?: boolean;
+            target_division_id?: string;
+            top_up_reference?: string;
         };
         if (!action) return json(400, { error: 'Missing action' });
 
@@ -257,6 +442,19 @@ serve(async (req: Request) => {
 
         if (action === 'admin_remove' && !isAdmin) {
             return json(403, { error: 'Admin only' });
+        }
+
+        // ===== Division switch (move the entry instead of refunding) =====
+        if (action === 'switch_division') {
+            const result = await handleSwitchDivision(supabaseAdmin, {
+                registrationId: registration_id,
+                targetDivisionId: target_division_id,
+                topUpReference: top_up_reference,
+                callerEmail,
+                isAdmin,
+                json,
+            });
+            return result;
         }
 
         // ----- Load the target registration(s) -----

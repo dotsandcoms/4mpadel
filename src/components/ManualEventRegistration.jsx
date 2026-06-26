@@ -308,6 +308,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [withdrawAll, setWithdrawAll] = useState(false);
     const [removePartnerTarget, setRemovePartnerTarget] = useState(null);
     const [removingPartner, setRemovingPartner] = useState(false);
+    const [switchMode, setSwitchMode] = useState(false);
+    const [switchTargetDivId, setSwitchTargetDivId] = useState('');
+    const [switching, setSwitching] = useState(false);
 
     const [selected, setSelected] = useState({});
     const [hasPartner, setHasPartner] = useState(false);
@@ -2301,6 +2304,119 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
+    // Divisions a withdrawing player can switch their paid entry into instead of
+    // refunding: open, active, not already entered, gender-matched, not current.
+    const switchEligibleDivisions = useMemo(() => {
+        if (!withdrawTarget) return [];
+        const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
+        return divisions.filter((d) => {
+            if (cur && d.id === cur.id) return false;          // not the current division
+            if (d.is_active === false) return false;            // not disabled divisions
+            if (isClosed(d, event)) return false;               // not closed for entries
+            if (registeredDivisionIds.has(d.id)) return false;  // not already entered
+            return true;
+        });
+    }, [withdrawTarget, divisions, event, registeredDivisionIds]);
+
+    const finishSwitch = () => {
+        setSwitching(false);
+        setSwitchMode(false);
+        setSwitchTargetDivId('');
+        setWithdrawTarget(null);
+        loadMyRegs();
+        loadDivisionRegs();
+        onParticipantsChange?.();
+    };
+
+    const confirmSwitch = async () => {
+        const reg = withdrawTarget;
+        const targetDiv = divisions.find((d) => d.id === switchTargetDivId);
+        if (!reg || !targetDiv || switching) return;
+
+        const currentDiv = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+        const oldFee = Number(currentDiv?.entry_fee || 0);
+        const newFee = Number(targetDiv.entry_fee || 0);
+        const delta = Math.round((newFee - oldFee) * 100) / 100;
+
+        setSwitching(true);
+        try {
+            if (delta > 0) {
+                if (!isPaystackConfigured()) { toast.error('Payments not configured'); setSwitching(false); return; }
+                const reference = `SWITCH-${String(reg.id).slice(0, 8)}-${Date.now()}`;
+                const metadata = {
+                    source: 'division_switch',
+                    registration_id: reg.id,
+                    event_id: event.id,
+                    event_name: event.event_name,
+                    target_division_id: targetDiv.id,
+                    target_division: targetDiv.name,
+                    from_division: reg.division,
+                    registrant_email: userEmail,
+                    registrant_name: profile?.name,
+                    reference,
+                };
+                const { error: payErr } = await supabase.from('payments').insert([{
+                    player_id: profile?.id || null,
+                    event_id: event.id,
+                    amount: delta,
+                    currency: 'ZAR',
+                    status: 'processing',
+                    payment_type: 'event_entry_fee',
+                    payment_method: 'paystack',
+                    reference,
+                    is_test: isPaystackTestMode,
+                    metadata,
+                }]);
+                if (payErr) throw payErr;
+
+                const pop = new PaystackPop();
+                const cfg = buildPaystackCheckoutConfig({
+                    reference, email: userEmail, amount: delta,
+                    fullName: profile?.name || displayProfile?.name, metadata,
+                });
+                await pop.checkout({
+                    ...cfg,
+                    onSuccess: async (response) => {
+                        try {
+                            const paidRef = resolvePaystackReference(response, reference);
+                            await invokePaystackRefund({
+                                action: 'switch_division',
+                                registration_id: reg.id,
+                                target_division_id: targetDiv.id,
+                                top_up_reference: paidRef,
+                            });
+                            toast.success(`Switched to ${targetDiv.name}`);
+                            finishSwitch();
+                        } catch (err) {
+                            console.error('Switch finalize failed:', err);
+                            toast.error(err.message || 'Payment taken but switch failed — contact support.');
+                            setSwitching(false);
+                        }
+                    },
+                    onCancel: () => {
+                        setSwitching(false);
+                        toast.info('Payment cancelled — division not changed.');
+                    },
+                });
+            } else {
+                const res = await invokePaystackRefund({
+                    action: 'switch_division',
+                    registration_id: reg.id,
+                    target_division_id: targetDiv.id,
+                });
+                const refunded = Number(res?.refunded_rands || 0);
+                toast.success(refunded > 0
+                    ? `Switched to ${targetDiv.name} — R ${refunded.toLocaleString('en-ZA')} difference refunded`
+                    : `Switched to ${targetDiv.name}`);
+                finishSwitch();
+            }
+        } catch (err) {
+            console.error('Switch division failed:', err);
+            toast.error(err.message || 'Failed to switch division');
+            setSwitching(false);
+        }
+    };
+
     const goNext = () => {
         if (wizardMode === 'addPartner' && wizardStep === 2) {
             if (selectedDivisions.length === 0) { toast.error('Division not found'); return; }
@@ -3662,7 +3778,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             showActions={!!reg}
                                             onAddPartner={() => openAddPartnerWizard(reg)}
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
-                                            onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setWithdrawTarget(reg); } : undefined}
+                                            onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onRemovePartner={reg ? () => setRemovePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
                                         />
@@ -3893,7 +4009,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 );
                             })()}
 
-                            {panelEntries.length >= 2 && (
+                            {!switchMode && panelEntries.length >= 2 && (
                                 <label className="mx-6 mt-3 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
                                     <input
                                         type="checkbox"
@@ -3908,24 +4024,82 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </label>
                             )}
 
+                            {withdrawTarget.payment_status === 'paid' && switchEligibleDivisions.length > 0 && !withdrawAll && (
+                                <div className="mx-6 mt-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSwitchMode((v) => !v); setSwitchTargetDivId(''); }}
+                                        disabled={switching || withdrawing}
+                                        className="text-xs font-semibold text-emerald-700 hover:underline disabled:opacity-50"
+                                    >
+                                        {switchMode ? '← Keep my refund instead' : 'Switch to another division instead (keep your payment) →'}
+                                    </button>
+                                    {switchMode && (() => {
+                                        const cur = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
+                                        const oldFee = Number(cur?.entry_fee || 0);
+                                        const tgt = divisions.find((d) => d.id === switchTargetDivId);
+                                        const newFee = Number(tgt?.entry_fee || 0);
+                                        const delta = tgt ? Math.round((newFee - oldFee) * 100) / 100 : 0;
+                                        return (
+                                            <div className="mt-2 space-y-2">
+                                                <select
+                                                    value={switchTargetDivId}
+                                                    onChange={(e) => setSwitchTargetDivId(e.target.value)}
+                                                    disabled={switching}
+                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-slate-900 bg-white outline-none focus:border-emerald-400"
+                                                >
+                                                    <option value="">Choose a division…</option>
+                                                    {switchEligibleDivisions.map((d) => (
+                                                        <option key={d.id} value={d.id}>
+                                                            {d.name} — {fmtRWhole(Number(d.entry_fee || 0))}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                {tgt && (
+                                                    <p className="text-xs text-slate-600 px-1 leading-snug">
+                                                        {delta > 0
+                                                            ? `You'll pay an extra ${fmtRWhole(delta)} to switch to ${tgt.name}.`
+                                                            : delta < 0
+                                                                ? `${fmtRWhole(Math.abs(delta))} difference will be refunded to your original payment method.`
+                                                                : 'Same entry fee — no extra charge, your payment moves with you.'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+
                             <div className="px-6 py-5 flex gap-3">
                                 <button
                                     type="button"
-                                    onClick={() => setWithdrawTarget(null)}
-                                    disabled={withdrawing}
+                                    onClick={() => { setWithdrawTarget(null); setSwitchMode(false); setSwitchTargetDivId(''); }}
+                                    disabled={withdrawing || switching}
                                     className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={confirmWithdraw}
-                                    disabled={withdrawing}
-                                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                                >
-                                    {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                    {withdrawing ? 'Withdrawing…' : (withdrawAll ? 'Withdraw all' : 'Withdraw')}
-                                </button>
+                                {switchMode ? (
+                                    <button
+                                        type="button"
+                                        onClick={confirmSwitch}
+                                        disabled={switching || !switchTargetDivId}
+                                        className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {switching ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                        {switching ? 'Switching…' : 'Switch division'}
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={confirmWithdraw}
+                                        disabled={withdrawing}
+                                        className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                        {withdrawing ? 'Withdrawing…' : (withdrawAll ? 'Withdraw all' : 'Withdraw')}
+                                    </button>
+                                )}
                             </div>
                         </motion.div>
                     </div>
