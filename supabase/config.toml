@@ -25,6 +25,11 @@ enabled = true
 verify_jwt = true
 entrypoint = "./functions/confirm-manual-payment/index.ts"
 
+[functions.paystack-refund]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/paystack-refund/index.ts"
+
 [functions.send-email]
 enabled = true
 verify_jwt = true

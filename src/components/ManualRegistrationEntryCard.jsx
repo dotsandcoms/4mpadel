@@ -41,6 +41,7 @@ const PersonCell = ({ role, name, paid, label }) => (
  * @param {() => void} [props.onAddPartner]
  * @param {() => void} [props.onPay]
  * @param {() => void} [props.onWithdraw]
+ * @param {() => void} [props.onRemovePartner]
  * @param {string} [props.withdrawLabel]
  * @param {boolean} [props.showActions]
  */
@@ -53,6 +54,7 @@ const ManualRegistrationEntryCard = ({
     onAddPartner,
     onPay,
     onWithdraw,
+    onRemovePartner,
     withdrawLabel = 'Withdraw',
     showActions = false,
 }) => {
@@ -105,6 +107,15 @@ const ManualRegistrationEntryCard = ({
                             paid={partnerPaid}
                             label={partnerLabel}
                         />
+                        {showActions && onRemovePartner && entry.isBookingOwner && entry.canWithdraw && (
+                            <button
+                                type="button"
+                                onClick={onRemovePartner}
+                                className="mt-1.5 text-[11px] font-semibold text-red-600 hover:text-red-700 hover:underline"
+                            >
+                                Remove partner
+                            </button>
+                        )}
                     </div>
                 ) : entry.canAddPartner ? (
                     <div className="flex-1 min-w-0 flex items-center">

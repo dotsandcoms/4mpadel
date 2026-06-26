@@ -1095,7 +1095,7 @@ const AuthModal = ({ isOpen, onClose }) => {
                                         <ul className="list-disc list-inside space-y-1 text-gray-400">
                                             <li>You must provide accurate and complete information during registration.</li>
                                             <li>You are responsible for maintaining the confidentiality of your account credentials.</li>
-                                            <li>Registration fees are non-refundable unless otherwise stated.</li>
+                                            <li>Entry fees are automatically refunded if you withdraw before registration closes. After registration closes, refunds are at the organiser's discretion. Paystack processing fees are non-refundable. Annual SAPA licenses are non-refundable.</li>
                                             <li>You agree to participate in good faith and respect other players and organisers.</li>
                                             <li>You consent to your profile information being displayed on the platform for ranking and tournament purposes.</li>
                                             <li>We reserve the right to suspend or remove accounts that violate these terms.</li>

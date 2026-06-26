@@ -130,6 +130,7 @@ async function finalizeManualEventPayment(
                 eventDates: meta.event_dates || '',
                 venue: meta.event_venue || '',
                 paid: true,
+                amount: fmtR(amount),
                 amountDue: 'R 0.00',
                 eventUrl,
             },

@@ -119,6 +119,7 @@ async function finalizeManualEventPayment(
                 eventDates: meta.event_dates || '',
                 venue: meta.event_venue || '',
                 paid: true,
+                amount: fmtR(amount),
                 amountDue: 'R 0.00',
                 eventUrl,
             },
@@ -205,6 +206,102 @@ const corsHeaders = {
 
 const fmtR = (n: number) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
+// ---------------------------------------------------------------------------
+// Refund webhook handling
+// ---------------------------------------------------------------------------
+
+const REFUND_STATUS_BY_EVENT: Record<string, string> = {
+    'refund.pending': 'pending',
+    'refund.processing': 'processing',
+    'refund.processed': 'processed',
+    'refund.failed': 'failed',
+};
+
+/**
+ * Handle refund.* events. Idempotent: matches an existing payment_refunds row
+ * (by paystack_refund_id, else by reference + amount among non-final rows) and
+ * advances its status. On 'processed' it finalizes the registration's
+ * payment_status — guarded so a replay or the client poll cannot double-apply.
+ */
+async function handleRefundEvent(
+    supabaseAdmin: SupabaseClient,
+    event: string,
+    data: Record<string, unknown>,
+): Promise<{ updated: boolean; reason?: string }> {
+    const newStatus = REFUND_STATUS_BY_EVENT[event];
+    if (!newStatus) return { updated: false, reason: 'unknown_refund_event' };
+
+    const refundId = data.id != null ? String(data.id) : null;
+    const transaction = data.transaction as Record<string, unknown> | string | undefined;
+    const reference = String(
+        data.transaction_reference
+        || (typeof transaction === 'object' ? transaction?.reference : transaction)
+        || data.reference
+        || '',
+    );
+    const amountRands = data.amount != null ? Number(data.amount) / 100 : null;
+
+    let row: Record<string, unknown> | null = null;
+
+    if (refundId) {
+        const { data: byId } = await supabaseAdmin
+            .from('payment_refunds')
+            .select('*')
+            .eq('paystack_refund_id', refundId)
+            .maybeSingle();
+        row = byId || null;
+    }
+
+    if (!row && reference) {
+        const { data: candidates } = await supabaseAdmin
+            .from('payment_refunds')
+            .select('*')
+            .eq('paystack_reference', reference)
+            .in('status', ['pending', 'processing']);
+        const list = candidates || [];
+        row = (amountRands != null
+            ? list.find((r) => Math.abs(Number(r.amount) - amountRands) < 0.01)
+            : undefined) || list[0] || null;
+    }
+
+    if (!row) return { updated: false, reason: 'refund_row_not_found' };
+
+    // Idempotency: never regress a processed row; skip identical no-op writes.
+    if (row.status === 'processed' && newStatus !== 'processed') {
+        return { updated: false, reason: 'already_processed' };
+    }
+    if (row.status === newStatus && (row.paystack_refund_id || !refundId)) {
+        return { updated: false, reason: 'no_change' };
+    }
+
+    const update: Record<string, unknown> = { status: newStatus };
+    if (refundId && !row.paystack_refund_id) update.paystack_refund_id = refundId;
+    if (newStatus === 'processed' || newStatus === 'failed') {
+        update.processed_at = new Date().toISOString();
+    }
+    await supabaseAdmin.from('payment_refunds').update(update).eq('id', row.id);
+
+    if (newStatus === 'processed' && row.event_registration_id) {
+        const { data: reg } = await supabaseAdmin
+            .from('event_registrations')
+            .select('id, payment_status')
+            .eq('id', row.event_registration_id)
+            .maybeSingle();
+        if (reg && reg.payment_status !== 'refunded') {
+            await supabaseAdmin
+                .from('event_registrations')
+                .update({
+                    payment_status: 'refunded',
+                    refunded_at: new Date().toISOString(),
+                    refund_amount: Number(row.amount),
+                })
+                .eq('id', row.event_registration_id);
+        }
+    }
+
+    return { updated: true };
+}
+
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') {
         return new Response('ok', { headers: corsHeaders });
@@ -225,20 +322,34 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({ error: 'Invalid JSON' }), { status: 400, headers: corsHeaders });
     }
 
-    if (payload?.event !== 'charge.success') {
+    const eventName = String(payload?.event || '');
+    const isRefundEvent = eventName.startsWith('refund.');
+
+    if (eventName !== 'charge.success' && !isRefundEvent) {
         return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
     }
 
     const data = payload.data as Record<string, unknown> | undefined;
-    const reference = String(data?.reference || '');
-    if (!reference) {
-        return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
-    }
 
     const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
+
+    if (isRefundEvent) {
+        try {
+            const result = await handleRefundEvent(supabaseAdmin, eventName, data || {});
+            return new Response(JSON.stringify({ received: true, ...result }), { status: 200, headers: corsHeaders });
+        } catch (error) {
+            console.error('paystack-webhook refund error:', error);
+            return new Response(JSON.stringify({ error: (error as Error).message }), { status: 500, headers: corsHeaders });
+        }
+    }
+
+    const reference = String(data?.reference || '');
+    if (!reference) {
+        return new Response(JSON.stringify({ received: true }), { status: 200, headers: corsHeaders });
+    }
 
     try {
         const { data: payment } = await supabaseAdmin

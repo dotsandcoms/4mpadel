@@ -80,6 +80,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [filterDivision, setFilterDivision] = useState('all');
     const [filterWhatsApp, setFilterWhatsApp] = useState('all');
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
+    const [refunds, setRefunds] = useState([]);
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -149,6 +150,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             .filter(p => p.is_paid)
             .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
     }, [localParticipants, selectedEvent]);
+
+    const totalRefunded = useMemo(
+        () => refunds
+            .filter(r => r.status !== 'failed')
+            .reduce((sum, r) => sum + Number(r.amount || 0), 0),
+        [refunds],
+    );
 
     const dashboardStats = useMemo(() => {
         if (!selectedEvent) return { expected: 0, outstanding: 0, licenses: { full: 0, temp: 0, none: 0 }, uniquePlayers: 0 };
@@ -360,6 +368,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const fetchParticipants = useCallback(async (eventId) => {
         if (!eventId) return;
         setLoading(prev => ({ ...prev, matching: true }));
+        setRefunds([]);
         try {
             // Determine if this is a manual event — query directly to avoid stale closure on `events`
             const { data: evMeta } = await supabase
@@ -386,6 +395,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     .select('*')
                     .eq('event_id', eventId)
                     .eq('status', 'success');
+
+                // Refunds for this event (by its successful payments) — includes
+                // refunds tied to now-withdrawn registrations, for accurate net.
+                const successPayIds = (payData || []).map(p => p.id);
+                if (successPayIds.length) {
+                    const { data: refundRows } = await supabase
+                        .from('payment_refunds')
+                        .select('*')
+                        .in('payment_id', successPayIds);
+                    setRefunds(refundRows || []);
+                }
 
                 // Map registrations → participant shape
                 const mapped = (regRows || []).map(r => {
@@ -1378,6 +1398,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                     <span className="text-[9px] text-padel-green font-black uppercase tracking-widest opacity-70">Collected</span>
                                 </div>
                                 <p className="text-[10px] text-red-400 font-bold uppercase mt-1">Outstanding R {dashboardStats.outstanding.toLocaleString()}</p>
+                                {totalRefunded > 0 && (
+                                    <p className="text-[10px] text-sky-400 font-bold uppercase mt-1">
+                                        Refunded R {totalRefunded.toLocaleString()} · Net R {(totalCollected - totalRefunded).toLocaleString()}
+                                    </p>
+                                )}
                             </div>
                         </motion.div>
                         
@@ -1547,8 +1572,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                      <p className="text-xl font-black leading-none mt-1">{localParticipants.filter(p => p.is_paid).length}</p>
                                  </div>
                                  <div className="bg-padel-green p-3 rounded-xl border border-padel-green/20 flex flex-col justify-between items-start text-black shadow-lg shadow-padel-green/20">
-                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-70 leading-tight">Total Revenue</p>
-                                     <p className="text-xl font-black leading-none mt-1">R {totalCollected}</p>
+                                     <p className="text-[9px] font-black uppercase tracking-widest opacity-70 leading-tight">{totalRefunded > 0 ? 'Net Revenue' : 'Total Revenue'}</p>
+                                     <p className="text-xl font-black leading-none mt-1">R {totalRefunded > 0 ? (totalCollected - totalRefunded) : totalCollected}</p>
+                                     {totalRefunded > 0 && (
+                                         <p className="text-[9px] font-bold uppercase opacity-70 mt-1">R {totalCollected} collected · R {totalRefunded} refunded</p>
+                                     )}
                                  </div>
                             </div>
                         </div>

@@ -245,7 +245,7 @@ async function generateEmailBody(
         vars.eventUrl = vars.eventUrl || `https://4mpadel.co.za/calendar/${eventInfo.slug || eventInfo.id}`;
       }
     } catch (err) {
-      console.error('Database Event Query Error:', err.message);
+      console.error('Database Event Query Error:', (err as Error).message);
     }
   }
 
@@ -633,6 +633,7 @@ async function generateEmailBody(
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
           Hi ${vars.playerName || 'Player'}, you have successfully withdrawn from <strong style="color: #FFFFFF;">${vars.eventName}</strong> in the <strong style="color: #FFFFFF;">${vars.division || 'Open'}</strong> division.
           ${vars.partnerName ? `<br/>Your partner <strong style="color: #FFFFFF;">${vars.partnerName}</strong> has been notified. Their registration remains active.` : ''}
+          ${vars.refundAmount ? `<br/>A refund of <strong style="color:#9AE900;">${vars.refundAmount}</strong> has been initiated and will appear on your statement within 3–10 business days.` : ''}
         </p>
         ${eventInfo ? generateEventCardHtml(eventInfo, {
           division: vars.division,
@@ -644,6 +645,40 @@ async function generateEmailBody(
       actionLabel = isPartnerRole && !partnerPaid && entryFee > 0 ? 'Complete Payment' : 'View Event Calendar';
       break;
     }
+
+    case 'entry_refunded':
+      subject = `Refund Initiated: ${vars.eventName || 'Tournament'} ✅`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Refund Initiated</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${vars.playerName || 'Player'}, your entry fee of <strong style="color:#9AE900;">${vars.amount || 'R 0.00'}</strong> for <strong style="color: #FFFFFF;">${vars.eventName}</strong>${vars.division ? ` (${vars.division})` : ''} has been refunded.
+        </p>
+        <p style="font-size: 14px; line-height: 1.6; color: #64748B; margin-bottom: 24px;">
+          Refunds typically take 3–10 business days to appear on your statement, back to the original payment method.
+        </p>
+        ${eventInfo ? generateEventCardHtml(eventInfo, {
+          division: vars.division,
+          paid: true,
+          amount: vars.amount,
+          statusOverride: 'withdrawn',
+        }) : ''}
+        ${vars.reference ? `
+        <div style="background-color: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 16px 24px; border-radius: 16px; margin-bottom: 24px; font-family: 'Outfit', sans-serif;">
+          <table width="100%" style="font-size: 13.5px; color: #E2E8F0; border-collapse: collapse;">
+            <tr>
+              <td style="color: #64748B; font-weight: 600;">Refunded:</td>
+              <td align="right" style="color: #9AE900; font-weight: 900; font-size: 16px;">${vars.amount || 'R 0.00'}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 6px; color: #64748B;">Reference:</td>
+              <td align="right" style="padding-top: 6px; font-weight: 600; font-size: 11px; color: #94A3B8; font-family: monospace;">${vars.reference}</td>
+            </tr>
+          </table>
+        </div>` : ''}
+      `;
+      actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Calendar';
+      break;
 
     case 'partner_invite':
       subject = `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;

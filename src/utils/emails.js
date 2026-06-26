@@ -117,6 +117,8 @@ const getSubjectForTemplate = (template, vars) => {
             return vars.recipientRole === 'partner'
                 ? `${vars.withdrawnPlayerName || 'Your partner'} withdrew from ${vars.eventName || 'Tournament'}`
                 : `Withdrawal confirmed: ${vars.eventName || 'Tournament'}`;
+        case 'entry_refunded':
+            return `Refund Initiated: ${vars.eventName || 'Tournament'} ✅`;
         case 'partner_invite':
             return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
         case 'profile_invite':

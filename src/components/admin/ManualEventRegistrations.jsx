@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -31,11 +31,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const [registrations, setRegistrations] = useState([]);
     const [payments, setPayments] = useState([]);
     const [divisions, setDivisions] = useState([]);
+    const [refunds, setRefunds] = useState([]);
     const [playersByEmail, setPlayersByEmail] = useState(new Map());
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('all'); // all | paid | pending | withdrawn
     const [markingId, setMarkingId] = useState(null);
+    const [removeTarget, setRemoveTarget] = useState(null);
+    const [removePair, setRemovePair] = useState(false);
+    const [removeBusy, setRemoveBusy] = useState(false);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -58,6 +62,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
         setRegistrations(regs);
         setPayments(payRes.data || []);
         setDivisions(divRes.data || []);
+
+        const regIds = regs.map((r) => r.id);
+        if (regIds.length > 0) {
+            const { data: refundRows } = await supabase
+                .from('payment_refunds')
+                .select('*')
+                .in('event_registration_id', regIds);
+            setRefunds(refundRows || []);
+        } else {
+            setRefunds([]);
+        }
 
         const emails = [...new Set(regs.map((r) => r.email).filter(Boolean))];
         if (emails.length > 0) {
@@ -109,6 +124,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
         };
     }, [registrations, payments]);
 
+    const refundByReg = useMemo(() => {
+        const m = new Map();
+        for (const rf of refunds) {
+            const id = rf.event_registration_id;
+            if (!id) continue;
+            const cur = m.get(id) || { amount: 0, statuses: [] };
+            cur.amount += Number(rf.amount || 0);
+            cur.statuses.push(rf.status);
+            m.set(id, cur);
+        }
+        return m;
+    }, [refunds]);
+
+    const refundSummaryFor = (regId) => {
+        const e = refundByReg.get(regId);
+        if (!e) return null;
+        let status = 'pending';
+        if (e.statuses.some((s) => s === 'failed' || s === 'needs_attention')) status = 'failed';
+        else if (e.statuses.length && e.statuses.every((s) => s === 'processed')) status = 'processed';
+        return { amount: e.amount, status };
+    };
+
     const filtered = useMemo(() => {
         let rows = registrations;
         if (statusFilter === 'withdrawn') rows = rows.filter((r) => r.status === 'withdrawn');
@@ -156,6 +193,65 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
             toast.error(`Failed: ${err.message}`);
         } finally {
             setMarkingId(null);
+        }
+    };
+
+    const invokeAdminRefund = async (body) => {
+        const { data, error } = await supabase.functions.invoke('paystack-refund', { body });
+        if (error) {
+            let payload = null;
+            try {
+                if (error.context && typeof error.context.json === 'function') {
+                    payload = await error.context.json();
+                }
+            } catch {
+                // ignore
+            }
+            throw new Error(payload?.error || payload?.message || error.message || 'Request failed');
+        }
+        if (data?.error) throw new Error(data.message || data.error);
+        return data;
+    };
+
+    const partnerRegOf = (reg) => {
+        if (!reg?.partner_email) return null;
+        const pe = reg.partner_email.toLowerCase();
+        return registrations.find(
+            (x) => x.id !== reg.id
+                && (x.email || '').toLowerCase() === pe
+                && x.division === reg.division
+                && x.status !== 'withdrawn',
+        ) || null;
+    };
+
+    // mode: 'refund' (Paystack/auto) | 'cash_refund' (mark refunded, no Paystack) | 'no_refund'
+    const removeRegistration = async (reg, mode) => {
+        setRemoveBusy(true);
+        try {
+            const flags = {};
+            if (mode === 'cash_refund') flags.skip_paystack = true;
+            if (mode === 'no_refund') flags.no_refund = true;
+
+            const toRemove = [reg];
+            if (removePair) {
+                const pr = partnerRegOf(reg);
+                if (pr) toRemove.push(pr);
+            }
+
+            let totalRefunded = 0;
+            for (const t of toRemove) {
+                const res = await invokeAdminRefund({ action: 'admin_remove', registration_id: t.id, ...flags });
+                totalRefunded += Number(res?.total_refunded_rands || 0);
+            }
+
+            toast.success(totalRefunded > 0 ? `Removed — ${fmtR(totalRefunded)} refunded` : 'Removed');
+            setRemoveTarget(null);
+            setRemovePair(false);
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to remove');
+        } finally {
+            setRemoveBusy(false);
         }
     };
 
@@ -357,18 +453,45 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                                 {r.partner_name || '—'}
                                                 {r.partner_email && <div className="text-[10px] text-gray-600">{r.partner_email}</div>}
                                             </td>
-                                            <td className="py-3 px-4">{statusBadge(r)}</td>
+                                            <td className="py-3 px-4">
+                                                {statusBadge(r)}
+                                                {(() => {
+                                                    const rf = refundSummaryFor(r.id);
+                                                    if (!rf) return null;
+                                                    const cfg = rf.status === 'processed'
+                                                        ? { cls: 'bg-emerald-500/10 text-emerald-400', text: `Refunded ${fmtR(rf.amount)}` }
+                                                        : rf.status === 'failed'
+                                                            ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
+                                                            : { cls: 'bg-sky-500/10 text-sky-400', text: `Refund pending ${fmtR(rf.amount)}` };
+                                                    return (
+                                                        <div className={`mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
+                                                            {cfg.text}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
                                             <td className="py-3 px-4 text-right">
-                                                {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
-                                                    <button
-                                                        onClick={() => markPaid(r)}
-                                                        disabled={markingId === r.id}
-                                                        className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50"
-                                                    >
-                                                        {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                                                        Mark Paid
-                                                    </button>
-                                                )}
+                                                <div className="inline-flex items-center gap-2 justify-end">
+                                                    {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
+                                                        <button
+                                                            onClick={() => markPaid(r)}
+                                                            disabled={markingId === r.id}
+                                                            className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50"
+                                                        >
+                                                            {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                                            Mark Paid
+                                                        </button>
+                                                    )}
+                                                    {r.status !== 'withdrawn' && (
+                                                        <button
+                                                            onClick={() => { setRemovePair(false); setRemoveTarget(r); }}
+                                                            className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white inline-flex items-center gap-1.5"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -376,6 +499,61 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                             </table>
                         )}
                     </div>
+
+                    {removeTarget && (() => {
+                        const paid = removeTarget.payment_status === 'paid';
+                        const method = formatPaymentMethodForExport(removeTarget);
+                        const isCash = method === 'Cash' || method === 'Manual';
+                        const partner = partnerRegOf(removeTarget);
+                        return (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/60" onClick={() => !removeBusy && setRemoveTarget(null)}>
+                                <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-start gap-3 mb-4">
+                                        <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
+                                            <Trash2 size={16} className="text-red-400" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-white font-bold">Remove {removeTarget.full_name}?</h3>
+                                            <p className="text-xs text-gray-400 mt-0.5">
+                                                {removeTarget.division}
+                                                {paid ? ` · Paid${method ? ` (${method})` : ''}` : ' · Not paid'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {partner && (
+                                        <label className="flex items-center gap-2 mb-4 text-xs text-gray-300 cursor-pointer">
+                                            <input type="checkbox" checked={removePair} onChange={(e) => setRemovePair(e.target.checked)} disabled={removeBusy} className="accent-red-500" />
+                                            Also remove partner <span className="font-bold text-white">{partner.full_name}</span> (pair)
+                                        </label>
+                                    )}
+
+                                    <div className="flex flex-col gap-2">
+                                        {paid && !isCash && (
+                                            <button onClick={() => removeRegistration(removeTarget, 'refund')} disabled={removeBusy}
+                                                className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                                                {removeBusy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />} Remove &amp; Refund
+                                            </button>
+                                        )}
+                                        {paid && isCash && (
+                                            <button onClick={() => removeRegistration(removeTarget, 'cash_refund')} disabled={removeBusy}
+                                                className="w-full py-2.5 rounded-lg text-sm font-bold bg-padel-green text-black hover:opacity-90 disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                                                {removeBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} Mark Refunded &amp; Remove
+                                            </button>
+                                        )}
+                                        <button onClick={() => removeRegistration(removeTarget, 'no_refund')} disabled={removeBusy}
+                                            className="w-full py-2.5 rounded-lg text-sm font-bold bg-white/5 text-gray-300 border border-white/10 hover:bg-white/10 disabled:opacity-50">
+                                            {paid ? 'Remove without refund' : 'Remove'}
+                                        </button>
+                                        <button onClick={() => setRemoveTarget(null)} disabled={removeBusy}
+                                            className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {(stats.activeCheckoutCount > 0 || stats.abandonedCheckoutCount > 0) && (
                         <div className="px-6 py-2 border-t border-white/5 text-[11px] space-y-1">

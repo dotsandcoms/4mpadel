@@ -305,6 +305,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const [processing, setProcessing] = useState(false);
     const [withdrawTarget, setWithdrawTarget] = useState(null);
     const [withdrawing, setWithdrawing] = useState(false);
+    const [withdrawAll, setWithdrawAll] = useState(false);
+    const [removePartnerTarget, setRemovePartnerTarget] = useState(null);
+    const [removingPartner, setRemovingPartner] = useState(false);
 
     const [selected, setSelected] = useState({});
     const [hasPartner, setHasPartner] = useState(false);
@@ -631,6 +634,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 canAddPartner,
+                isBookingOwner: !wasAddedByPartner,
+                canWithdraw: !!div && !isClosed(div, event),
             };
         }),
         [myRegs, divisions, divisionRegs, userEmail, event],
@@ -932,8 +937,24 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     const isSelfDivisionPaid = (divisionId) =>
         myRegs.some((r) => r.division_id === divisionId && r.email?.toLowerCase() === userEmail?.toLowerCase() && r.payment_status === 'paid');
 
-    const isPartnerDivisionPaid = (divisionId) =>
-        myRegs.some((r) => r.division_id === divisionId && r.partner_payment_status === 'paid');
+    // True when the selected partner already has their own active, paid entry in
+    // this division (e.g. they registered solo and paid). Used to avoid charging
+    // the registrant for a partner who is already entered.
+    const partnerHasOwnPaidEntry = (divisionId, partnerEmail) => {
+        if (!partnerEmail) return false;
+        return divisionRegs.some(
+            (r) => r.division_id === divisionId
+                && normEmail(r.email) === normEmail(partnerEmail)
+                && r.status !== 'withdrawn'
+                && r.payment_status === 'paid',
+        );
+    };
+
+    const isPartnerDivisionPaid = (divisionId) => {
+        if (myRegs.some((r) => r.division_id === divisionId && r.partner_payment_status === 'paid')) return true;
+        const sel = selected[divisionId];
+        return partnerHasOwnPaidEntry(divisionId, sel?.partnerEmail);
+    };
 
     const isSelfPayingDivision = (divId, sel) => {
         if (isSelfDivisionPaid(divId)) return false;
@@ -1370,7 +1391,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         if (anyPartnerPaid && payMode === 'both') {
             setPayMode('self');
         }
-    }, [selectedDivisions, myRegs, payMode]);
+    }, [selectedDivisions, selected, myRegs, divisionRegs, payMode]);
 
     const licenseFee = (choice) => (choice === 'full' ? FEES.FULL_LICENSE : FEES.TEMPORARY_LICENSE);
 
@@ -1379,6 +1400,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
             if (!sel?.payForPartner || !sel?.partnerLicenseChoice || !sel?.partnerId) continue;
+            if (isPartnerDivisionPaid(d.id)) continue; // partner already entered & paid
             const lic = getPartnerLicenseInfo(sel.partnerId);
             if (lic.active) continue;
             const choice = sel.partnerLicenseChoice === 'full' ? 'full' : 'temporary';
@@ -1395,7 +1417,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             }
         }
         return Array.from(byPartnerId.values());
-    }, [selectedDivisions, selected, partnerLicenseCache]);
+    }, [selectedDivisions, selected, partnerLicenseCache, divisionRegs, myRegs]);
 
     const getEventPartnerLicenseChoice = (partnerId) => {
         if (!partnerId) return null;
@@ -1425,14 +1447,14 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const sel = selected[d.id];
             const fee = Number(d.entry_fee || 0);
             if (isSelfPayingDivision(d.id, sel)) t += fee;
-            if (sel?.partnerName && sel?.payForPartner) t += fee;
+            if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) t += fee;
         }
         if (buyLicenseSelf) t += licenseFee(licenseSelfChoice);
         for (const purchase of partnerLicensePurchases) {
             t += licenseFee(purchase.choice);
         }
         return t;
-    }, [selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail]);
+    }, [selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice, partnerLicensePurchases, userEmail]);
 
     const total = subtotal;
 
@@ -1459,7 +1481,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         for (const d of selectedDivisions) {
             const sel = selected[d.id];
             const fee = Number(d.entry_fee || 0);
-            if (sel?.partnerName && sel?.payForPartner) {
+            if (sel?.partnerName && sel?.payForPartner && !isPartnerDivisionPaid(d.id)) {
                 const key = sel.partnerEmail || sel.partnerName;
                 if (!partnerGroups[key]) {
                     partnerGroups[key] = { name: sel.partnerName, divisions: [] };
@@ -1494,7 +1516,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
         return { players, extras };
     }, [
-        selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice,
+        selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
         partnerLicenseCache, partnerLicensePurchases, profile?.name, displayProfile?.name,
     ]);
 
@@ -1504,15 +1526,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             const sel = selected[d.id];
             const fee = Number(d.entry_fee || 0);
             const selfPays = isSelfPayingDivision(d.id, sel);
-            const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner);
+            const partnerAlreadyPaid = isPartnerDivisionPaid(d.id);
+            const userPaysPartner = !!(sel?.partnerName && sel?.payForPartner) && !partnerAlreadyPaid;
             const payerCount = (selfPays ? 1 : 0) + (userPaysPartner ? 1 : 0);
 
             const hasPartner = !!(sel?.partnerName && sel?.partnerEmail);
             const payTag = !hasPartner
                 ? 'Your Entry'
-                : userPaysPartner
-                    ? 'You Paying both Entries'
-                    : 'Partner Pays Their Entry';
+                : partnerAlreadyPaid
+                    ? 'Partner Already Entered'
+                    : userPaysPartner
+                        ? 'You Paying both Entries'
+                        : 'Partner Pays Their Entry';
 
             return {
                 id: d.id,
@@ -1556,7 +1581,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             totalPayable: entryFeesTotal + licensesSubtotal,
         };
     }, [
-        selectedDivisions, selected, myRegs, buyLicenseSelf, licenseSelfChoice,
+        selectedDivisions, selected, myRegs, divisionRegs, buyLicenseSelf, licenseSelfChoice,
         hasLicense, anySelectedRequiresLicense, partnerLicenseCache, partnerLicensePurchases,
         profile?.name, displayProfile?.name, profileImageUrl,
     ]);
@@ -1631,6 +1656,23 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         return response?.reference || response?.trxref || fallbackRef;
     };
 
+    const invokePaystackRefund = async (body) => {
+        const { data, error } = await supabase.functions.invoke('paystack-refund', { body });
+        if (error) {
+            let payload = null;
+            try {
+                if (error.context && typeof error.context.json === 'function') {
+                    payload = await error.context.json();
+                }
+            } catch {
+                // ignore parse errors
+            }
+            throw new Error(payload?.error || payload?.message || error.message || 'Refund request failed');
+        }
+        if (data?.error) throw new Error(data.message || data.error);
+        return data;
+    };
+
     const confirmManualPayment = async (paidRef, attempts = 10) => {
         for (let i = 0; i < attempts; i++) {
             const { data, error } = await supabase.functions.invoke('confirm-manual-payment', {
@@ -1699,7 +1741,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 partner_email: sel?.partnerEmail || existingSelfReg?.partner_email || null,
                 payment_status: selfAlreadyPaid ? 'paid' : fee === 0 ? 'paid' : 'pending',
                 partner_payment_status: (sel?.partnerName || existingSelfReg?.partner_name)
-                    ? (existingSelfReg?.partner_payment_status || 'pending')
+                    ? (isPartnerDivisionPaid(d.id) ? 'paid' : (existingSelfReg?.partner_payment_status || 'pending'))
                     : null,
                 status: 'registered',
                 registered_by: existingSelfReg?.registered_by || userEmail,
@@ -1715,6 +1757,18 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 if (existingPartnerReg) {
                     if (partnerPays && fee > 0 && existingPartnerReg.payment_status !== 'paid') {
                         covers.push({ email: existingPartnerReg.email, division: d.name, type: 'entry' });
+                    }
+                    // Link the existing (e.g. solo) partner row back to the registrant so the
+                    // pairing shows on both sides instead of leaving them as a solo entry.
+                    if (!normEmail(existingPartnerReg.partner_email)) {
+                        soloLinks.push({
+                            id: existingPartnerReg.id,
+                            email: existingPartnerReg.email,
+                            division: d.name,
+                            partner_name: selfName,
+                            partner_email: userEmail,
+                            partner_payment_status: (selfAlreadyPaid || fee === 0 || selfPays) ? 'paid' : 'pending',
+                        });
                     }
                 } else if (sel.linkSoloRegId) {
                     soloLinks.push({
@@ -2175,90 +2229,75 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         }
     };
 
+    // Refund/withdrawal is processed server-side by the paystack-refund edge
+    // function (handles refund initiation, partner unlinking, ownership transfer,
+    // temp-license cancellation, and emails). The frontend only invokes + reloads.
     const confirmWithdraw = async () => {
         const reg = withdrawTarget;
         if (!reg || withdrawing) return;
 
+        const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+        if (div && isClosed(div, event)) {
+            toast.error('Registration has closed — please contact the organiser.');
+            return;
+        }
+
         setWithdrawing(true);
         try {
-            const withdrawnAt = new Date().toISOString();
-            const { error } = await supabase
-                .from('event_registrations')
-                .update({ status: 'withdrawn', withdrawn_at: withdrawnAt })
-                .eq('id', reg.id);
-            if (error) throw error;
+            const result = await invokePaystackRefund(
+                withdrawAll
+                    ? { action: 'withdraw_all', event_id: event.id }
+                    : { action: 'withdraw', registration_id: reg.id },
+            );
 
-            // Unlink partner on their remaining registration — they stay entered, not withdrawn
-            if (reg.partner_email) {
-                await supabase
-                    .from('event_registrations')
-                    .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .eq('status', 'registered');
-            }
-            await supabase
-                .from('event_registrations')
-                .update({ partner_name: null, partner_email: null, partner_payment_status: null })
-                .eq('event_id', reg.event_id)
-                .eq('division', reg.division)
-                .ilike('partner_email', reg.email)
-                .eq('status', 'registered');
-
-            const eventUrl = `${window.location.origin}/calendar/${event.slug || event.id}`;
-            const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
-            const entryFee = Number(div?.entry_fee || 0);
-            const baseEmailVars = {
-                eventId: event.id,
-                eventName: event.event_name,
-                division: reg.division,
-                eventDates: event.event_dates || '',
-                eventUrl,
-                withdrawnPlayerName: reg.full_name,
-                entryFee,
-            };
-
-            sendEmail(reg.email, 'entry_withdrawn', {
-                ...baseEmailVars,
-                recipientRole: 'player',
-                playerName: reg.full_name,
-                partnerName: reg.partner_name || '',
-            });
-
-            if (reg.partner_email) {
-                const { data: partnerReg } = await supabase
-                    .from('event_registrations')
-                    .select('full_name, payment_status')
-                    .eq('event_id', reg.event_id)
-                    .eq('division', reg.division)
-                    .ilike('email', reg.partner_email)
-                    .neq('status', 'withdrawn')
-                    .maybeSingle();
-
-                const partnerPaid = partnerReg?.payment_status === 'paid';
-
-                sendEmail(reg.partner_email, 'entry_withdrawn', {
-                    ...baseEmailVars,
-                    recipientRole: 'partner',
-                    recipientEmail: reg.partner_email,
-                    playerName: partnerReg?.full_name || reg.partner_name || 'Player',
-                    paid: partnerPaid,
-                    amount: partnerPaid && entryFee > 0 ? fmtRWhole(entryFee) : undefined,
-                    amountDue: !partnerPaid && entryFee > 0 ? fmtRWhole(entryFee) : undefined,
-                    payUrl: !partnerPaid && entryFee > 0 ? eventUrl : undefined,
-                });
+            const refunded = Number(result?.total_refunded_rands || 0);
+            if (refunded > 0) {
+                toast.success(`Withdrawn — R ${refunded.toLocaleString('en-ZA')} refund initiated (3–10 business days).`);
+            } else {
+                toast.success(withdrawAll ? 'Withdrawn from all divisions' : `Withdrawn from ${reg.division}`);
             }
 
-            toast.success(`Withdrawn from ${reg.division}`);
             setWithdrawTarget(null);
+            setWithdrawAll(false);
             loadMyRegs();
             loadDivisionRegs();
             onParticipantsChange?.();
         } catch (err) {
-            toast.error('Failed to withdraw');
+            console.error('Withdraw failed:', err);
+            toast.error(err.message || 'Failed to withdraw');
         } finally {
             setWithdrawing(false);
+        }
+    };
+
+    const removePartner = async () => {
+        const reg = removePartnerTarget;
+        if (!reg || removingPartner) return;
+
+        const div = divisions.find((d) => d.id === reg.division_id || d.name === reg.division);
+        if (div && isClosed(div, event)) {
+            toast.error('Registration has closed — please contact the organiser.');
+            return;
+        }
+
+        setRemovingPartner(true);
+        try {
+            const result = await invokePaystackRefund({ action: 'remove_partner', registration_id: reg.id });
+            const refunded = Number(result?.total_refunded_rands || 0);
+            if (refunded > 0) {
+                toast.success(`Partner removed — R ${refunded.toLocaleString('en-ZA')} refund initiated.`);
+            } else {
+                toast.success('Partner removed');
+            }
+            setRemovePartnerTarget(null);
+            loadMyRegs();
+            loadDivisionRegs();
+            onParticipantsChange?.();
+        } catch (err) {
+            console.error('Remove partner failed:', err);
+            toast.error(err.message || 'Failed to remove partner');
+        } finally {
+            setRemovingPartner(false);
         }
     };
 
@@ -2667,6 +2706,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 const searchState = divisionPartnerSearch[d.id] || { query: '', results: [], open: false, hasSearched: false };
                                 const partnerLic = sel?.partnerId ? getPartnerLicenseInfo(sel.partnerId) : null;
                                 const payModeSelf = sel?.payForPartner !== false;
+                                const partnerAlreadyEntered = !!sel?.partnerName && isPartnerDivisionPaid(d.id);
                                 const eventPartnerLicenseChoice = getEventPartnerLicenseChoice(sel?.partnerId);
                                 const primaryPartnerLicenseDivisionId = sel?.partnerId
                                     ? getPrimaryPartnerLicenseDivisionId(sel.partnerId)
@@ -2833,7 +2873,16 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         )}
                                                     </div>
 
-                                                    {sel?.partnerName && (
+                                                    {partnerAlreadyEntered && (
+                                                        <div className="flex items-start gap-2.5 text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs font-normal leading-snug">
+                                                            <Check size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+                                                            <p>
+                                                                <span className="font-semibold">{sel.partnerName} has already entered and paid</span> for this division. You won't be charged for their entry — only your own.
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {sel?.partnerName && !partnerAlreadyEntered && (
                                                         <div>
                                                             <div className="flex w-full rounded-full border border-gray-200 overflow-hidden p-0.5 bg-white">
                                                                 {[
@@ -2905,7 +2954,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                         </div>
                                                     )}
 
-                                                    {!payModeSelf && sel?.partnerName && (
+                                                    {!payModeSelf && sel?.partnerName && !partnerAlreadyEntered && (
                                                         <div className="flex items-start gap-2.5 text-blue-800 bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs font-normal leading-snug">
                                                             <Check size={16} className="shrink-0 mt-0.5 text-blue-600" />
                                                             <p>A payment request will be sent to your partner</p>
@@ -3613,7 +3662,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             showActions={!!reg}
                                             onAddPartner={() => openAddPartnerWizard(reg)}
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
-                                            onWithdraw={reg ? () => setWithdrawTarget(reg) : undefined}
+                                            onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setWithdrawTarget(reg); } : undefined}
+                                            onRemovePartner={reg ? () => setRemovePartnerTarget(reg) : undefined}
                                             withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
                                         />
                                     );
@@ -3825,10 +3875,37 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 </button>
                             </div>
 
-                            {withdrawTarget.payment_status === 'paid' && (
-                                <div className="mx-6 mt-4 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 font-normal leading-snug">
-                                    This entry is already paid. Withdrawing will not automatically issue a refund.
-                                </div>
+                            {(() => {
+                                const wdDiv = divisions.find((d) => d.id === withdrawTarget.division_id || d.name === withdrawTarget.division);
+                                const wdFee = Number(wdDiv?.entry_fee || 0);
+                                const wdPaid = withdrawTarget.payment_status === 'paid';
+                                if (wdPaid && wdFee > 0) {
+                                    return (
+                                        <div className="mx-6 mt-4 px-3 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 font-normal leading-snug">
+                                            Your entry fee of {fmtRWhole(wdFee)} will be refunded to your original payment method (3–10 business days). Any temporary SAPA license bought in the same checkout is refunded too; annual licenses are non-refundable.
+                                        </div>
+                                    );
+                                }
+                                return (
+                                    <div className="mx-6 mt-4 px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 font-normal leading-snug">
+                                        No refund applicable — this entry was not paid.
+                                    </div>
+                                );
+                            })()}
+
+                            {panelEntries.length >= 2 && (
+                                <label className="mx-6 mt-3 flex items-start gap-2.5 px-3 py-2.5 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
+                                    <input
+                                        type="checkbox"
+                                        checked={withdrawAll}
+                                        onChange={(e) => setWithdrawAll(e.target.checked)}
+                                        className="mt-0.5 accent-red-600"
+                                        disabled={withdrawing}
+                                    />
+                                    <span className="text-xs text-slate-700 font-normal leading-snug">
+                                        <span className="font-semibold text-slate-900">Withdraw from all {panelEntries.length} divisions.</span> Each paid entry is refunded to its original payer.
+                                    </span>
+                                </label>
                             )}
 
                             <div className="px-6 py-5 flex gap-3">
@@ -3847,7 +3924,73 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {withdrawing ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                                    {withdrawing ? 'Withdrawing…' : 'Withdraw'}
+                                    {withdrawing ? 'Withdrawing…' : (withdrawAll ? 'Withdraw all' : 'Withdraw')}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Remove partner confirmation */}
+            <AnimatePresence>
+                {removePartnerTarget && (
+                    <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+                            onClick={() => !removingPartner && setRemovePartnerTarget(null)}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 12 }}
+                            className="relative w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-xl overflow-hidden"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div className="px-6 py-5 border-b border-gray-50 flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center shrink-0">
+                                    <AlertCircle className="w-5 h-5 text-red-600" />
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-base font-semibold text-slate-900">
+                                        Remove {removePartnerTarget.partner_name || 'your partner'}?
+                                    </h3>
+                                    <p className="text-xs text-slate-600 mt-1 font-normal leading-snug">
+                                        {removePartnerTarget.partner_payment_status === 'paid'
+                                            ? `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be withdrawn and, if it was paid, refunded automatically to whoever paid for it. Your entry stays active.`
+                                            : `${removePartnerTarget.partner_name || 'Your partner'}'s entry will be removed. Your entry stays active.`}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => !removingPartner && setRemovePartnerTarget(null)}
+                                    className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-gray-100 shrink-0"
+                                    disabled={removingPartner}
+                                >
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="px-6 py-5 flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setRemovePartnerTarget(null)}
+                                    disabled={removingPartner}
+                                    className="flex-1 py-3 rounded-xl border border-gray-200 text-sm font-semibold text-slate-700 hover:bg-gray-50 disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={removePartner}
+                                    disabled={removingPartner}
+                                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                                >
+                                    {removingPartner ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                                    {removingPartner ? 'Removing…' : 'Remove partner'}
                                 </button>
                             </div>
                         </motion.div>
