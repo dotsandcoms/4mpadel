@@ -11,6 +11,55 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 
+const getParticipantEntryFee = (p, event) => {
+    if (p?._divisionFee != null && p._divisionFee !== '') {
+        return Number(p._divisionFee) || 0;
+    }
+    if (!event) return 0;
+    return Number(event.category_fees?.[p.class_name] || event.entry_fee || 0);
+};
+
+const findManualRegistrationPayment = (payData, reg) => {
+    const email = (reg.email || '').toLowerCase();
+    const division = reg.division || reg.class_name;
+
+    for (const pay of payData || []) {
+        if (pay.status !== 'success') continue;
+        const meta = pay.metadata || {};
+
+        if (meta.registration_id === reg.id) return pay;
+        if ((meta.email || '').toLowerCase() === email) return pay;
+
+        const covers = meta.covers;
+        if (Array.isArray(covers)) {
+            const covered = covers.some((c) =>
+                c.type === 'entry'
+                && (c.email || '').toLowerCase() === email
+                && (!c.division || !division || c.division === division)
+            );
+            if (covered) return pay;
+        }
+
+        if (
+            meta.source === 'manual_event_admin'
+            && (meta.email || '').toLowerCase() === email
+            && (!meta.division || meta.division === division)
+        ) {
+            return pay;
+        }
+    }
+
+    return null;
+};
+
+const getParticipantPaidAmount = (p) => {
+    if (!p?.is_paid) return 0;
+    if (p._isManualReg && p._divisionFee != null) return Number(p._divisionFee) || 0;
+    if (p.actual_payment?.amount != null) return Number(p.actual_payment.amount) || 0;
+    if (p._divisionFee != null) return Number(p._divisionFee) || 0;
+    return 0;
+};
+
 const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) => {
     const [events, setEvents] = useState([]);
     const [selectedEventId, setSelectedEventId] = useState(null);
@@ -94,13 +143,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     
     const totalCollected = useMemo(() => {
         if (!selectedEvent) return 0;
-        
+
         return localParticipants
             .filter(p => p.is_paid)
-            .reduce((sum, p) => {
-                const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
-                return sum + Number(divFee);
-            }, 0);
+            .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
     }, [localParticipants, selectedEvent]);
 
     const dashboardStats = useMemo(() => {
@@ -111,8 +157,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const licenseCounts = { full: 0, temp: 0, none: 0 };
 
         localParticipants.forEach(p => {
-            const divFee = selectedEvent.category_fees?.[p.class_name] || selectedEvent.entry_fee || 0;
-            expected += Number(divFee);
+            expected += getParticipantEntryFee(p, selectedEvent);
             
             const profileKey = p.profile_id || p.full_name?.toLowerCase().trim();
             if (profileKey && !uniqueProfiles.has(profileKey)) {
@@ -154,9 +199,14 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 const tempLicenses = tempLicData || [];
 
                 const playerLicenses = {};
+                const emailToPlayerId = {};
                 (pData || []).forEach(p => {
                     playerLicenses[p.id] = p.license_type === 'full' ? 'full' : 'none';
+                    if (p.email) emailToPlayerId[p.email.toLowerCase()] = p.id;
                 });
+
+                const manualEventIds = (eData || []).filter(e => e.is_manual).map(e => e.id);
+                const manualEventIdSet = new Set(manualEventIds);
 
                 // Fetch basic global stats for "at a glance" view
                 let allParts = [];
@@ -176,6 +226,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 // Aggregate stats
                 const statsByEvent = {};
                 allParts.forEach(p => {
+                    if (manualEventIdSet.has(p.event_id)) return;
+
                     if (!statsByEvent[p.event_id]) {
                         statsByEvent[p.event_id] = { 
                             entries: 0, billed: 0, collected: 0, paidCount: 0,
@@ -206,7 +258,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 });
 
                 // ── Manual events: pull stats from event_registrations ──────────────────
-                const manualEventIds = (eData || []).filter(e => e.is_manual).map(e => e.id);
+                const manualLicenseCounted = {};
                 if (manualEventIds.length > 0) {
                     const { data: manualRegs } = await supabase
                         .from('event_registrations')
@@ -234,7 +286,24 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             es._manualCollected = (es._manualCollected || 0) + fee;
                         }
                         const profileKey = (r.email || '').toLowerCase().trim();
-                        if (profileKey) es.uniqueProfiles.add(profileKey);
+                        if (profileKey) {
+                            es.uniqueProfiles.add(profileKey);
+
+                            if (!manualLicenseCounted[eid]) manualLicenseCounted[eid] = new Set();
+                            if (!manualLicenseCounted[eid].has(profileKey)) {
+                                manualLicenseCounted[eid].add(profileKey);
+                                const playerId = emailToPlayerId[profileKey];
+                                let lic = 'none';
+                                if (playerId) {
+                                    if (playerLicenses[playerId] === 'full') {
+                                        lic = 'full';
+                                    } else if (tempLicenses.some(t => t.event_id === eid && t.player_id === playerId)) {
+                                        lic = 'temp';
+                                    }
+                                }
+                                es.licenses[lic]++;
+                            }
+                        }
                     });
                 }
                 // ────────────────────────────────────────────────────────────────────────
@@ -321,10 +390,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 const mapped = (regRows || []).map(r => {
                     const divFee = Number(r.tournament_divisions?.entry_fee || 0);
                     const isPaid = r.payment_status === 'paid';
-                    const payment = (payData || []).find(pay =>
-                        pay.metadata?.registration_id === r.id ||
-                        (pay.metadata?.email?.toLowerCase() === r.email?.toLowerCase())
-                    ) || null;
+                    const payment = findManualRegistrationPayment(payData, {
+                        id: r.id,
+                        email: r.email,
+                        division: r.division || r.tournament_divisions?.name,
+                    });
 
                     return {
                         id: r.id,
@@ -967,7 +1037,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
-                const amountPaid = p.is_paid ? (p.actual_payment?.amount || 0) : 0;
+                const amountPaid = getParticipantPaidAmount(p);
                 const lic = getResolvedLicenseType(p, selectedEvent?.id);
                 const licLabel = lic === 'full' ? 'Full' : lic === 'temporary' ? 'Temporary' : 'None';
                 sheet.addRow([
@@ -1608,9 +1678,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                         <span className="text-[8px] text-gray-400 italic uppercase font-black tracking-wider">
                                                             {getPaymentSubLabel(p)}
                                                         </span>
-                                                        {(p.actual_payment || p.paid_by_name) && (
+                                                        {(p.paid_by_name || p.is_paid) && (
                                                             <span className="text-[8px] text-white font-black">
-                                                                {p.paid_by_name ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
+                                                                {p.paid_by_name
+                                                                    ? 'PARTNER FEE'
+                                                                    : `R ${getParticipantPaidAmount(p).toLocaleString()}`}
                                                             </span>
                                                         )}
                                                     </div>
@@ -1749,9 +1821,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     <p className="text-[10px] text-padel-green font-black uppercase italic tracking-wider">
                                                         {getPaymentSubLabel(p)}
                                                     </p>
-                                                    {(p.actual_payment || p.paid_by_name) && (
+                                                    {(p.paid_by_name || p.is_paid) && (
                                                         <p className="text-[10px] text-white font-black">
-                                                            {p.paid_by_name ? 'PARTNER FEE' : `R ${p.actual_payment.amount}`}
+                                                            {p.paid_by_name
+                                                                ? 'PARTNER FEE'
+                                                                : `R ${getParticipantPaidAmount(p).toLocaleString()}`}
                                                         </p>
                                                     )}
                                                 </div>
