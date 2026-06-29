@@ -101,7 +101,9 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const getPaymentSubLabel = useCallback((p) => {
         if (p.paid_by_name) return `By ${p.paid_by_name}`;
         if (p.actual_payment?.metadata?.paid_by_name) return `By ${p.actual_payment.metadata.paid_by_name}`;
-        return p.actual_payment?.payment_method || p.registration_payment_method || p.metadata?.payment_method || 'System';
+        const note = p.metadata?.payment_note || p.actual_payment?.metadata?.note;
+        if (note) return note;
+        return p.payment_method_resolved || p.actual_payment?.payment_method || p.registration_payment_method || p.metadata?.payment_method || 'System';
     }, []);
 
     const filteredEvents = useMemo(() => {
@@ -566,12 +568,42 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 if (!paidByName && registeredBy && registeredBy !== playerEmail) {
                     paidByName = registration.partner_name || payerNameByEmail[registeredBy] || null;
                 }
-                
+
+                // Resolve the payment method even when the matcher above didn't bind a
+                // row to this participant. Bundled manual_event Paystack payments carry
+                // the player in metadata.registrant_email / covers[] (raw shape) or
+                // metadata.original_trx (paystack_sync / split shape) rather than a
+                // participant_id, so the plain matcher can miss them and the cell would
+                // fall back to "System". We only read the method here (not the amount),
+                // so the displayed entry fee is unaffected.
+                let resolvedMethod = payment?.payment_method || registration?.payment_method || null;
+                if (!resolvedMethod && p.is_paid) {
+                    const coveringPay = (payData || []).find(pay => {
+                        if (pay.payment_type !== 'event_entry_fee') return false;
+                        const meta = pay.metadata || {};
+                        const inner = meta.original_trx?.metadata || {};
+                        if (p.profile_id && pay.player_id === p.profile_id) return true;
+                        const emails = [
+                            meta.email,
+                            meta.registrant_email,
+                            meta.original_trx?.user,
+                            inner.registrant_email,
+                            ...(Array.isArray(meta.covers) ? meta.covers.map(c => c?.email) : []),
+                            ...(Array.isArray(inner.covers) ? inner.covers.map(c => c?.email) : []),
+                            ...(Array.isArray(meta.registration_rows) ? meta.registration_rows.map(r => r?.email) : []),
+                            ...(Array.isArray(inner.registration_rows) ? inner.registration_rows.map(r => r?.email) : []),
+                        ].map(normalize).filter(Boolean);
+                        return playerEmail && emails.includes(playerEmail);
+                    });
+                    resolvedMethod = coveringPay?.payment_method || null;
+                }
+
                 return {
                     ...p,
                     actual_payment: payment || null,
                     paid_by_name: paidByName,
                     registration_payment_method: registration?.payment_method || null,
+                    payment_method_resolved: resolvedMethod,
                 };
             });
 
@@ -911,16 +943,25 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
 
     // 4. Mark as Paid (Explicit Manual Marking)
     const handleMarkAsPaid = async (participant) => {
-        setMarkingPaid(participant.id);
         const selEvent = events.find(e => e.id === selectedEventId);
         const amountToCharge = selEvent.entry_fee || 0;
-        
+
+        // Capture a reason/description for this manual payment (e.g. "EFT paid", "Cash").
+        const reason = window.prompt(
+            `Payment note for ${participant.full_name} — why are you marking this as paid? (e.g. "EFT paid", "Cash", "Comp")`,
+            'EFT'
+        );
+        if (reason === null) return; // cancelled — leave the entry unpaid
+        const paymentNote = reason.trim();
+
+        setMarkingPaid(participant.id);
         try {
             // Update local participant table - also clear manual_unpaid flag
-            const newMetadata = { 
-                ...(participant.metadata || {}), 
+            const newMetadata = {
+                ...(participant.metadata || {}),
                 manual_unpaid: false,
-                payment_method: 'manual'
+                payment_method: 'manual',
+                payment_note: paymentNote || null
             };
             const { error: pError } = await supabase
                 .from('tournament_participants')
@@ -937,10 +978,10 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 payment_type: 'event_entry_fee',
                 payment_method: 'manual',
                 reference: `Manual - ${participant.full_name} - ${selEvent.event_name}`,
-                metadata: { participant_id: participant.id }
+                metadata: { participant_id: participant.id, note: paymentNote || null }
             }]);
 
-            toast.success(`Marked ${participant.full_name} as paid (R${amountToCharge})`);
+            toast.success(`Marked ${participant.full_name} as paid (R${amountToCharge})${paymentNote ? ` — ${paymentNote}` : ''}`);
             fetchParticipants(selectedEventId);
         } catch (err) {
             toast.error("Failed to mark as paid");
@@ -1795,7 +1836,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                         {(p.paid_by_name || p.is_paid) && (
                                                             <span className="text-[8px] text-white font-black">
                                                                 {p.paid_by_name
-                                                                    ? 'PARTNER FEE'
+                                                                    ? `PARTNER PAID · R ${getParticipantEntryFee(p, selectedEvent).toLocaleString()}`
                                                                     : `R ${getParticipantPaidAmount(p).toLocaleString()}`}
                                                             </span>
                                                         )}
@@ -1938,7 +1979,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                                     {(p.paid_by_name || p.is_paid) && (
                                                         <p className="text-[10px] text-white font-black">
                                                             {p.paid_by_name
-                                                                ? 'PARTNER FEE'
+                                                                ? `PARTNER PAID · R ${getParticipantEntryFee(p, selectedEvent).toLocaleString()}`
                                                                 : `R ${getParticipantPaidAmount(p).toLocaleString()}`}
                                                         </p>
                                                     )}
