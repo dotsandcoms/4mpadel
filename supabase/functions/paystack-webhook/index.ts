@@ -32,10 +32,6 @@ async function finalizeManualEventPayment(
     if (meta.source !== 'manual_event') {
         return { processed: false, skipped: true, reason: 'not_manual_event' };
     }
-    if (payment.status === 'success') {
-        return { processed: false, alreadyProcessed: true };
-    }
-
     const paymentId = payment.id as string;
     const reference = payment.reference as string;
     const amount = Number(payment.amount || 0);
@@ -43,14 +39,30 @@ async function finalizeManualEventPayment(
     const covers: Array<{ type: string; email: string; division?: string; license?: string }> =
         Array.isArray(meta.covers) ? meta.covers : [];
 
+    // Atomically claim this payment. The browser-triggered confirm-manual-payment
+    // function and this webhook both run identical persist + email logic, and
+    // Paystack may deliver/retry the webhook more than once. They race on this
+    // single conditional UPDATE: only the caller that flips status from
+    // non-'success' -> 'success' gets a row back and proceeds. The losers return
+    // immediately, which stops the duplicate registration/payment confirmation emails.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+        .from('payments')
+        .update({ status: 'success' })
+        .eq('id', paymentId)
+        .neq('status', 'success')
+        .select('id');
+    if (claimError) throw claimError;
+    if (!claimed || claimed.length === 0) {
+        return { processed: false, alreadyProcessed: true };
+    }
+
+    try {
     const { savedRows, persisted } = await persistManualEventRegistrations(
         supabaseAdmin,
         payment,
         meta,
         covers,
     );
-
-    await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', paymentId);
 
     for (const c of covers.filter((c) => c.type === 'entry')) {
         await supabaseAdmin
@@ -197,6 +209,13 @@ async function finalizeManualEventPayment(
     }
 
     return { processed: true };
+    } catch (err) {
+        // Side-effects failed after we claimed the payment. Release the claim by
+        // reverting status to 'pending' so a retry (webhook or browser) can safely
+        // reprocess instead of leaving the registration half-finished.
+        await supabaseAdmin.from('payments').update({ status: 'pending' }).eq('id', paymentId);
+        throw err;
+    }
 }
 
 const corsHeaders = {
@@ -352,14 +371,44 @@ serve(async (req: Request) => {
     }
 
     try {
-        const { data: payment } = await supabaseAdmin
+        let { data: payment } = await supabaseAdmin
             .from('payments')
             .select('*')
             .eq('reference', reference)
             .maybeSingle();
 
-        if (!payment || parseMetadata(payment.metadata).source !== 'manual_event') {
-            return new Response(JSON.stringify({ received: true, skipped: true }), { status: 200, headers: corsHeaders });
+        const localIsManual = !!payment && parseMetadata(payment.metadata).source === 'manual_event';
+
+        // If there's no usable local manual_event row, reconstruct one from the
+        // metadata Paystack sends in the event itself. This makes finalisation
+        // resilient to flaky client flows — e.g. a long mobile 3DS where the tab
+        // closed before the browser could insert/confirm the processing row — so
+        // the webhook no longer depends on the browser having left a row behind.
+        if (!localIsManual) {
+            const eventMeta = parseMetadata(data?.metadata);
+            if (eventMeta.source !== 'manual_event') {
+                return new Response(JSON.stringify({ received: true, skipped: true }), { status: 200, headers: corsHeaders });
+            }
+            const amountRands = Number(data?.amount || 0) / 100;
+            const { data: repaired, error: repairErr } = await supabaseAdmin
+                .from('payments')
+                .upsert({
+                    reference,
+                    event_id: eventMeta.event_id ?? payment?.event_id ?? null,
+                    player_id: payment?.player_id ?? null,
+                    amount: amountRands || payment?.amount || 0,
+                    currency: 'ZAR',
+                    status: 'pending', // finalize's atomic claim flips this to success
+                    payment_type: 'event_entry_fee',
+                    payment_method: 'paystack',
+                    metadata: eventMeta,
+                    is_test: !!eventMeta.is_test,
+                }, { onConflict: 'reference' })
+                .select('*')
+                .maybeSingle();
+            if (repairErr) throw repairErr;
+            payment = repaired;
+            console.log(`paystack-webhook: reconstructed manual_event payment from event metadata for ${reference}`);
         }
 
         const result = await finalizeManualEventPayment(supabaseAdmin, payment);

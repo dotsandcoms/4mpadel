@@ -43,10 +43,6 @@ async function finalizeManualEventPayment(
     if (meta.source !== 'manual_event') {
         return { processed: false, skipped: true, reason: 'not_manual_event' };
     }
-    if (payment.status === 'success') {
-        return { processed: false, alreadyProcessed: true };
-    }
-
     const paymentId = payment.id as string;
     const reference = payment.reference as string;
     const amount = Number(payment.amount || 0);
@@ -54,14 +50,30 @@ async function finalizeManualEventPayment(
     const covers: Array<{ type: string; email: string; division?: string; license?: string }> =
         Array.isArray(meta.covers) ? meta.covers : [];
 
+    // Atomically claim this payment. This edge function (triggered by the browser)
+    // and the Paystack webhook both run identical persist + email logic, and either
+    // can be retried. They race on this single conditional UPDATE: only the caller
+    // that flips status from non-'success' -> 'success' gets a row back and proceeds.
+    // The losers return immediately, which is what stops the duplicate
+    // registration/payment confirmation emails.
+    const { data: claimed, error: claimError } = await supabaseAdmin
+        .from('payments')
+        .update({ status: 'success' })
+        .eq('id', paymentId)
+        .neq('status', 'success')
+        .select('id');
+    if (claimError) throw claimError;
+    if (!claimed || claimed.length === 0) {
+        return { processed: false, alreadyProcessed: true };
+    }
+
+    try {
     const { savedRows, persisted } = await persistManualEventRegistrations(
         supabaseAdmin,
         payment,
         meta,
         covers,
     );
-
-    await supabaseAdmin.from('payments').update({ status: 'success' }).eq('id', paymentId);
 
     for (const c of covers.filter((c) => c.type === 'entry')) {
         await supabaseAdmin
@@ -208,6 +220,13 @@ async function finalizeManualEventPayment(
     }
 
     return { processed: true };
+    } catch (err) {
+        // Side-effects failed after we claimed the payment. Release the claim by
+        // reverting status to 'pending' so a retry (browser or webhook) can safely
+        // reprocess instead of leaving the registration half-finished.
+        await supabaseAdmin.from('payments').update({ status: 'pending' }).eq('id', paymentId);
+        throw err;
+    }
 }
 
 serve(async (req: Request) => {

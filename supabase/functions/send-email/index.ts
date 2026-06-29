@@ -249,6 +249,39 @@ async function generateEmailBody(
     }
   }
 
+  // For confirmation emails, the partner shown on the card can be missing or a
+  // placeholder ("TBD") when the registrant joined via a partner invite — in that
+  // case the pairing lives on their event_registrations row, not in the payment
+  // metadata that the caller passed. Resolve the real partner from the database so
+  // the confirmation card is accurate.
+  if (
+    (template === 'event_registration' || template === 'payment_confirmation' || template === 'division_changed') &&
+    eventId &&
+    vars.recipientEmail &&
+    (!vars.partnerName || String(vars.partnerName).trim() === '' || vars.partnerName === 'TBD')
+  ) {
+    try {
+      const { data: regRows } = await supabaseAdmin
+        .from('event_registrations')
+        .select('partner_name')
+        .eq('event_id', eventId)
+        .ilike('email', String(vars.recipientEmail))
+        .neq('status', 'withdrawn');
+      const partnerNames = [
+        ...new Set(
+          (regRows || [])
+            .map((r: any) => String(r.partner_name || '').trim())
+            .filter((n: string) => n.length > 0),
+        ),
+      ];
+      if (partnerNames.length > 0) {
+        vars.partnerName = partnerNames.join(', ');
+      }
+    } catch (err) {
+      console.error('Partner name lookup failed:', (err as Error).message);
+    }
+  }
+
   const eventCardHtml = eventInfo ? generateEventCardHtml(eventInfo, vars) : '';
 
   switch (template) {
@@ -518,6 +551,46 @@ async function generateEmailBody(
       `;
       actionUrl = vars.payUrl || vars.eventUrl || 'https://4mpadel.co.za/calendar';
       actionLabel = !vars.paid && vars.amountDue && vars.amountDue !== 'R 0.00' ? 'Pay Entry Fee' : 'View Event Details';
+      break;
+
+    case 'division_changed':
+      subject = `Division Updated: ${vars.eventName || 'Tournament'} 🔄`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">Division Changed</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${vars.playerName || 'Player'}, your entry for <strong style="color: #FFFFFF;">${vars.eventName}</strong> has been moved to a new division. Your spot is still fully confirmed — only the division has changed.
+        </p>
+        <div style="background-color: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 20px; border-radius: 16px; margin-bottom: 24px; font-family: 'Outfit', sans-serif;">
+          <table width="100%" style="border-collapse: collapse;">
+            <tr>
+              <td style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748B; padding-bottom: 4px;">Previous division</td>
+              <td align="right" style="font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px; color: #64748B; padding-bottom: 4px;">New division</td>
+            </tr>
+            <tr>
+              <td style="font-size: 15px; font-weight: 700; color: #F59E0B; text-decoration: line-through;">${vars.fromDivision || 'Previous'}</td>
+              <td align="center" style="font-size: 18px; color: #64748B;">→</td>
+              <td align="right" style="font-size: 16px; font-weight: 800; color: #9AE900;">${vars.toDivision || vars.division || 'New'}</td>
+            </tr>
+          </table>
+        </div>
+        ${vars.feeNote ? `<p style="font-size: 13.5px; line-height: 1.6; color: #CBD5E1; margin-bottom: 24px;">${vars.feeNote}</p>` : ''}
+        ${eventCardHtml}
+      `;
+      actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Details';
+      break;
+
+    case 'partner_assigned':
+      subject = `You've been paired up: ${vars.eventName || 'Tournament'} 🎾`;
+      contentHtml = `
+        <h2 style="font-size: 24px; font-weight: 800; color: #9AE900; margin-top: 0; margin-bottom: 16px; font-family: 'Outfit', sans-serif;">You Have a Partner!</h2>
+        <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 24px;">
+          Hi ${vars.playerName || 'Player'}, you've been paired with <strong style="color: #FFFFFF;">${vars.partnerName || 'your partner'}</strong> for <strong style="color: #FFFFFF;">${vars.eventName}</strong>${vars.division ? ` in the <strong style="color: #FFFFFF;">${vars.division}</strong> division` : ''}. Your team is confirmed — both entries are paid and locked in. See you on court!
+        </p>
+        ${eventCardHtml}
+      `;
+      actionUrl = vars.eventUrl || 'https://4mpadel.co.za/calendar';
+      actionLabel = 'View Event Details';
       break;
 
     case 'payment_confirmation':
@@ -791,8 +864,16 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Make the primary recipient available to template logic (e.g. resolving the
+    // registrant's partner from the database) without changing any caller.
+    const emailVars = variables || {};
+    if (!emailVars.recipientEmail) {
+      const primaryTo = Array.isArray(to) ? to[0] : to;
+      if (primaryTo) emailVars.recipientEmail = primaryTo;
+    }
+
     // Compile beautiful HTML body and subject (asynchronous for db lookup)
-    const { subject, html } = await generateEmailBody(supabaseAdmin, template, variables || {});
+    const { subject, html } = await generateEmailBody(supabaseAdmin, template, emailVars);
 
     // Check if verified sender domain exists, otherwise fallback to custom domain
     const verifiedSender = Deno.env.get('RESEND_VERIFIED_SENDER') || 'notifications.4mpadel.co.za';

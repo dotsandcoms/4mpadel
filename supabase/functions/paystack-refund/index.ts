@@ -365,22 +365,35 @@ async function handleSwitchDivision(
         successPayments,
     );
 
-    // ---- Confirmation email ----
+    // ---- Division-changed email ----
+    // A dedicated template (not a fresh "Registration Confirmed") so the player
+    // clearly sees they moved FROM their old division TO the new one, rather than
+    // being confused by what looks like a brand-new registration.
     const eventUrl = `https://4mpadel.co.za/calendar/${event?.slug || eventId}`;
+    let feeNote = 'There was no change to your entry fee.';
+    if (chargedRands > 0) {
+        feeNote = `An additional <strong style="color:#FFFFFF;">${fmtR(chargedRands)}</strong> was charged for the higher entry fee of your new division.`;
+    } else if (refundedRands > 0) {
+        feeNote = `The <strong style="color:#FFFFFF;">${fmtR(refundedRands)}</strong> entry-fee difference is being refunded to you.`;
+    }
     try {
         await sendEmailViaEdge({
             to: reg.email,
-            template: 'event_registration',
+            template: 'division_changed',
             variables: {
                 eventId,
                 playerName: reg.full_name || 'Player',
                 eventName: event?.event_name || 'Tournament',
+                fromDivision: reg.division,
+                toDivision: targetDiv.name,
                 division: targetDiv.name,
+                // A division switch is a solo move — the partner link is cleared,
+                // so the new entry starts without a partner.
                 partnerName: 'TBD',
                 eventDates: event?.event_dates || '',
                 paid: true,
                 amount: fmtR(newFee),
-                amountDue: 'R 0.00',
+                feeNote,
                 eventUrl,
             },
         });

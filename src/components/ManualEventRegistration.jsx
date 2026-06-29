@@ -155,10 +155,17 @@ const getPartnerAvailability = (regs, divisionId, player, divisionName) => {
         const registeredBy = normEmail(primary.registered_by);
         if (registeredBy && registeredBy !== email) {
             const inviter = divRegs.find((r) => normEmail(r.email) === registeredBy);
-            return {
-                ok: false,
-                message: `${name} is already partnered with ${inviter?.full_name || 'another player'} for ${divLabel}`,
-            };
+            // `registered_by` only records who *created* this entry — it persists
+            // after a division switch or withdrawal that cleared the actual pairing.
+            // Only treat this as taken when the inviter STILL lists this player as
+            // their partner; otherwise it's a stale link and the player is free.
+            const inviterStillPartners = inviter && normEmail(inviter.partner_email) === email;
+            if (inviterStillPartners) {
+                return {
+                    ok: false,
+                    message: `${name} is already partnered with ${inviter?.full_name || 'another player'} for ${divLabel}`,
+                };
+            }
         }
         if (primary.partner_name?.trim() || primary.partner_email?.trim()) {
             const partnerEm = normEmail(primary.partner_email);

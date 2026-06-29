@@ -434,6 +434,9 @@ export async function switchRegistrationDivision(
         .eq('status', 'registered');
 
     // 2. Move the registration row to the new division (solo, partner cleared).
+    //    Reset registered_by to the player themselves: the moved entry is now a
+    //    fresh solo self-entry, not an invite. Leaving the old inviter here makes
+    //    it look perpetually "added by partner" and falsely blocks re-pairing.
     const { error } = await supabaseAdmin
         .from('event_registrations')
         .update({
@@ -442,6 +445,7 @@ export async function switchRegistrationDivision(
             partner_name: null,
             partner_email: null,
             partner_payment_status: null,
+            registered_by: reg.email,
         })
         .eq('id', reg.id);
     if (error) throw error;

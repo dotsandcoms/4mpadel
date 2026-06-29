@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import { sendEmail } from '../../utils/emails';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -40,6 +41,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
+    const [linkTarget, setLinkTarget] = useState(null); // solo entry we're adding a partner to
+    const [linkSearch, setLinkSearch] = useState('');
+    const [linkBusy, setLinkBusy] = useState(false);
+    const [moveTarget, setMoveTarget] = useState(null); // entry we're moving to another division
+    const [moveDivId, setMoveDivId] = useState('');
+    const [moveBusy, setMoveBusy] = useState(false);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -193,6 +200,171 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
             toast.error(`Failed: ${err.message}`);
         } finally {
             setMarkingId(null);
+        }
+    };
+
+    // Other paid, partnerless (solo) entries in the SAME division that the
+    // linkTarget can be paired with. Both sides are already paid, so this is a
+    // pure link — no charges, no division moves.
+    const eligiblePartners = useMemo(() => {
+        if (!linkTarget) return [];
+        const targetEmail = (linkTarget.email || '').toLowerCase();
+        const q = linkSearch.trim().toLowerCase();
+        return registrations.filter((r) => {
+            if (r.id === linkTarget.id) return false;
+            if (r.division !== linkTarget.division) return false;        // same division only
+            if (r.status === 'withdrawn') return false;
+            if (r.payment_status !== 'paid') return false;               // must already be paid
+            if ((r.email || '').toLowerCase() === targetEmail) return false;
+            if (r.partner_name?.trim() || r.partner_email?.trim()) return false; // must be solo
+            // exclude anyone already listed as another active entry's partner in this division
+            const alreadyTaken = registrations.some((x) =>
+                x.id !== r.id
+                && x.division === r.division
+                && x.status !== 'withdrawn'
+                && (x.partner_email || '').toLowerCase() === (r.email || '').toLowerCase());
+            if (alreadyTaken) return false;
+            if (q) {
+                const hay = [r.full_name, r.email].filter(Boolean).join(' ').toLowerCase();
+                if (!hay.includes(q)) return false;
+            }
+            return true;
+        });
+    }, [linkTarget, registrations, linkSearch]);
+
+    // Pair two paid solo entries into a team by mutually linking their rows.
+    const linkPartner = async (soloReg, partnerReg) => {
+        setLinkBusy(true);
+        try {
+            const [a, b] = await Promise.all([
+                supabase.from('event_registrations').update({
+                    partner_name: partnerReg.full_name,
+                    partner_email: partnerReg.email,
+                    partner_payment_status: 'paid',
+                }).eq('id', soloReg.id),
+                supabase.from('event_registrations').update({
+                    partner_name: soloReg.full_name,
+                    partner_email: soloReg.email,
+                    partner_payment_status: 'paid',
+                }).eq('id', partnerReg.id),
+            ]);
+            if (a.error) throw a.error;
+            if (b.error) throw b.error;
+
+            // Notify both players that they're now a team (best-effort).
+            try {
+                await Promise.all([
+                    sendEmail(soloReg.email, 'partner_assigned', {
+                        eventId: event.id,
+                        playerName: soloReg.full_name,
+                        partnerName: partnerReg.full_name,
+                        eventName: event.event_name,
+                        division: soloReg.division,
+                    }),
+                    sendEmail(partnerReg.email, 'partner_assigned', {
+                        eventId: event.id,
+                        playerName: partnerReg.full_name,
+                        partnerName: soloReg.full_name,
+                        eventName: event.event_name,
+                        division: soloReg.division,
+                    }),
+                ]);
+            } catch (mailErr) {
+                console.error('Partner-assigned email failed:', mailErr);
+            }
+
+            toast.success(`Paired ${soloReg.full_name} with ${partnerReg.full_name}`);
+            setLinkTarget(null);
+            setLinkSearch('');
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to pair players');
+        } finally {
+            setLinkBusy(false);
+        }
+    };
+
+    // Divisions an entry can be moved into: active, not the current one, and not
+    // one the player is already entered in.
+    const eligibleMoveDivisions = useMemo(() => {
+        if (!moveTarget) return [];
+        const email = (moveTarget.email || '').toLowerCase();
+        return divisions.filter((d) => {
+            if (d.name === moveTarget.division) return false;
+            if (d.is_active === false) return false;
+            const already = registrations.some((r) =>
+                r.id !== moveTarget.id
+                && (r.email || '').toLowerCase() === email
+                && r.division === d.name
+                && r.status !== 'withdrawn');
+            return !already;
+        });
+    }, [moveTarget, divisions, registrations]);
+
+    // Move one entry to another division (solo move — any pairing is broken). If
+    // the new fee is higher, the entry is marked pending so the player completes
+    // the extra payment; otherwise the paid status is kept (no auto-refund).
+    const movePlayer = async () => {
+        if (!moveTarget || !moveDivId) return;
+        const targetDiv = divisions.find((d) => d.id === moveDivId);
+        if (!targetDiv) return;
+        setMoveBusy(true);
+        try {
+            const oldFee = divFee(moveTarget.division);
+            const newFee = Number(targetDiv.entry_fee || 0);
+            const owesMore = newFee > oldFee && moveTarget.payment_status === 'paid';
+            const newStatus = owesMore ? 'pending' : moveTarget.payment_status;
+
+            // Unlink the partner in the OLD division (this is a solo move).
+            if (moveTarget.partner_email) {
+                await supabase.from('event_registrations')
+                    .update({ partner_name: null, partner_email: null, partner_payment_status: null })
+                    .eq('event_id', event.id)
+                    .ilike('email', moveTarget.partner_email)
+                    .eq('division', moveTarget.division)
+                    .neq('status', 'withdrawn');
+            }
+
+            const { error } = await supabase.from('event_registrations').update({
+                division_id: targetDiv.id,
+                division: targetDiv.name,
+                partner_name: null,
+                partner_email: null,
+                partner_payment_status: null,
+                registered_by: moveTarget.email,
+                payment_status: newStatus,
+            }).eq('id', moveTarget.id);
+            if (error) throw error;
+
+            let feeNote = 'There was no change to your entry fee.';
+            if (owesMore) feeNote = `Your new division has a higher entry fee of ${fmtR(newFee)}. Your entry is now marked pending — please complete payment to confirm your spot.`;
+            else if (newFee < oldFee) feeNote = 'Your new division has a lower entry fee; any difference will be handled by the organiser.';
+
+            try {
+                await sendEmail(moveTarget.email, 'division_changed', {
+                    eventId: event.id,
+                    playerName: moveTarget.full_name,
+                    eventName: event.event_name,
+                    fromDivision: moveTarget.division,
+                    toDivision: targetDiv.name,
+                    division: targetDiv.name,
+                    partnerName: 'TBD',
+                    feeNote,
+                });
+            } catch (mailErr) {
+                console.error('Move email failed:', mailErr);
+            }
+
+            toast.success(owesMore
+                ? `Moved ${moveTarget.full_name} to ${targetDiv.name} — marked pending payment`
+                : `Moved ${moveTarget.full_name} to ${targetDiv.name}`);
+            setMoveTarget(null);
+            setMoveDivId('');
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to move player');
+        } finally {
+            setMoveBusy(false);
         }
     };
 
@@ -472,6 +644,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                             </td>
                                             <td className="py-3 px-4 text-right">
                                                 <div className="inline-flex items-center gap-2 justify-end">
+                                                    {r.status !== 'withdrawn' && r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
+                                                        <button
+                                                            onClick={() => { setLinkSearch(''); setLinkTarget(r); }}
+                                                            className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-500 hover:text-white inline-flex items-center gap-1.5"
+                                                        >
+                                                            <UserPlus size={12} />
+                                                            Add Partner
+                                                        </button>
+                                                    )}
                                                     {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
                                                         <button
                                                             onClick={() => markPaid(r)}
@@ -480,6 +661,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                                         >
                                                             {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
                                                             Mark Paid
+                                                        </button>
+                                                    )}
+                                                    {r.status !== 'withdrawn' && (
+                                                        <button
+                                                            onClick={() => { setMoveDivId(''); setMoveTarget(r); }}
+                                                            className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-violet-500 hover:text-white inline-flex items-center gap-1.5"
+                                                        >
+                                                            <ArrowRightLeft size={12} />
+                                                            Move
                                                         </button>
                                                     )}
                                                     {r.status !== 'withdrawn' && (
@@ -546,6 +736,123 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                             {paid ? 'Remove without refund' : 'Remove'}
                                         </button>
                                         <button onClick={() => setRemoveTarget(null)} disabled={removeBusy}
+                                            className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {linkTarget && (
+                        <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/60" onClick={() => !linkBusy && setLinkTarget(null)}>
+                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-9 h-9 rounded-xl bg-sky-500/10 flex items-center justify-center shrink-0">
+                                        <UserPlus size={16} className="text-sky-400" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h3 className="text-white font-bold truncate">Add partner for {linkTarget.full_name}</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">{linkTarget.division} · pick another paid solo player in this division.</p>
+                                    </div>
+                                </div>
+
+                                <div className="relative mb-3">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                    <input
+                                        autoFocus
+                                        value={linkSearch}
+                                        onChange={(e) => setLinkSearch(e.target.value)}
+                                        placeholder="Search paid solo players…"
+                                        className="w-full bg-black/30 border border-white/10 rounded-lg pl-9 pr-3 py-2 text-sm text-white outline-none focus:border-sky-500/50"
+                                    />
+                                </div>
+
+                                <div className="max-h-64 overflow-y-auto -mx-1 px-1 space-y-1">
+                                    {eligiblePartners.length === 0 ? (
+                                        <p className="text-xs text-gray-500 text-center py-6">No eligible paid solo players in {linkTarget.division}.</p>
+                                    ) : eligiblePartners.map((p) => (
+                                        <button
+                                            key={p.id}
+                                            disabled={linkBusy}
+                                            onClick={() => linkPartner(linkTarget, p)}
+                                            className="w-full flex items-center justify-between gap-3 text-left bg-white/5 hover:bg-sky-500/10 border border-white/5 hover:border-sky-500/30 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-semibold text-white truncate">{p.full_name}</div>
+                                                <div className="text-[11px] text-gray-500 truncate">{p.email}</div>
+                                            </div>
+                                            {linkBusy ? <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" /> : <UserPlus size={14} className="text-sky-400 shrink-0" />}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <button onClick={() => setLinkTarget(null)} disabled={linkBusy}
+                                    className="mt-4 w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {moveTarget && (() => {
+                        const targetDiv = divisions.find((d) => d.id === moveDivId);
+                        const oldFee = divFee(moveTarget.division);
+                        const newFee = targetDiv ? Number(targetDiv.entry_fee || 0) : null;
+                        const owesMore = !!targetDiv && newFee > oldFee && moveTarget.payment_status === 'paid';
+                        const cheaper = !!targetDiv && newFee < oldFee;
+                        return (
+                            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 bg-black/60" onClick={() => !moveBusy && setMoveTarget(null)}>
+                                <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-start gap-3 mb-4">
+                                        <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center shrink-0">
+                                            <ArrowRightLeft size={16} className="text-violet-300" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-white font-bold truncate">Move {moveTarget.full_name}</h3>
+                                            <p className="text-xs text-gray-400 mt-0.5">Currently in {moveTarget.division}{moveTarget.partner_name ? ` · paired with ${moveTarget.partner_name}` : ''}</p>
+                                        </div>
+                                    </div>
+
+                                    {moveTarget.partner_name && (
+                                        <div className="mb-3 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                                            This is a solo move — the pairing with <span className="font-bold">{moveTarget.partner_name}</span> will be removed.
+                                        </div>
+                                    )}
+
+                                    <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Move to division</label>
+                                    {eligibleMoveDivisions.length === 0 ? (
+                                        <p className="text-xs text-gray-500 py-3">No other divisions available for this player.</p>
+                                    ) : (
+                                        <select
+                                            value={moveDivId}
+                                            onChange={(e) => setMoveDivId(e.target.value)}
+                                            className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-violet-500/50 mb-3"
+                                        >
+                                            <option value="">Select a division…</option>
+                                            {eligibleMoveDivisions.map((d) => (
+                                                <option key={d.id} value={d.id}>{d.name} — {fmtR(Number(d.entry_fee || 0))}</option>
+                                            ))}
+                                        </select>
+                                    )}
+
+                                    {targetDiv && (
+                                        <div className={`mb-4 text-[11px] rounded-lg px-3 py-2 border ${owesMore ? 'text-amber-300 bg-amber-500/10 border-amber-500/20' : 'text-gray-400 bg-white/5 border-white/10'}`}>
+                                            {owesMore
+                                                ? `Higher fee (${fmtR(newFee)}). This entry will be marked PENDING so the player completes the extra payment.`
+                                                : cheaper
+                                                    ? `Lower fee (${fmtR(newFee)}). The entry stays paid — no automatic refund (reconcile manually if needed).`
+                                                    : `Same entry fee (${fmtR(newFee)}). Status is unchanged.`}
+                                        </div>
+                                    )}
+
+                                    <div className="flex flex-col gap-2">
+                                        <button onClick={movePlayer} disabled={!moveDivId || moveBusy}
+                                            className="w-full py-2.5 rounded-lg text-sm font-bold bg-violet-500 text-white hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2">
+                                            {moveBusy ? <Loader2 size={14} className="animate-spin" /> : <ArrowRightLeft size={14} />} Move player
+                                        </button>
+                                        <button onClick={() => setMoveTarget(null)} disabled={moveBusy}
                                             className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
                                             Cancel
                                         </button>

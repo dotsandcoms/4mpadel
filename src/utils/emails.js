@@ -121,6 +121,8 @@ const getSubjectForTemplate = (template, vars) => {
             return `Refund Initiated: ${vars.eventName || 'Tournament'} ✅`;
         case 'partner_invite':
             return `${vars.inviterName || 'Your partner'} registered you for ${vars.eventName || 'a tournament'}! 🎾`;
+        case 'partner_assigned':
+            return `You've been paired up: ${vars.eventName || 'Tournament'} 🎾`;
         case 'profile_invite':
             return `${vars.inviterName || 'A 4M Padel player'} invited you to join 4M Padel 🎾`;
         default: 
