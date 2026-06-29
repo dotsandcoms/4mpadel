@@ -558,25 +558,26 @@ const Hero = () => {
                                         ) : (
                                             // ── Actual Data ──
                                             <div className="lg:col-span-12">
-                                                <div className="flex items-center gap-1 sm:gap-2 mb-4 bg-white/5 p-1 rounded-lg w-fit border border-white/10">
+                                                {/* Tabs */}
+                                                <div className="flex w-full mb-6 bg-transparent border border-white/10 rounded-xl p-1">
                                                     <button
                                                         onClick={() => setActiveHeroTab('matches')}
-                                                        className={`px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${activeHeroTab === 'matches' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'matches' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        My Next Matches
+                                                        <Trophy size={16} /> My Next Matches
                                                         {matchesCount > 0 && (
-                                                            <span className="bg-orange-500 text-white text-[11px] sm:text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 leading-none">
+                                                            <span className="bg-orange-500 text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
                                                                 {matchesCount}
                                                             </span>
                                                         )}
                                                     </button>
                                                     <button
                                                         onClick={() => setActiveHeroTab('events')}
-                                                        className={`px-2 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 sm:gap-2 whitespace-nowrap ${activeHeroTab === 'events' ? 'bg-white/10 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
+                                                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'events' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        My Next Events
+                                                        <Calendar size={16} /> My Next Events
                                                         {upcomingEvents.length > 0 && (
-                                                            <span className="bg-padel-green text-black text-[11px] sm:text-xs font-black w-5 h-5 rounded-full flex items-center justify-center shrink-0 leading-none">
+                                                            <span className="bg-padel-green text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
                                                                 {upcomingEvents.length}
                                                             </span>
                                                         )}
@@ -586,103 +587,72 @@ const Hero = () => {
                                                 {/* Left Side: Upcoming Events */}
                                                 {activeHeroTab === 'events' && (
                                                     upcomingEvents.length > 0 ? (
-                                                        <div className="w-full animate-fade-in">
-                                                            {/* Event cards — horizontal scroll */}
-                                                            <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
+                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
+                                                            <div className="flex flex-col">
                                                                 {upcomingEvents.map((event, idx) => {
-                                                                    // colour accent
-                                                                    let borderCls = 'border-padel-green/60 shadow-[0_0_15px_rgba(46,213,115,0.1)]';
-                                                                    let hoverCls = 'hover:border-padel-green hover:shadow-[0_0_25px_rgba(46,213,115,0.2)]';
-                                                                    let dateCls = 'text-padel-green';
-                                                                    let glowBg = 'from-padel-green/10 to-transparent';
-                                                                    let ringCls = 'border-padel-green/30 text-padel-green';
-
+                                                                    let ringCls = 'text-padel-green';
+                                                                    
                                                                     if (event.sapa_status === 'Major') {
-                                                                        borderCls = 'border-red-500/60 shadow-[0_0_15px_rgba(239,68,68,0.1)]';
-                                                                        hoverCls = 'hover:border-red-500 hover:shadow-[0_0_25px_rgba(239,68,68,0.2)]';
-                                                                        dateCls = 'text-red-400';
-                                                                        glowBg = 'from-red-500/10 to-transparent';
-                                                                        ringCls = 'border-red-500/30 text-red-400';
+                                                                        ringCls = 'text-red-500';
                                                                     } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                        borderCls = 'border-amber-500/60 shadow-[0_0_15px_rgba(245,158,11,0.1)]';
-                                                                        hoverCls = 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.2)]';
-                                                                        dateCls = 'text-amber-400';
-                                                                        glowBg = 'from-amber-500/10 to-transparent';
-                                                                        ringCls = 'border-amber-500/30 text-amber-400';
+                                                                        ringCls = 'text-amber-500';
                                                                     } else if (event.sapa_status === 'Gold') {
-                                                                        borderCls = 'border-yellow-500/60 shadow-[0_0_15px_rgba(234,179,8,0.1)]';
-                                                                        hoverCls = 'hover:border-yellow-400 hover:shadow-[0_0_25px_rgba(234,179,8,0.2)]';
-                                                                        dateCls = 'text-yellow-400';
-                                                                        glowBg = 'from-yellow-500/10 to-transparent';
-                                                                        ringCls = 'border-yellow-500/30 text-yellow-400';
+                                                                        ringCls = 'text-yellow-500';
                                                                     } else if (event.sapa_status === 'Silver') {
-                                                                        borderCls = 'border-gray-400/60 shadow-[0_0_15px_rgba(156,163,175,0.1)]';
-                                                                        hoverCls = 'hover:border-gray-300 hover:shadow-[0_0_25px_rgba(156,163,175,0.2)]';
-                                                                        dateCls = 'text-gray-300';
-                                                                        glowBg = 'from-gray-400/10 to-transparent';
-                                                                        ringCls = 'border-gray-400/30 text-gray-300';
+                                                                        ringCls = 'text-gray-400';
                                                                     } else if (event.sapa_status === 'Bronze') {
-                                                                        borderCls = 'border-orange-600/60 shadow-[0_0_15px_rgba(234,88,12,0.1)]';
-                                                                        hoverCls = 'hover:border-orange-500 hover:shadow-[0_0_25px_rgba(234,88,12,0.2)]';
-                                                                        dateCls = 'text-orange-400';
-                                                                        glowBg = 'from-orange-600/10 to-transparent';
-                                                                        ringCls = 'border-orange-600/30 text-orange-400';
+                                                                        ringCls = 'text-orange-600';
                                                                     }
 
                                                                     return (
-                                                                        <motion.button
+                                                                        <button
                                                                             key={event.id}
-                                                                            initial={{ opacity: 0, y: 15 }}
-                                                                            animate={{ opacity: 1, y: 0 }}
-                                                                            transition={{ delay: 0.1 + idx * 0.08, type: 'spring', stiffness: 100 }}
                                                                             onClick={() => {
                                                                                 if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
                                                                                 else if (!event.id.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                                             }}
-                                                                            className={`relative flex-shrink-0 w-52 md:w-64 bg-white/5 backdrop-blur-md border ${borderCls} ${hoverCls} rounded-2xl p-4 text-left transition-all duration-300 group hover:-translate-y-1 hover:scale-[1.02]`}
+                                                                            className="flex items-center gap-4 p-4 border-b border-white/10 hover:bg-white/5 transition-colors text-left group"
                                                                         >
-                                                                            {/* Subtle status top gradient bar */}
-                                                                            <div className={`absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r ${glowBg}`} />
-
-                                                                            <div className="flex justify-between items-start mb-2">
-                                                                                <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded bg-white/5 border ${ringCls}`}>
-                                                                                    {event.sapa_status || 'SAPA'}
-                                                                                </span>
-
-                                                                                {/* Paid Stamp / Icon */}
-                                                                                {event.isPaid ? (
-                                                                                    <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-padel-green bg-padel-green/10 border border-padel-green/35 px-1.5 py-0.5 rounded-full animate-pulse-slow">
-                                                                                        <CheckCircle2 size={10} className="shrink-0" /> Paid
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <ExternalLink size={9} className="text-white/25 group-hover:text-white/50 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all shrink-0" />
-                                                                                )}
+                                                                            <Calendar size={20} className="text-padel-green shrink-0" />
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <p className="text-white text-sm font-bold uppercase truncate">{event.event_name}</p>
+                                                                                <p className="text-[11px] text-white/50 mt-1 uppercase font-semibold">
+                                                                                    {new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                                                    <span className="mx-1.5 font-light">|</span>
+                                                                                    <span className={ringCls}>{event.sapa_status || 'SAPA'}</span>
+                                                                                </p>
                                                                             </div>
-
-                                                                            <p className="text-sm font-semibold text-white uppercase tracking-tight line-clamp-2 group-hover:text-padel-green transition-colors leading-snug mb-3.5 h-10">
-                                                                                {event.event_name}
-                                                                            </p>
-
-                                                                            <div className="flex items-center justify-between mt-auto border-t border-white/5 pt-2">
-                                                                                <span className={`text-xs font-medium ${dateCls} flex items-center gap-1.5`}>
-                                                                                    <Calendar size={12} className="shrink-0" />
-                                                                                    {new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                                                </span>
-                                                                            </div>
-                                                                        </motion.button>
+                                                                            <ChevronRight size={18} className="text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
+                                                                        </button>
                                                                     );
                                                                 })}
+                                                                <button
+                                                                    onClick={() => navigate('/calendar')}
+                                                                    className="py-4 text-center text-sm font-bold text-padel-green hover:text-padel-green/80 flex items-center justify-center gap-1 w-full transition-colors"
+                                                                >
+                                                                    View all events <ChevronRight size={16} />
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="text-white/50 py-4 text-sm font-medium">No upcoming events this month.</div>
+                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                            <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <h3 className="text-white font-bold text-sm mb-1">You have no upcoming events.</h3>
+                                                            <p className="text-white/50 text-[11px] font-medium mb-6">Explore the calendar to find your next event.</p>
+                                                            <button
+                                                                onClick={() => navigate('/calendar')}
+                                                                className="text-padel-green text-xs font-bold flex items-center gap-1 hover:text-padel-green/80 transition-colors"
+                                                            >
+                                                                Explore Calendar <ChevronRight size={14} />
+                                                            </button>
+                                                        </div>
                                                     )
                                                 )}
 
                                                 {/* Right Side: My Next Match */}
                                                 {activeHeroTab === 'matches' && (
                                                     nextMatch ? (
-                                                        <div className="w-full lg:w-1/2 xl:w-1/3 animate-fade-in">
+                                                        <div className="w-full animate-fade-in bg-white/5 border border-white/10 rounded-2xl overflow-hidden p-4">
                                                             {/* Match Card */}
                                                             {(() => {
                                                                 const info = nextMatch.Info || {};
@@ -769,7 +739,11 @@ const Hero = () => {
                                                             })()}
                                                         </div>
                                                     ) : (
-                                                        <div className="text-white/50 py-4 text-sm font-medium">No upcoming matches at this moment.</div>
+                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                            <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <h3 className="text-white font-bold text-sm mb-1">You have no upcoming matches.</h3>
+                                                            <p className="text-white/50 text-[11px] font-medium mb-6">Your next match will appear here when draws are published.</p>
+                                                        </div>
                                                     )
                                                 )}
                                             </div>
