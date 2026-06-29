@@ -1963,7 +1963,22 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             console.error('Payment confirmation error:', confirmErr);
             toast.error(confirmErr.message || 'Payment received but confirmation failed. Try refreshing or contact support.');
         }
-        setConfirmedPaidTotal(paidAmount ?? 0);
+        // Show the amount actually charged, not the client-side `total` captured
+        // when the checkout was preloaded — that value can drift if the cart/fees
+        // changed between preload and completion. The payments row is the source of
+        // truth (it's what Paystack charged and what the receipt/emails report).
+        let confirmedAmount = paidAmount ?? 0;
+        try {
+            const { data: payRow } = await supabase
+                .from('payments')
+                .select('amount')
+                .eq('reference', paidRef)
+                .maybeSingle();
+            if (payRow?.amount != null) confirmedAmount = Number(payRow.amount);
+        } catch (amountErr) {
+            console.error('Could not load charged amount, falling back to client total:', amountErr);
+        }
+        setConfirmedPaidTotal(confirmedAmount);
         setProcessing(false);
         setWizardStep(5);
         await loadMyRegs();

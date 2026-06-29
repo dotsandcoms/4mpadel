@@ -2740,7 +2740,7 @@ const EventDetails = () => {
                             variant="banner"
                             accent={theme?.fill || '#CCFF00'}
                             showActions
-                            withdrawLabel="Decline"
+                            withdrawLabel={entry.isPaid ? 'Withdraw' : 'Decline'}
                             onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
                         />
                     ))}
