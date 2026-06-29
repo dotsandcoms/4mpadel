@@ -286,6 +286,13 @@ const FinanceManager = () => {
                     enrichedEventDate = eventData.start_date || enrichedEventDate;
                 }
 
+                // Divisions for this event — used to safely resolve a participant's
+                // class to a real division before backfilling an event_registrations row.
+                const { data: eventDivisions } = await supabase
+                    .from('tournament_divisions')
+                    .select('id, name')
+                    .eq('event_id', enrichedEventId);
+
                 console.info(`Marking participants for Player ${player.name} in Event ${enrichedEventId} as PAID...`);
                 
                 const normalizeDivisionKey = (value) => (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -473,7 +480,52 @@ const FinanceManager = () => {
                                 },
                             })
                             .eq('id', p.id);
-                            
+
+                        // Backfill the payer's OWN event_registrations row if it's
+                        // missing, so a finance sync fully enters them rather than only
+                        // marking the participant cache. Strict safety rules to avoid
+                        // duplicate / false entries:
+                        //   - only the payer's own entry (never partners, which can be
+                        //     fuzzy-matched and risk false entries),
+                        //   - only when the participant's class maps to a REAL division,
+                        //   - check for an existing (non-withdrawn) row first; if found,
+                        //     only nudge it to paid — never insert a second row.
+                        if (!isPartner && email) {
+                            const matchedDiv = (eventDivisions || []).find((d) => divisionMatches(d.name, p.class_name));
+                            if (matchedDiv) {
+                                const { data: existingReg } = await supabase
+                                    .from('event_registrations')
+                                    .select('id, payment_status')
+                                    .eq('event_id', enrichedEventId)
+                                    .ilike('email', email)
+                                    .eq('division', matchedDiv.name)
+                                    .neq('status', 'withdrawn')
+                                    .maybeSingle();
+
+                                if (existingReg) {
+                                    if (existingReg.payment_status !== 'paid') {
+                                        await supabase
+                                            .from('event_registrations')
+                                            .update({ payment_status: 'paid', payment_method: 'paystack' })
+                                            .eq('id', existingReg.id);
+                                    }
+                                } else {
+                                    await supabase.from('event_registrations').insert({
+                                        event_id: enrichedEventId,
+                                        email,
+                                        full_name: player.name,
+                                        division: matchedDiv.name,
+                                        division_id: matchedDiv.id,
+                                        payment_status: 'paid',
+                                        payment_method: 'paystack',
+                                        status: 'registered',
+                                        registered_by: email,
+                                    });
+                                    console.info(`[Sync] Backfilled event_registrations: ${player.name} — ${matchedDiv.name}`);
+                                }
+                            }
+                        }
+
                         // Prepare entry fee payment record
                         paymentsToInsert.push({
                             player_id: p.profile_id || player.id,

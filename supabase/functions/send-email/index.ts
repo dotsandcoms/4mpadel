@@ -92,13 +92,17 @@ function generateEventCardHtml(
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(eventInfo.address + ' ' + (eventInfo.venue || ''))}`
     : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venueString)}`;
 
-  // Determine payment status badge
+  // Determine payment status badge.
+  // "Payment Pending" must only appear when there is genuinely something to pay —
+  // an outstanding Amount Due, or a pay link. If nothing is owed (e.g. a fee-neutral
+  // division change, or a confirmed/paid entry), the card shows Paid instead of
+  // falsely warning about a pending payment.
   let statusBadge = '';
   const isWithdrawn = vars.statusOverride?.toLowerCase() === 'withdrawn';
-  const isPaid = !isWithdrawn && (
-    vars.paid === true
-    || (!vars.formerPartnerName && vars.paid !== false && Boolean(vars.amount) && !vars.amountDue && !vars.payUrl)
-  );
+  const amountDueRaw = String(vars.amountDue || '').replace(/\s/g, '').toUpperCase();
+  const hasOutstanding = !!amountDueRaw && amountDueRaw !== 'R0.00' && amountDueRaw !== 'R0';
+  const isPending = !isWithdrawn && vars.paid !== true && (hasOutstanding || Boolean(vars.payUrl));
+  const isPaid = !isWithdrawn && !isPending;
   
   if (isWithdrawn) {
     statusBadge = `<span style="background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); color: #FCA5A5; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 20px; display: inline-block;">Withdrawn</span>`;

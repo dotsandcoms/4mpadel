@@ -47,6 +47,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const [moveTarget, setMoveTarget] = useState(null); // entry we're moving to another division
     const [moveDivId, setMoveDivId] = useState('');
     const [moveBusy, setMoveBusy] = useState(false);
+    const [divisionFilter, setDivisionFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('division'); // 'division' | 'name' | 'recent'
+    const [profileResults, setProfileResults] = useState([]); // profiles not yet entered (for invite)
+    const [searchingProfiles, setSearchingProfiles] = useState(false);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -97,7 +101,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     }, [event?.id]);
 
     useEffect(() => {
-        if (isOpen) { load(); setSearch(''); setStatusFilter('all'); }
+        if (isOpen) { load(); setSearch(''); setStatusFilter('all'); setDivisionFilter('all'); setSortBy('division'); }
     }, [isOpen, load]);
 
     const divFee = useCallback(
@@ -161,14 +165,26 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
             if (statusFilter === 'paid') rows = rows.filter((r) => r.payment_status === 'paid');
             if (statusFilter === 'pending') rows = rows.filter((r) => r.payment_status !== 'paid');
         }
+        if (divisionFilter !== 'all') {
+            rows = rows.filter((r) => r.division === divisionFilter);
+        }
         if (search.trim()) {
             const q = search.toLowerCase();
             rows = rows.filter((r) =>
                 [r.full_name, r.email, r.division, r.partner_name, r.partner_email].filter(Boolean).some((v) => v.toLowerCase().includes(q))
             );
         }
-        return rows;
-    }, [registrations, statusFilter, search]);
+        const sorted = [...rows];
+        if (sortBy === 'division') {
+            sorted.sort((a, b) =>
+                (a.division || '').localeCompare(b.division || '')
+                || (a.full_name || '').localeCompare(b.full_name || ''));
+        } else if (sortBy === 'name') {
+            sorted.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+        }
+        // 'recent' keeps the load order (created_at desc)
+        return sorted;
+    }, [registrations, statusFilter, search, divisionFilter, sortBy]);
 
     const markPaid = async (reg) => {
         setMarkingId(reg.id);
@@ -231,6 +247,111 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
             return true;
         });
     }, [linkTarget, registrations, linkSearch]);
+
+    // Search 4M player profiles who are NOT yet entered in this division — these can
+    // be added as a partner and will be invited (by email) to pay their entry.
+    useEffect(() => {
+        if (!linkTarget || linkSearch.trim().length < 2) { setProfileResults([]); return; }
+        let cancelled = false;
+        const handle = setTimeout(async () => {
+            setSearchingProfiles(true);
+            const q = linkSearch.trim().replace(/[,()%]/g, ' ');
+            const { data } = await supabase
+                .from('players')
+                .select('id, name, email, image_url')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .limit(8);
+            if (cancelled) return;
+            // Exclude the solo player and anyone already entered (active) in this division.
+            const taken = new Set(
+                registrations
+                    .filter((r) => r.division === linkTarget.division && r.status !== 'withdrawn')
+                    .map((r) => (r.email || '').toLowerCase()),
+            );
+            taken.add((linkTarget.email || '').toLowerCase());
+            setProfileResults((data || []).filter((p) => p.email && !taken.has(p.email.toLowerCase())));
+            setSearchingProfiles(false);
+        }, 300);
+        return () => { cancelled = true; clearTimeout(handle); };
+    }, [linkTarget, linkSearch, registrations]);
+
+    // Add a profile-holder who isn't entered yet as a partner: create their PENDING
+    // entry, link it to the solo entry, and email them an invite to pay. Guards
+    // against duplicates (never adds someone already entered in this division).
+    const addUnregisteredPartner = async (soloReg, profile) => {
+        setLinkBusy(true);
+        try {
+            const alreadyEntered = registrations.some((r) =>
+                r.division === soloReg.division
+                && r.status !== 'withdrawn'
+                && (r.email || '').toLowerCase() === (profile.email || '').toLowerCase());
+            if (alreadyEntered) {
+                toast.error(`${profile.name} is already entered in ${soloReg.division}`);
+                setLinkBusy(false);
+                return;
+            }
+
+            const div = divisions.find((d) => d.name === soloReg.division);
+            const fee = divFee(soloReg.division);
+
+            const { data: inserted, error: insErr } = await supabase
+                .from('event_registrations')
+                .insert({
+                    event_id: event.id,
+                    email: profile.email,
+                    full_name: profile.name,
+                    division: soloReg.division,
+                    division_id: div?.id || null,
+                    payment_status: 'pending',
+                    status: 'registered',
+                    registered_by: soloReg.email, // the solo player is the inviter
+                    partner_name: soloReg.full_name,
+                    partner_email: soloReg.email,
+                    partner_payment_status: 'paid', // their partner (the solo player) is paid
+                })
+                .select('id, pay_token')
+                .maybeSingle();
+            if (insErr) throw insErr;
+
+            const { error: updErr } = await supabase
+                .from('event_registrations')
+                .update({
+                    partner_name: profile.name,
+                    partner_email: profile.email,
+                    partner_payment_status: 'pending', // new partner hasn't paid yet
+                })
+                .eq('id', soloReg.id);
+            if (updErr) throw updErr;
+
+            // Invite-to-pay email (best-effort).
+            const eventUrl = `https://4mpadel.co.za/calendar/${event.slug || event.id}`;
+            const payUrl = inserted?.pay_token ? `${eventUrl}?pay_token=${inserted.pay_token}` : eventUrl;
+            try {
+                await sendEmail(profile.email, 'partner_invite', {
+                    eventId: event.id,
+                    playerName: profile.name,
+                    inviterName: soloReg.full_name,
+                    eventName: event.event_name,
+                    division: soloReg.division,
+                    eventDates: event.event_dates || '',
+                    amountDue: fmtR(fee),
+                    payUrl,
+                });
+            } catch (mailErr) {
+                console.error('Partner invite email failed:', mailErr);
+            }
+
+            toast.success(`Invited ${profile.name} — they'll get an email to pay their entry`);
+            setLinkTarget(null);
+            setLinkSearch('');
+            setProfileResults([]);
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to add partner');
+        } finally {
+            setLinkBusy(false);
+        }
+    };
 
     // Pair two paid solo entries into a team by mutually linking their rows.
     const linkPartner = async (soloReg, partnerReg) => {
@@ -349,6 +470,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                     toDivision: targetDiv.name,
                     division: targetDiv.name,
                     partnerName: 'TBD',
+                    // Reflect the real post-move status so the card never shows
+                    // "Payment Pending" when nothing is owed.
+                    paid: newStatus === 'paid',
+                    amount: fmtR(newFee),
+                    amountDue: newStatus === 'paid' ? 'R 0.00' : fmtR(newFee),
                     feeNote,
                 });
             } catch (mailErr) {
@@ -591,6 +717,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                 </button>
                             ))}
                         </div>
+                        <select
+                            value={divisionFilter}
+                            onChange={(e) => setDivisionFilter(e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                            title="Filter by division"
+                        >
+                            <option value="all">All divisions</option>
+                            {divisions.map((d) => (
+                                <option key={d.id} value={d.name}>{d.name}</option>
+                            ))}
+                        </select>
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                            title="Sort by"
+                        >
+                            <option value="division">Sort: Division</option>
+                            <option value="name">Sort: Player name</option>
+                            <option value="recent">Sort: Most recent</option>
+                        </select>
                     </div>
 
                     {/* Table */}
@@ -646,7 +793,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                                 <div className="inline-flex items-center gap-2 justify-end">
                                                     {r.status !== 'withdrawn' && r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
                                                         <button
-                                                            onClick={() => { setLinkSearch(''); setLinkTarget(r); }}
+                                                            onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
                                                             className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-500 hover:text-white inline-flex items-center gap-1.5"
                                                         >
                                                             <UserPlus size={12} />
@@ -754,7 +901,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                     </div>
                                     <div className="min-w-0">
                                         <h3 className="text-white font-bold truncate">Add partner for {linkTarget.full_name}</h3>
-                                        <p className="text-xs text-gray-400 mt-0.5">{linkTarget.division} · pick another paid solo player in this division.</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">{linkTarget.division} · pair with a paid solo player, or invite a 4M member to pay.</p>
                                     </div>
                                 </div>
 
@@ -769,26 +916,57 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                                     />
                                 </div>
 
-                                <div className="max-h-64 overflow-y-auto -mx-1 px-1 space-y-1">
-                                    {eligiblePartners.length === 0 ? (
-                                        <p className="text-xs text-gray-500 text-center py-6">No eligible paid solo players in {linkTarget.division}.</p>
-                                    ) : eligiblePartners.map((p) => (
-                                        <button
-                                            key={p.id}
-                                            disabled={linkBusy}
-                                            onClick={() => linkPartner(linkTarget, p)}
-                                            className="w-full flex items-center justify-between gap-3 text-left bg-white/5 hover:bg-sky-500/10 border border-white/5 hover:border-sky-500/30 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
-                                        >
-                                            <div className="min-w-0">
-                                                <div className="text-sm font-semibold text-white truncate">{p.full_name}</div>
-                                                <div className="text-[11px] text-gray-500 truncate">{p.email}</div>
-                                            </div>
-                                            {linkBusy ? <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" /> : <UserPlus size={14} className="text-sky-400 shrink-0" />}
-                                        </button>
-                                    ))}
+                                <div className="max-h-72 overflow-y-auto -mx-1 px-1 space-y-3">
+                                    {/* Already-paid solo players in this division — instant pairing. */}
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">Paid solo players · instant team</p>
+                                        {eligiblePartners.length === 0 ? (
+                                            <p className="text-xs text-gray-600 px-1 py-2">No paid solo players available in {linkTarget.division}.</p>
+                                        ) : eligiblePartners.map((p) => (
+                                            <button
+                                                key={p.id}
+                                                disabled={linkBusy}
+                                                onClick={() => linkPartner(linkTarget, p)}
+                                                className="w-full flex items-center justify-between gap-3 text-left bg-white/5 hover:bg-sky-500/10 border border-white/5 hover:border-sky-500/30 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-semibold text-white truncate">{p.full_name}</div>
+                                                    <div className="text-[11px] text-gray-500 truncate">{p.email}</div>
+                                                </div>
+                                                {linkBusy ? <Loader2 size={14} className="animate-spin text-sky-400 shrink-0" /> : <UserPlus size={14} className="text-sky-400 shrink-0" />}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    {/* 4M members not yet entered — adding them sends an invite to pay. */}
+                                    <div className="space-y-1">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-gray-500 px-1">Invite a 4M member · they'll be emailed to pay</p>
+                                        {linkSearch.trim().length < 2 ? (
+                                            <p className="text-xs text-gray-600 px-1 py-2">Type a name or email above to search members not yet entered.</p>
+                                        ) : searchingProfiles ? (
+                                            <p className="text-xs text-gray-500 px-1 py-2 inline-flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Searching members…</p>
+                                        ) : profileResults.length === 0 ? (
+                                            <p className="text-xs text-gray-600 px-1 py-2">No unentered members match “{linkSearch.trim()}”.</p>
+                                        ) : profileResults.map((p) => (
+                                            <button
+                                                key={p.id}
+                                                disabled={linkBusy}
+                                                onClick={() => addUnregisteredPartner(linkTarget, p)}
+                                                className="w-full flex items-center justify-between gap-3 text-left bg-white/5 hover:bg-amber-500/10 border border-white/5 hover:border-amber-500/30 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+                                            >
+                                                <div className="min-w-0">
+                                                    <div className="text-sm font-semibold text-white truncate">{p.name}</div>
+                                                    <div className="text-[11px] text-gray-500 truncate">{p.email}</div>
+                                                </div>
+                                                <span className="text-[10px] font-bold text-amber-300 shrink-0 inline-flex items-center gap-1">
+                                                    {linkBusy ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />} Invite
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
-                                <button onClick={() => setLinkTarget(null)} disabled={linkBusy}
+                                <button onClick={() => { setLinkTarget(null); setProfileResults([]); }} disabled={linkBusy}
                                     className="mt-4 w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
                                     Cancel
                                 </button>
