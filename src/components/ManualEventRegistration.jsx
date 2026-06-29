@@ -299,7 +299,7 @@ const ProgressBar = ({ step, theme }) => (
     </div>
 );
 
-const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
+const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
     const [divisions, setDivisions] = useState([]);
@@ -812,6 +812,10 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                 openWithdraw: (regId) => {
                     const reg = myRegs.find((r) => r.id === regId);
                     if (reg) setWithdrawTarget(reg);
+                },
+                openRemovePartner: (regId) => {
+                    const reg = myRegs.find((r) => r.id === regId);
+                    if (reg) setRemovePartnerTarget(reg);
                 },
                 openRegistration: () => {
                     if (!userEmail) {
@@ -3794,6 +3798,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             key={entry.id}
                                             entry={entry}
                                             playerName={profile?.name || displayProfile?.name || 'You'}
+                                            playerAvatar={profile?.image_url || displayProfile?.image_url}
+                                            partnerAvatar={entry.partnerName ? fourMPlayers[entry.partnerName.toLowerCase().trim()] : null}
                                             variant="panel"
                                             accent={accent}
                                             btnTextColor={btnTextColor}

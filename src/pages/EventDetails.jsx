@@ -232,10 +232,10 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false })
     return null;
 };
 
-const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = false, text = null, children }) => {
+const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = false, text = null, children, className = "" }) => {
     const [open, setOpen] = useState(defaultOpen);
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200 ${className}`}>
             <div
                 onClick={() => setOpen((o) => !o)}
                 className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
@@ -800,6 +800,9 @@ const EventDetails = () => {
             const addedByName = wasAddedByPartner
                 ? (reg._payerName || reg.partner_name || 'your partner')
                 : null;
+            const closeAt = div?.entries_close_at || event.registration_closes_at;
+            const divClosed = closeAt ? new Date(closeAt).getTime() < Date.now() : false;
+            const canWithdraw = !!div && !divClosed && reg.status !== 'withdrawn';
             return {
                 id: reg.id,
                 division: reg.division,
@@ -810,6 +813,8 @@ const EventDetails = () => {
                 partnerPaid,
                 wasAddedByPartner,
                 addedByName,
+                isBookingOwner: !wasAddedByPartner,
+                canWithdraw,
                 partnerPaymentLabel: !hasPartner
                     ? null
                     : partnerPaid
@@ -1332,7 +1337,7 @@ const EventDetails = () => {
                             }
                         }
                     }
-                    
+
                     if (useCache && cacheRow && cacheRow.winners && Array.isArray(cacheRow.winners)) {
                         const hasPending = cacheRow.winners.some(w => {
                             const wStr = JSON.stringify(w).toLowerCase();
@@ -1502,76 +1507,76 @@ const EventDetails = () => {
                     setPlayerDivisions(divisions);
                     setParticipants(participantsMap);
                 } else {
-                const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
 
-                // 1. Fetch from Rankedin if rId exists
-                if (rId) {
-                    if (divisions.length === 0) {
-                        const fetchedDivs = await getTournamentPlayerTabs(rId);
-                        if (fetchedDivs) divisions = fetchedDivs;
-                    }
-                    if (divisions.length > 0) {
-                        for (const cls of divisions) {
-                            const data = await getTournamentParticipants(rId, cls.Id);
-                            participantsMap[cls.Id] = data || [];
+                    // 1. Fetch from Rankedin if rId exists
+                    if (rId) {
+                        if (divisions.length === 0) {
+                            const fetchedDivs = await getTournamentPlayerTabs(rId);
+                            if (fetchedDivs) divisions = fetchedDivs;
+                        }
+                        if (divisions.length > 0) {
+                            for (const cls of divisions) {
+                                const data = await getTournamentParticipants(rId, cls.Id);
+                                participantsMap[cls.Id] = data || [];
+                            }
                         }
                     }
-                }
 
-                // 2. Fetch from local event_registrations
-                const { data: localRegs } = await supabase.from('event_registrations').select('*').eq('event_id', event.id);
+                    // 2. Fetch from local event_registrations
+                    const { data: localRegs } = await supabase.from('event_registrations').select('*').eq('event_id', event.id);
 
-                if (localRegs && localRegs.length > 0) {
-                    localRegs.forEach(reg => {
-                        if (reg.status === 'withdrawn' || reg.payment_status !== 'paid') {
-                            return;
-                        }
-
-                        // Find division by name, case-insensitive
-                        let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
-
-                        // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
-                        // If it's a local-only event (!rId), allow creating new divisions from registrations.
-                        if (!div && !rId) {
-                            div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
-                            divisions.push(div);
-                        }
-
-                        if (div) {
-                            if (!participantsMap[div.Id]) {
-                                participantsMap[div.Id] = [];
+                    if (localRegs && localRegs.length > 0) {
+                        localRegs.forEach(reg => {
+                            if (reg.status === 'withdrawn' || reg.payment_status !== 'paid') {
+                                return;
                             }
 
-                            // Check if this player is already in the Rankedin list for this division
-                            const existingInRankedin = participantsMap[div.Id].some(item => {
-                                const p = item.Participant || {};
-                                const pNames = [];
-                                if (p.Players) p.Players.forEach(pl => pNames.push((pl.Name || '').toLowerCase()));
-                                if (p.FirstPlayer) pNames.push((p.FirstPlayer.Name || '').toLowerCase());
-                                if (p.SecondPlayer) pNames.push((p.SecondPlayer.Name || '').toLowerCase());
-                                return pNames.includes((reg.full_name || '').toLowerCase());
-                            });
+                            // Find division by name, case-insensitive
+                            let div = divisions.find(d => d.Name.toLowerCase() === reg.division.toLowerCase());
 
-                            if (!existingInRankedin) {
-                                const players = [{ Name: reg.full_name, Email: reg.email }];
-                                if (reg.partner_name) {
-                                    players.push({ Name: reg.partner_name });
+                            // If it's a Rankedin event, only accept divisions that exist on Rankedin. 
+                            // If it's a local-only event (!rId), allow creating new divisions from registrations.
+                            if (!div && !rId) {
+                                div = { Id: `local_${reg.division.replace(/\s+/g, '_')}`, Name: reg.division };
+                                divisions.push(div);
+                            }
+
+                            if (div) {
+                                if (!participantsMap[div.Id]) {
+                                    participantsMap[div.Id] = [];
                                 }
 
-                                participantsMap[div.Id].push({
-                                    Participant: {
-                                        Id: `local_${reg.id}`,
-                                        Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
-                                        Players: players
-                                    }
+                                // Check if this player is already in the Rankedin list for this division
+                                const existingInRankedin = participantsMap[div.Id].some(item => {
+                                    const p = item.Participant || {};
+                                    const pNames = [];
+                                    if (p.Players) p.Players.forEach(pl => pNames.push((pl.Name || '').toLowerCase()));
+                                    if (p.FirstPlayer) pNames.push((p.FirstPlayer.Name || '').toLowerCase());
+                                    if (p.SecondPlayer) pNames.push((p.SecondPlayer.Name || '').toLowerCase());
+                                    return pNames.includes((reg.full_name || '').toLowerCase());
                                 });
-                            }
-                        }
-                    });
-                }
 
-                setPlayerDivisions(divisions);
-                setParticipants(prev => ({ ...prev, ...participantsMap }));
+                                if (!existingInRankedin) {
+                                    const players = [{ Name: reg.full_name, Email: reg.email }];
+                                    if (reg.partner_name) {
+                                        players.push({ Name: reg.partner_name });
+                                    }
+
+                                    participantsMap[div.Id].push({
+                                        Participant: {
+                                            Id: `local_${reg.id}`,
+                                            Name: reg.partner_name ? `${reg.full_name} / ${reg.partner_name}` : reg.full_name,
+                                            Players: players
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                    }
+
+                    setPlayerDivisions(divisions);
+                    setParticipants(prev => ({ ...prev, ...participantsMap }));
                 }
 
                 // Gather all player names and Rankedin IDs for bulk database query
@@ -1920,7 +1925,7 @@ const EventDetails = () => {
                     const errorMsg = event?.is_manual
                         ? "Profile not found. Partner must register to be paid for."
                         : "Player not found. Partner must be registered for this division on RankedIn.";
-                    
+
                     setDivisionPartners(prev => ({
                         ...prev,
                         [division]: {
@@ -2699,16 +2704,14 @@ const EventDetails = () => {
     const partnerAddedPaymentConfirmed = partnerAddedEntries.length > 0 && !partnerAddedNeedsPayment;
 
     const manualPartnerAddedBlock = event.is_manual && manualUserEmail && partnerAddedEntries.length > 0 && (
-        <div className={`rounded-2xl shadow-sm overflow-hidden ${
-            partnerAddedPaymentConfirmed
+        <div className={`rounded-2xl shadow-sm overflow-hidden ${partnerAddedPaymentConfirmed
                 ? 'border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC]'
                 : 'border border-amber-200/80 bg-gradient-to-br from-amber-50 to-[#FFFBEB]'
-        }`}>
+            }`}>
             <div className="p-4 sm:p-5">
                 <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-11 h-11 rounded-full bg-white border-2 flex items-center justify-center shadow-sm shrink-0 ${
-                        partnerAddedPaymentConfirmed ? 'border-emerald-500' : 'border-amber-500'
-                    }`}>
+                    <div className={`w-11 h-11 rounded-full bg-white border-2 flex items-center justify-center shadow-sm shrink-0 ${partnerAddedPaymentConfirmed ? 'border-emerald-500' : 'border-amber-500'
+                        }`}>
                         {partnerAddedPaymentConfirmed ? (
                             <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
                         ) : (
@@ -2716,14 +2719,12 @@ const EventDetails = () => {
                         )}
                     </div>
                     <div className="min-w-0">
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${
-                            partnerAddedPaymentConfirmed ? 'text-emerald-700' : 'text-amber-700'
-                        }`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${partnerAddedPaymentConfirmed ? 'text-emerald-700' : 'text-amber-700'
+                            }`}>
                             Your partner entered you
                         </p>
-                        <p className={`text-xs leading-relaxed mt-1 ${
-                            partnerAddedPaymentConfirmed ? 'text-emerald-900/90' : 'text-amber-900/90'
-                        }`}>
+                        <p className={`text-xs leading-relaxed mt-1 ${partnerAddedPaymentConfirmed ? 'text-emerald-900/90' : 'text-amber-900/90'
+                            }`}>
                             {partnerAddedNeedsPayment
                                 ? `${partnerAddedByName} added you to this event. Pay your entry fee to confirm your spot, or decline if you don't want to play.`
                                 : `${partnerAddedByName} added you to this event. You're confirmed — decline below if your plans have changed.`}
@@ -2737,19 +2738,21 @@ const EventDetails = () => {
                             key={entry.id}
                             entry={entry}
                             playerName={loggedInPlayer?.name || 'You'}
+                            playerAvatar={loggedInPlayer?.image_url}
+                            partnerAvatar={entry.partnerName ? fourMPlayers[entry.partnerName.toLowerCase().trim()] : null}
                             variant="banner"
                             accent={theme?.fill || '#CCFF00'}
                             showActions
                             withdrawLabel={entry.isPaid ? 'Withdraw' : 'Decline'}
                             onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
+                            onRemovePartner={() => manualRegActionsRef.current?.openRemovePartner?.(entry.id)}
                         />
                     ))}
                 </div>
 
                 {(partnerAddedNeedsPayment || manualRegStatus.canAddDivision) && (
-                    <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${
-                        partnerAddedPaymentConfirmed ? 'border-emerald-200/60' : 'border-amber-200/60'
-                    }`}>
+                    <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${partnerAddedPaymentConfirmed ? 'border-emerald-200/60' : 'border-amber-200/60'
+                        }`}>
                         {partnerAddedNeedsPayment && (
                             <button
                                 type="button"
@@ -2764,11 +2767,10 @@ const EventDetails = () => {
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openRegistration?.()}
-                                className={`flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ${
-                                    partnerAddedPaymentConfirmed
+                                className={`flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ${partnerAddedPaymentConfirmed
                                         ? 'border border-emerald-600 text-emerald-700 bg-white/80 hover:bg-white'
                                         : 'border border-amber-600/60 text-amber-800 bg-white hover:bg-amber-50/50'
-                                }`}
+                                    }`}
                             >
                                 <span className="text-base leading-none">+</span> Add Division
                             </button>
@@ -2801,6 +2803,8 @@ const EventDetails = () => {
                                 key={entry.id}
                                 entry={entry}
                                 playerName="You"
+                                playerAvatar={loggedInPlayer?.image_url}
+                                partnerAvatar={entry.partnerName ? fourMPlayers[entry.partnerName.toLowerCase().trim()] : null}
                                 variant="banner"
                                 accent={theme?.fill || '#CCFF00'}
                                 showActions
@@ -2809,6 +2813,7 @@ const EventDetails = () => {
                                     ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
                                     : undefined}
                                 onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
+                                onRemovePartner={() => manualRegActionsRef.current?.openRemovePartner?.(entry.id)}
                             />
                         ))}
                 </div>
@@ -2973,102 +2978,102 @@ const EventDetails = () => {
                                                 <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
                                             </div>
                                             <div className="flex gap-2 w-full">
-                                        {(() => {
-                                            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                            if (event.is_manual) {
-                                                if (!isEventPassed) {
-                                                    if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                {(() => {
+                                                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                                    if (event.is_manual) {
+                                                        if (!isEventPassed) {
+                                                            if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                                return (
+                                                                    <div
+                                                                        className="flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
+                                                                        style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                                        aria-label="Registered for this event"
+                                                                    >
+                                                                        <CheckCircle className="w-4 h-4 shrink-0" />
+                                                                        <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            if (manualRegStatus.hasPendingPayment) {
+                                                                return (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openManualPayFlow}
+                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                    >
+                                                                        <CreditCard className="w-4 h-4" />
+                                                                        Pay Entry
+                                                                    </button>
+                                                                );
+                                                            }
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={openManualRegistration}
+                                                                    className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                                    style={registerNowStyle}
+                                                                >
+                                                                    Register Now <ArrowRight className="w-4 h-4" />
+                                                                </button>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    }
+                                                    if (!isEventPassed) {
+                                                        if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
+                                                                    className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                                    style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                                >
+                                                                    <CheckCircle className="w-4 h-4 shrink-0" />
+                                                                    <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                                </button>
+                                                            );
+                                                        }
                                                         return (
-                                                            <div
-                                                                className="flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
-                                                                style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                                aria-label="Registered for this event"
-                                                            >
-                                                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                                                <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                            </div>
+                                                            <>
+                                                                {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={handleRankedinRedirect}
+                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                                        style={registerNowStyle}
+                                                                    >
+                                                                        Register Now <ArrowRight className="w-4 h-4" />
+                                                                    </button>
+                                                                )}
+                                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openRegistrationModal}
+                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                                    >
+                                                                        <CreditCard className="w-4 h-4" />
+                                                                        Pay Fee
+                                                                    </button>
+                                                                )}
+                                                            </>
                                                         );
                                                     }
-                                                    if (manualRegStatus.hasPendingPayment) {
+                                                    if ((hasResults || hasDraw) && (rId || event.slug)) {
                                                         return (
-                                                            <button
-                                                                type="button"
-                                                                onClick={openManualPayFlow}
+                                                            <Link
+                                                                to={`/draws/${event.slug || rId}`}
                                                                 className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                                 style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                             >
-                                                                <CreditCard className="w-4 h-4" />
-                                                                Pay Entry
-                                                            </button>
+                                                                <GitBranch className="w-4 h-4" />
+                                                                Draws & Results
+                                                            </Link>
                                                         );
                                                     }
-                                                    return (
-                                                        <button
-                                                            type="button"
-                                                            onClick={openManualRegistration}
-                                                            className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                            style={registerNowStyle}
-                                                        >
-                                                            Register Now <ArrowRight className="w-4 h-4" />
-                                                        </button>
-                                                    );
-                                                }
-                                                return null;
-                                            }
-                                            if (!isEventPassed) {
-                                                if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
-                                                    return (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                            className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
-                                                            style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                        >
-                                                            <CheckCircle className="w-4 h-4 shrink-0" />
-                                                            <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                        </button>
-                                                    );
-                                                }
-                                                return (
-                                                    <>
-                                                        {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleRankedinRedirect}
-                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                                style={registerNowStyle}
-                                                            >
-                                                                Register Now <ArrowRight className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={openRegistrationModal}
-                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                            >
-                                                                <CreditCard className="w-4 h-4" />
-                                                                Pay Fee
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                );
-                                            }
-                                            if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                                return (
-                                                    <Link
-                                                        to={`/draws/${event.slug || rId}`}
-                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                    >
-                                                        <GitBranch className="w-4 h-4" />
-                                                        Draws & Results
-                                                    </Link>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
+                                                    return null;
+                                                })()}
                                             </div>
                                         </div>
                                         <button
@@ -3086,114 +3091,114 @@ const EventDetails = () => {
                                     </div>
                                 </>
                             ) : (
-                        <div className="w-full flex flex-col md:items-center md:text-center mt-2">
-                            <EventHeroBranding event={event} theme={theme} centered />
-                            <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left md:max-w-3xl md:mx-auto">
-                                {event.event_name}
-                            </h1>
+                                <div className="w-full flex flex-col md:items-center md:text-center mt-2">
+                                    <EventHeroBranding event={event} theme={theme} centered />
+                                    <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left md:max-w-3xl md:mx-auto">
+                                        {event.event_name}
+                                    </h1>
 
-                            <div className="flex items-center gap-3 text-white/90 text-sm font-normal mb-8 md:justify-center w-full">
-                                <CalendarIcon className="w-5 h-5 text-white/70 shrink-0" />
-                                <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
-                            </div>
+                                    <div className="flex items-center gap-3 text-white/90 text-sm font-normal mb-8 md:justify-center w-full">
+                                        <CalendarIcon className="w-5 h-5 text-white/70 shrink-0" />
+                                        <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                    </div>
 
-                            {/* Action Buttons Row */}
-                            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto relative">
-                                {(() => {
-                                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                    if (event.is_manual) {
-                                        if (!isEventPassed) {
-                                            if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
-                                                return (
-                                                    <div
-                                                        className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
-                                                        style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                        aria-label="Registered for this event"
-                                                    >
-                                                        <CheckCircle className="w-4 h-4 shrink-0" />
-                                                        <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                    </div>
-                                                );
+                                    {/* Action Buttons Row */}
+                                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto relative">
+                                        {(() => {
+                                            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                            if (event.is_manual) {
+                                                if (!isEventPassed) {
+                                                    if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                        return (
+                                                            <div
+                                                                className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
+                                                                style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                                aria-label="Registered for this event"
+                                                            >
+                                                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                                                <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    if (manualRegStatus.hasPendingPayment) {
+                                                        return (
+                                                            <button
+                                                                type="button"
+                                                                onClick={openManualPayFlow}
+                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            >
+                                                                <CreditCard className="w-4 h-4" />
+                                                                Pay Entry
+                                                            </button>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <button
+                                                            type="button"
+                                                            onClick={openManualRegistration}
+                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                            style={registerNowStyle}
+                                                        >
+                                                            Register Now <ArrowRight className="w-4 h-4" />
+                                                        </button>
+                                                    );
+                                                }
+                                                return null;
                                             }
-                                            if (manualRegStatus.hasPendingPayment) {
+                                            if (!isEventPassed) {
+                                                if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                    return (
+                                                        <button
+                                                            onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
+                                                            className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
+                                                            style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                        >
+                                                            <CheckCircle className="w-4 h-4 shrink-0" />
+                                                            <span className="text-xs font-semibold tracking-normal truncate">{isLive ? 'Registered' : 'Registered'}</span>
+                                                        </button>
+                                                    );
+                                                }
                                                 return (
-                                                    <button
-                                                        type="button"
-                                                        onClick={openManualPayFlow}
+                                                    <>
+                                                        {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleRankedinRedirect}
+                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                                style={registerNowStyle}
+                                                            >
+                                                                Register Now <ArrowRight className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                        {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                            <button
+                                                                onClick={openRegistrationModal}
+                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            >
+                                                                <CreditCard className="w-4 h-4" />
+                                                                Pay Fee
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            } else if ((hasResults || hasDraw) && (rId || event.slug)) {
+                                                return (
+                                                    <Link
+                                                        to={`/draws/${event.slug || rId}`}
                                                         className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
                                                         style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                     >
-                                                        <CreditCard className="w-4 h-4" />
-                                                        Pay Entry
-                                                    </button>
+                                                        <GitBranch className="w-4 h-4" />
+                                                        Draws & Results
+                                                    </Link>
                                                 );
                                             }
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    onClick={openManualRegistration}
-                                                    className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                    style={registerNowStyle}
-                                                >
-                                                    Register Now <ArrowRight className="w-4 h-4" />
-                                                </button>
-                                            );
-                                        }
-                                        return null;
-                                    }
-                                    if (!isEventPassed) {
-                                        if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
-                                            return (
-                                                <button
-                                                    onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                    className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
-                                                    style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                >
-                                                    <CheckCircle className="w-4 h-4 shrink-0" />
-                                                    <span className="text-xs font-semibold tracking-normal truncate">{isLive ? 'Registered' : 'Registered'}</span>
-                                                </button>
-                                            );
-                                        }
-                                        return (
-                                            <>
-                                                {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={handleRankedinRedirect}
-                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                        style={registerNowStyle}
-                                                    >
-                                                        Register Now <ArrowRight className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
-                                                    <button
-                                                        onClick={openRegistrationModal}
-                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                    >
-                                                        <CreditCard className="w-4 h-4" />
-                                                        Pay Fee
-                                                    </button>
-                                                )}
-                                            </>
-                                        );
-                                    } else if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                        return (
-                                            <Link
-                                                to={`/draws/${event.slug || rId}`}
-                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                            >
-                                                <GitBranch className="w-4 h-4" />
-                                                Draws & Results
-                                            </Link>
-                                        );
-                                    }
-                                    return null;
-                                })()}
-                            </div>
-                        </div>
+                                            return null;
+                                        })()}
+                                    </div>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -3230,11 +3235,11 @@ const EventDetails = () => {
                 </div>
 
                 {/* ── WHITE BACKGROUND AREA ── */}
-                <div className="bg-white -mt-6 relative z-30 pt-6 px-4">
-                    <div className="max-w-5xl mx-auto">
+                <div className="bg-white -mt-6 relative z-30 pt-6 px-4 pb-6">
+                    <div className="max-w-5xl mx-auto flex flex-col gap-6">
 
                         {/* Quick Stats Card */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mb-6 flex divide-x divide-gray-100">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex divide-x divide-gray-100">
                             {/* Status block (Custom Style) */}
                             {(() => {
                                 const computedStatus = (() => {
@@ -3273,14 +3278,26 @@ const EventDetails = () => {
                         </div>
 
                         {/* Registration Status (If any) */}
-                        {(activeRegistrationBlock) && (
-                            <div className="mb-6 relative z-[60]">
-                                {activeRegistrationBlock}
-                            </div>
-                        )}
-                        {readyToCompeteBlock && !activeRegistrationBlock && (
-                            <div className="mb-6">
-                                {readyToCompeteBlock}
+                        {(activeRegistrationBlock || readyToCompeteBlock) && (
+                            <div className="relative z-[60]">
+                                {(() => {
+                                    let accordionGlowClass = "shadow-[0_0_15px_rgba(34,197,94,0.15)] border-green-100";
+                                    if (activeRegistrationBlock) {
+                                        if (manualPartnerAddedBlock && !partnerAddedPaymentConfirmed) {
+                                            accordionGlowClass = "shadow-[0_0_15px_rgba(245,158,11,0.2)] border-amber-200";
+                                        } else {
+                                            accordionGlowClass = "shadow-[0_0_15px_rgba(34,197,94,0.2)] border-green-200";
+                                        }
+                                    }
+
+                                    return (
+                                        <InfoSection title="Registration" icon={CheckCircle} accent={theme.fill} defaultOpen={true} className={accordionGlowClass}>
+                                            <div className="-mx-1 -my-1">
+                                                {activeRegistrationBlock ? activeRegistrationBlock : readyToCompeteBlock}
+                                            </div>
+                                        </InfoSection>
+                                    );
+                                })()}
                             </div>
                         )}
 
@@ -3332,11 +3349,8 @@ const EventDetails = () => {
 
                                         {/* Left Column: Event Information */}
                                         <div className="flex-1 space-y-6">
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="px-6 py-5 border-b border-gray-50">
-                                                    <h2 className="text-base font-semibold text-slate-900">Event Information</h2>
-                                                </div>
-                                                <div className="divide-y divide-gray-50">
+                                            <InfoSection title="Event Information" icon={FileText} accent={theme.fill} defaultOpen={true}>
+                                                <div className="divide-y divide-gray-50 -mx-6 -my-5 border-t border-gray-50">
                                                     {(() => {
                                                         const computedStatus = (() => {
                                                             if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
@@ -3372,119 +3386,119 @@ const EventDetails = () => {
                                                         ));
                                                     })()}
                                                 </div>
-                                            </div>
+                                            </InfoSection>
                                         </div>
 
                                         {/* Right Column: Top Seeds (RankedIn events only) */}
                                         {!event.is_manual && (
-                                        <div className="flex-1 space-y-6">
+                                            <div className="flex-1 space-y-6">
 
-                                            {/* Top Seeds */}
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-                                                    <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
-                                                    <Link to="/rankings" className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
-                                                        View Rankings <ChevronRight className="w-4 h-4" />
-                                                    </Link>
-                                                </div>
-                                                <div className="divide-y divide-gray-50 px-6">
-                                                    {(() => {
-                                                        let seedList = [];
+                                                {/* Top Seeds */}
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
+                                                        <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
+                                                        <Link to="/rankings" className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                            View Rankings <ChevronRight className="w-4 h-4" />
+                                                        </Link>
+                                                    </div>
+                                                    <div className="divide-y divide-gray-50 px-6">
+                                                        {(() => {
+                                                            let seedList = [];
 
-                                                        let targetDivs = playerDivisions.filter(d => {
-                                                            const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
-                                                            return name.includes('mens');
-                                                        });
-
-                                                        if (targetDivs.length === 0) {
-                                                            const fallbackDivs = playerDivisions.filter(d => {
+                                                            let targetDivs = playerDivisions.filter(d => {
                                                                 const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
-                                                                const isLadies = name.includes('ladies') || name.includes('women') || name.includes('mixed');
-                                                                return !isLadies && (name.includes('open') || name.includes('advanced') || name.includes('pro'));
+                                                                return name.includes('mens');
                                                             });
-                                                            targetDivs.push(...fallbackDivs);
-                                                        }
 
-                                                        if (targetDivs.length === 0) {
-                                                            const genericDivs = playerDivisions.filter(d => {
-                                                                const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
-                                                                return !name.includes('ladies') && !name.includes('women') && !name.includes('mixed');
-                                                            });
-                                                            targetDivs.push(...genericDivs);
-                                                        }
+                                                            if (targetDivs.length === 0) {
+                                                                const fallbackDivs = playerDivisions.filter(d => {
+                                                                    const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
+                                                                    const isLadies = name.includes('ladies') || name.includes('women') || name.includes('mixed');
+                                                                    return !isLadies && (name.includes('open') || name.includes('advanced') || name.includes('pro'));
+                                                                });
+                                                                targetDivs.push(...fallbackDivs);
+                                                            }
 
-                                                        if (targetDivs.length === 0) {
-                                                            targetDivs = playerDivisions;
-                                                        }
+                                                            if (targetDivs.length === 0) {
+                                                                const genericDivs = playerDivisions.filter(d => {
+                                                                    const name = (d.Name || '').toLowerCase().replace(/['`]/g, '');
+                                                                    return !name.includes('ladies') && !name.includes('women') && !name.includes('mixed');
+                                                                });
+                                                                targetDivs.push(...genericDivs);
+                                                            }
 
-                                                        const divParticipantsToProcess = targetDivs.map(d => participants[d.Id]).filter(Boolean);
+                                                            if (targetDivs.length === 0) {
+                                                                targetDivs = playerDivisions;
+                                                            }
 
-                                                        const seenNames = new Set();
+                                                            const divParticipantsToProcess = targetDivs.map(d => participants[d.Id]).filter(Boolean);
 
-                                                        divParticipantsToProcess.forEach(divParticipants => {
-                                                            if (!divParticipants) return;
-                                                            divParticipants.forEach(item => {
-                                                                const p = item.Participant || {};
+                                                            const seenNames = new Set();
 
-                                                                let individualPlayers = [];
-                                                                if (p.Players && p.Players.length > 0) {
-                                                                    individualPlayers = p.Players;
-                                                                } else if (p.FirstPlayer || p.SecondPlayer) {
-                                                                    if (p.FirstPlayer) individualPlayers.push(p.FirstPlayer);
-                                                                    if (p.SecondPlayer) individualPlayers.push(p.SecondPlayer);
-                                                                } else if (p.Name) {
-                                                                    individualPlayers.push(p);
-                                                                }
+                                                            divParticipantsToProcess.forEach(divParticipants => {
+                                                                if (!divParticipants) return;
+                                                                divParticipants.forEach(item => {
+                                                                    const p = item.Participant || {};
 
-                                                                individualPlayers.forEach(player => {
-                                                                    if (player && player.Name && !seenNames.has(player.Name)) {
-                                                                        seenNames.add(player.Name);
-
-                                                                        const globalRank = globalRankings.get(player.Name.toLowerCase());
-                                                                        const rankVal = globalRank !== undefined ? globalRank : (item.Ranking ? parseInt(item.Ranking) : Infinity);
-                                                                        const seedVal = p.Seed ? parseInt(p.Seed) : Infinity;
-
-                                                                        const country = player.Country?.ISOCode || 'za';
-                                                                        seedList.push({ name: player.Name, seed: seedVal, rank: rankVal, country });
+                                                                    let individualPlayers = [];
+                                                                    if (p.Players && p.Players.length > 0) {
+                                                                        individualPlayers = p.Players;
+                                                                    } else if (p.FirstPlayer || p.SecondPlayer) {
+                                                                        if (p.FirstPlayer) individualPlayers.push(p.FirstPlayer);
+                                                                        if (p.SecondPlayer) individualPlayers.push(p.SecondPlayer);
+                                                                    } else if (p.Name) {
+                                                                        individualPlayers.push(p);
                                                                     }
+
+                                                                    individualPlayers.forEach(player => {
+                                                                        if (player && player.Name && !seenNames.has(player.Name)) {
+                                                                            seenNames.add(player.Name);
+
+                                                                            const globalRank = globalRankings.get(player.Name.toLowerCase());
+                                                                            const rankVal = globalRank !== undefined ? globalRank : (item.Ranking ? parseInt(item.Ranking) : Infinity);
+                                                                            const seedVal = p.Seed ? parseInt(p.Seed) : Infinity;
+
+                                                                            const country = player.Country?.ISOCode || 'za';
+                                                                            seedList.push({ name: player.Name, seed: seedVal, rank: rankVal, country });
+                                                                        }
+                                                                    });
                                                                 });
                                                             });
-                                                        });
 
-                                                        if (seedList.length === 0) {
-                                                            return (
-                                                                <div className="py-8 text-center text-gray-400 text-sm">
-                                                                    No ranked players registered yet
+                                                            if (seedList.length === 0) {
+                                                                return (
+                                                                    <div className="py-8 text-center text-gray-400 text-sm">
+                                                                        No ranked players registered yet
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            seedList.sort((a, b) => {
+                                                                if (a.rank !== Infinity || b.rank !== Infinity) return a.rank - b.rank;
+                                                                return a.seed - b.seed;
+                                                            });
+
+                                                            const validSeeds = seedList.filter(s => s.rank !== Infinity || s.seed !== Infinity);
+                                                            const displayList = validSeeds.length > 0 ? validSeeds : seedList;
+
+                                                            return displayList.slice(0, 4).map((seed, idx) => (
+                                                                <div key={idx} className="flex items-center justify-between py-4">
+                                                                    <div className="flex items-center gap-4">
+                                                                        <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
+                                                                        <span className="font-medium text-[#0F172A] text-[14px] max-w-[180px] truncate" title={seed.name}>
+                                                                            {seed.name} {seed.rank !== Infinity && <span className="text-gray-500 ml-1 text-[13px]">(#{seed.rank})</span>}
+                                                                        </span>
+                                                                    </div>
+                                                                    {seed.country && (
+                                                                        <img src={`https://flagcdn.com/w40/${seed.country.toLowerCase()}.png`} alt={seed.country} className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
+                                                                    )}
                                                                 </div>
-                                                            );
-                                                        }
-
-                                                        seedList.sort((a, b) => {
-                                                            if (a.rank !== Infinity || b.rank !== Infinity) return a.rank - b.rank;
-                                                            return a.seed - b.seed;
-                                                        });
-
-                                                        const validSeeds = seedList.filter(s => s.rank !== Infinity || s.seed !== Infinity);
-                                                        const displayList = validSeeds.length > 0 ? validSeeds : seedList;
-
-                                                        return displayList.slice(0, 4).map((seed, idx) => (
-                                                            <div key={idx} className="flex items-center justify-between py-4">
-                                                                <div className="flex items-center gap-4">
-                                                                    <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
-                                                                    <span className="font-medium text-[#0F172A] text-[14px] max-w-[180px] truncate" title={seed.name}>
-                                                                        {seed.name} {seed.rank !== Infinity && <span className="text-gray-500 ml-1 text-[13px]">(#{seed.rank})</span>}
-                                                                    </span>
-                                                                </div>
-                                                                {seed.country && (
-                                                                    <img src={`https://flagcdn.com/w40/${seed.country.toLowerCase()}.png`} alt={seed.country} className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
-                                                                )}
-                                                            </div>
-                                                        ));
-                                                    })()}
+                                                            ));
+                                                        })()}
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                        </div>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="w-full space-y-6">
@@ -3496,6 +3510,7 @@ const EventDetails = () => {
                                                     userEmail={manualUserEmail}
                                                     theme={theme}
                                                     initialPlayer={loggedInPlayer}
+                                                    fourMPlayers={fourMPlayers}
                                                     onStatusChange={setManualRegStatus}
                                                     onParticipantsChange={refreshParticipants}
                                                     registrationActionsRef={manualRegActionsRef}
@@ -3504,37 +3519,37 @@ const EventDetails = () => {
                                         )}
                                         {/* Divisions — hidden for manual events (shown in Register block above) */}
                                         {!event.is_manual && (
-                                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-                                                <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
-                                                <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
-                                                    View All Divisions <ChevronRight className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                            <div className="divide-y divide-gray-50">
-                                                {playerDivisions.length > 0 ? playerDivisions.map((cls, idx) => {
-                                                    const clsParticipants = participants[cls.Id] || [];
-                                                    return (
-                                                        <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
-                                                            <div className="flex items-center gap-4">
-                                                                <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
-                                                                <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
+                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
+                                                    <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
+                                                    <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                        View All Divisions <ChevronRight className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                                <div className="divide-y divide-gray-50">
+                                                    {playerDivisions.length > 0 ? playerDivisions.map((cls, idx) => {
+                                                        const clsParticipants = participants[cls.Id] || [];
+                                                        return (
+                                                            <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                                                                <div className="flex items-center gap-4">
+                                                                    <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
+                                                                    <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
+                                                                    <ChevronRight className="w-4 h-4 text-gray-300" />
+                                                                </div>
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
-                                                                <ChevronRight className="w-4 h-4 text-gray-300" />
-                                                            </div>
+                                                        );
+                                                    }) : (
+                                                        <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
+                                                            <Users className="w-10 h-10 text-gray-200 mb-3" />
+                                                            <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
+                                                            <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
                                                         </div>
-                                                    );
-                                                }) : (
-                                                    <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
-                                                        <Users className="w-10 h-10 text-gray-200 mb-3" />
-                                                        <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
-                                                        <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
-                                                    </div>
-                                                )}
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
                                         )}
 
                                         {/* Event Info */}

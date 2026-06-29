@@ -14,19 +14,25 @@ const PaymentBadge = ({ paid, label }) => (
     </span>
 );
 
-const PersonCell = ({ role, name, paid, label }) => (
-    <div className="flex items-start gap-2 min-w-0">
-        <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0">
-            <User size={13} className="text-slate-500" />
-        </div>
-        <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-0.5">
-                {role}
-            </p>
-            <p className="text-sm font-medium text-slate-900 truncate leading-tight">{name}</p>
-            <div className="mt-1">
-                <PaymentBadge paid={paid} label={label} />
+const PersonCell = ({ role, name, avatarUrl, paid, label }) => (
+    <div className="min-w-0">
+        <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0 overflow-hidden">
+                {avatarUrl ? (
+                    <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+                ) : (
+                    <User size={13} className="text-slate-500" />
+                )}
             </div>
+            <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-0.5">
+                    {role}
+                </p>
+                <p className="text-sm font-medium text-slate-900 truncate leading-tight">{name}</p>
+            </div>
+        </div>
+        <div className="mt-2.5">
+            <PaymentBadge paid={paid} label={label} />
         </div>
     </div>
 );
@@ -35,6 +41,8 @@ const PersonCell = ({ role, name, paid, label }) => (
  * @param {object} props
  * @param {object} props.entry — registrationEntries item
  * @param {string} props.playerName — display name for the registrant
+ * @param {string} [props.playerAvatar]
+ * @param {string} [props.partnerAvatar]
  * @param {'panel'|'banner'} [props.variant]
  * @param {string} [props.accent]
  * @param {string} [props.btnTextColor]
@@ -48,6 +56,8 @@ const PersonCell = ({ role, name, paid, label }) => (
 const ManualRegistrationEntryCard = ({
     entry,
     playerName = 'You',
+    playerAvatar,
+    partnerAvatar,
     variant = 'panel',
     accent = '#CCFF00',
     btnTextColor = '#0F172A',
@@ -69,26 +79,15 @@ const ManualRegistrationEntryCard = ({
 
     return (
         <div className={`${shellClass} p-3.5 sm:p-4`}>
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-1">
-                        Division
+            <div className="min-w-0">
+                <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide leading-none mb-1">
+                    Division
+                </p>
+                <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.division}</p>
+                {entry.wasAddedByPartner && entry.addedByName && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
+                        Added by {entry.addedByName}
                     </p>
-                    <p className="text-sm font-semibold text-slate-900 leading-snug">{entry.division}</p>
-                    {entry.wasAddedByPartner && entry.addedByName && (
-                        <p className="text-[11px] text-slate-500 mt-0.5 font-normal">
-                            Added by {entry.addedByName}
-                        </p>
-                    )}
-                </div>
-                {showActions && onWithdraw && (
-                    <button
-                        type="button"
-                        onClick={onWithdraw}
-                        className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors shrink-0"
-                    >
-                        {withdrawLabel}
-                    </button>
                 )}
             </div>
 
@@ -96,7 +95,16 @@ const ManualRegistrationEntryCard = ({
 
             <div className={`flex gap-3 ${entry.hasPartner || entry.canAddPartner ? '' : 'flex-col'}`}>
                 <div className={entry.hasPartner || entry.canAddPartner ? 'flex-1 min-w-0' : 'w-full'}>
-                    <PersonCell role="Player" name={playerName} paid={playerPaid} label={playerLabel} />
+                    <PersonCell role="Player" name={playerName} avatarUrl={playerAvatar} paid={playerPaid} label={playerLabel} />
+                    {showActions && onWithdraw && (
+                        <button
+                            type="button"
+                            onClick={onWithdraw}
+                            className="mt-2 text-xs font-semibold px-4 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors"
+                        >
+                            {withdrawLabel}
+                        </button>
+                    )}
                 </div>
 
                 {entry.hasPartner ? (
@@ -104,6 +112,7 @@ const ManualRegistrationEntryCard = ({
                         <PersonCell
                             role="Partner"
                             name={entry.partnerName}
+                            avatarUrl={partnerAvatar || entry.partnerAvatarUrl}
                             paid={partnerPaid}
                             label={partnerLabel}
                         />
@@ -111,7 +120,7 @@ const ManualRegistrationEntryCard = ({
                             <button
                                 type="button"
                                 onClick={onRemovePartner}
-                                className="mt-1.5 text-[11px] font-semibold text-red-600 hover:text-red-700 hover:underline"
+                                className="mt-2 text-xs font-semibold px-4 py-1.5 rounded-lg border border-red-200 text-red-600 bg-white hover:bg-red-50 transition-colors"
                             >
                                 Remove partner
                             </button>
