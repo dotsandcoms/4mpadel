@@ -723,10 +723,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                             className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
                             title="Filter by division"
                         >
-                            <option value="all">All divisions</option>
-                            {divisions.map((d) => (
-                                <option key={d.id} value={d.name}>{d.name}</option>
-                            ))}
+                            <option value="all">All divisions ({stats.total})</option>
+                            {divisions.map((d) => {
+                                const count = registrations.filter(r => r.status !== 'withdrawn' && r.division === d.name).length;
+                                return (
+                                    <option key={d.id} value={d.name}>{d.name} ({count})</option>
+                                );
+                            })}
                         </select>
                         <select
                             value={sortBy}
