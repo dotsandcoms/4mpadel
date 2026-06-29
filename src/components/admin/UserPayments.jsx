@@ -20,15 +20,30 @@ const UserPayments = ({ allowedEvents = [] }) => {
         const fetchPlayerData = async () => {
             setLoading(true);
             try {
-                // Fetch players with their payments
-                let query = supabase
-                    .from('players')
-                    .select('*, payments(*, calendar(event_name))');
+                // Fetch players with their payments. PostgREST caps a plain
+                // select at ~1000 rows, which silently dropped players (e.g.
+                // anyone past the first 1000) from the ledger. Page through in
+                // 1000-row batches, ordered by id, to load every player.
+                const pageSize = 1000;
+                let page = 0;
+                let data = [];
+                while (true) {
+                    const { data: rows, error } = await supabase
+                        .from('players')
+                        .select('*, payments(*, calendar(event_name))')
+                        .order('id', { ascending: true })
+                        .range(page * pageSize, page * pageSize + pageSize - 1);
 
-                const { data, error } = await query;
-                
-                if (error) throw error;
-                
+                    if (error) throw error;
+                    if (rows?.length) {
+                        data = data.concat(rows);
+                        if (rows.length < pageSize) break;
+                        page++;
+                    } else {
+                        break;
+                    }
+                }
+
                 // Process data to calculate summary stats per player
                 const processed = (data || []).map(p => {
                     let playerPayments = p.payments || [];

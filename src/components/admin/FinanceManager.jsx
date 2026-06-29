@@ -610,7 +610,7 @@ const FinanceManager = () => {
                 // We search by the main reference OR by the paystack_ref in metadata
                 await supabase.from('payments')
                     .delete()
-                    .or(`reference.eq.${trx.id},reference.like.${trx.id}-%,reference.like.REG-${trx.id}-%,reference.like.REG-PARTNER-${trx.id}-%`);
+                    .or(`reference.eq.${trx.id},reference.like.${trx.id}-%,reference.like.REG-${trx.id}-%,reference.like.REG-PARTNER-${trx.id}-%,reference.eq.LIC-${trx.id},reference.like.LIC-${trx.id}-%`);
 
                 // ALSO delete by metadata search to catch legacy format records
                 await supabase.from('payments')

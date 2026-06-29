@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { parseMetadata, verifyPaystackWebhookSignature } from './paystack.ts';
-import { persistManualEventRegistrations } from './manual-event-payment.ts';
+import { persistManualEventRegistrations, recordLicensePaymentSplit } from './manual-event-payment.ts';
 
 async function sendEmailViaEdge(payload: {
     to: string;
@@ -106,6 +106,10 @@ async function finalizeManualEventPayment(
             }
         }
     }
+
+    // Split a bundled license into its own ledger row so it shows as a separate
+    // entry in the User Ledger and reconciles per type. Idempotent.
+    await recordLicensePaymentSplit(supabaseAdmin, payment, meta);
 
     const lineItems = Array.isArray(meta.line_items)
         ? (meta.line_items as Array<{ label: string; amount: number }>)

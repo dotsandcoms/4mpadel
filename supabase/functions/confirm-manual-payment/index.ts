@@ -5,7 +5,7 @@ import {
     resolvePaystackVerifySecrets,
     verifyPaystackReference,
 } from './paystack.ts';
-import { persistManualEventRegistrations } from './manual-event-payment.ts';
+import { persistManualEventRegistrations, recordLicensePaymentSplit } from './manual-event-payment.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -117,6 +117,10 @@ async function finalizeManualEventPayment(
             }
         }
     }
+
+    // Split a bundled license into its own ledger row so it shows as a separate
+    // entry in the User Ledger and reconciles per type. Idempotent.
+    await recordLicensePaymentSplit(supabaseAdmin, payment, meta);
 
     const lineItems = Array.isArray(meta.line_items)
         ? (meta.line_items as Array<{ label: string; amount: number }>)
