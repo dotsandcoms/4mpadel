@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-    Calendar, Users, CheckCircle, XCircle, Search, Download, 
+    Calendar, Users, CheckCircle, XCircle, Search, Download,
     RefreshCcw, Loader2, AlertCircle, UserPlus, Link2, ExternalLink, Trophy, DollarSign,
-    MessageCircle, Check
+    MessageCircle, Check, Trash2, ChevronDown
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
@@ -70,6 +70,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [loading, setLoading] = useState({ events: true, matching: false, syncing: false });
     const [searchQuery, setSearchQuery] = useState('');
     const [eventSearch, setEventSearch] = useState('');
+    const [showCompleted, setShowCompleted] = useState(false);
     const [isEventSearchOpen, setIsEventSearchOpen] = useState(false);
     const [markingPaid, setMarkingPaid] = useState(null);
     const [matchingProfile, setMatchingProfile] = useState(null); // Participant being matched
@@ -133,6 +134,20 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!eventSearch) return sorted;
         return sorted.filter(e => e.event_name.toLowerCase().includes(eventSearch.toLowerCase()));
     }, [events, eventSearch, allowedEvents, isEventManagementModule]);
+
+    // Split the managed list into upcoming and completed (past) events so the
+    // completed ones can live in a collapsible section underneath. "Completed"
+    // is determined by start date being before today.
+    const { upcomingEvents, pastEvents } = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const up = [];
+        const past = [];
+        filteredEvents.forEach(e => {
+            (new Date(e.start_date) >= today ? up : past).push(e);
+        });
+        return { upcomingEvents: up, pastEvents: past };
+    }, [filteredEvents]);
 
     const playerEntryCounts = useMemo(() => {
         const counts = {};
@@ -870,6 +885,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (selectedEventId) fetchParticipants(selectedEventId);
     };
 
+    // Remove an event from the Event Manager. This only clears the
+    // finance_managed flag — the calendar event, its registrations and payments
+    // are left untouched, so it can be re-added later.
+    const handleRemoveFromManager = async (e) => {
+        if (!confirm(`Remove "${e.event_name}" from the Event Manager?\n\nThe event stays in your calendar with all registrations and payments intact — this only hides it from this list. You can re-add it later.`)) return;
+        try {
+            const { error } = await supabase
+                .from('calendar')
+                .update({ finance_managed: false })
+                .eq('id', e.id);
+            if (error) throw error;
+
+            setEvents(prev => prev.map(ev => ev.id === e.id ? { ...ev, finance_managed: false } : ev));
+            if (selectedEventId === e.id) {
+                setSelectedEventId(null);
+                setViewMode('list');
+            }
+            toast.success(`Removed "${e.event_name}" from Event Manager`);
+        } catch (err) {
+            console.error('Remove from manager failed:', err);
+            toast.error('Failed to remove event from manager');
+        }
+    };
+
     // 4. Mark as Paid (Explicit Manual Marking)
     const handleMarkAsPaid = async (participant) => {
         setMarkingPaid(participant.id);
@@ -1150,6 +1189,98 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         return matchesSearch && matchesProfile && matchesLicense && matchesPayment && matchesDivision && matchesWhatsApp;
     });
 
+    // Number of columns in the event list table (extra Actions column when
+    // running inside the Event Manager module).
+    const eventListColCount = isEventManagementModule ? 6 : 5;
+
+    // Single source of truth for an event list row, reused by the upcoming list
+    // and the completed (past) collapsible section.
+    const renderEventRow = (e) => {
+        const isSelected = selectedEventId === e.id;
+        const eventDate = new Date(e.start_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const isUpcoming = eventDate >= today;
+
+        return (
+            <tr
+                key={e.id}
+                onClick={() => {
+                    setSelectedEventId(e.id);
+                    setViewMode('dashboard');
+                }}
+                className={`group cursor-pointer transition-all hover:bg-white/5`}
+            >
+                <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex flex-col">
+                        <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
+                            {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        <span className={`text-[8px] font-black uppercase tracking-widest ${isUpcoming ? 'text-padel-green/60' : 'text-gray-600'}`}>
+                            {isUpcoming ? 'Upcoming' : 'Completed'}
+                        </span>
+                    </div>
+                </td>
+                <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                        <p className={`font-black uppercase tracking-tight text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                            {e.event_name}
+                        </p>
+                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
+                    </div>
+                </td>
+                <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                        <span className="text-white font-black text-[11px]">{e.stats?.entries || 0}</span>
+                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
+                    </div>
+                </td>
+                <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                        <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
+                        {(e.stats?.outstanding > 0) && (
+                            <span className="text-[8px] text-red-400 font-bold uppercase tracking-widest">R{e.stats.outstanding.toLocaleString()} Out</span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-6 py-4">
+                    {e.stats?.uniquePlayersCount > 0 ? (
+                        <div className="flex items-center gap-4">
+                            <div className="flex flex-col items-center min-w-[32px]">
+                                <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Full</span>
+                                <div className="w-full h-0.5 bg-[#BFFF00] rounded-full mt-0.5" />
+                            </div>
+                            <div className="flex flex-col items-center min-w-[32px]">
+                                <span className="text-[#0ea5e9] font-black text-sm">{e.stats.licenses?.temp || 0}</span>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Temp</span>
+                                <div className="w-full h-0.5 bg-[#0ea5e9] rounded-full mt-0.5" />
+                            </div>
+                            <div className="flex flex-col items-center min-w-[32px]">
+                                <span className="text-[#ff6b6b] font-black text-sm">{e.stats.licenses?.none || 0}</span>
+                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">None</span>
+                                <div className="w-full h-0.5 bg-[#ff6b6b]/30 rounded-full mt-0.5" />
+                            </div>
+                        </div>
+                    ) : (
+                        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
+                    )}
+                </td>
+                {isEventManagementModule && (
+                    <td className="px-4 py-4 text-right whitespace-nowrap">
+                        <button
+                            onClick={(ev) => { ev.stopPropagation(); handleRemoveFromManager(e); }}
+                            title="Remove from Event Manager"
+                            className="p-2 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100 focus:opacity-100"
+                        >
+                            <Trash2 size={15} />
+                        </button>
+                    </td>
+                )}
+            </tr>
+        );
+    };
+
     return (
         <div className="space-y-6">
             {/* Header & Managed Events List - Only visible in 'list' mode */}
@@ -1200,88 +1331,49 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                     <th className="px-6 py-3">Entries</th>
                                     <th className="px-6 py-3">Finances (Collected/Billed)</th>
                                     <th className="px-6 py-3">License Status</th>
+                                    {isEventManagementModule && <th className="px-4 py-3 text-right">Actions</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-white/5">
-                                {filteredEvents.map(e => {
-                                        const isSelected = selectedEventId === e.id;
-                                        const rId = e.rankedin_id || e.rankedin_url?.match(/\/(\d+)(?:\/|$)/)?.[1];
-                                        const eventDate = new Date(e.start_date);
-                                        const today = new Date();
-                                        today.setHours(0, 0, 0, 0);
-                                        const isUpcoming = eventDate >= today;
-                                        
-                                        return (
-                                            <tr 
-                                                key={e.id}
-                                                onClick={() => {
-                                                    setSelectedEventId(e.id);
-                                                    setViewMode('dashboard');
-                                                }}
-                                                className={`group cursor-pointer transition-all hover:bg-white/5`}
-                                            >
-                                                <td className="px-4 py-4 whitespace-nowrap">
-                                                    <div className="flex flex-col">
-                                                        <p className={`text-[11px] font-bold text-white group-hover:text-padel-green`}>
-                                                            {eventDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                                                        </p>
-                                                        <span className={`text-[8px] font-black uppercase tracking-widest ${isUpcoming ? 'text-padel-green/60' : 'text-gray-600'}`}>
-                                                            {isUpcoming ? 'Upcoming' : 'Past'}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <p className={`font-black uppercase tracking-tight text-sm ${isSelected ? 'text-white' : 'text-gray-300'}`}>
-                                                            {e.event_name}
-                                                        </p>
-                                                        {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-padel-green animate-pulse" />}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-white font-black text-[11px]">{e.stats?.entries || 0}</span>
-                                                        <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">{e.stats?.paidCount || 0} Paid</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-padel-green font-bold text-[11px]">R{e.stats?.collected?.toLocaleString() || 0} / R{e.stats?.billed?.toLocaleString() || 0}</span>
-                                                        {(e.stats?.outstanding > 0) && (
-                                                            <span className="text-[8px] text-red-400 font-bold uppercase tracking-widest">R{e.stats.outstanding.toLocaleString()} Out</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {e.stats?.uniquePlayersCount > 0 ? (
-                                                        <div className="flex items-center gap-4">
-                                                            <div className="flex flex-col items-center min-w-[32px]">
-                                                                <span className="text-[#BFFF00] font-black text-sm">{e.stats.licenses?.full || 0}</span>
-                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Full</span>
-                                                                <div className="w-full h-0.5 bg-[#BFFF00] rounded-full mt-0.5" />
-                                                            </div>
-                                                            <div className="flex flex-col items-center min-w-[32px]">
-                                                                <span className="text-[#0ea5e9] font-black text-sm">{e.stats.licenses?.temp || 0}</span>
-                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Temp</span>
-                                                                <div className="w-full h-0.5 bg-[#0ea5e9] rounded-full mt-0.5" />
-                                                            </div>
-                                                            <div className="flex flex-col items-center min-w-[32px]">
-                                                                <span className="text-[#ff6b6b] font-black text-sm">{e.stats.licenses?.none || 0}</span>
-                                                                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">None</span>
-                                                                <div className="w-full h-0.5 bg-[#ff6b6b]/30 rounded-full mt-0.5" />
-                                                            </div>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">No Players</span>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
+                                {(isEventManagementModule ? upcomingEvents : filteredEvents).length > 0 ? (
+                                    (isEventManagementModule ? upcomingEvents : filteredEvents).map(renderEventRow)
+                                ) : (
+                                    <tr>
+                                        <td colSpan={eventListColCount} className="px-6 py-10 text-center text-[11px] font-bold text-gray-600 uppercase tracking-widest">
+                                            {isEventManagementModule ? 'No upcoming events' : 'No events found'}
+                                        </td>
+                                    </tr>
+                                )}
                             </tbody>
                         </table>
                     </div>
                 </div>
+
+                {/* Completed (past) events - collapsible, Event Manager only */}
+                {isEventManagementModule && pastEvents.length > 0 && (
+                    <div className="mt-4 bg-black/20 rounded-2xl border border-white/5 overflow-hidden">
+                        <button
+                            onClick={() => setShowCompleted(s => !s)}
+                            className="w-full flex items-center justify-between px-6 py-4 hover:bg-white/5 transition-all"
+                        >
+                            <span className="flex items-center gap-3 text-[11px] font-black uppercase tracking-widest text-gray-400">
+                                <CheckCircle size={15} className="text-padel-green/70" />
+                                Completed Events
+                                <span className="px-2 py-0.5 rounded-full bg-white/10 text-gray-300">{pastEvents.length}</span>
+                            </span>
+                            <ChevronDown size={18} className={`text-gray-500 transition-transform ${(showCompleted || eventSearch) ? 'rotate-180' : ''}`} />
+                        </button>
+                        {(showCompleted || eventSearch) && (
+                            <div className="max-h-[320px] overflow-y-auto no-scrollbar border-t border-white/5">
+                                <table className="w-full text-left border-collapse">
+                                    <tbody className="divide-y divide-white/5">
+                                        {pastEvents.map(renderEventRow)}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
             )}
 
