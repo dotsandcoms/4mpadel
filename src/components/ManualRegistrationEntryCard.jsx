@@ -16,12 +16,12 @@ const PaymentBadge = ({ paid, label }) => (
 
 const PersonCell = ({ role, name, avatarUrl, paid, label }) => (
     <div className="min-w-0">
-        <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-full bg-slate-100 border border-slate-200/80 flex items-center justify-center shrink-0 overflow-hidden shadow-sm">
                 {avatarUrl ? (
                     <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
                 ) : (
-                    <User size={13} className="text-slate-500" />
+                    <User size={16} className="text-slate-500" />
                 )}
             </div>
             <div className="min-w-0 flex-1">
