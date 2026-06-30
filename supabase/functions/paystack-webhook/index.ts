@@ -506,6 +506,28 @@ serve(async (req: Request) => {
                 return new Response(JSON.stringify({ received: true, ...result }), { status: 200, headers: corsHeaders });
             }
 
+            // Apple Pay fallback: the inline popup can deliver the charge.success
+            // event WITHOUT the metadata the client set, so the source check above
+            // misses and the membership ledger row never gets written (until the
+            // reconcile-payments cron sweeps it up). When there's no local row and
+            // no source, but the amount is exactly a known license fee, treat it as
+            // a standalone license and finalize now — same trx-id keying, so it
+            // reconciles with the cron / admin backfill instead of duplicating.
+            const fallbackAmountRands = Number(data?.amount || 0) / 100;
+            const FULL_LICENSE_RANDS = 450;
+            const TEMP_LICENSE_RANDS = 120;
+            if (!payment && !eventMeta.source &&
+                (fallbackAmountRands === FULL_LICENSE_RANDS || fallbackAmountRands === TEMP_LICENSE_RANDS)) {
+                const inferredMeta = {
+                    ...eventMeta,
+                    source: 'web_license_modal',
+                    license_type: fallbackAmountRands === TEMP_LICENSE_RANDS ? 'temporary' : 'full',
+                    inferred_from: 'webhook_amount_fallback',
+                };
+                const result = await finalizeWebLicensePayment(supabaseAdmin, data || {}, inferredMeta);
+                return new Response(JSON.stringify({ received: true, ...result, fallback: 'amount' }), { status: 200, headers: corsHeaders });
+            }
+
             if (eventMeta.source !== 'manual_event') {
                 return new Response(JSON.stringify({ received: true, skipped: true }), { status: 200, headers: corsHeaders });
             }

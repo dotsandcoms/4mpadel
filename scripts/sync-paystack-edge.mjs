@@ -13,6 +13,7 @@ const targets = [
     'supabase/functions/confirm-manual-payment/paystack.ts',
     'supabase/functions/paystack-webhook/paystack.ts',
     'supabase/functions/paystack-transactions/paystack.ts',
+    'supabase/functions/reconcile-payments/paystack.ts',
 ];
 
 for (const rel of targets) {
