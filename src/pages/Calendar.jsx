@@ -67,7 +67,7 @@ const FeaturedEventCard = ({ event, index }) => {
             {/* Soft Glow Behind the Card */}
             <div className={`absolute -inset-1 sm:-inset-1.5 rounded-[28px] blur-xl opacity-20 sm:opacity-30 group-hover:opacity-50 transition-opacity duration-700 ${glowBgColor} -z-10`} />
 
-            <div className={`relative flex flex-row items-stretch min-h-[220px] sm:min-h-[280px] bg-[#0F1420] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl`}>
+            <div className={`relative flex flex-row items-stretch min-h-[180px] sm:min-h-[220px] bg-[#0F1420] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl [transform:translateZ(0)]`}>
                 
                 {/* Shimmer Effect */}
                 <motion.div 
@@ -82,14 +82,14 @@ const FeaturedEventCard = ({ event, index }) => {
                 />
 
                 {/* Left Content */}
-                <div className="flex flex-col justify-center flex-1 p-4 sm:p-8 z-20 overflow-hidden">
+                <div className="flex flex-col justify-center flex-1 p-4 sm:p-6 z-20 overflow-hidden">
                     <div className="mb-2 sm:mb-3">
                         <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest border ${badgeColor}`}>
                             {event.sapa_status}
                         </span>
                     </div>
 
-                    <h3 className="text-sm sm:text-2xl font-black text-white mb-2 sm:mb-4 uppercase tracking-tight leading-tight line-clamp-3">
+                    <h3 className="text-sm sm:text-2xl font-display font-semibold text-white mb-2 sm:mb-4 uppercase tracking-tight leading-tight line-clamp-3">
                         {event.event_name || event.eventName}
                     </h3>
 
@@ -129,7 +129,7 @@ const FeaturedEventCard = ({ event, index }) => {
                 <div className="absolute inset-y-0 right-[100px] sm:right-[280px] w-16 sm:w-32 bg-gradient-to-l from-transparent to-[#0F1420] z-10 pointer-events-none" />
 
                 {/* Right Image Container */}
-                <div className="relative w-[110px] sm:w-[320px] shrink-0 bg-black overflow-hidden z-0 flex items-center justify-center p-0">
+                <div className="relative w-[110px] sm:w-[320px] shrink-0 bg-black overflow-hidden rounded-r-[24px] z-0 flex items-center justify-center p-0">
                     {getEventImage(event) ? (
                         <>
                             <img
@@ -200,7 +200,7 @@ const FeaturedCarousel = ({ events }) => {
                         <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-padel-green" />
                     </div>
                     <div>
-                        <h2 className="text-xl sm:text-2xl md:text-3xl font-black text-white uppercase tracking-tight leading-none mb-0.5 sm:mb-1">
+                        <h2 className="text-xl sm:text-2xl md:text-3xl font-display font-black text-white uppercase tracking-tight leading-none mb-0.5 sm:mb-1">
                             Featured <span className="text-padel-green">Events</span>
                         </h2>
                         <p className="text-[10px] sm:text-xs text-gray-500 font-bold uppercase tracking-widest">Handpicked highlights for you</p>
@@ -340,7 +340,7 @@ const CalendarEventItem = ({ event, index }) => {
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-xs sm:text-lg font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-2 pr-2">
+                        <h3 className="text-xs sm:text-lg font-display font-semibold text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-2 pr-2">
                             {event.event_name || event.eventName}
                         </h3>
 
@@ -1014,7 +1014,7 @@ const Calendar = () => {
                             /* Premium List View */
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3 mb-2 px-1">
-                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Upcoming Events</h2>
+                                    <h2 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight">Upcoming Events</h2>
                                     <div className="bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] px-2.5 py-0.5 rounded-lg text-sm font-black">
                                         {filteredEvents.length}
                                     </div>
