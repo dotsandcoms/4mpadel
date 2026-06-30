@@ -268,6 +268,12 @@ const Hero = () => {
                 setNextMatch(firstNextMatch);
                 setMatchesCount(validMatches.length);
                 setEventsLoading(false);
+                
+                if (firstNextMatch) {
+                    setActiveHeroTab('matches');
+                } else if (filtered.length > 0) {
+                    setActiveHeroTab('events');
+                }
 
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
@@ -283,6 +289,24 @@ const Hero = () => {
         // ── Step 1: Read cache and render immediately (SWR) ──
         let hasCachedData = false;
         let isCacheExpired = true;
+        let hasCachedMatch = false;
+
+        try {
+            const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
+            if (cachedMatch) {
+                const { ts, match, count } = JSON.parse(cachedMatch);
+                if (match) {
+                    setNextMatch(match);
+                    setMatchesCount(count || 1);
+                    hasCachedData = true;
+                    hasCachedMatch = true;
+                    if (Date.now() - ts < CACHE_TTL) {
+                        isCacheExpired = false;
+                    }
+                    setActiveHeroTab('matches');
+                }
+            }
+        } catch (_) { }
 
         try {
             const cachedEvents = localStorage.getItem(CACHE_KEY);
@@ -294,20 +318,8 @@ const Hero = () => {
                     if (Date.now() - ts < CACHE_TTL) {
                         isCacheExpired = false;
                     }
-                }
-            }
-        } catch (_) { }
-
-        try {
-            const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
-            if (cachedMatch) {
-                const { ts, match, count } = JSON.parse(cachedMatch);
-                if (match) {
-                    setNextMatch(match);
-                    setMatchesCount(count || 1);
-                    hasCachedData = true;
-                    if (Date.now() - ts < CACHE_TTL) {
-                        isCacheExpired = false;
+                    if (!hasCachedMatch && events.length > 0) {
+                        setActiveHeroTab('events');
                     }
                 }
             }
