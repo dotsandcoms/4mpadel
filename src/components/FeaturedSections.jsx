@@ -97,18 +97,6 @@ const featuredDataTemplate = [
         icon: Play
     },
     {
-        id: 'featured-tournaments',
-        title: 'Featured Tournaments',
-        highlight: 'Up Next',
-        description: 'Get ready for the biggest clashes of the season. Top players gather to battle it out for the ultimate prize. Do not miss the action and secure your spot today!',
-        cardLabel: 'Major Event',
-        cardTitle: 'Loading Featured Event...',
-        image: 'https://images.unsplash.com/photo-1622384950482-1a4cbab9bd36?q=80&w=1471&auto=format&fit=crop',
-        align: 'left',
-        linkPath: '/calendar',
-        icon: Calendar
-    },
-    {
         id: 'recent-results',
         title: 'Recent Featured Results',
         highlight: 'Results',
@@ -119,6 +107,18 @@ const featuredDataTemplate = [
         align: 'right',
         linkPath: '/results',
         icon: Trophy
+    },
+    {
+        id: 'upcoming-events',
+        title: 'Upcoming Featured Tournaments',
+        highlight: 'UPCOMING EVENTS',
+        description: '',
+        cardLabel: 'Upcoming Event',
+        cardTitle: 'Loading Upcoming Event...',
+        image: null,
+        align: 'left',
+        linkPath: '/calendar',
+        icon: Calendar
     },
 ];
 
@@ -384,6 +384,114 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
 };
 
 
+
+const RecentResultCard = ({ title, label, date, image, linkPath, status, registeredPlayers, venue, city }) => {
+    const statusColors = getStatusColors(status);
+    const dateParts = date ? date.split(' ') : [];
+    const day = dateParts[0] || '';
+    const month = dateParts[1] || '';
+
+    // Extracting emojis if title has trophy
+    const cleanTitle = title.replace('🏆', '').trim();
+    const hasTrophy = title.includes('🏆') || cleanTitle.toLowerCase().includes('open') || cleanTitle.toLowerCase().includes('cup') || cleanTitle.toLowerCase().includes('1000');
+
+    return (
+        <Link to={linkPath} className="group relative flex flex-row items-stretch min-h-[120px] bg-[#0A0F1C] rounded-[16px] overflow-hidden border border-white/5 hover:border-padel-green/30 transition-all duration-300 shadow-xl">
+            <div className="relative w-[110px] sm:w-[130px] shrink-0 bg-black/40 border-r border-white/5">
+                {image ? (
+                    <>
+                        <FallbackImage src={image} alt={title} title={cleanTitle} className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125" aria-hidden="true" />
+                        <FallbackImage src={image} alt={cleanTitle} title={cleanTitle} className="absolute inset-0 z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                    </>
+                ) : (
+                    <div className="w-full h-full bg-[#05070A] flex items-center justify-center"><Calendar className="w-6 h-6 text-white/10" /></div>
+                )}
+                {date && (
+                    <div className="absolute bottom-2 left-2 z-30 bg-[#060913] rounded-lg px-2 py-1 text-center border border-white/10 shadow-lg">
+                        <div className="text-[9px] font-black text-white/70 uppercase tracking-widest leading-none mb-0.5">{month}</div>
+                        <div className="text-sm font-bold text-white leading-none">{day}</div>
+                    </div>
+                )}
+            </div>
+
+            <div className="p-4 sm:p-5 flex flex-col flex-1 min-w-0 justify-center relative">
+                <div className="flex items-center gap-2 mb-2">
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                        {label || status}
+                    </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-bold text-white mb-2 uppercase tracking-tight leading-tight group-hover:text-padel-green transition-colors pr-6 truncate">
+                    {cleanTitle} {hasTrophy && '🏆'}
+                </h3>
+
+                <div className="space-y-1 mt-auto">
+                    {(venue || city) && (
+                        <div className="flex items-center gap-1.5 text-gray-400">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
+                                {[venue, city].filter(Boolean).join(', ')}
+                            </span>
+                        </div>
+                    )}
+                    {registeredPlayers > 0 && (
+                        <div className="flex items-center gap-1.5 text-gray-400 mt-1">
+                            <Users className={`w-3 h-3 shrink-0 ${statusColors.text}`} />
+                            <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">{registeredPlayers} ENTRIES</span>
+                        </div>
+                    )}
+                </div>
+
+                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-padel-green group-hover:translate-x-1 transition-transform" />
+            </div>
+        </Link>
+    );
+};
+
+const UpcomingEventListItem = ({ title, label, date, startDateStr, linkPath, status, venue, city }) => {
+    const statusColors = getStatusColors(status);
+    const dateParts = date ? date.split(' ') : [];
+    const day = dateParts[0] || '';
+    const month = dateParts[1] || '';
+
+    let weekday = 'TBD';
+    if (startDateStr) {
+        try {
+            weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(startDateStr)).toUpperCase();
+        } catch (e) { }
+    }
+
+    return (
+        <Link to={linkPath} className="group flex items-center py-4 bg-transparent hover:bg-white/[0.02] border-b border-white/5 transition-colors">
+            <div className="flex flex-col items-center justify-center w-14 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 mr-3 sm:mr-4">
+                <span className="text-[9px] sm:text-[10px] font-black text-padel-green uppercase tracking-widest mb-0.5">{month}</span>
+                <span className="text-xl sm:text-2xl font-bold text-white leading-none mb-0.5">{day}</span>
+                <span className="text-[8px] sm:text-[9px] font-bold text-padel-green uppercase tracking-widest">{weekday}</span>
+            </div>
+
+            <div className="flex-1 min-w-0 pr-2 sm:pr-4">
+                <h3 className="text-xs sm:text-sm font-bold text-white mb-1.5 uppercase tracking-tight truncate group-hover:text-padel-green transition-colors">
+                    {title}
+                </h3>
+                {(venue || city) && (
+                    <div className="flex items-center gap-1.5 text-gray-400">
+                        <MapPin className="w-3 h-3 shrink-0 text-gray-500" />
+                        <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
+                            {[venue, city].filter(Boolean).join(', ')}
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4 shrink-0 pl-2">
+                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                    {label || status}
+                </span>
+                <ChevronRight className="w-4 h-4 text-padel-green group-hover:translate-x-1 transition-all" />
+            </div>
+        </Link>
+    );
+};
+
 const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournaments, liveFeaturedTournaments, onWatchLive }) => {
     const navigate = useNavigate();
     const { getTournamentClasses } = useRankedin();
@@ -392,6 +500,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const scrollRef = useRef(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
+    const [recentResultsPage, setRecentResultsPage] = useState(0);
 
     // Image/Card content for the right/bottom side of the hero section
     const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
@@ -419,7 +528,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     useEffect(() => {
         const checkStatus = async () => {
             // Only check for single blocks (where data.linkPath or data.rankedin_url exists)
-            if (data.id !== 'recent-results' && !(data.id === 'featured-tournaments' && featuredTournaments?.length > 1) && !(data.id === 'featured-live' && liveFeaturedTournaments?.length > 1)) {
+            if (data.id !== 'recent-results' && !(data.id === 'upcoming-events' && featuredTournaments?.length > 1) && !(data.id === 'featured-live' && liveFeaturedTournaments?.length > 1)) {
                 const rId = data.rankedinId || extractRankedinId(data.rankedin_url) || extractRankedinId(data.linkPath);
                 if (rId) {
                     const classes = await getTournamentClasses(rId);
@@ -452,7 +561,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     }, [featuredTournaments, liveTournaments, liveFeaturedTournaments]);
 
     const isLeft = data.align === 'left';
-    const isGridSection = data.id === 'recent-results' || (data.id === 'featured-tournaments' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
+    const isGridSection = data.id === 'recent-results' || data.id === 'upcoming-events' || (data.id === 'upcoming-events' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
 
     const isFeatured = data.id === 'featured-tournaments';
     const isLiveSection = data.id === 'featured-live';
@@ -470,24 +579,21 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const textContent = isGridSection ? (
         <div className={`relative z-10 flex flex-col sm:flex-row sm:items-end justify-between mb-6 md:mb-8`}>
             <div>
-                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${isFeatured ? 'border-black/20 text-black bg-black/5' : isLiveSection ? 'border-red-500/20 text-red-400 bg-red-500/10' : 'border-white/10 text-padel-green bg-padel-green/5'} text-[10px] font-bold uppercase tracking-widest mb-3`}>
+                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${isFeatured ? 'border-black/20 text-black bg-black/5' : isLiveSection ? 'border-red-500/20 text-red-400 bg-red-500/10' : data.id === 'upcoming-events' ? 'border-padel-green/30 text-padel-green bg-transparent' : 'border-white/10 text-padel-green bg-padel-green/5'} text-[10px] font-bold uppercase tracking-widest mb-3`}>
                     {isLiveSection ? <Play className="w-3.5 h-3.5 fill-current" /> : <Icon className="w-3.5 h-3.5" />}
                     <span>{data.highlight}</span>
                 </div>
-                <h2 className={`text-3xl md:text-4xl lg:text-5xl font-bold font-display tracking-tight ${isFeatured ? 'text-black' : 'text-white'}`}>
+                <h2 className={`text-3xl md:text-4xl lg:text-5xl font-bold font-display tracking-tight ${isFeatured ? 'text-black' : 'text-white'} mb-2`}>
                     {data.title}
                 </h2>
+
+                {data.id === 'upcoming-events' && (
+                    <button onClick={() => navigate('/calendar')} className="mt-2 flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-colors">
+                        VIEW CALENDAR <ChevronRight className="w-3 h-3" />
+                    </button>
+                )}
             </div>
 
-            {data.linkPath && (
-                <button
-                    onClick={() => navigate(data.linkPath)}
-                    className={`mt-4 sm:mt-0 sm:mb-2 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest ${isFeatured ? 'text-black/60 hover:text-black' : 'text-gray-400 hover:text-white'} transition-colors group`}
-                >
-                    View All
-                    <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
-                </button>
-            )}
         </div>
     ) : (
         <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
@@ -557,7 +663,71 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         </div>
     );
 
-    const imageContent = isGridSection ? (
+    const maxResultsPage = Math.max(0, Math.ceil((items?.length || 0) / 2) - 1);
+
+    const imageContent = data.id === 'recent-results' ? (
+        <div className="relative z-10 w-full mt-4 lg:mt-0">
+            <div className="flex flex-col gap-4 w-full bg-[#060913] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
+                {items?.slice(recentResultsPage * 2, recentResultsPage * 2 + 2).map((t, i) => (
+                    <RecentResultCard
+                        key={t.id || t.eventId}
+                        title={t.event_name || t.eventName}
+                        label={t.sapa_status || t.sapaStatus || 'Tournament'}
+                        date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
+                        image={getEventImage(t) || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                        linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
+                        status={t.sapa_status || t.sapaStatus || 'Gold'}
+                        registeredPlayers={t.registered_players || t.registeredPlayers}
+                        venue={t.venue || t.clubName}
+                        city={t.city}
+                    />
+                ))}
+
+                {(items?.length > 2) && (
+                    <div className="flex gap-4 justify-center mt-2">
+                        <button
+                            onClick={() => setRecentResultsPage(p => Math.max(0, p - 1))}
+                            disabled={recentResultsPage === 0}
+                            className={`w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-colors ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-padel-green hover:text-black'}`}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setRecentResultsPage(p => Math.min(maxResultsPage, p + 1))}
+                            disabled={recentResultsPage === maxResultsPage}
+                            className={`w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-colors ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed' : 'hover:bg-padel-green hover:text-black'}`}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+    ) : data.id === 'upcoming-events' ? (
+        <div className="relative z-10 w-full mt-4 lg:mt-0">
+            <div className="flex flex-col w-full bg-[#060913] rounded-[24px] overflow-hidden shadow-2xl border border-white/5">
+                <div className="flex flex-col p-4 sm:p-6">
+                    {items?.slice(0, 5).map((t, i) => (
+                        <UpcomingEventListItem
+                            key={t.id || t.eventId}
+                            title={t.event_name || t.eventName}
+                            label={t.sapa_status || t.sapaStatus || 'Tournament'}
+                            date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
+                            startDateStr={t.start_date || null}
+                            linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
+                            status={t.sapa_status || t.sapaStatus || 'Gold'}
+                            venue={t.venue || t.clubName}
+                            city={t.city}
+                        />
+                    ))}
+
+                    <button onClick={() => navigate('/calendar')} className="mt-4 w-full py-4 rounded-full border border-padel-green/50 text-padel-green text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-padel-green hover:text-black transition-all flex items-center justify-center gap-2 group">
+                        VIEW ALL TOURNAMENTS <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </button>
+                </div>
+            </div>
+        </div>
+    ) : isGridSection ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0 min-w-0">
             {/* Unified swipable horizontal list & desktop grid/slider */}
             <div
@@ -735,7 +905,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 
     return (
-        <section className={`relative py-12 lg:py-16 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
+        <section className={`relative py-6 lg:py-8 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
             <div className={`w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10`}>
                 {isGridSection ? (
                     <>
@@ -793,7 +963,7 @@ const FeaturedSections = () => {
                         city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
                         image: getEventImage(t) || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
-                        customLink: `/draws/${t.slug || t.id}`,
+                        customLink: `/calendar/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
                         venue: t.venue || t.clubName,
@@ -815,10 +985,12 @@ const FeaturedSections = () => {
 
         const fetchFeaturedEvents = async () => {
             try {
+                const today = new Date().toISOString().split('T')[0];
                 const { data, error } = await supabase
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
                     .eq('featured_event', true)
+                    .gte('start_date', today)
                     .neq('is_visible', false)
                     .order('start_date', { ascending: true })
                     .limit(10);
@@ -831,7 +1003,7 @@ const FeaturedSections = () => {
                         const singleEvent = data[0];
                         setFeaturedData(prevData => {
                             const newData = [...prevData];
-                            const featuredIndex = newData.findIndex(item => item.id === 'featured-tournaments');
+                            const featuredIndex = newData.findIndex(item => item.id === 'upcoming-events');
                             if (featuredIndex !== -1) {
                                 newData[featuredIndex] = {
                                     ...newData[featuredIndex],
@@ -923,7 +1095,7 @@ const FeaturedSections = () => {
                                 data={section}
                                 index={index}
                                 liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                                featuredTournaments={section.id === 'featured-tournaments' ? featuredTournaments : null}
+                                featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments : null}
                                 liveFeaturedTournaments={null}
                                 onWatchLive={openVideoModal}
                             />
@@ -947,7 +1119,7 @@ const FeaturedSections = () => {
                     data={section}
                     index={index}
                     liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                    featuredTournaments={section.id === 'featured-tournaments' ? featuredTournaments : null}
+                    featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments : null}
                     liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
                     onWatchLive={openVideoModal}
                 />

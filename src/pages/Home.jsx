@@ -37,7 +37,7 @@ const Home = () => {
                 <FeaturedSections />
 
                 {/* Intro / Dynamics Section */}
-                <section className="relative py-24 px-6 md:px-20 container mx-auto">
+                <section className="relative py-24 px-6 md:px-20 container mx-auto hidden md:block">
                     <div className="grid md:grid-cols-2 gap-16 items-center">
                         <div className="relative">
                             <motion.div
@@ -94,9 +94,6 @@ const Home = () => {
 
                 {/* Services Section */}
                 <Services />
-
-                {/* Calendar */}
-                <Calendar />
 
                 {/* FAQ */}
                 <FAQ />

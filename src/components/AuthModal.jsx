@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, Search, Calendar, ChevronRight, Check } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -20,8 +20,14 @@ console.log('Paystack Config Check:', {
     isTestMode: PAYSTACK_PUBLIC_KEY.startsWith('pk_test_'),
 });
 
-const AuthModal = ({ isOpen, onClose }) => {
-    const [activeTab, setActiveTab] = useState('login'); // 'login', 'register', 'forgot_password'
+const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
+    const [activeTab, setActiveTab] = useState(initialTab); // 'login', 'register', 'forgot_password'
+
+    useEffect(() => {
+        if (isOpen) {
+            setActiveTab(initialTab);
+        }
+    }, [isOpen, initialTab]);
     const [loading, setLoading] = useState(false);
     const [message, setMessage] = useState(null);
     const navigate = useNavigate();
