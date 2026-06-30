@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Filter, Search, ChevronRight, X, ChevronDown, Award, ArrowRight, Users, ChevronLeft, LayoutGrid, List, Loader, AlertCircle, Trophy, Layers, User, PlayCircle, Video, Shield, Check, Star, Globe } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { getEventImage } from '../utils/imageUtils';
@@ -46,13 +46,14 @@ const FeaturedEventCard = ({ event, index }) => {
     let badgeColor = 'bg-white/10 text-gray-400';
     let accentColor = 'text-padel-green';
     let glowColor = 'shadow-padel-green/20';
+    let glowBgColor = 'bg-white/5';
 
-    if (event.sapa_status === 'Major') { tierColor = 'border-red-500/30 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; accentColor = 'text-red-500'; glowColor = 'shadow-red-500/15'; }
-    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-amber-500/30 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; accentColor = 'text-amber-500'; glowColor = 'shadow-amber-500/15'; }
-    else if (event.sapa_status === 'Gold') { tierColor = 'border-yellow-500/30 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; accentColor = 'text-yellow-500'; glowColor = 'shadow-yellow-500/15'; }
-    else if (event.sapa_status === 'Silver') { tierColor = 'border-gray-400/30 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; accentColor = 'text-gray-400'; glowColor = 'shadow-gray-400/15'; }
-    else if (event.sapa_status === 'Bronze') { tierColor = 'border-orange-700/30 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; accentColor = 'text-orange-700'; glowColor = 'shadow-orange-700/15'; }
-    else if (event.sapa_status === 'FIP event') { tierColor = 'border-blue-500/30 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; accentColor = 'text-blue-500'; glowColor = 'shadow-blue-500/15'; }
+    if (event.sapa_status === 'Major') { tierColor = 'border-red-500/30 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; accentColor = 'text-red-500'; glowColor = 'shadow-red-500/15'; glowBgColor = 'bg-red-500/30'; }
+    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-amber-500/30 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; accentColor = 'text-amber-500'; glowColor = 'shadow-amber-500/15'; glowBgColor = 'bg-amber-500/30'; }
+    else if (event.sapa_status === 'Gold') { tierColor = 'border-yellow-500/30 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; accentColor = 'text-yellow-500'; glowColor = 'shadow-yellow-500/15'; glowBgColor = 'bg-yellow-500/30'; }
+    else if (event.sapa_status === 'Silver') { tierColor = 'border-gray-400/30 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; accentColor = 'text-gray-400'; glowColor = 'shadow-gray-400/15'; glowBgColor = 'bg-gray-400/30'; }
+    else if (event.sapa_status === 'Bronze') { tierColor = 'border-orange-700/30 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; accentColor = 'text-orange-700'; glowColor = 'shadow-orange-700/15'; glowBgColor = 'bg-orange-700/30'; }
+    else if (event.sapa_status === 'FIP event') { tierColor = 'border-blue-500/30 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; accentColor = 'text-blue-500'; glowColor = 'shadow-blue-500/15'; glowBgColor = 'bg-blue-500/30'; }
 
     const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
 
@@ -61,14 +62,74 @@ const FeaturedEventCard = ({ event, index }) => {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: index * 0.1 }}
-            className="h-full"
+            className="w-full relative group"
         >
-            <Link
-                to={detailsPath}
-                className={`group relative flex flex-row items-stretch h-full min-h-[140px] sm:min-h-[160px] bg-[#060913] rounded-[20px] sm:rounded-[24px] overflow-hidden border-2 ${tierColor} transition-all duration-500 hover:scale-[1.02] shadow-xl ${glowColor}`}
-            >
-                {/* Poster Image Container */}
-                <div className="relative w-[100px] sm:w-[130px] shrink-0 overflow-hidden bg-black/40 border-r border-white/5">
+            {/* Soft Glow Behind the Card */}
+            <div className={`absolute -inset-1 sm:-inset-1.5 rounded-[28px] blur-xl opacity-20 sm:opacity-30 group-hover:opacity-50 transition-opacity duration-700 ${glowBgColor} -z-10`} />
+
+            <div className={`relative flex flex-row items-stretch min-h-[220px] sm:min-h-[280px] bg-[#0F1420] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl`}>
+                
+                {/* Shimmer Effect */}
+                <motion.div 
+                    className="absolute top-0 bottom-0 left-0 w-[150%] z-30 pointer-events-none"
+                    style={{
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
+                        transform: 'skewX(-20deg)',
+                    }}
+                    initial={{ x: '-100%' }}
+                    animate={{ x: '100%' }}
+                    transition={{ repeat: Infinity, duration: 2.5, ease: "linear", repeatDelay: 2 }}
+                />
+
+                {/* Left Content */}
+                <div className="flex flex-col justify-center flex-1 p-4 sm:p-8 z-20 overflow-hidden">
+                    <div className="mb-2 sm:mb-3">
+                        <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest border ${badgeColor}`}>
+                            {event.sapa_status}
+                        </span>
+                    </div>
+
+                    <h3 className="text-sm sm:text-2xl font-black text-white mb-2 sm:mb-4 uppercase tracking-tight leading-tight line-clamp-3">
+                        {event.event_name || event.eventName}
+                    </h3>
+
+                    <div className="space-y-1 sm:space-y-2 mb-3 sm:mb-6">
+                        <div className="flex items-center gap-1.5 sm:gap-2 text-[#CCFF00]">
+                            <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                            <span className="text-[10px] sm:text-sm font-bold truncate">
+                                {event.event_dates ||
+                                    (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
+                                    (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
+                            </span>
+                        </div>
+
+                        {(event.venue || event.city) && (
+                            <div className="flex items-center gap-1.5 sm:gap-2 text-gray-400">
+                                <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 text-[#CCFF00]" />
+                                <span className="text-[10px] sm:text-sm font-medium truncate">
+                                    {[event.venue || event.clubName, event.city].filter(Boolean).join(', ')}
+                                </span>
+                            </div>
+                        )}
+                    </div>
+
+                    <div>
+                        <Link
+                            to={detailsPath}
+                            target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
+                            className="inline-flex items-center gap-1.5 sm:gap-2 bg-[#CCFF00] hover:bg-[#b3ff00] text-[#000000] font-black px-4 sm:px-6 py-1.5 sm:py-2.5 rounded-full transition-colors text-[9px] sm:text-sm uppercase tracking-wide w-fit shrink-0"
+                        >
+                            <span className="text-[#000000]">View Event</span>
+                            <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4 text-[#000000]" />
+                        </Link>
+                    </div>
+                </div>
+
+                {/* Gradient overlay for fade effect to image */}
+                <div className="absolute inset-y-0 right-[100px] sm:right-[280px] w-16 sm:w-32 bg-gradient-to-l from-transparent to-[#0F1420] z-10 pointer-events-none" />
+
+                {/* Right Image Container */}
+                <div className="relative w-[110px] sm:w-[320px] shrink-0 bg-black overflow-hidden z-0 flex items-center justify-center p-0">
                     {getEventImage(event) ? (
                         <>
                             <img
@@ -80,71 +141,16 @@ const FeaturedEventCard = ({ event, index }) => {
                             <img
                                 src={getEventImage(event)}
                                 alt={event.event_name || event.eventName}
-                                className="absolute inset-0 z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                className="relative w-full h-full object-cover sm:object-contain drop-shadow-2xl"
                             />
                         </>
                     ) : (
-                        <div className="w-full h-full bg-slate-900 flex items-center justify-center">
-                            <CalendarIcon className="w-6 h-6 text-white/10" />
-                        </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-[#060913] opacity-40 z-20" />
-
-                    {event.featured_live && (
-                        <div className="absolute top-2 left-2 z-30 flex items-center gap-1.5 bg-red-600 text-white px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest animate-pulse shadow-lg shadow-red-600/30">
-                            <div className="w-1 h-1 rounded-full bg-white" />
-                            <span>Live</span>
+                        <div className="w-full h-full flex items-center justify-center">
+                            <CalendarIcon className="w-8 sm:w-12 h-8 sm:h-12 text-white/10" />
                         </div>
                     )}
                 </div>
-
-                {/* Content */}
-                <div className="p-3 sm:p-4 flex flex-col flex-1 min-w-0 justify-center">
-                    <div className="flex items-center gap-2 mb-1.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${badgeColor} backdrop-blur-md shadow-lg border border-white/5`}>
-                            {event.sapa_status}
-                        </span>
-                    </div>
-
-                    <h3 className="text-sm sm:text-base font-black text-white mb-1.5 group-hover:text-padel-green transition-colors line-clamp-2 uppercase tracking-tight leading-tight">
-                        {event.event_name || event.eventName}
-                    </h3>
-
-                    <div className="space-y-1 mt-auto">
-                        <div className="flex items-center gap-1.5 text-gray-400">
-                            <CalendarIcon className={`w-3 h-3 ${accentColor} shrink-0`} />
-                            <span className={`text-[9px] sm:text-[10px] font-bold ${accentColor} truncate`}>
-                                {event.event_dates ||
-                                    (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
-                                    (event.start_date && `${new Date(event.start_date).toLocaleDateString()}${event.end_date && event.end_date !== event.start_date ? ` - ${new Date(event.end_date).toLocaleDateString()}` : ''}`)}
-                            </span>
-                        </div>
-
-                        {(event.venue || event.city) && (
-                            <div className="flex items-center gap-1.5 text-gray-400">
-                                <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
-                                <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
-                                    {event.venue || event.city}
-                                </span>
-                            </div>
-                        )}
-
-                        <div className="flex items-center justify-between pt-2 border-t border-white/5 mt-2">
-                            {event.registered_players > 0 ? (
-                                <div className="flex items-center gap-1">
-                                    <Users className={`w-2.5 h-2.5 ${accentColor}`} />
-                                    <span className="text-white font-bold text-[9px] sm:text-[10px]">{event.registered_players}</span>
-                                </div>
-                            ) : <div></div>}
-
-                            <div className="flex items-center gap-1 text-padel-green font-black text-[9px] sm:text-[10px] uppercase tracking-widest group-hover:translate-x-1 transition-transform">
-                                <span>Details</span>
-                                <ArrowRight className="w-3 h-3" />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </Link>
+            </div>
         </motion.div>
     );
 };
@@ -257,6 +263,20 @@ const CalendarEventItem = ({ event, index }) => {
 
     const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
 
+    const dateStr = event.start_date || event.startDate;
+    let dayNum = '--';
+    let monthStr = '---';
+    let weekdayStr = '---';
+
+    if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            dayNum = d.getDate();
+            monthStr = d.toLocaleString('en-US', { month: 'short' });
+            weekdayStr = d.toLocaleString('en-US', { weekday: 'short' });
+        }
+    }
+
     return (
         <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -267,13 +287,21 @@ const CalendarEventItem = ({ event, index }) => {
             <Link
                 to={detailsPath}
                 target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
-                className={`group block backdrop-blur-sm border ${tierColor} rounded-2xl p-4 hover:bg-white/10 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
+                className={`group block bg-[#0F1420] hover:bg-[#151A27] border ${tierColor} rounded-2xl p-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
             >
-                <div className={`absolute inset-0 ${bgGradient} opacity-50 group-hover:opacity-80 transition-opacity`}></div>
+                <div className={`absolute inset-0 ${bgGradient} opacity-10 group-hover:opacity-30 transition-opacity`}></div>
 
-                <div className="flex flex-row items-center gap-4 relative z-10 w-full min-w-0">
-                    {/* Square Icon/Image on left */}
-                    <div className="flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden bg-black/40 border border-white/5 relative shadow-xl">
+                <div className="flex flex-row items-center gap-3 sm:gap-5 relative z-10 w-full min-w-0">
+
+                    {/* Date Block (Far Left) */}
+                    <div className="flex flex-col items-center justify-center w-12 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 py-1">
+                        <span className="text-white text-lg sm:text-2xl font-black leading-none">{dayNum}</span>
+                        <span className="text-gray-400 text-[10px] sm:text-xs font-bold uppercase mt-0.5">{monthStr}</span>
+                        <span className="text-[#CCFF00] text-[9px] sm:text-[10px] font-bold uppercase mt-1 tracking-wider">{weekdayStr}</span>
+                    </div>
+
+                    {/* Image Block */}
+                    <div className="flex-shrink-0 w-16 h-20 sm:w-20 sm:h-24 rounded-lg sm:rounded-xl overflow-hidden bg-black/40 border border-white/5 relative shadow-xl">
                         {getEventImage(event) ? (
                             <img
                                 src={getEventImage(event)}
@@ -287,23 +315,23 @@ const CalendarEventItem = ({ event, index }) => {
                         )}
                     </div>
 
-                    {/* Right Info block */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 py-1">
+                    {/* Info block (Middle) */}
+                    <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 sm:gap-1.5 py-1">
                         {/* Status Row */}
                         <div className="flex items-center gap-2 mb-0.5">
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
+                            <span className={`px-2 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
                                 {event.sapa_status}
                             </span>
                             {event.is_league && (
-                                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest">
+                                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-widest">
                                     League
                                 </span>
                             )}
                         </div>
-                        
+
                         {/* Date */}
-                        <div className="flex items-center gap-1 text-padel-green font-bold text-[10px] sm:text-xs">
-                            <CalendarIcon className="w-3.5 h-3.5" />
+                        <div className="flex items-center gap-1 text-[#CCFF00] font-bold text-[9px] sm:text-[10px] mt-0.5">
+                            <CalendarIcon className="w-3 h-3" />
                             <span>
                                 {event.event_dates ||
                                     (event.startDate && `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate || event.startDate).toLocaleDateString()}`) ||
@@ -312,45 +340,38 @@ const CalendarEventItem = ({ event, index }) => {
                         </div>
 
                         {/* Title */}
-                        <h3 className="text-base sm:text-xl font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-2">
+                        <h3 className="text-xs sm:text-lg font-black text-white group-hover:text-padel-green transition-colors leading-tight uppercase tracking-tight line-clamp-2 pr-2">
                             {event.event_name || event.eventName}
                         </h3>
 
                         {/* Bottom Metadata Row */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-gray-400 text-[10px] sm:text-xs font-medium mt-0.5">
+                        <div className="flex items-center gap-3 text-gray-400 text-[9px] sm:text-xs font-medium mt-0.5 w-full overflow-hidden">
+                            <div className="flex items-center gap-1 min-w-0 shrink">
+                                <MapPin className="w-3 sm:w-3.5 h-3 sm:h-3.5 text-padel-green/60 shrink-0" />
+                                <span className="truncate" title={event.venue || event.clubName}>
+                                    {event.venue || event.clubName || 'Location TBC'}
+                                </span>
+                            </div>
+
                             {event.city && (
-                                <span className="flex items-center gap-1 shrink-0">
-                                    <Map className="w-3.5 h-3.5 text-padel-green/60" />
-                                    {event.city}
-                                </span>
-                            )}
-                            <span className="flex items-center gap-1 min-w-0">
-                                <MapPin className="w-3.5 h-3.5 text-padel-green/60 shrink-0" />
-                                <span className="truncate max-w-[120px] sm:max-w-[200px]" title={event.venue || event.clubName}>
-                                    {(event.venue || event.clubName || 'Location TBC').split(' ').slice(0, 3).join(' ') + ((event.venue || event.clubName || 'Location TBC').split(' ').length > 3 ? '...' : '')}
-                                </span>
-                            </span>
-                            {event.registered_players > 0 && (
-                                <span className="flex items-center gap-1 shrink-0 bg-padel-green/5 border border-padel-green/10 px-1.5 py-0.5 rounded-md">
-                                    <Users className="w-3 h-3 text-padel-green" />
-                                    <span className="text-white font-bold text-[9px] leading-none">{event.registered_players}</span>
-                                </span>
-                            )}
-                            
-                            {/* Tags */}
-                            {(event.live_youtube_url && event.featured_live) && (
-                                <div className="flex items-center gap-0.5 bg-red-600 text-white px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest shrink-0 animate-pulse">
-                                    <PlayCircle className="w-2.5 h-2.5 shrink-0" />
-                                    <span>Live</span>
+                                <div className="flex items-center gap-1 shrink-0 text-[#CCFF00]/80">
+                                    <Map className="w-3 sm:w-3.5 h-3 sm:h-3.5 shrink-0" />
+                                    <span className="truncate max-w-[80px] sm:max-w-[120px]">{event.city}</span>
                                 </div>
                             )}
-                            {(new Date(event.end_date || event.start_date) < new Date()) && (
-                                <div className="flex items-center gap-0.5 bg-slate-900 text-gray-400 px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase tracking-widest border border-white/10 shrink-0">
-                                    <Check className="w-2.5 h-2.5 shrink-0 text-padel-green" />
-                                    <span>Complete</span>
+
+                            {event.registered_players != null && (
+                                <div className="flex items-center gap-1 shrink-0 bg-[#CCFF00]/10 border border-[#CCFF00]/20 px-1.5 py-0.5 rounded-md">
+                                    <Users className="w-3 h-3 text-[#CCFF00]" />
+                                    <span className="text-white font-bold text-[9px] leading-none">{event.registered_players}</span>
                                 </div>
                             )}
                         </div>
+                    </div>
+
+                    {/* Arrow (Far Right) */}
+                    <div className="flex-shrink-0 pr-2">
+                        <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-[#CCFF00] opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
                     </div>
                 </div>
             </Link>
@@ -360,7 +381,7 @@ const CalendarEventItem = ({ event, index }) => {
 
 const Calendar = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const initialTab = searchParams.get('tab') || 'upcoming';
+    const initialTab = searchParams.get('tab') || 'all';
 
     const [events, setEvents] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -466,7 +487,39 @@ const Calendar = () => {
                 .order('id', { ascending: true });
 
             if (error) throw error;
-            setEvents(data || []);
+            
+            let eventsData = data || [];
+
+            // Calculate dynamic registration counts for manual events
+            const manualEventIds = eventsData.filter(e => e.is_manual).map(e => e.id);
+            if (manualEventIds.length > 0) {
+                const { data: regs } = await supabase
+                    .from('event_registrations')
+                    .select('event_id, full_name, partner_name')
+                    .in('event_id', manualEventIds)
+                    .neq('status', 'withdrawn');
+                
+                if (regs) {
+                    const counts = {};
+                    regs.forEach(reg => {
+                        if (!counts[reg.event_id]) counts[reg.event_id] = new Set();
+                        if (reg.full_name) counts[reg.event_id].add(reg.full_name.toLowerCase());
+                        if (reg.partner_name) counts[reg.event_id].add(reg.partner_name.toLowerCase());
+                    });
+                    
+                    eventsData = eventsData.map(event => {
+                        if (event.is_manual) {
+                            return {
+                                ...event,
+                                registered_players: counts[event.id] ? counts[event.id].size : 0
+                            };
+                        }
+                        return event;
+                    });
+                }
+            }
+
+            setEvents(eventsData);
         } catch (err) {
             console.error('Error fetching calendar:', err?.message || err, err);
             setError('Failed to load events. Please try again later.');
@@ -534,7 +587,7 @@ const Calendar = () => {
             const organizer = event.organizer_name || '';
             const eventType = event.is_league ? 'League' : 'Tournament';
 
-            const matchesSearch =
+            const matchesSearch = !searchTerm ||
                 eventName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 venueName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 city.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -542,7 +595,9 @@ const Calendar = () => {
                 organizer.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 eventType.toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesStatus = statusFilters.length === 0 || statusFilters.includes(status);
+            const matchesStatus = (activeTab === 'all' || activeTab === 'All Events') ? true : status === activeTab;
+            // Additional fallback if statusFilters from Drawer are still active
+            const matchesDrawerStatus = statusFilters.length === 0 || statusFilters.includes(status);
 
             const matchesCity = cityFilter === 'All' || city === cityFilter;
 
@@ -552,13 +607,9 @@ const Calendar = () => {
                 const startDateStr = event.start_date || event.startDate;
                 const endDateStr = event.end_date || event.endDate || startDateStr;
 
-                if (activeTab === 'upcoming') {
-                    const eventDate = new Date(endDateStr);
-                    matchesTiming = !isNaN(eventDate.getTime()) && eventDate >= today;
-                } else if (activeTab === 'past') {
-                    const eventDate = new Date(endDateStr);
-                    matchesTiming = !isNaN(eventDate.getTime()) && eventDate < today;
-                }
+                const eventDate = new Date(endDateStr);
+                // Default to showing only upcoming events when browsing tabs
+                matchesTiming = !isNaN(eventDate.getTime()) && eventDate >= today;
             }
 
 
@@ -566,7 +617,7 @@ const Calendar = () => {
                 (leagueFilter === 'League' && event.is_league === true) ||
                 (leagueFilter === 'Tournaments' && !event.is_league);
 
-            return matchesSearch && matchesStatus && matchesCity && matchesTiming && matchesLeague;
+            return matchesSearch && matchesStatus && matchesDrawerStatus && matchesCity && matchesTiming && matchesLeague;
         });
     }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode]);
 
@@ -713,7 +764,7 @@ const Calendar = () => {
                     </div>
 
                     <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-                        <strong className="text-white font-medium">Explore the 2026/2027 season events.</strong>
+                        <strong className="text-white font-medium">Find and explore padel events across South Africa.</strong>
                     </p>
                 </section>
 
@@ -723,51 +774,33 @@ const Calendar = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
-                        className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
+                        className="flex gap-3 items-center max-w-4xl mx-auto px-4 sm:px-0"
                     >
                         {/* Search Input Container */}
-                        <div className="relative flex-1">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+                        <div className="relative flex-1 bg-[#121620] border border-white/5 rounded-full shadow-lg">
+                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
                             <input
                                 type="text"
                                 placeholder="Search events or venues..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
+                                className="w-full bg-transparent py-3 md:py-4 pl-12 md:pl-14 pr-4 text-[14px] md:text-base text-white focus:outline-none placeholder-gray-500 rounded-full"
                             />
                         </div>
 
                         {/* Filters Button */}
                         <button
                             onClick={() => setShowFilters(true)}
-                            className="relative flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-3.5 text-white transition-all font-semibold text-sm md:text-base shrink-0 group"
+                            className="relative flex items-center justify-center gap-2 bg-[#121620] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
                         >
                             <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
                             <span className="hidden sm:block">Filters</span>
                             {((statusFilters.length > 0) || (cityFilter !== 'All') || (leagueFilter !== 'All')) && (
-                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 md:w-5 md:h-5 bg-padel-green text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg">
+                                <span className="w-5 h-5 bg-[#CCFF00] text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg ml-1">
                                     {(statusFilters.length > 0 ? 1 : 0) + (cityFilter !== 'All' ? 1 : 0) + (leagueFilter !== 'All' ? 1 : 0)}
                                 </span>
                             )}
                         </button>
-
-                        {/* View Toggle (Grid/List) in Command Deck */}
-                        <div className="hidden sm:flex bg-white/5 border border-white/10 rounded-xl md:rounded-2xl p-1 gap-1">
-                            <button
-                                onClick={() => setViewMode('list')}
-                                className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${viewMode === 'list' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
-                                title="List View"
-                            >
-                                <List className="w-4 h-4 md:w-5 md:h-5" />
-                            </button>
-                            <button
-                                onClick={() => setViewMode('calendar')}
-                                className={`w-10 h-10 md:w-12 md:h-12 rounded-lg md:rounded-xl flex items-center justify-center transition-all ${viewMode === 'calendar' ? 'bg-white/10 text-white shadow-inner' : 'text-gray-500 hover:text-white'}`}
-                                title="Grid View"
-                            >
-                                <LayoutGrid className="w-4 h-4 md:w-5 md:h-5" />
-                            </button>
-                        </div>
                     </motion.div>
                 </section>
 
@@ -908,39 +941,51 @@ const Calendar = () => {
                 </AnimatePresence>
 
                 {/* Primary Tab Navigation */}
-                <div className="flex justify-center mb-6 md:mb-10 relative z-50">
-                    <div className="flex overflow-x-auto hide-scrollbar space-x-1 sm:space-x-2 bg-white/5 backdrop-blur-md p-1.5 sm:p-2 rounded-[2rem] border border-white/10 shadow-xl shadow-black/20 mx-auto max-w-[95vw] md:max-w-fit flex-nowrap shrink-0 snap-x snap-mandatory">
+                <div className="flex justify-center mb-10 md:mb-12 relative z-50">
+                    <div className="flex overflow-x-auto hide-scrollbar space-x-2 sm:space-x-3 px-4 mx-auto max-w-full flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
-                            ...(activeTab === 'my-calendar' ? [{ id: 'my-calendar', label: 'My Calendar' }] : []),
-                            { id: 'upcoming', label: 'Upcoming' },
-                            { id: 'all', label: 'All Events' },
-                            { id: 'past', label: 'Past Events' }
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => {
-                                    setActiveTab(tab.id);
-                                    setSearchParams({ tab: tab.id });
-                                }}
-                                className={`relative px-4 sm:px-8 py-2.5 sm:py-3.5 rounded-full font-black text-[10px] sm:text-[11px] md:text-xs tracking-[0.1em] sm:tracking-[0.15em] uppercase transition-all duration-300 whitespace-nowrap snap-center ${activeTab === tab.id ? 'text-black' : 'text-gray-400 hover:text-white hover:bg-white/5'
-                                    }`}
-                            >
-                                {activeTab === tab.id && (
-                                    <motion.div
-                                        layoutId="calendarPrimaryTab"
-                                        className="absolute inset-0 bg-padel-green rounded-full shadow-lg shadow-padel-green/20"
-                                        initial={false}
-                                        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                                    />
-                                )}
-                                <span className="relative z-10">{tab.label}</span>
-                            </button>
-                        ))}
+                            { id: 'all', label: 'All Events', icon: CalendarIcon },
+                            { id: 'Major', label: 'Major', icon: Trophy },
+                            { id: 'Super Gold', label: 'Super Gold', icon: Trophy },
+                            { id: 'Gold', label: 'Gold', icon: Trophy },
+                            { id: 'Silver', label: 'Silver', icon: Trophy },
+                            { id: 'Bronze', label: 'Bronze', icon: Trophy },
+                            { id: 'FIP event', label: 'FIP', icon: Globe },
+                            ...(userProfile?.rankedin_id ? [{ id: 'my-calendar', label: 'My Calendar', icon: User }] : [])
+                        ].map((tab) => {
+                            const Icon = tab.icon;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => {
+                                        setActiveTab(tab.id);
+                                        setSearchParams({ tab: tab.id });
+                                    }}
+                                    className={`relative px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-medium text-[12px] sm:text-[14px] flex items-center gap-2 transition-all duration-300 whitespace-nowrap snap-center border ${activeTab === tab.id
+                                        ? 'bg-[#CCFF00] text-black border-[#CCFF00]'
+                                        : 'bg-transparent text-gray-300 border-white/10 hover:border-white/20 hover:text-white'
+                                        }`}
+                                >
+                                    <Icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-black' : 'text-gray-400'}`} />
+                                    <span className="relative z-10">{tab.label}</span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
-                {/* Featured Carousel */}
-                <FeaturedCarousel events={featuredEvents} />
+                {/* Event Spotlight */}
+                {featuredEvents.length > 0 && (
+                    <div className="mb-12 px-4 sm:px-0 max-w-4xl mx-auto">
+                        <div className="flex items-center gap-2 mb-6">
+                            <Star className="w-5 h-5 md:w-6 md:h-6 text-[#CCFF00] fill-[#CCFF00]" />
+                            <h2 className="text-lg md:text-xl font-bold text-[#CCFF00] uppercase tracking-widest">
+                                Event Spotlight
+                            </h2>
+                        </div>
+                        <FeaturedEventCard event={featuredEvents[0]} index={0} />
+                    </div>
+                )}
 
                 {/* Content Area */}
                 {(loading || personalLoading) ? (
@@ -968,6 +1013,12 @@ const Calendar = () => {
                         {viewMode === 'list' ? (
                             /* Premium List View */
                             <div className="space-y-4">
+                                <div className="flex items-center gap-3 mb-2 px-1">
+                                    <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">Upcoming Events</h2>
+                                    <div className="bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] px-2.5 py-0.5 rounded-lg text-sm font-black">
+                                        {filteredEvents.length}
+                                    </div>
+                                </div>
                                 <AnimatePresence mode="popLayout">
                                     {paginatedEvents.map((event, index) => (
                                         <CalendarEventItem key={event.id} event={event} index={index} />
@@ -1042,7 +1093,7 @@ const Calendar = () => {
 
                 <div className="mt-16 bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-3xl text-sm text-gray-400 leading-relaxed text-center max-w-4xl mx-auto shadow-xl">
                     <p className="mb-4"><strong className="text-white uppercase tracking-widest text-xs">Note</strong> <br />Further information on all events will be released in due course. Please note event information is subject to change.</p>
-                    <p>All players are required to have a valid SAPA Player's license for all Gold and Major events. Registration for events is strictly through RankedIn only.</p>
+                    <p>All players are required to have a valid SAPA Player's license for all Gold and Major events. Registration for events is strictly through 4M Padel.</p>
                 </div>
             </main>
         </div>
