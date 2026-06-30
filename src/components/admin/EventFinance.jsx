@@ -1122,18 +1122,19 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             sheet.addRow([]);
 
             // Add Headers
-            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Payment Method', 'Amount Paid', 'WhatsApp Added'];
+            const headers = ['Participant Name', 'Division', 'System Profile', 'Email', 'Contact Number', 'License Type', 'Event Payment Status', 'Payment Method', 'Amount Paid', 'WhatsApp Added', 'Notes'];
             const headerRow = sheet.addRow(headers);
             headerRow.font = { bold: true };
-            
+
             // Add auto-filter to header row
-            sheet.autoFilter = 'A3:I3';
+            sheet.autoFilter = 'A3:K3';
 
             // Add Data Rows
             sortedParticipants.forEach(p => {
                 const amountPaid = getParticipantPaidAmount(p);
                 const lic = getResolvedLicenseType(p, selectedEvent?.id);
                 const licLabel = lic === 'full' ? 'Full' : lic === 'temporary' ? 'Temporary' : 'None';
+                const note = p.metadata?.payment_note || p.actual_payment?.metadata?.note || '';
                 sheet.addRow([
                     p.full_name,
                     p.class_name || 'N/A',
@@ -1144,7 +1145,8 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     p.is_paid ? 'PAID' : 'UNPAID',
                     p.is_paid ? (p.paid_by_name ? `Paid by ${p.paid_by_name}` : (p.actual_payment?.metadata?.paid_by_name ? `Paid by ${p.actual_payment.metadata.paid_by_name}` : (p.actual_payment?.payment_method || p.registration_payment_method || 'System'))) : 'N/A',
                     amountPaid,
-                    p.whatsapp_added ? 'YES' : 'NO'
+                    p.whatsapp_added ? 'YES' : 'NO',
+                    note
                 ]);
             });
 
@@ -1156,7 +1158,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             totalRow.getCell(9).numFmt = '"R"#,##0.00';
 
             // Expand columns to fit content
-            for (let i = 1; i <= 10; i++) {
+            for (let i = 1; i <= 11; i++) {
                 const column = sheet.getColumn(i);
                 let maxLen = 0;
                 column.eachCell({ includeEmpty: true }, (cell, rowNumber) => {
