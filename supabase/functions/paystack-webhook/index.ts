@@ -222,6 +222,112 @@ async function finalizeManualEventPayment(
     }
 }
 
+/**
+ * Finalize a standalone web license / membership purchase (LicensePaymentModal).
+ *
+ * The browser flow only calls the mark_player_paid RPC (which sets license_type +
+ * paid_registration on the profile) and, for temporary licenses, inserts a
+ * temporary_licenses row. It never writes a `payments` ledger row — and on mobile
+ * / Apple Pay the tab can close before even that runs. So we finalize entirely
+ * server-side here off the charge.success webhook, which Paystack delivers
+ * regardless of what the browser does.
+ *
+ * Fully idempotent:
+ *   - payments row is upserted on `reference` (keyed on the Paystack transaction
+ *     id so a later admin "Paystack sync" backfill collides on the same row
+ *     instead of creating a duplicate),
+ *   - the profile update is naturally idempotent,
+ *   - the temporary_licenses insert is guarded by an existence check (the browser
+ *     may have already inserted it on the happy path).
+ */
+async function finalizeWebLicensePayment(
+    supabaseAdmin: SupabaseClient,
+    data: Record<string, unknown>,
+    meta: Record<string, unknown>,
+) {
+    const txnId = data.id != null ? String(data.id) : '';
+    const clientRef = String(data.reference || '');
+    // Use the Paystack transaction id as the ledger reference so the admin
+    // backfill (which keys standalone membership rows on trx.id) reconciles to
+    // this same row instead of duplicating it.
+    const reference = txnId || clientRef;
+    if (!reference) return { processed: false, skipped: true, reason: 'no_reference' };
+
+    const customer = data.customer as Record<string, unknown> | undefined;
+    const email = String(meta.email || customer?.email || data.email || '').toLowerCase();
+    if (!email) return { processed: false, skipped: true, reason: 'no_email' };
+
+    const isFull = meta.license_type !== 'temporary';
+    const amountRands = Number(data.amount || 0) / 100;
+    const eventId = meta.event_id ?? null;
+    const eventName = (meta.event_name as string) || null;
+    const isTest = String(data.domain || '').toLowerCase() === 'test' || meta.is_test === true;
+
+    const { data: player } = await supabaseAdmin
+        .from('players')
+        .select('id')
+        .ilike('email', email)
+        .maybeSingle();
+
+    // 1) Ledger row — idempotent on `reference`. Mirrors the admin Paystack-sync
+    //    shape: payment_type 'membership' for full, 'temp_license' for temporary.
+    const { error: payErr } = await supabaseAdmin
+        .from('payments')
+        .upsert({
+            player_id: player?.id ?? null,
+            event_id: isFull ? null : eventId,
+            amount: amountRands,
+            currency: 'ZAR',
+            status: 'success',
+            payment_type: isFull ? 'membership' : 'temp_license',
+            payment_method: 'paystack',
+            reference,
+            is_test: isTest,
+            metadata: {
+                source: 'web_license_modal',
+                license_type: isFull ? 'full' : 'temporary',
+                client_reference: clientRef,
+                paystack_ref: txnId,
+                event_id: eventId,
+                event_name: eventName,
+            },
+        }, { onConflict: 'reference' });
+    if (payErr) throw payErr;
+
+    // 2) Apply the license to the profile (same effect as mark_player_paid).
+    if (player) {
+        await supabaseAdmin
+            .from('players')
+            .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true })
+            .eq('id', player.id);
+
+        // 3) Temporary license record — only if missing (browser may have inserted it).
+        if (!isFull && eventId) {
+            const { data: existingLic } = await supabaseAdmin
+                .from('temporary_licenses')
+                .select('id')
+                .eq('player_id', player.id)
+                .eq('event_id', eventId)
+                .maybeSingle();
+            if (!existingLic) {
+                const { data: ev } = await supabaseAdmin
+                    .from('calendar')
+                    .select('event_name, end_date, start_date')
+                    .eq('id', eventId)
+                    .maybeSingle();
+                await supabaseAdmin.from('temporary_licenses').insert([{
+                    player_id: player.id,
+                    event_id: eventId,
+                    event_name: ev?.event_name || eventName || 'Calendar Event',
+                    event_date: ev?.end_date || ev?.start_date || null,
+                }]);
+            }
+        }
+    }
+
+    return { processed: true, licenseType: isFull ? 'full' : 'temporary', playerFound: !!player };
+}
+
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-paystack-signature',
@@ -390,6 +496,16 @@ serve(async (req: Request) => {
         // the webhook no longer depends on the browser having left a row behind.
         if (!localIsManual) {
             const eventMeta = parseMetadata(data?.metadata);
+
+            // Standalone web license / membership purchase (LicensePaymentModal).
+            // Finalize entirely server-side — the browser never writes a payments
+            // row for these, so without this the ledger row only ever appears after
+            // an admin Paystack-sync backfill.
+            if (eventMeta.source === 'web_license_modal') {
+                const result = await finalizeWebLicensePayment(supabaseAdmin, data || {}, eventMeta);
+                return new Response(JSON.stringify({ received: true, ...result }), { status: 200, headers: corsHeaders });
+            }
+
             if (eventMeta.source !== 'manual_event') {
                 return new Response(JSON.stringify({ received: true, skipped: true }), { status: 200, headers: corsHeaders });
             }
