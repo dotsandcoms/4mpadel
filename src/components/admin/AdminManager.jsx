@@ -135,14 +135,16 @@ const AdminManager = () => {
     const handleSave = async (e) => {
         e.preventDefault();
         try {
+            const adminData = {
+                email: formData.email.trim().toLowerCase(),
+                role: formData.role,
+                allowed_tabs: formData.role === 'super_admin' ? [] : formData.allowed_tabs,
+                module_permissions: formData.role === 'super_admin' ? {} : formData.module_permissions
+            };
+
             const { error } = await supabase
                 .from('admin_sidebar_permissions')
-                .upsert({
-                    email: formData.email,
-                    role: formData.role,
-                    allowed_tabs: formData.role === 'super_admin' ? [] : formData.allowed_tabs,
-                    module_permissions: formData.role === 'super_admin' ? {} : formData.module_permissions
-                });
+                .upsert(adminData);
 
             if (error) throw error;
 
