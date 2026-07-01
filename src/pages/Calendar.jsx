@@ -1050,6 +1050,19 @@ const Calendar = () => {
                     )}
                 </AnimatePresence>
 
+                {/* Event Spotlight */}
+                {featuredEvents.length > 0 && (
+                    <div className="mb-8 px-4 sm:px-0 max-w-4xl mx-auto">
+                        <div className="flex items-center gap-1.5 mb-4">
+                            <Star className="w-3.5 h-3.5 text-padel-green fill-padel-green shrink-0" />
+                            <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">
+                                Event Spotlight
+                            </h2>
+                        </div>
+                        <FeaturedTournamentSpotlight event={featuredEvents[0]} />
+                    </div>
+                )}
+
                 {/* Primary Tab Navigation */}
                 <div className="flex justify-center mb-8 md:mb-10 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-2 sm:space-x-3 px-4 mx-auto max-w-full flex-nowrap shrink-0 snap-x snap-mandatory">
@@ -1083,19 +1096,6 @@ const Calendar = () => {
                         })}
                     </div>
                 </div>
-
-                {/* Event Spotlight */}
-                {featuredEvents.length > 0 && (
-                    <div className="mb-8 px-4 sm:px-0 max-w-4xl mx-auto">
-                        <div className="flex items-center gap-1.5 mb-4">
-                            <Star className="w-3.5 h-3.5 text-padel-green fill-padel-green shrink-0" />
-                            <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">
-                                Event Spotlight
-                            </h2>
-                        </div>
-                        <FeaturedTournamentSpotlight event={featuredEvents[0]} />
-                    </div>
-                )}
 
                 {/* Content Area */}
                 {(loading || personalLoading) ? (
