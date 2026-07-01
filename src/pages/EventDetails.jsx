@@ -382,6 +382,8 @@ const EventDetails = () => {
     // each player's division entry separately; excludes withdrawn).
     const [manualEntriesCount, setManualEntriesCount] = useState(0);
     const [globalRankings, setGlobalRankings] = useState(new Map());
+    const [genderRankingPoints, setGenderRankingPoints] = useState({ men: new Map(), women: new Map() });
+    const [topSeedsGender, setTopSeedsGender] = useState('men');
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
 
@@ -404,6 +406,37 @@ const EventDetails = () => {
         });
         return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
     }, [participants, event?.registered_players, event?.is_manual]);
+
+    // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points
+    // (each player's live best-8 points total, summed across the team), matching the
+    // gender of the division they're registered in. Only used for manual events —
+    // RankedIn events already carry their own Rank/Seed fields from the API.
+    const manualTeamSeeds = useMemo(() => {
+        if (!event?.is_manual) return {};
+        const result = {};
+        playerDivisions.forEach((div) => {
+            const dname = (div.Name || '').toLowerCase();
+            const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
+            const pointsMap = genderRankingPoints[genderLabel] || new Map();
+
+            const teams = (participants[div.Id] || []).map((item) => {
+                const p = item.Participant || {};
+                const players = p.Players || [];
+                const totalPoints = players.reduce((sum, pl) => sum + (pointsMap.get((pl.Name || '').toLowerCase().trim()) || 0), 0);
+                return { id: p.Id, name: p.Name, players, totalPoints };
+            });
+
+            const ranked = teams.filter((t) => t.totalPoints > 0).sort((a, b) => b.totalPoints - a.totalPoints);
+            const seedById = {};
+            ranked.forEach((t, idx) => { seedById[t.id] = idx + 1; });
+
+            result[div.Id] = {
+                genderLabel,
+                teams: teams.map((t) => ({ ...t, seed: seedById[t.id] || null })),
+            };
+        });
+        return result;
+    }, [event?.is_manual, playerDivisions, participants, genderRankingPoints]);
 
     // Total registered entries for manual events — counts every active
     // registration row (incl. pending payment; each player's division entry
@@ -1680,9 +1713,22 @@ const EventDetails = () => {
                 const men = await getOrganisationRankings(3, 82, 2000, 15809);
                 const women = await getOrganisationRankings(4, 83, 2000, 15809);
                 const map = new Map();
-                if (men) men.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
-                if (women) women.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
+                const menPoints = new Map();
+                const womenPoints = new Map();
+                if (men) men.forEach(r => {
+                    if (r.Name) {
+                        map.set(r.Name.toLowerCase(), r.Standing);
+                        menPoints.set(r.Name.toLowerCase(), r.ParticipantPoints?.Points || 0);
+                    }
+                });
+                if (women) women.forEach(r => {
+                    if (r.Name) {
+                        map.set(r.Name.toLowerCase(), r.Standing);
+                        womenPoints.set(r.Name.toLowerCase(), r.ParticipantPoints?.Points || 0);
+                    }
+                });
                 setGlobalRankings(map);
+                setGenderRankingPoints({ men: menPoints, women: womenPoints });
             } catch (err) {
                 console.error("Error fetching global rankings:", err);
             }
@@ -3500,6 +3546,64 @@ const EventDetails = () => {
 
                                             </div>
                                         )}
+
+                                        {/* Right Column: Top Seeds (Manual events — combined ranking points seeding) */}
+                                        {event.is_manual && (
+                                            <div className="flex-1 space-y-6">
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                                                    <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50 gap-3">
+                                                        <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
+                                                        <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0">
+                                                            <button
+                                                                onClick={() => setTopSeedsGender('men')}
+                                                                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'men' ? 'bg-[#0F172A] text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                                                            >
+                                                                Men
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setTopSeedsGender('women')}
+                                                                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'women' ? 'bg-[#0F172A] text-white' : 'text-gray-500 hover:text-gray-700'}`}
+                                                            >
+                                                                Women
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="divide-y divide-gray-50 px-6">
+                                                        {(() => {
+                                                            // Note: teams[].seed is numbered per-division (each division's
+                                                                // own draw starts at 1), so when pooling multiple divisions of
+                                                                // the same gender for this overview panel we re-rank fresh by
+                                                                // points across the whole pool rather than reusing that field.
+                                                            const teams = Object.values(manualTeamSeeds)
+                                                                .filter((d) => d.genderLabel === topSeedsGender)
+                                                                .flatMap((d) => d.teams)
+                                                                .filter((t) => t.totalPoints > 0)
+                                                                .sort((a, b) => b.totalPoints - a.totalPoints);
+
+                                                            if (teams.length === 0) {
+                                                                return (
+                                                                    <div className="py-8 text-center text-gray-400 text-sm">
+                                                                        No ranked teams registered yet
+                                                                    </div>
+                                                                );
+                                                            }
+
+                                                            return teams.slice(0, 4).map((team, idx) => (
+                                                                <div key={team.id} className="flex items-center justify-between py-4 gap-3">
+                                                                    <div className="flex items-center gap-4 min-w-0">
+                                                                        <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
+                                                                        <span className="font-medium text-[#0F172A] text-[14px] truncate" title={team.name}>
+                                                                            {team.name} <span className="text-gray-500 ml-1 text-[13px]">({team.totalPoints.toLocaleString()} pts)</span>
+                                                                        </span>
+                                                                    </div>
+                                                                    <img src="https://flagcdn.com/w40/za.png" alt="South Africa" className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
+                                                                </div>
+                                                            ));
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="w-full space-y-6">
                                         {/* Manual event registration & checkout */}
@@ -3864,6 +3968,7 @@ const EventDetails = () => {
                                                                             const sPlayer = p.SecondPlayer || {};
                                                                             const seed = p.Seed;
                                                                             const rank = item.Ranking;
+                                                                            const manualSeedInfo = event.is_manual ? manualTeamSeeds[cls.Id]?.teams.find((t) => t.id === p.Id) : null;
 
                                                                             const getProfileImage = (playerObj) => {
                                                                                 if (!playerObj) return null;
@@ -3877,11 +3982,13 @@ const EventDetails = () => {
                                                                             if (isTeam) {
                                                                                 return (
                                                                                     <div key={pIdx} className="px-6 py-4">
-                                                                                        {(rank || seed) && (
+                                                                                        {(rank || seed || manualSeedInfo?.seed) && (
                                                                                             <div className="flex justify-end mb-3">
                                                                                                 <div className="flex gap-2">
                                                                                                     {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
                                                                                                     {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                                    {manualSeedInfo?.totalPoints > 0 && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{manualSeedInfo.totalPoints.toLocaleString()} pts</span>}
+                                                                                                    {manualSeedInfo?.seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {manualSeedInfo.seed}</span>}
                                                                                                 </div>
                                                                                             </div>
                                                                                         )}
