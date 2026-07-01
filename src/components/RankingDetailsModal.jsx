@@ -97,7 +97,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
           initial={{ opacity: 0, y: 50 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 50 }}
-          className="flex-1 flex flex-col bg-[#0b0f19] sm:w-[800px] sm:max-w-[95vw] sm:max-h-[85vh] sm:flex-none sm:rounded-3xl sm:border sm:border-white/10 sm:overflow-hidden relative"
+          className="flex-1 min-h-0 flex flex-col bg-[#0b0f19] overflow-hidden sm:w-[800px] sm:max-w-[95vw] sm:h-[85vh] sm:flex-none sm:rounded-3xl sm:border sm:border-white/10 relative"
         >
           {/* Desktop Header Overlay */}
           <div className="hidden sm:flex absolute top-0 left-0 right-0 p-4 justify-between items-center z-10 bg-gradient-to-b from-black/80 to-transparent">
@@ -165,7 +165,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
           </div>
 
           {/* Tab Content */}
-          <div className="flex-1 overflow-y-auto px-6 py-6 nice-scrollbar">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 nice-scrollbar">
             {activeTab === 'overview' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
                 <div className="grid grid-cols-3 gap-3">
