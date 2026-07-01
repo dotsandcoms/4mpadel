@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import RankingDetailsModal from '../components/RankingDetailsModal';
 import sapaLogo from '../assets/sapa-logo.svg';
 import brollLogo from '../assets/BrollLogo.png';
+import heroBg from '../assets/herobg.jpeg';
 
 const ORG_LABELS = {
   15809: 'SAPA',
@@ -329,7 +330,6 @@ const FullRankingsTable = ({
   setImageErrors,
   setSelectedPlayer,
   getInitials,
-  selectedOrgId,
   setSelectedOrgId,
   categories
 }) => {
@@ -339,54 +339,35 @@ const FullRankingsTable = ({
     <div className="max-w-[1440px] mx-auto px-4 xl:px-8 relative z-10 pb-4 md:pb-24">
       {/* Official Rankings Header */}
       <div className="flex mb-6 md:mb-10 flex-col items-center text-center">
-        <div className="hidden md:flex flex-row items-center justify-center flex-nowrap gap-3 md:gap-5 mb-3">
-          {ORG_LOGOS[selectedOrgId] && (
-            <motion.div
-              key={selectedOrgId}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-white/5 border border-white/10 rounded-2xl p-2 md:p-2.5 backdrop-blur-sm h-10 w-24 md:h-16 md:w-36 flex items-center justify-center shadow-lg shadow-black/20 shrink-0"
-            >
-              <img
-                src={ORG_LOGOS[selectedOrgId]}
-                alt={`${ORG_LABELS[selectedOrgId]} Logo`}
-                className="max-h-full max-w-full object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]"
-              />
-            </motion.div>
-          )}
-          <h2 className="text-xl md:text-3xl lg:text-4xl font-black text-white tracking-tighter uppercase text-center lg:text-left">
-            Official <span className="text-padel-green">{ORG_LABELS[selectedOrgId] || 'SAPA'}</span> Rankings
-          </h2>
-        </div>
-        <p className="hidden md:block text-gray-400 text-xs md:text-sm max-w-xl mx-auto mt-1 px-4">Browse the full rankings list, search for specific players, and check total accumulated points.</p>
+        {/* Removed on desktop — redundant with the org dropdown + title already shown in the page header above */}
 
         {/* Categories Tab Navigation */}
         <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`mt-0 md:mt-6 relative flex p-1 bg-white/5 backdrop-blur-sm rounded-xl w-full sm:w-auto border border-white/10 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`mt-0 md:mt-0 relative flex p-1 bg-white/5 backdrop-blur-sm rounded-xl w-full border border-white/10 ${categories.length > 2 ? 'overflow-x-auto whitespace-nowrap hide-scrollbar' : ''}`}
         >
-            {categories.map((cat) => {
-                const isSelected = activeTab === cat.id;
-                return (
-                    <button
-                        key={cat.id}
-                        onClick={() => setActiveTab(cat.id)}
-                        className="relative flex-1 sm:flex-none py-2 px-6 md:px-8 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 z-10"
-                        style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
-                    >
-                        {isSelected && (
-                            <motion.div
-                                layoutId="activeGenderTabMain"
-                                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                                className="absolute inset-0 bg-padel-green rounded-lg shadow-lg shadow-padel-green/20"
-                                style={{ zIndex: -1 }}
-                            />
-                        )}
-                        {cat.label}
-                    </button>
-                );
-            })}
+          {categories.map((cat) => {
+            const isSelected = activeTab === cat.id;
+            return (
+              <button
+                key={cat.id}
+                onClick={() => setActiveTab(cat.id)}
+                className="relative flex-1 py-2 px-6 md:px-8 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 z-10"
+                style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
+              >
+                {isSelected && (
+                  <motion.div
+                    layoutId="activeGenderTabMain"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    className="absolute inset-0 bg-padel-green rounded-lg shadow-lg shadow-padel-green/20"
+                    style={{ zIndex: -1 }}
+                  />
+                )}
+                {cat.label}
+              </button>
+            );
+          })}
         </motion.div>
       </div>
 
@@ -394,11 +375,11 @@ const FullRankingsTable = ({
       <div className="bg-black/40 border border-white/10 rounded-3xl overflow-hidden backdrop-blur-md">
         {/* Top 3 Podium (Only on page 1 without search) */}
         {searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 && (
-          <PodiumCoverflow 
-            data={paginatedData} 
-            onPlayerClick={setSelectedPlayer} 
-            imageErrors={imageErrors} 
-            setImageErrors={setImageErrors} 
+          <PodiumCoverflow
+            data={paginatedData}
+            onPlayerClick={setSelectedPlayer}
+            imageErrors={imageErrors}
+            setImageErrors={setImageErrors}
             getInitials={getInitials}
             activeIndex={podiumIndex}
             setActiveIndex={setPodiumIndex}
@@ -455,7 +436,7 @@ const FullRankingsTable = ({
                       </div>
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <span className="inline-block bg-white/10 border border-white/5 px-4 py-2 rounded-xl text-base font-black text-white group-hover:bg-padel-green/10 group-hover:text-padel-green group-hover:border-padel-green/30 transition-all duration-300">
+                      <span className="inline-block bg-white/10 border border-white/5 px-4 py-2 rounded-xl text-base font-black text-padel-green group-hover:bg-padel-green/10 group-hover:border-padel-green/30 transition-all duration-300">
                         {player.points.toLocaleString()}
                       </span>
                     </td>
@@ -508,8 +489,13 @@ const FullRankingsTable = ({
                       )}
                     </div>
                     <span className="text-xs sm:text-sm font-bold text-white truncate">{player.name}</span>
+                    {player.hasLocalProfile && (
+                      <span className="inline-block px-1 py-0.5 rounded bg-padel-green/10 text-padel-green text-[7px] font-black uppercase tracking-widest border border-padel-green/20 flex-shrink-0">
+                        4M
+                      </span>
+                    )}
                   </div>
-                  <div className="text-xs sm:text-sm font-bold text-gray-300 text-right">{player.points.toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm font-bold text-padel-green text-right">{player.points.toLocaleString()}</div>
                   <div className="text-xs sm:text-sm font-black text-center">
                     <span className={`${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
                       {player.change > 0 && `▲ ${player.change}`}
@@ -593,7 +579,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
 
     let minDistance = Infinity;
     let newIndex = 0;
-    
+
     Array.from(scrollRef.current.children).forEach((child) => {
       const idxStr = child.getAttribute('data-index');
       if (idxStr === null) return;
@@ -621,7 +607,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
 
   return (
     <div className="relative w-full bg-[#0A0F1D] md:bg-transparent border-b border-white/5 overflow-hidden">
-      <div 
+      <div
         ref={scrollRef}
         onScroll={handleScroll}
         className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar nice-scrollbar items-center py-10 md:py-14"
@@ -633,7 +619,14 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
         {top10.map((player, index) => {
           const isActive = index === activeIndex;
           const actualRank = player.rawRank || index + 1;
-          
+          const medal = actualRank === 1
+            ? { border: 'border-[#FFD700]', badge: 'bg-[#FFD700] text-black', glow: 'shadow-[0_0_20px_rgba(255,215,0,0.35)]' }
+            : actualRank === 2
+              ? { border: 'border-[#C7CCD4]', badge: 'bg-[#C7CCD4] text-black', glow: 'shadow-[0_0_18px_rgba(199,204,212,0.3)]' }
+              : actualRank === 3
+                ? { border: 'border-[#CD7F32]', badge: 'bg-[#CD7F32] text-black', glow: 'shadow-[0_0_18px_rgba(205,127,50,0.3)]' }
+                : null;
+
           return (
             <div
               key={player.id || index}
@@ -644,50 +637,50 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
                 if (!isActive && scrollRef.current) {
                   const child = scrollRef.current.children[index + 1]; // +1 because of padding div
                   if (child) {
-                     scrollRef.current.scrollTo({
-                       left: child.offsetLeft - scrollRef.current.clientWidth / 2 + child.offsetWidth / 2,
-                       behavior: 'smooth'
-                     });
+                    scrollRef.current.scrollTo({
+                      left: child.offsetLeft - scrollRef.current.clientWidth / 2 + child.offsetWidth / 2,
+                      behavior: 'smooth'
+                    });
                   }
                 } else {
                   onPlayerClick(player);
                 }
               }}
             >
-              <div className={`relative mb-3 w-full aspect-square rounded-xl overflow-hidden transition-all duration-300
-                  ${isActive ? 'border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border-2 border-gray-600/50'}`}>
-                
-                <div className={`absolute -top-1 -left-1 w-7 h-7 rounded flex items-center justify-center font-black text-xs z-10 transition-colors
-                    ${isActive ? 'bg-padel-green text-black' : 'bg-gray-700 text-white'}`}>
+              <div className={`relative w-full rounded-xl overflow-hidden transition-all duration-300 bg-[#0B1220]
+                  ${medal ? `border-[3px] ${medal.border} ${medal.glow}` : isActive ? 'border-[3px] border-padel-green shadow-[0_0_20px_rgba(190,255,0,0.3)]' : 'border-2 border-gray-600/50'}`}>
+
+                <div className={`absolute top-1.5 left-1.5 w-6 h-6 md:w-7 md:h-7 rounded flex items-center justify-center font-black text-xs z-10 transition-colors
+                    ${medal ? medal.badge : isActive ? 'bg-padel-green text-black' : 'bg-gray-700 text-white'}`}>
                   {actualRank}
                 </div>
-                
-                <div className="w-full h-full bg-[#1E293B]">
+
+                <div className="w-full aspect-[4/3] bg-[#1E293B]">
                   {player.image && !imageErrors[player.id] ? (
                     <img src={player.image} alt={player.name} className="w-full h-full object-cover" onError={() => setImageErrors(prev => ({ ...prev, [player.id]: true }))} />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-sm font-black text-gray-400 bg-black/40">{getInitials(player.name)}</div>
                   )}
                 </div>
-              </div>
 
-              <div className="text-center w-full">
-                <h4 className={`font-black text-white leading-tight uppercase line-clamp-2 transition-all
-                  ${isActive ? 'text-xs md:text-lg min-h-[32px]' : 'text-[10px] md:text-sm min-h-[28px]'}`}>
-                  {player.name}
-                </h4>
-                <div className="flex items-center justify-center gap-1.5 mt-1">
-                  <p className={`font-bold transition-all ${isActive ? 'text-padel-green text-sm md:text-base' : 'text-gray-400 text-xs md:text-sm'}`}>
-                    {player.points.toLocaleString()}
-                  </p>
-                  <span className={`font-black transition-all ${isActive ? 'text-[10px] md:text-xs' : 'text-[9px] md:text-[10px]'} 
-                    ${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
-                    {player.change > 0 && `▲ ${player.change}`}
-                    {player.change < 0 && `▼ ${Math.abs(player.change)}`}
-                    {player.change === 0 && `-`}
-                  </span>
+                <div className="px-2 py-2 text-center">
+                  <h4 className={`font-black text-white leading-tight uppercase line-clamp-1 transition-all
+                    ${isActive ? 'text-xs md:text-base' : 'text-[10px] md:text-sm'}`}>
+                    {player.name}
+                  </h4>
+                  <div className="flex items-center justify-center gap-1.5 mt-1">
+                    <p className={`font-bold transition-all ${isActive ? 'text-padel-green text-sm md:text-base' : 'text-gray-400 text-xs md:text-sm'}`}>
+                      {player.points.toLocaleString()}
+                    </p>
+                    <span className={`font-black transition-all ${isActive ? 'text-[10px] md:text-xs' : 'text-[9px] md:text-[10px]'}
+                      ${player.change > 0 ? 'text-padel-green' : player.change < 0 ? 'text-red-500' : 'text-gray-500'}`}>
+                      {player.change > 0 && `▲ ${player.change}`}
+                      {player.change < 0 && `▼ ${Math.abs(player.change)}`}
+                      {player.change === 0 && `-`}
+                    </span>
+                  </div>
+                  <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
                 </div>
-                <p className="text-[8px] font-black text-gray-500 tracking-widest mt-0.5 uppercase">Points</p>
               </div>
             </div>
           );
@@ -696,7 +689,7 @@ const PodiumCoverflow = ({ data, onPlayerClick, imageErrors, setImageErrors, get
         {/* Right padding to center the last item */}
         <div className="w-[calc(50vw-80px)] md:w-[calc(50%-112px)] flex-shrink-0" />
       </div>
-      
+
       {/* Scroll Hint */}
       <div className="absolute bottom-2 left-0 w-full text-center pointer-events-none">
         <p className="text-[10px] text-gray-500 uppercase tracking-widest flex items-center justify-center gap-2">
@@ -947,7 +940,7 @@ const Rankings = () => {
   }, [filteredData, currentPage]);
 
   return (
-    <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
+    <div className="relative bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
@@ -955,113 +948,126 @@ const Rankings = () => {
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
       </div>
 
+      {/* Photo panel — full-bleed edge-to-edge, same treatment as the Home hero (sits behind the fixed navbar at the very top-right of the viewport) */}
+      <div className="absolute top-0 right-0 z-[1] w-[34%] sm:w-[36%] lg:w-[38%] xl:w-[40%] h-[380px] sm:h-[440px] md:h-[500px] lg:h-[560px] overflow-hidden pointer-events-none">
+        <img
+          src={heroBg}
+          alt=""
+          className="w-full h-full object-cover saturate-[0.45] contrast-[1.08]"
+        />
+        <div className="absolute inset-0 bg-[#0B1730]/35 mix-blend-multiply" />
+        <div className="absolute inset-0 bg-[#0F172A]/10" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0F172A] from-0% via-[#0F172A]/40 via-25% to-transparent to-65%" />
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0F172A]" />
+      </div>
+
       <main className="relative z-10 pb-2 md:pb-6 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
         {/* Unified Header */}
         <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
-                <Trophy className="w-3 h-3" />
-                <span>Live Standings</span>
-            </div>
+          <div className="relative z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+            <Trophy className="w-3 h-3" />
+            <span>Player Rankings</span>
+          </div>
 
-            <div className="overflow-hidden mb-6">
-                <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
-                    PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">RANKINGS</span>
-                </h1>
-            </div>
+          <div className="relative z-10 overflow-hidden mb-1">
+            <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
+              PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">RANKINGS</span>
+            </h1>
+          </div>
 
-            <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-                <strong className="text-white font-medium">Browse ranking lists below.</strong>
-            </p>
+          <p className="relative z-10 text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
+            <strong className="text-white font-medium">Official SAPA rankings. Compete. Climb. Be the best.</strong>
+          </p>
         </section>
 
         {/* Search & Command Deck */}
-        <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-4 md:mb-8">
-            <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 }}
-                className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex flex-col md:flex-row gap-3 items-center shadow-2xl max-w-4xl mx-auto"
-            >
-                {/* Search Input Container */}
-                <div className="relative flex-1 w-full">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
-                    <input
-                        type="text"
-                        placeholder="Search player name..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
-                    />
-                    {searchTerm && (
-                        <button
-                            onClick={() => setSearchTerm('')}
-                            className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white"
-                        >
-                            <X className="w-4 h-4 md:w-5 md:h-5" />
-                        </button>
+        <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-4 md:mb-2">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl shadow-2xl max-w-4xl mx-auto md:max-w-none md:mx-0"
+          >
+            {/* Search Input Container — full width on its own row */}
+            <div className="relative w-full">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+              <input
+                type="text"
+                placeholder="Search player name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all placeholder-gray-500"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-500 hover:text-white"
+                >
+                  <X className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Organization Dropdown + Overview/Rankings switch — same row on both mobile and desktop */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="flex flex-row items-center justify-between max-w-4xl mx-auto md:max-w-none md:mx-0 mt-3 md:mt-6 gap-2 md:gap-4"
+          >
+            {/* Organization Dropdown — compact on mobile, stretches wider on desktop to close the gap to the tab switch */}
+            <div className="relative shrink-0 min-w-0 md:flex-1">
+              <div className="absolute inset-y-0 left-0 pl-2.5 md:pl-4 flex items-center pointer-events-none">
+                {ORG_LOGOS[selectedOrgId] ? (
+                  <img src={ORG_LOGOS[selectedOrgId]} alt="Logo" className="w-4 h-4 md:w-5 md:h-5 object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
+                ) : (
+                  <Trophy className="w-3.5 h-3.5 md:w-5 md:h-5 text-padel-green" />
+                )}
+              </div>
+              <select
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId(Number(e.target.value))}
+                className="w-[150px] sm:w-auto md:w-full h-11 md:h-12 bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg md:rounded-2xl py-0 pl-8 md:pl-12 pr-6 md:pr-10 text-xs md:text-base text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all font-semibold"
+              >
+                <option value={15809} className="bg-[#0a0f1d]">Official SAPA Rankings</option>
+                <option value={16317} className="bg-[#0a0f1d]">Official Broll Pro Tour Rankings</option>
+                <option value={11706} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
+              </select>
+              <div className="absolute inset-y-0 right-1.5 md:right-4 flex items-center pointer-events-none">
+                <ChevronDown className="w-3.5 h-3.5 md:w-4 md:h-4 text-gray-400" />
+              </div>
+            </div>
+
+            {/* Main Tabs: Overview / Rankings */}
+            <div className="relative flex items-center gap-1 h-11 md:h-12 bg-white/5 p-1 rounded-xl md:rounded-full border border-white/10 shrink-0 overflow-hidden">
+              {[
+                { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5" /> },
+                { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5" /> }
+              ].map((tab) => {
+                const isActive = activeMainTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveMainTab(tab.id)}
+                    className={`relative flex items-center justify-center gap-1.5 px-3.5 md:px-6 h-full rounded-lg md:rounded-full text-[9px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10`}
+                    style={{ color: isActive ? '#000000' : '#9CA3AF' }}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="activeTabPill"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                        className="absolute inset-0 bg-padel-green rounded-lg md:rounded-full shadow-lg shadow-padel-green/20"
+                        style={{ zIndex: -1 }}
+                      />
                     )}
-                </div>
-
-                {/* Organization Dropdown */}
-                <div className="relative w-full md:w-auto shrink-0">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        {ORG_LOGOS[selectedOrgId] ? (
-                            <img src={ORG_LOGOS[selectedOrgId]} alt="Logo" className="w-5 h-5 object-contain filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]" />
-                        ) : (
-                            <Trophy className="w-4 h-4 md:w-5 md:h-5 text-padel-green" />
-                        )}
-                    </div>
-                    <select
-                        value={selectedOrgId}
-                        onChange={(e) => setSelectedOrgId(Number(e.target.value))}
-                        className="w-full bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-12 pr-10 text-[16px] md:text-base text-white appearance-none cursor-pointer focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all font-semibold"
-                    >
-                        <option value={15809} className="bg-[#0a0f1d]">Official SAPA Rankings</option>
-                        <option value={16317} className="bg-[#0a0f1d]">Official Broll Pro Tour Rankings</option>
-                        <option value={11706} className="bg-[#0a0f1d]">Official SA Grand Tour Rankings</option>
-                    </select>
-                    <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-                        <ChevronDown className="w-4 h-4 text-gray-400" />
-                    </div>
-                </div>
-            </motion.div>
-
-            {/* Quick Category Filters (Tabs) */}
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 }}
-                className="flex flex-col sm:flex-row items-center justify-between max-w-4xl mx-auto mt-6 gap-4"
-            >
-                {/* Main Tabs: Overview / Rankings */}
-                <div className="relative flex items-center gap-1 bg-white/5 p-1 rounded-2xl md:rounded-full border border-white/10 w-full sm:w-auto overflow-hidden">
-                    {[
-                        { id: 'overview', label: 'Overview', icon: <Target className="w-3.5 h-3.5" /> },
-                        { id: 'rankings', label: 'Rankings', icon: <Users className="w-3.5 h-3.5" /> }
-                    ].map((tab) => {
-                        const isActive = activeMainTab === tab.id;
-                        return (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveMainTab(tab.id)}
-                                className={`relative flex-1 md:flex-none flex items-center justify-center gap-1.5 px-6 py-2 md:py-2.5 rounded-xl md:rounded-full text-[10px] md:text-xs font-black uppercase tracking-widest transition-all duration-300 z-10`}
-                                style={{ color: isActive ? '#000000' : '#9CA3AF' }}
-                            >
-                                {isActive && (
-                                    <motion.div
-                                        layoutId="activeTabPill"
-                                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                                        className="absolute inset-0 bg-padel-green rounded-xl md:rounded-full shadow-lg shadow-padel-green/20"
-                                        style={{ zIndex: -1 }}
-                                    />
-                                )}
-                                {tab.icon}
-                                <span>{tab.label}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </motion.div>
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </motion.div>
         </section>
 
       </main>
