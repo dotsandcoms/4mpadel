@@ -1203,6 +1203,7 @@ const Rankings = () => {
             player={selectedPlayer}
             playerRecord={selectedPlayer.playerRecord || { name: selectedPlayer.name, id: selectedPlayer.id }}
             selectedOrgId={selectedOrgId}
+            categoryLabel={(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).find(c => c.id === activeTab)?.label}
             onClose={() => setSelectedPlayer(null)}
           />
         )}

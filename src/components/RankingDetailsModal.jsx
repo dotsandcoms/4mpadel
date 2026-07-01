@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Share2 } from 'lucide-react';
 
-const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId }) => {
+const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel }) => {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'tournaments'
   const [showBest8, setShowBest8] = useState(true);
 
@@ -16,10 +16,41 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId }) =
   };
   const activeOrgLabel = orgLabels[selectedOrgId] || 'SAPA';
 
-  // Find the ranking record for the active org
+  // Find the ranking record for the active org — a player can have several ranking
+  // entries under the same org (Men/Women, different age groups, doubles, etc.), so
+  // narrow down to the one matching the category/tab the player was clicked from
+  // (e.g. "Men - Main") rather than blindly taking the first org match.
   let rankingData = null;
   if (playerRecord.rankings && Array.isArray(playerRecord.rankings)) {
-    rankingData = playerRecord.rankings.find(r => r.org?.toUpperCase().includes(activeOrgLabel.toUpperCase()));
+    const orgCandidates = playerRecord.rankings.filter(r => r.org?.toUpperCase().includes(activeOrgLabel.toUpperCase()));
+
+    const genderKeywords = categoryLabel?.toUpperCase().includes('WOMEN') || categoryLabel?.toUpperCase().includes('LADIES')
+      ? ['WOMEN', 'LADIES', 'FEMALE']
+      : categoryLabel?.toUpperCase().includes('MEN')
+        ? ['MEN']
+        : null;
+
+    if (genderKeywords) {
+      // Best match: correct gender AND a "main"/open age group (not an age-restricted category)
+      rankingData = orgCandidates.find(r => {
+        const matchType = (r.match_type || '').toUpperCase();
+        const ageGroup = (r.age_group || '').toUpperCase();
+        const genderMatch = genderKeywords.some(k => matchType.includes(k));
+        const isMainAgeGroup = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
+        return genderMatch && isMainAgeGroup;
+      });
+
+      // Relax: just the correct gender, any age group
+      if (!rankingData) {
+        rankingData = orgCandidates.find(r => genderKeywords.some(k => (r.match_type || '').toUpperCase().includes(k)));
+      }
+    }
+
+    // Fallback: the org entry with the most tournaments counted (the main individual
+    // ranking almost always has the deepest results history vs a niche category)
+    if (!rankingData && orgCandidates.length > 0) {
+      rankingData = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
+    }
   }
 
   // Fallback to player object if rankingData is missing some fields
