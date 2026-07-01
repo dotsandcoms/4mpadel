@@ -340,7 +340,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const [partnerSearch, setPartnerSearch] = useState({ query: '', results: [] });
     const [expandedDivisions, setExpandedDivisions] = useState({});
-    const [divisionsBlockOpen, setDivisionsBlockOpen] = useState(true);
+    const [divisionsBlockOpen, setDivisionsBlockOpen] = useState(false);
     const [divisionPartnerSearch, setDivisionPartnerSearch] = useState({});
     const [partnerLicenseCache, setPartnerLicenseCache] = useState({});
     const partnerSearchSeq = useRef(0);

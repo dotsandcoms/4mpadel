@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -382,8 +382,9 @@ const EventDetails = () => {
     // each player's division entry separately; excludes withdrawn).
     const [manualEntriesCount, setManualEntriesCount] = useState(0);
     const [globalRankings, setGlobalRankings] = useState(new Map());
-    const [genderRankingPoints, setGenderRankingPoints] = useState({ men: new Map(), women: new Map() });
+    const [playerRankingsMap, setPlayerRankingsMap] = useState({});
     const [topSeedsGender, setTopSeedsGender] = useState('men');
+    const [topSeedsOpen, setTopSeedsOpen] = useState(false);
     const [fetchingParticipants, setFetchingParticipants] = useState(false);
     const { getTournamentClasses, getTournamentWinners, getTournamentMatches, getTournamentParticipants, getTournamentPlayerTabs, getTournamentInfo, getOrganisationRankings } = useRankedin();
 
@@ -407,22 +408,50 @@ const EventDetails = () => {
         return event?.is_manual ? uniqueNames.size : Math.max(uniqueNames.size, event?.registered_players || 0);
     }, [participants, event?.registered_players, event?.is_manual]);
 
+    // Resolves a player's SAPA "Main" ranking points for the given gender from their
+    // locally-synced players.rankings breakdown (same matching rules used on the
+    // Rankings page's player modal: prefer an Open/Main age group of the right
+    // gender, relax to just the right gender, then fall back to whichever SAPA
+    // entry has the deepest tournament history).
+    const getMainCategoryPoints = useCallback((rankingsArr, genderLabel) => {
+        if (!Array.isArray(rankingsArr) || rankingsArr.length === 0) return 0;
+        const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
+        if (orgCandidates.length === 0) return 0;
+
+        const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
+
+        let match = orgCandidates.find((r) => {
+            const matchType = (r.match_type || '').toUpperCase();
+            const ageGroup = (r.age_group || '').toUpperCase();
+            const genderMatch = genderKeywords.some((k) => matchType.includes(k));
+            const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
+            return genderMatch && isMain;
+        });
+
+        if (!match) match = orgCandidates.find((r) => genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k)));
+        if (!match) match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
+
+        return match?.points ? Number(match.points) : 0;
+    }, []);
+
     // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points
-    // (each player's live best-8 points total, summed across the team), matching the
-    // gender of the division they're registered in. Only used for manual events —
-    // RankedIn events already carry their own Rank/Seed fields from the API.
+    // (each player's synced best-8 points total, summed across the team), matching
+    // the gender of the division they're registered in. Only used for manual
+    // events — RankedIn events already carry their own Rank/Seed fields from the API.
     const manualTeamSeeds = useMemo(() => {
         if (!event?.is_manual) return {};
         const result = {};
         playerDivisions.forEach((div) => {
             const dname = (div.Name || '').toLowerCase();
             const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
-            const pointsMap = genderRankingPoints[genderLabel] || new Map();
 
             const teams = (participants[div.Id] || []).map((item) => {
                 const p = item.Participant || {};
                 const players = p.Players || [];
-                const totalPoints = players.reduce((sum, pl) => sum + (pointsMap.get((pl.Name || '').toLowerCase().trim()) || 0), 0);
+                const totalPoints = players.reduce((sum, pl) => {
+                    const rankingsArr = playerRankingsMap[(pl.Name || '').toLowerCase().trim()];
+                    return sum + getMainCategoryPoints(rankingsArr, genderLabel);
+                }, 0);
                 return { id: p.Id, name: p.Name, players, totalPoints };
             });
 
@@ -436,7 +465,7 @@ const EventDetails = () => {
             };
         });
         return result;
-    }, [event?.is_manual, playerDivisions, participants, genderRankingPoints]);
+    }, [event?.is_manual, playerDivisions, participants, playerRankingsMap, getMainCategoryPoints]);
 
     // Total registered entries for manual events — counts every active
     // registration row (incl. pending payment; each player's division entry
@@ -1706,6 +1735,35 @@ const EventDetails = () => {
         fetchFourMPlayers();
     }, []);
 
+    // Local players table already stores each player's synced ranking breakdown
+    // (per-org/gender/age-group, with the Best-8 points total) — used for manual
+    // event seeding instead of a live RankedIn API call, since name-matching against
+    // a live top-2000 list can silently miss players who are still ranked but just
+    // outside that window or fetched at a different moment.
+    useEffect(() => {
+        const fetchPlayerRankings = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('name, rankedin_id, rankings')
+                    .not('rankings', 'is', null);
+
+                if (data && !error) {
+                    const lookup = {};
+                    data.forEach(p => {
+                        if (!Array.isArray(p.rankings) || p.rankings.length === 0) return;
+                        if (p.rankedin_id) lookup[p.rankedin_id.toString()] = p.rankings;
+                        if (p.name) lookup[p.name.toLowerCase().trim()] = p.rankings;
+                    });
+                    setPlayerRankingsMap(lookup);
+                }
+            } catch (err) {
+                console.error("Error fetching player rankings:", err);
+            }
+        };
+        fetchPlayerRankings();
+    }, []);
+
     useEffect(() => {
         const fetchGlobalRankings = async () => {
             try {
@@ -1713,22 +1771,9 @@ const EventDetails = () => {
                 const men = await getOrganisationRankings(3, 82, 2000, 15809);
                 const women = await getOrganisationRankings(4, 83, 2000, 15809);
                 const map = new Map();
-                const menPoints = new Map();
-                const womenPoints = new Map();
-                if (men) men.forEach(r => {
-                    if (r.Name) {
-                        map.set(r.Name.toLowerCase(), r.Standing);
-                        menPoints.set(r.Name.toLowerCase(), r.ParticipantPoints?.Points || 0);
-                    }
-                });
-                if (women) women.forEach(r => {
-                    if (r.Name) {
-                        map.set(r.Name.toLowerCase(), r.Standing);
-                        womenPoints.set(r.Name.toLowerCase(), r.ParticipantPoints?.Points || 0);
-                    }
-                });
+                if (men) men.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
+                if (women) women.forEach(r => { if (r.Name) map.set(r.Name.toLowerCase(), r.Standing); });
                 setGlobalRankings(map);
-                setGenderRankingPoints({ men: menPoints, women: womenPoints });
             } catch (err) {
                 console.error("Error fetching global rankings:", err);
             }
@@ -3395,7 +3440,7 @@ const EventDetails = () => {
 
                                         {/* Left Column: Event Information */}
                                         <div className="flex-1 space-y-6">
-                                            <InfoSection title="Event Information" icon={FileText} accent={theme.fill} defaultOpen={true}>
+                                            <InfoSection title="Event Information" icon={FileText} accent={theme.fill} defaultOpen={false}>
                                                 <div className="divide-y divide-gray-50 -mx-6 -my-5 border-t border-gray-50">
                                                     {(() => {
                                                         const computedStatus = (() => {
@@ -3550,57 +3595,82 @@ const EventDetails = () => {
                                         {/* Right Column: Top Seeds (Manual events — combined ranking points seeding) */}
                                         {event.is_manual && (
                                             <div className="flex-1 space-y-6">
-                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                                    <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50 gap-3">
-                                                        <h2 className="font-bold text-[#0F172A] text-lg">Top Seeds</h2>
-                                                        <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0">
-                                                            <button
-                                                                onClick={() => setTopSeedsGender('men')}
-                                                                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'men' ? 'bg-[#0F172A] text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                                                            >
-                                                                Men
-                                                            </button>
-                                                            <button
-                                                                onClick={() => setTopSeedsGender('women')}
-                                                                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'women' ? 'bg-[#0F172A] text-white' : 'text-gray-500 hover:text-gray-700'}`}
-                                                            >
-                                                                Women
-                                                            </button>
+                                                <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden transition-all duration-200">
+                                                    <div
+                                                        onClick={() => setTopSeedsOpen((o) => !o)}
+                                                        className="flex items-center justify-between px-6 py-4 border-b border-gray-50 gap-3 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.fill + '20' }}>
+                                                                <Crown className="w-4 h-4 text-[#0F172A]" />
+                                                            </div>
+                                                            <h2 className="text-sm font-semibold text-slate-900 tracking-normal">Top Seeds</h2>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 shrink-0">
+                                                            <div className="flex bg-gray-100 rounded-full p-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                <button
+                                                                    onClick={() => setTopSeedsGender('men')}
+                                                                    style={topSeedsGender === 'men' ? { backgroundColor: theme.fill, color: '#0F172A' } : undefined}
+                                                                    className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'men' ? '' : 'text-gray-500 hover:text-gray-700'}`}
+                                                                >
+                                                                    Men
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setTopSeedsGender('women')}
+                                                                    style={topSeedsGender === 'women' ? { backgroundColor: theme.fill, color: '#0F172A' } : undefined}
+                                                                    className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide rounded-full transition-all ${topSeedsGender === 'women' ? '' : 'text-gray-500 hover:text-gray-700'}`}
+                                                                >
+                                                                    Women
+                                                                </button>
+                                                            </div>
+                                                            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${topSeedsOpen ? '' : '-rotate-90'}`} />
                                                         </div>
                                                     </div>
-                                                    <div className="divide-y divide-gray-50 px-6">
-                                                        {(() => {
-                                                            // Note: teams[].seed is numbered per-division (each division's
-                                                                // own draw starts at 1), so when pooling multiple divisions of
-                                                                // the same gender for this overview panel we re-rank fresh by
-                                                                // points across the whole pool rather than reusing that field.
-                                                            const teams = Object.values(manualTeamSeeds)
-                                                                .filter((d) => d.genderLabel === topSeedsGender)
-                                                                .flatMap((d) => d.teams)
-                                                                .filter((t) => t.totalPoints > 0)
-                                                                .sort((a, b) => b.totalPoints - a.totalPoints);
+                                                    <AnimatePresence initial={false}>
+                                                        {topSeedsOpen && (
+                                                            <motion.div
+                                                                initial={{ height: 0, opacity: 0 }}
+                                                                animate={{ height: 'auto', opacity: 1 }}
+                                                                exit={{ height: 0, opacity: 0 }}
+                                                                transition={{ duration: 0.2 }}
+                                                                className="overflow-hidden"
+                                                            >
+                                                                <div className="divide-y divide-gray-50 px-6">
+                                                                    {(() => {
+                                                                        // Note: teams[].seed is numbered per-division (each division's
+                                                                        // own draw starts at 1), so when pooling multiple divisions of
+                                                                        // the same gender for this overview panel we re-rank fresh by
+                                                                        // points across the whole pool rather than reusing that field.
+                                                                        const teams = Object.values(manualTeamSeeds)
+                                                                            .filter((d) => d.genderLabel === topSeedsGender)
+                                                                            .flatMap((d) => d.teams)
+                                                                            .filter((t) => t.totalPoints > 0)
+                                                                            .sort((a, b) => b.totalPoints - a.totalPoints);
 
-                                                            if (teams.length === 0) {
-                                                                return (
-                                                                    <div className="py-8 text-center text-gray-400 text-sm">
-                                                                        No ranked teams registered yet
-                                                                    </div>
-                                                                );
-                                                            }
+                                                                        if (teams.length === 0) {
+                                                                            return (
+                                                                                <div className="py-8 text-center text-gray-400 text-sm">
+                                                                                    No ranked teams registered yet
+                                                                                </div>
+                                                                            );
+                                                                        }
 
-                                                            return teams.slice(0, 4).map((team, idx) => (
-                                                                <div key={team.id} className="flex items-center justify-between py-4 gap-3">
-                                                                    <div className="flex items-center gap-4 min-w-0">
-                                                                        <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
-                                                                        <span className="font-medium text-[#0F172A] text-[14px] truncate" title={team.name}>
-                                                                            {team.name} <span className="text-gray-500 ml-1 text-[13px]">({team.totalPoints.toLocaleString()} pts)</span>
-                                                                        </span>
-                                                                    </div>
-                                                                    <img src="https://flagcdn.com/w40/za.png" alt="South Africa" className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
+                                                                        return teams.slice(0, 4).map((team, idx) => (
+                                                                            <div key={team.id} className="flex items-center justify-between py-4 gap-3">
+                                                                                <div className="flex items-center gap-4 min-w-0">
+                                                                                    <span className="font-semibold text-yellow-500 w-4 flex-shrink-0">{idx + 1}</span>
+                                                                                    <span className="font-medium text-[#0F172A] text-[14px] truncate" title={team.name}>
+                                                                                        {team.name} <span className="text-gray-500 ml-1 text-[13px]">({team.totalPoints.toLocaleString()} pts)</span>
+                                                                                    </span>
+                                                                                </div>
+                                                                                <img src="https://flagcdn.com/w40/za.png" alt="South Africa" className="w-6 h-auto rounded-sm border border-gray-200 flex-shrink-0" />
+                                                                            </div>
+                                                                        ));
+                                                                    })()}
                                                                 </div>
-                                                            ));
-                                                        })()}
-                                                    </div>
+                                                            </motion.div>
+                                                        )}
+                                                    </AnimatePresence>
                                                 </div>
                                             </div>
                                         )}
@@ -3980,34 +4050,68 @@ const EventDetails = () => {
                                                                             };
 
                                                                             if (isTeam) {
+                                                                                const seedPills = (
+                                                                                    <>
+                                                                                        {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                        {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
+                                                                                        {manualSeedInfo?.totalPoints > 0 && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{manualSeedInfo.totalPoints.toLocaleString()} pts</span>}
+                                                                                        {manualSeedInfo?.seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {manualSeedInfo.seed}</span>}
+                                                                                    </>
+                                                                                );
+
                                                                                 return (
                                                                                     <div key={pIdx} className="px-6 py-4">
-                                                                                        {(rank || seed || manualSeedInfo?.seed) && (
-                                                                                            <div className="flex justify-end mb-3">
-                                                                                                <div className="flex gap-2">
-                                                                                                    {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                                    {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
-                                                                                                    {manualSeedInfo?.totalPoints > 0 && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{manualSeedInfo.totalPoints.toLocaleString()} pts</span>}
-                                                                                                    {manualSeedInfo?.seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {manualSeedInfo.seed}</span>}
-                                                                                                </div>
-                                                                                            </div>
-                                                                                        )}
-                                                                                        <div className="flex flex-wrap gap-2">
-                                                                                            {p.Players.map((player, idx) => (
-                                                                                                <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-                                                                                                    <div className="w-7 h-7 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                                                        {/* Mobile: overlapping avatars, first names, pills stacked centered */}
+                                                                                        <div className="sm:hidden flex flex-col items-center text-center gap-2">
+                                                                                            <div className="flex items-center justify-center">
+                                                                                                {p.Players.map((player, idx) => (
+                                                                                                    <div
+                                                                                                        key={idx}
+                                                                                                        className={`w-16 h-16 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow-sm flex-shrink-0 flex items-center justify-center ${idx > 0 ? '-ml-4' : ''}`}
+                                                                                                        style={{ zIndex: p.Players.length - idx }}
+                                                                                                    >
                                                                                                         {getProfileImage(player) ? (
                                                                                                             <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
                                                                                                         ) : (
-                                                                                                            <User className="w-4 h-4 text-gray-500" />
+                                                                                                            <User className="w-7 h-7 text-gray-400" />
                                                                                                         )}
                                                                                                     </div>
-                                                                                                    <span className="text-xs font-bold text-[#0F172A]">
-                                                                                                        <span className="hidden sm:inline">{player.Name}</span>
-                                                                                                        <span className="sm:hidden">{formatPlayerName(player.Name)}</span>
-                                                                                                    </span>
+                                                                                                ))}
+                                                                                            </div>
+                                                                                            <span className="text-base font-bold text-[#0F172A]">
+                                                                                                {p.Players.map((player) => (player.Name || '').split(' ')[0]).join(' & ')}
+                                                                                            </span>
+                                                                                            {(rank || seed || manualSeedInfo?.seed) && (
+                                                                                                <div className="flex flex-wrap gap-2 justify-center">
+                                                                                                    {seedPills}
                                                                                                 </div>
-                                                                                            ))}
+                                                                                            )}
+                                                                                        </div>
+
+                                                                                        {/* Desktop: numbered row, pills top-right, name pill per player */}
+                                                                                        <div className="hidden sm:block">
+                                                                                            <div className="flex items-center justify-between gap-2 mb-3">
+                                                                                                <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
+                                                                                                {(rank || seed || manualSeedInfo?.seed) && (
+                                                                                                    <div className="flex flex-wrap gap-2 justify-end">
+                                                                                                        {seedPills}
+                                                                                                    </div>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <div className="flex flex-wrap gap-2">
+                                                                                                {p.Players.map((player, idx) => (
+                                                                                                    <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
+                                                                                                        <div className="w-7 h-7 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                                                                                                            {getProfileImage(player) ? (
+                                                                                                                <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                            ) : (
+                                                                                                                <User className="w-4 h-4 text-gray-500" />
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                        <span className="text-xs font-bold text-[#0F172A] truncate">{player.Name}</span>
+                                                                                                    </div>
+                                                                                                ))}
+                                                                                            </div>
                                                                                         </div>
                                                                                     </div>
                                                                                 );
