@@ -83,14 +83,19 @@ const Hero = () => {
         const controller = new AbortController();
         const signal = controller.signal;
 
-        const CACHE_KEY = `hero_events_${session.user.email}`;
-        const MATCH_CACHE_KEY = `hero_match_${session.user.email}`;
+        // Respect admin impersonation (set by PlayerManager) so the Hero shows the
+        // impersonated user's events/matches instead of the logged-in admin's own.
+        const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+        const targetEmail = impersonationEmail || session.user.email;
+
+        const CACHE_KEY = `hero_events_${targetEmail}`;
+        const MATCH_CACHE_KEY = `hero_match_${targetEmail}`;
         const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
         const fetchPlayerEventsAndMatches = async () => {
             try {
                 // Check player details cache
-                const PLAYER_METADATA_KEY = `player_metadata_${session.user.email}`;
+                const PLAYER_METADATA_KEY = `player_metadata_${targetEmail}`;
                 let playerData = null;
                 try {
                     const cachedPlayer = localStorage.getItem(PLAYER_METADATA_KEY);
@@ -103,7 +108,7 @@ const Hero = () => {
                     const { data, error } = await supabase
                         .from('players')
                         .select('id, rankedin_id, email, name')
-                        .ilike('email', session.user.email)
+                        .ilike('email', targetEmail)
                         .maybeSingle();
 
                     if (error) throw error;
@@ -362,7 +367,9 @@ const Hero = () => {
             return;
         }
 
-        const email = session.user.email;
+        // Respect admin impersonation so the greeting/stats reflect the impersonated user, not the admin
+        const impersonationEmail = sessionStorage.getItem('admin_test_login_email');
+        const email = impersonationEmail || session.user.email;
         const CACHE_KEY = `hero_player_stats_${email}`;
 
         try {
