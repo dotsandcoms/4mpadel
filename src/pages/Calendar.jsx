@@ -842,7 +842,7 @@ const Calendar = () => {
     };
 
     return (
-        <div className="bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
+        <div className="bg-[#080C17] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
 
             {/* Background elements matched from Rankings */}
             <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
