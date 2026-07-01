@@ -617,7 +617,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
             <h2 className={`text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate ${isFeatured ? 'text-black' : 'text-white/80'}`}>
                 {data.title}
             </h2>
-            {data.linkPath && (
+            {data.linkPath && data.id !== 'recent-results' && data.id !== 'upcoming-events' && (
                 <button
                     onClick={() => navigate(data.linkPath)}
                     className={`flex items-center gap-1 text-[10px] md:text-xs font-medium uppercase tracking-widest transition-colors shrink-0 ${isFeatured ? 'text-black/70 hover:text-black' : 'text-[#CCFF00] hover:text-white'}`}
