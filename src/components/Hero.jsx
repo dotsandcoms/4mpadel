@@ -1,10 +1,10 @@
 import React, { useState, useCallback } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import heroBg from '../assets/hero_bg.png';
+import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
@@ -12,7 +12,6 @@ import HappeningNowWidget from './HappeningNowWidget';
 
 const Hero = () => {
     const { scrollY } = useScroll();
-    const yBackend = useTransform(scrollY, [0, 500], [0, 150]);
     const opacityText = useTransform(scrollY, [0, 300], [1, 0]);
 
     // Mouse tracking for desktop light effect
@@ -37,6 +36,7 @@ const Hero = () => {
     const [matchesCount, setMatchesCount] = useState(0);
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
+    const [player, setPlayer] = useState(null);
     const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
 
     useEffect(() => {
@@ -215,7 +215,7 @@ const Hero = () => {
 
                 if (filtered.length > 0) {
                     const [dbEventsRes, paidParticipantsRes] = await Promise.all([
-                        supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees'),
+                        supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees, venue, city'),
                         supabase.from('tournament_participants').select('event_id')
                             .or(`email.ilike.${playerData.email},profile_id.eq.${playerData.id}`)
                             .eq('is_paid', true),
@@ -239,6 +239,8 @@ const Hero = () => {
                                 e.sapa_status = match.sapa_status;
                                 e.entry_fee = match.entry_fee;
                                 e.category_fees = match.category_fees;
+                                e.venue = match.venue;
+                                e.city = match.city;
                                 e.isPaid = e.id?.toString().startsWith('local_')
                                     ? paidManualEventIds.has(match.id)
                                     : paidEventIds.has(match.id);
@@ -268,7 +270,7 @@ const Hero = () => {
                 setNextMatch(firstNextMatch);
                 setMatchesCount(validMatches.length);
                 setEventsLoading(false);
-                
+
                 if (firstNextMatch) {
                     setActiveHeroTab('matches');
                 } else if (filtered.length > 0) {
@@ -353,79 +355,115 @@ const Hero = () => {
         };
     }, [session, getPlayerEventsAsync, getPlayerMatches]);
 
+    // Fetch lightweight player profile (name, ranking, points) for the personalized greeting/stats
+    useEffect(() => {
+        if (!session?.user) {
+            setPlayer(null);
+            return;
+        }
+
+        const email = session.user.email;
+        const CACHE_KEY = `hero_player_stats_${email}`;
+
+        try {
+            const cached = localStorage.getItem(CACHE_KEY);
+            if (cached) setPlayer(JSON.parse(cached));
+        } catch (_) { }
+
+        supabase
+            .from('players')
+            .select('name, rank_label, points, region')
+            .ilike('email', email)
+            .maybeSingle()
+            .then(({ data, error }) => {
+                if (data && !error) {
+                    setPlayer(data);
+                    try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch (_) { }
+                }
+            });
+    }, [session]);
+
+    const getGreeting = () => {
+        const hour = new Date().getHours();
+        if (hour < 12) return 'Good Morning';
+        if (hour < 18) return 'Good Afternoon';
+        return 'Good Evening';
+    };
+
+    const firstName = player?.name ? player.name.split(' ')[0] : null;
+
     return (
         <div className="relative w-full bg-black">
             <div
                 className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-center min-h-[90vh] lg:min-h-[80vh]"
                 onMouseMove={handleMouseMove}
             >
-                {/* Parallax Background */}
-                <motion.div
-                    style={{ y: yBackend }}
-                    animate={{ scale: [1.1, 1.15] }}
-                    transition={{
-                        duration: 20,
-                        repeat: Infinity,
-                        repeatType: "reverse",
-                        ease: "linear"
-                    }}
-                    className="absolute inset-0 z-0 bg-black"
+                {/* Solid base background — text sits on this, never on the photo */}
+                <div className="absolute inset-0 z-0 bg-[#060913]" />
+
+                {/* Photo panel — anchored to the right, shown in the space the text doesn't use (not stretched as a full-bleed cover) */}
+                <div
+                    className="absolute top-0 right-0 z-0 w-[34%] sm:w-[36%] lg:w-[38%] xl:w-[40%] h-[52%] sm:h-[58%] lg:h-[65%] overflow-hidden"
                 >
-                    <div className="absolute inset-0 bg-gradient-to-b from-[#060913]/90 via-[#060913]/50 to-[#060913]/95 z-10" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#060913]/90 via-transparent to-[#060913]/90 z-10" />
-
-                    {/* Floating Orbs (Ambient for Mobile) */}
-                    {false && (
-                        <>
-                            <motion.div
-                                animate={{
-                                    scale: [1, 1.5, 1],
-                                    opacity: [0.3, 0.7, 0.3],
-                                    x: [0, 300, -150, 0],
-                                    y: [0, -200, 150, 0]
-                                }}
-                                transition={{
-                                    duration: 8,
-                                    repeat: Infinity,
-                                    ease: "easeInOut"
-                                }}
-                                className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
-                            />
-
-                            {/* Mouse Follow Orb (Desktop only) */}
-                            <motion.div
-                                style={{
-                                    x: smoothMouseX,
-                                    y: smoothMouseY,
-                                    left: -200,
-                                    top: -200,
-                                }}
-                                className="absolute hidden lg:block w-[400px] h-[400px] bg-padel-green/60 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
-                            />
-                            <motion.div
-                                animate={{
-                                    scale: [1, 1.8, 1],
-                                    opacity: [0.2, 0.6, 0.2],
-                                    x: [0, -300, 200, 0],
-                                    y: [0, 250, -150, 0]
-                                }}
-                                transition={{
-                                    duration: 10,
-                                    repeat: Infinity,
-                                    ease: "easeInOut",
-                                    delay: 1
-                                }}
-                                className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
-                            />
-                        </>
-                    )}
-
                     <img
                         src={heroBg}
                         alt="Premium Padel Court"
-                        className="w-full h-full object-cover opacity-50 mix-blend-luminosity"
+                        className="w-full h-full object-cover saturate-[0.45] contrast-[1.08]"
                     />
-                </motion.div>
+                    {/* Navy colour tint so the photo reads as part of the dark theme rather than its own warm/teal palette */}
+                    <div className="absolute inset-0 bg-[#0B1730]/35 mix-blend-multiply" />
+                    <div className="absolute inset-0 bg-[#060913]/10" />
+                    {/* Fade the panel's left edge into the solid background so the crop doesn't read as a hard rectangle */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-[#060913] from-0% via-[#060913]/40 via-25% to-transparent to-65%" />
+                    {/* Fade the bottom edge so it dissolves into the solid background instead of ending abruptly */}
+                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#060913]" />
+                </div>
+
+                {/* Floating Orbs (Ambient for Mobile) */}
+                {false && (
+                    <>
+                        <motion.div
+                            animate={{
+                                scale: [1, 1.5, 1],
+                                opacity: [0.3, 0.7, 0.3],
+                                x: [0, 300, -150, 0],
+                                y: [0, -200, 150, 0]
+                            }}
+                            transition={{
+                                duration: 8,
+                                repeat: Infinity,
+                                ease: "easeInOut"
+                            }}
+                            className="absolute lg:hidden top-1/4 left-1/4 w-72 h-72 bg-padel-green/80 rounded-full blur-[80px] mix-blend-screen z-10 pointer-events-none"
+                        />
+
+                        {/* Mouse Follow Orb (Desktop only) */}
+                        <motion.div
+                            style={{
+                                x: smoothMouseX,
+                                y: smoothMouseY,
+                                left: -200,
+                                top: -200,
+                            }}
+                            className="absolute hidden lg:block w-[400px] h-[400px] bg-padel-green/60 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
+                        />
+                        <motion.div
+                            animate={{
+                                scale: [1, 1.8, 1],
+                                opacity: [0.2, 0.6, 0.2],
+                                x: [0, -300, 200, 0],
+                                y: [0, 250, -150, 0]
+                            }}
+                            transition={{
+                                duration: 10,
+                                repeat: Infinity,
+                                ease: "easeInOut",
+                                delay: 1
+                            }}
+                            className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500/80 rounded-full blur-[100px] mix-blend-screen z-10 pointer-events-none"
+                        />
+                    </>
+                )}
 
                 {/* Hero Content */}
                 <motion.div
@@ -457,15 +495,52 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-8 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal"
+                        className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-[15rem] sm:max-w-sm md:max-w-md mb-8 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal"
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
+
+                    {/* Personalized Greeting + Stats — visible only when logged in */}
+                    {session && player && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.9, duration: 0.8 }}
+                            className="mb-6"
+                        >
+                            <p className="text-white text-base md:text-lg font-bold mb-3">
+                                {getGreeting()}{firstName && <>, <span className="text-padel-green">{firstName}</span></>} <span aria-hidden="true">👋</span>
+                            </p>
+                            <div className="grid grid-cols-2 divide-x divide-white/10 max-w-[14rem] sm:max-w-[15.5rem] bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
+                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
+                                    <div className="w-8 h-8 rounded-full bg-padel-green/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(204,255,0,0.15)]">
+                                        <Trophy size={14} strokeWidth={1.75} className="text-padel-green" />
+                                    </div>
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none">Ranking</p>
+                                    <p className="text-padel-green font-black text-base leading-none">
+                                        {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
+                                    </p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">{player.region || 'National Ranking'}</p>
+                                </div>
+                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
+                                    <div className="w-8 h-8 rounded-full bg-padel-green/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(204,255,0,0.15)]">
+                                        <Star size={14} strokeWidth={1.75} className="text-padel-green" />
+                                    </div>
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none">Points</p>
+                                    <p className="text-padel-green font-black text-base leading-none">
+                                        {player.points !== undefined && player.points !== null ? player.points.toLocaleString() : '—'}
+                                    </p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none">Total Points</p>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 1, duration: 0.8 }}
-                        className="flex flex-col sm:flex-row items-center gap-4"
+                        className="flex flex-col sm:flex-row items-center gap-4 max-w-[15rem] sm:max-w-none"
                     >
 
 
@@ -576,7 +651,7 @@ const Hero = () => {
                                                         onClick={() => setActiveHeroTab('matches')}
                                                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'matches' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        <Trophy size={16} /> My Next Matches
+                                                        <Trophy size={16} /> Matches
                                                         {matchesCount > 0 && (
                                                             <span className="bg-orange-500 text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
                                                                 {matchesCount}
@@ -587,7 +662,7 @@ const Hero = () => {
                                                         onClick={() => setActiveHeroTab('events')}
                                                         className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg transition-all text-xs sm:text-sm font-bold ${activeHeroTab === 'events' ? 'border border-white/40 bg-white/5 text-white shadow-md' : 'text-white/50 hover:text-white'}`}
                                                     >
-                                                        <Calendar size={16} /> My Next Events
+                                                        <Calendar size={16} /> Events
                                                         {upcomingEvents.length > 0 && (
                                                             <span className="bg-padel-green text-black text-[11px] font-black px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[20px] leading-none">
                                                                 {upcomingEvents.length}
@@ -602,18 +677,23 @@ const Hero = () => {
                                                         <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
                                                             <div className="flex flex-col">
                                                                 {upcomingEvents.map((event, idx) => {
-                                                                    let ringCls = 'text-padel-green';
-                                                                    
+                                                                    const startDate = new Date(event.start_date);
+                                                                    const day = startDate.getDate();
+                                                                    const month = startDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+                                                                    const weekday = startDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+                                                                    const location = [event.venue, event.city].filter(Boolean).join(', ');
+
+                                                                    let statusColors = { border: 'border-padel-green/40', text: 'text-padel-green' };
                                                                     if (event.sapa_status === 'Major') {
-                                                                        ringCls = 'text-red-500';
+                                                                        statusColors = { border: 'border-red-500/40', text: 'text-red-500' };
                                                                     } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                        ringCls = 'text-amber-500';
+                                                                        statusColors = { border: 'border-amber-500/40', text: 'text-amber-500' };
                                                                     } else if (event.sapa_status === 'Gold') {
-                                                                        ringCls = 'text-yellow-500';
+                                                                        statusColors = { border: 'border-yellow-400/40', text: 'text-yellow-400' };
                                                                     } else if (event.sapa_status === 'Silver') {
-                                                                        ringCls = 'text-gray-400';
+                                                                        statusColors = { border: 'border-gray-400/40', text: 'text-gray-400' };
                                                                     } else if (event.sapa_status === 'Bronze') {
-                                                                        ringCls = 'text-orange-600';
+                                                                        statusColors = { border: 'border-orange-700/40', text: 'text-orange-700' };
                                                                     }
 
                                                                     return (
@@ -623,27 +703,35 @@ const Hero = () => {
                                                                                 if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
                                                                                 else if (!event.id.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
                                                                             }}
-                                                                            className="flex items-center gap-4 p-4 border-b border-white/10 hover:bg-white/5 transition-colors text-left group"
+                                                                            className={`flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left group ${idx !== upcomingEvents.length - 1 ? 'border-b border-white/10' : ''}`}
                                                                         >
-                                                                            <Calendar size={20} className="text-padel-green shrink-0" />
+                                                                            <div className="flex items-center gap-3 shrink-0">
+                                                                                <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
+                                                                                <div className="flex flex-col items-center leading-none">
+                                                                                    <span className="text-white font-bold text-xl leading-none">{day}</span>
+                                                                                    <span className="text-padel-green text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>
+                                                                                    <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
+                                                                                </div>
+                                                                            </div>
                                                                             <div className="flex-1 min-w-0">
                                                                                 <p className="text-white text-sm font-bold uppercase truncate">{event.event_name}</p>
-                                                                                <p className="text-[11px] text-white/50 mt-1 uppercase font-semibold">
-                                                                                    {new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                                                                    <span className="mx-1.5 font-light">|</span>
-                                                                                    <span className={ringCls}>{event.sapa_status || 'SAPA'}</span>
+                                                                                <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1.5 flex-wrap min-w-0">
+                                                                                    {location && (
+                                                                                        <span className="flex items-center gap-1 min-w-0">
+                                                                                            <MapPin size={12} className="text-white/40 shrink-0" />
+                                                                                            <span className="truncate">{location}</span>
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {location && <span className="text-white/20 font-light">|</span>}
+                                                                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                                                                                        {event.sapa_status || 'SAPA'}
+                                                                                    </span>
                                                                                 </p>
                                                                             </div>
-                                                                            <ChevronRight size={18} className="text-white/20 group-hover:text-white/50 shrink-0 transition-colors" />
+                                                                            <ChevronRight size={18} className="text-padel-green shrink-0 transition-transform group-hover:translate-x-0.5" />
                                                                         </button>
                                                                     );
                                                                 })}
-                                                                <button
-                                                                    onClick={() => navigate('/calendar')}
-                                                                    className="py-4 text-center text-sm font-bold text-padel-green hover:text-padel-green/80 flex items-center justify-center gap-1 w-full transition-colors"
-                                                                >
-                                                                    View all events <ChevronRight size={16} />
-                                                                </button>
                                                             </div>
                                                         </div>
                                                     ) : (

@@ -6,6 +6,7 @@ import { supabase } from '../supabaseClient';
 import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranch, Users, X, MapPin, Shield, ArrowRight } from 'lucide-react';
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 import { getEventImage } from '../utils/imageUtils';
+import featuredBg from '../assets/featuredbg.jpeg';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
@@ -181,6 +182,17 @@ const formatTournamentDate = (startDate, endDate) => {
     }
 
     return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+};
+
+// Finds the Men's Open category in a RankedIn winners payload and returns the winning team's name (e.g. "Adam Van Harte / Warren van Heerden")
+const findMensOpenWinner = (winners) => {
+    if (!Array.isArray(winners)) return null;
+    const match = winners.find(w => {
+        const cat = (w.CategoryName || w.className || '').toLowerCase();
+        return cat.includes('men') && !cat.includes('wom') && cat.includes('open');
+    });
+    if (!match) return null;
+    return match.Winner?.Name || match.winners || null;
 };
 
 const renderBrollTitle = (title, tag) => {
@@ -385,49 +397,111 @@ const TournamentCard = ({ index, title, label, date = null, image, linkPath, dra
 
 
 
-const RecentResultCard = ({ title, label, date, image, linkPath, status, registeredPlayers, venue, city }) => {
+const RecentResultCard = ({ title, label, startDateStr, linkPath, status, winnerName, venue, city }) => {
     const statusColors = getStatusColors(status);
-    const dateParts = date ? date.split(' ') : [];
-    const day = dateParts[0] || '';
-    const month = dateParts[1] || '';
 
     // Extracting emojis if title has trophy
     const cleanTitle = title.replace('🏆', '').trim();
     const hasTrophy = title.includes('🏆') || cleanTitle.toLowerCase().includes('open') || cleanTitle.toLowerCase().includes('cup') || cleanTitle.toLowerCase().includes('1000');
 
+    let month = '';
+    let day = '';
+    if (startDateStr) {
+        const d = new Date(startDateStr);
+        if (!isNaN(d.getTime())) {
+            month = new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(d).toUpperCase();
+            day = d.getDate();
+        }
+    }
+
     return (
-        <Link to={linkPath} className="group relative flex flex-row items-stretch min-h-[120px] bg-[#0A0F1C] rounded-[16px] overflow-hidden border border-white/5 hover:border-padel-green/30 transition-all duration-300 shadow-xl">
-            <div className="relative w-[110px] sm:w-[130px] shrink-0 bg-black/40 border-r border-white/5">
-                {image ? (
-                    <>
-                        <FallbackImage src={image} alt={title} title={cleanTitle} className="absolute inset-0 w-full h-full object-cover blur-2xl opacity-40 scale-125" aria-hidden="true" />
-                        <FallbackImage src={image} alt={cleanTitle} title={cleanTitle} className="absolute inset-0 z-10 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                    </>
-                ) : (
-                    <div className="w-full h-full bg-[#05070A] flex items-center justify-center"><Calendar className="w-6 h-6 text-white/10" /></div>
-                )}
-                {date && (
-                    <div className="absolute bottom-2 left-2 z-30 bg-[#060913] rounded-lg px-2 py-1 text-center border border-white/10 shadow-lg">
-                        <div className="text-[9px] font-black text-white/70 uppercase tracking-widest leading-none mb-0.5">{month}</div>
-                        <div className="text-sm font-bold text-white leading-none">{day}</div>
+        <div className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl">
+            {/* Rotating shimmer along the border */}
+            <div
+                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:4s] pointer-events-none"
+                style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
+            />
+            <Link to={linkPath} className="relative z-10 flex items-center gap-4 p-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">
+                {/* Date block */}
+                {startDateStr && (
+                    <div className="flex flex-col items-center justify-center w-14 h-14 sm:w-16 sm:h-16 shrink-0 rounded-xl border border-padel-green/30">
+                        <span className="text-padel-green text-[9px] sm:text-[10px] font-black uppercase tracking-widest">{month}</span>
+                        <span className="text-white text-xl sm:text-2xl font-bold leading-none mt-0.5">{day}</span>
                     </div>
                 )}
-            </div>
 
-            <div className="p-4 sm:p-5 flex flex-col flex-1 min-w-0 justify-center relative">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                <div className="flex-1 min-w-0">
+                    <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent inline-block mb-2`}>
                         {label || status}
                     </span>
-                </div>
-                <h3 className="text-sm sm:text-base font-bold text-white mb-2 uppercase tracking-tight leading-tight group-hover:text-padel-green transition-colors pr-6 truncate">
-                    {cleanTitle} {hasTrophy && '🏆'}
-                </h3>
+                    <h3 className="text-sm sm:text-base font-bold text-white mb-1.5 uppercase tracking-tight leading-tight group-hover:text-padel-green transition-colors truncate">
+                        {cleanTitle} {hasTrophy && '🏆'}
+                    </h3>
 
-                <div className="space-y-1 mt-auto">
+                    {(venue || city) && (
+                        <div className="flex items-center gap-1.5 text-gray-400 mb-1">
+                            <MapPin className="w-3 h-3 shrink-0" />
+                            <span className="text-[9px] sm:text-[10px] font-medium truncate">
+                                {[venue, city].filter(Boolean).join(', ')}
+                            </span>
+                        </div>
+                    )}
+                    {winnerName && (
+                        <div className="flex items-center gap-1.5 text-gray-400">
+                            <Users className={`w-3 h-3 shrink-0 ${statusColors.text}`} />
+                            <span className="text-[9px] sm:text-[10px] font-medium truncate">
+                                Winner: {winnerName}
+                            </span>
+                        </div>
+                    )}
+                </div>
+
+                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-padel-green shrink-0 group-hover:translate-x-1 transition-transform" />
+            </Link>
+        </div>
+    );
+};
+
+const UpcomingEventListItem = ({ title, label, startDateStr, linkPath, status, venue, city, registeredPlayers }) => {
+    const statusColors = getStatusColors(status);
+
+    // Always show the tournament's start date only (day/month/weekday), never a range
+    let day = '';
+    let month = '';
+    let weekday = 'TBD';
+    if (startDateStr) {
+        const d = new Date(startDateStr);
+        if (!isNaN(d.getTime())) {
+            day = String(d.getDate()).padStart(2, '0');
+            month = new Intl.DateTimeFormat('en-GB', { month: 'short' }).format(d).toUpperCase();
+            weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(d).toUpperCase();
+        }
+    }
+
+    return (
+        <div className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl">
+            {/* Rotating shimmer along the border */}
+            <div
+                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:4s] pointer-events-none"
+                style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
+            />
+            <Link to={linkPath} className="relative z-10 flex items-center py-3 px-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">
+                <div className="flex flex-col items-center justify-center text-center w-14 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 mr-3 sm:mr-4">
+                    <span className="text-[9px] sm:text-[10px] font-black text-padel-green uppercase tracking-widest mb-0.5">{month}</span>
+                    <span className="text-xl sm:text-2xl font-bold text-white leading-none mb-0.5">{day}</span>
+                    <span className="text-[8px] sm:text-[9px] font-bold text-padel-green uppercase tracking-widest">{weekday}</span>
+                </div>
+
+                <div className="flex-1 min-w-0 pr-2 sm:pr-4">
+                    <span className={`hidden sm:inline-block px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent mb-1.5`}>
+                        {label || status}
+                    </span>
+                    <h3 className="text-xs sm:text-sm font-bold text-white mb-1.5 uppercase tracking-tight truncate group-hover:text-padel-green transition-colors">
+                        {title}
+                    </h3>
                     {(venue || city) && (
                         <div className="flex items-center gap-1.5 text-gray-400">
-                            <MapPin className="w-3 h-3 shrink-0" />
+                            <MapPin className="w-3 h-3 shrink-0 text-gray-500" />
                             <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
                                 {[venue, city].filter(Boolean).join(', ')}
                             </span>
@@ -436,59 +510,21 @@ const RecentResultCard = ({ title, label, date, image, linkPath, status, registe
                     {registeredPlayers > 0 && (
                         <div className="flex items-center gap-1.5 text-gray-400 mt-1">
                             <Users className={`w-3 h-3 shrink-0 ${statusColors.text}`} />
-                            <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">{registeredPlayers} ENTRIES</span>
+                            <span className="text-[9px] sm:text-[10px] font-medium truncate">
+                                {registeredPlayers} Registered
+                            </span>
                         </div>
                     )}
                 </div>
 
-                <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-padel-green group-hover:translate-x-1 transition-transform" />
-            </div>
-        </Link>
-    );
-};
-
-const UpcomingEventListItem = ({ title, label, date, startDateStr, linkPath, status, venue, city }) => {
-    const statusColors = getStatusColors(status);
-    const dateParts = date ? date.split(' ') : [];
-    const day = dateParts[0] || '';
-    const month = dateParts[1] || '';
-
-    let weekday = 'TBD';
-    if (startDateStr) {
-        try {
-            weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(new Date(startDateStr)).toUpperCase();
-        } catch (e) { }
-    }
-
-    return (
-        <Link to={linkPath} className="group flex items-center py-4 bg-transparent hover:bg-white/[0.02] border-b border-white/5 transition-colors">
-            <div className="flex flex-col items-center justify-center w-14 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 mr-3 sm:mr-4">
-                <span className="text-[9px] sm:text-[10px] font-black text-padel-green uppercase tracking-widest mb-0.5">{month}</span>
-                <span className="text-xl sm:text-2xl font-bold text-white leading-none mb-0.5">{day}</span>
-                <span className="text-[8px] sm:text-[9px] font-bold text-padel-green uppercase tracking-widest">{weekday}</span>
-            </div>
-
-            <div className="flex-1 min-w-0 pr-2 sm:pr-4">
-                <h3 className="text-xs sm:text-sm font-bold text-white mb-1.5 uppercase tracking-tight truncate group-hover:text-padel-green transition-colors">
-                    {title}
-                </h3>
-                {(venue || city) && (
-                    <div className="flex items-center gap-1.5 text-gray-400">
-                        <MapPin className="w-3 h-3 shrink-0 text-gray-500" />
-                        <span className="text-[9px] sm:text-[10px] font-medium truncate uppercase tracking-widest">
-                            {[venue, city].filter(Boolean).join(', ')}
-                        </span>
-                    </div>
-                )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-4 shrink-0 pl-2">
-                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
-                    {label || status}
-                </span>
-                <ChevronRight className="w-4 h-4 text-padel-green group-hover:translate-x-1 transition-all" />
-            </div>
-        </Link>
+                <div className="flex items-center gap-2 sm:gap-0 shrink-0 pl-2">
+                    <span className={`sm:hidden px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                        {label || status}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-padel-green shrink-0 group-hover:translate-x-1 transition-all" />
+                </div>
+            </Link>
+        </div>
     );
 };
 
@@ -577,23 +613,18 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     // Text content for the left/top side of the hero section
     const textContent = isGridSection ? (
-        <div className={`relative z-10 flex flex-col sm:flex-row sm:items-end justify-between mb-6 md:mb-8`}>
-            <div>
-                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${isFeatured ? 'border-black/20 text-black bg-black/5' : isLiveSection ? 'border-red-500/20 text-red-400 bg-red-500/10' : data.id === 'upcoming-events' ? 'border-padel-green/30 text-padel-green bg-transparent' : 'border-white/10 text-padel-green bg-padel-green/5'} text-[10px] font-bold uppercase tracking-widest mb-3`}>
-                    {isLiveSection ? <Play className="w-3.5 h-3.5 fill-current" /> : <Icon className="w-3.5 h-3.5" />}
-                    <span>{data.highlight}</span>
-                </div>
-                <h2 className={`text-3xl md:text-4xl lg:text-5xl font-bold font-display tracking-tight ${isFeatured ? 'text-black' : 'text-white'} mb-2`}>
-                    {data.title}
-                </h2>
-
-                {data.id === 'upcoming-events' && (
-                    <button onClick={() => navigate('/calendar')} className="mt-2 flex items-center gap-1.5 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-white transition-colors">
-                        VIEW CALENDAR <ChevronRight className="w-3 h-3" />
-                    </button>
-                )}
-            </div>
-
+        <div className="relative z-10 flex items-center justify-between mb-6 md:mb-8">
+            <h2 className={`text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate ${isFeatured ? 'text-black' : 'text-white/80'}`}>
+                {data.title}
+            </h2>
+            {data.linkPath && (
+                <button
+                    onClick={() => navigate(data.linkPath)}
+                    className={`flex items-center gap-1 text-[10px] md:text-xs font-medium uppercase tracking-widest transition-colors shrink-0 ${isFeatured ? 'text-black/70 hover:text-black' : 'text-[#CCFF00] hover:text-white'}`}
+                >
+                    {data.id === 'upcoming-events' ? 'View calendar' : 'View all'} <ArrowRight className="w-3 h-3" />
+                </button>
+            )}
         </div>
     ) : (
         <div className={`relative z-10 ${!isGridSection ? 'lg:pr-8' : ''}`}>
@@ -673,11 +704,10 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         key={t.id || t.eventId}
                         title={t.event_name || t.eventName}
                         label={t.sapa_status || t.sapaStatus || 'Tournament'}
-                        date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
-                        image={getEventImage(t) || t.image || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.eventId}.png`}
+                        startDateStr={t.start_date}
                         linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
                         status={t.sapa_status || t.sapaStatus || 'Gold'}
-                        registeredPlayers={t.registered_players || t.registeredPlayers}
+                        winnerName={t.winnerName}
                         venue={t.venue || t.clubName}
                         city={t.city}
                     />
@@ -705,27 +735,25 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         </div>
     ) : data.id === 'upcoming-events' ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0">
-            <div className="flex flex-col w-full bg-[#060913] rounded-[24px] overflow-hidden shadow-2xl border border-white/5">
-                <div className="flex flex-col p-4 sm:p-6">
-                    {items?.slice(0, 5).map((t, i) => (
-                        <UpcomingEventListItem
-                            key={t.id || t.eventId}
-                            title={t.event_name || t.eventName}
-                            label={t.sapa_status || t.sapaStatus || 'Tournament'}
-                            date={t.start_date ? formatTournamentDate(t.start_date, t.end_date) : t.date}
-                            startDateStr={t.start_date || null}
-                            linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
-                            status={t.sapa_status || t.sapaStatus || 'Gold'}
-                            venue={t.venue || t.clubName}
-                            city={t.city}
-                        />
-                    ))}
-
-                    <button onClick={() => navigate('/calendar')} className="mt-4 w-full py-4 rounded-full border border-padel-green/50 text-padel-green text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-padel-green hover:text-black transition-all flex items-center justify-center gap-2 group">
-                        VIEW ALL TOURNAMENTS <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </button>
-                </div>
+            <div className="flex flex-col gap-3">
+                {items?.slice(0, 5).map((t, i) => (
+                    <UpcomingEventListItem
+                        key={t.id || t.eventId}
+                        title={t.event_name || t.eventName}
+                        label={t.sapa_status || t.sapaStatus || 'Tournament'}
+                        startDateStr={t.start_date || null}
+                        linkPath={t.customLink || (t.event_name ? `/calendar/${t.slug || t.id}` : `/draws/${t.eventId}`)}
+                        status={t.sapa_status || t.sapaStatus || 'Gold'}
+                        venue={t.venue || t.clubName}
+                        city={t.city}
+                        registeredPlayers={t.registered_players || t.registeredPlayers}
+                    />
+                ))}
             </div>
+
+            <button onClick={() => navigate('/calendar')} className="mt-4 w-full py-4 rounded-xl border border-[#CCFF00]/50 text-[#CCFF00] text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-[#CCFF00] hover:text-black transition-all flex items-center justify-center gap-2 group">
+                VIEW ALL TOURNAMENTS <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+            </button>
         </div>
     ) : isGridSection ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0 min-w-0">
@@ -808,8 +836,19 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 </div>
             </div>
 
-            {/* Background Gradient & Overlays */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0A0F1F] via-[#05070A] to-[#05070A]" />
+            {/* Background Image — event poster if uploaded, otherwise the default event background */}
+            <div className="absolute inset-0">
+                <FallbackImage
+                    src={data.image || getEventImage(data)}
+                    alt=""
+                    title={data.cardTitle || data.title}
+                    className="w-full h-full object-cover"
+                />
+            </div>
+
+            {/* Background Gradient & Overlays (kept on top of the image for text legibility) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#05070A] via-[#05070A]/75 to-[#05070A]/25" />
+            <div className="absolute inset-0 bg-gradient-to-br from-[#0A0F1F]/50 via-transparent to-transparent" />
             <div className="absolute inset-0 bg-white/[0.01]" />
 
             {(data.isLive || data.id === 'live-events' || data.id === 'featured-live') && (
@@ -927,6 +966,80 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 };
 
+// Standalone "Featured Tournament" hero card — sits above Recent Featured Results.
+// Background is always the featuredbg photo; the event's own uploaded poster (if any)
+// is shown as a distinct insert on the right, not as the background.
+const FeaturedTournamentHero = ({ event }) => {
+    const navigate = useNavigate();
+
+    if (!event) return null;
+
+    const statusColors = getStatusColors(event.sapa_status || event.tournament_tag);
+    const dateLabel = formatTournamentDate(event.start_date, event.end_date);
+    const location = [event.venue || event.clubName, event.city].filter(Boolean).join(', ');
+    const locationWords = location.split(' ');
+    const locationShort = locationWords.length > 3 ? `${locationWords.slice(0, 3).join(' ')}…` : location;
+    const posterImage = event.image || event.custom_image_url;
+    const linkPath = `/calendar/${event.slug || event.id}`;
+
+    return (
+        <section className="relative py-6 lg:py-8 border-t border-white/5 bg-[#05070A]">
+            <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
+                        Featured Tournament
+                    </h2>
+                    <button
+                        onClick={() => navigate(linkPath)}
+                        className="flex items-center gap-1 text-[10px] md:text-xs font-medium uppercase tracking-widest text-[#CCFF00] hover:text-white transition-colors shrink-0"
+                    >
+                        View event <ArrowRight className="w-3 h-3" />
+                    </button>
+                </div>
+
+                <div
+                    onClick={() => navigate(linkPath)}
+                    className="relative w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[28px] overflow-hidden cursor-pointer group border border-white/10"
+                >
+                    {/* Background is always the ambient default photo — the poster (if any) is its own insert graphic below */}
+                    <img src={featuredBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/20" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+
+                    <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
+                        {(event.sapa_status || event.tournament_tag) && (
+                            <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
+                                {event.sapa_status || event.tournament_tag}
+                            </span>
+                        )}
+                        <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white mb-3 uppercase tracking-tight leading-tight line-clamp-2">
+                            {event.event_name}
+                        </h3>
+                        {dateLabel && (
+                            <div className="flex items-center gap-2 text-padel-green font-bold text-xs sm:text-sm md:text-base mb-2">
+                                <Calendar className="w-4 h-4 shrink-0" /> {dateLabel}
+                            </div>
+                        )}
+                        {location && (
+                            <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs md:text-sm truncate">
+                                <MapPin className="w-4 h-4 shrink-0" />
+                                <span className="truncate sm:hidden">{locationShort}</span>
+                                <span className="hidden sm:inline truncate">{location}</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {posterImage && (
+                        <div className="absolute right-3 sm:right-6 md:right-10 top-1/2 -translate-y-1/2 w-24 sm:w-36 md:w-52 aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-white/10 group-hover:scale-105 transition-transform duration-500">
+                            <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
+                        </div>
+                    )}
+                </div>
+            </div>
+        </section>
+    );
+};
+
 const FeaturedSections = () => {
     const { getRecentTournaments } = useRankedin();
     const [liveTournaments, setLiveTournaments] = useState([]);
@@ -956,18 +1069,25 @@ const FeaturedSections = () => {
                     .limit(10);
 
                 if (featuredResults && featuredResults.length > 0 && !error) {
+                    // Pull cached RankedIn winners so we can surface the Men's Open champions on each result card
+                    const { data: resultsCache } = await supabase
+                        .from('rankedin_results_cache')
+                        .select('event_id, winners')
+                        .in('event_id', featuredResults.map(t => t.id));
+
                     // Map calendar events to the format expected by TournamentCard for results
                     const mappedResults = featuredResults.map(t => ({
                         eventId: t.id,
                         eventName: t.event_name,
                         city: t.city,
                         date: formatTournamentDate(t.start_date, t.end_date),
-                        image: getEventImage(t) || `https://rankedin-prod-cdn-adavg8d3dwfegkbd.z01.azurefd.net/images/upload/tournament/${t.rankedin_id || extractRankedinId(t.rankedin_url) || 'default'}.png`,
+                        start_date: t.start_date,
                         customLink: `/calendar/${t.slug || t.id}`,
                         sapaStatus: t.sapa_status,
                         registeredPlayers: t.registered_players,
                         venue: t.venue || t.clubName,
-                        organizerName: t.organizer_name
+                        organizerName: t.organizer_name,
+                        winnerName: findMensOpenWinner(resultsCache?.find(c => c.event_id === t.id)?.winners),
                     }));
                     setLiveTournaments(mappedResults);
                 } else {
@@ -996,11 +1116,38 @@ const FeaturedSections = () => {
                     .limit(10);
 
                 if (data && !error) {
-                    setFeaturedTournaments(data);
+                    // Manual events register players directly on the site (stored in event_registrations),
+                    // not through RankedIn, so their registered_players column is stale/0 — count live instead.
+                    let enrichedData = data;
+                    const manualEventIds = data.filter(e => e.is_manual).map(e => e.id);
+                    if (manualEventIds.length > 0) {
+                        const { data: regs } = await supabase
+                            .from('event_registrations')
+                            .select('event_id, full_name, partner_name')
+                            .in('event_id', manualEventIds)
+                            .neq('status', 'withdrawn');
+
+                        if (regs) {
+                            const counts = {};
+                            regs.forEach(reg => {
+                                if (!counts[reg.event_id]) counts[reg.event_id] = new Set();
+                                if (reg.full_name) counts[reg.event_id].add(reg.full_name.toLowerCase());
+                                if (reg.partner_name) counts[reg.event_id].add(reg.partner_name.toLowerCase());
+                            });
+
+                            enrichedData = data.map(event =>
+                                event.is_manual
+                                    ? { ...event, registered_players: counts[event.id] ? counts[event.id].size : 0 }
+                                    : event
+                            );
+                        }
+                    }
+
+                    setFeaturedTournaments(enrichedData);
 
                     // If we only have one featured event, we still update the template for the single block fallback
-                    if (data.length === 1) {
-                        const singleEvent = data[0];
+                    if (enrichedData.length === 1) {
+                        const singleEvent = enrichedData[0];
                         setFeaturedData(prevData => {
                             const newData = [...prevData];
                             const featuredIndex = newData.findIndex(item => item.id === 'upcoming-events');
@@ -1087,6 +1234,7 @@ const FeaturedSections = () => {
         return (
             <>
                 <div className="flex flex-col w-full">
+                    <FeaturedTournamentHero event={featuredTournaments[0]} />
                     {featuredData
                         .filter(section => section.id !== 'featured-live')
                         .map((section, index) => (
@@ -1113,6 +1261,7 @@ const FeaturedSections = () => {
 
     return (
         <div className="flex flex-col w-full">
+            <FeaturedTournamentHero event={featuredTournaments[0]} />
             {featuredData.map((section, index) => (
                 <FeaturedSectionBlock
                     key={section.id}
