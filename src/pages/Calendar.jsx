@@ -8,11 +8,112 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 
 import { GitBranch, Map } from 'lucide-react';
+import featuredBg from '../assets/featuredbg.jpeg';
 
 const extractRankedinId = (url) => {
     if (!url) return null;
     const match = url.match(/\/(?:tournament|clubleague|draws|results)\/(\d+)/) || url.match(/\/(\d+)(?:\/|$)/);
     return match ? match[1] : null;
+};
+
+// Same status → color mapping used across the home page's Featured Tournaments cards,
+// kept local here so this page's cards line up visually with the home page.
+const getStatusColors = (status) => {
+    const s = status?.toLowerCase() || '';
+    if (s.includes('major')) return { border: 'border-red-500/40', text: 'text-red-500' };
+    if (s.includes('super gold') || s === 's gold') return { border: 'border-amber-500/40', text: 'text-amber-500' };
+    if (s.includes('gold')) return { border: 'border-yellow-400/40', text: 'text-yellow-400' };
+    if (s.includes('silver')) return { border: 'border-gray-400/40', text: 'text-gray-400' };
+    if (s.includes('bronze')) return { border: 'border-orange-700/40', text: 'text-orange-700' };
+    if (s.includes('fip')) return { border: 'border-blue-500/40', text: 'text-blue-500' };
+    return { border: 'border-padel-green/40', text: 'text-padel-green' };
+};
+
+const formatTournamentDate = (startDate, endDate) => {
+    if (!startDate) return null;
+
+    const start = new Date(startDate);
+    const end = endDate ? new Date(endDate) : null;
+
+    const dayFormatter = new Intl.DateTimeFormat('en-GB', { day: 'numeric' });
+    const monthFormatter = new Intl.DateTimeFormat('en-GB', { month: 'short' });
+
+    const startDay = dayFormatter.format(start);
+    const startMonth = monthFormatter.format(start);
+
+    if (!end || startDate === endDate) {
+        return `${startDay} ${startMonth}`;
+    }
+
+    const endDay = dayFormatter.format(end);
+    const endMonth = monthFormatter.format(end);
+
+    if (startMonth === endMonth) {
+        return `${startDay}-${endDay} ${startMonth}`;
+    }
+
+    return `${startDay} ${startMonth} - ${endDay} ${endMonth}`;
+};
+
+// Same "Featured Tournament" hero card design used on the home page — ambient
+// featuredbg photo, with the event's own uploaded poster (if any) shown as an insert.
+const FeaturedTournamentSpotlight = ({ event }) => {
+    if (!event) return null;
+
+    const statusColors = getStatusColors(event.sapa_status);
+    const dateLabel = formatTournamentDate(event.start_date, event.end_date);
+    const location = [event.venue || event.clubName, event.city].filter(Boolean).join(', ');
+    const locationWords = location.split(' ');
+    const locationShort = locationWords.length > 3 ? `${locationWords.slice(0, 3).join(' ')}…` : location;
+    const posterImage = event.image || event.custom_image_url;
+    const linkPath = `/calendar/${event.slug || event.id}`;
+
+    return (
+        <div
+            onClick={() => { window.location.href = linkPath; }}
+            className="relative w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[28px] overflow-hidden cursor-pointer group border border-white/10"
+        >
+            <img src={featuredBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/20" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+
+            <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
+                {event.sapa_status && (
+                    <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
+                        {event.sapa_status}
+                    </span>
+                )}
+                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white mb-3 uppercase tracking-tight leading-tight line-clamp-2">
+                    {event.event_name}
+                </h3>
+                {dateLabel && (
+                    <div className="flex items-center gap-2 text-padel-green font-bold text-xs sm:text-sm md:text-base mb-2">
+                        <CalendarIcon className="w-4 h-4 shrink-0" /> {dateLabel}
+                    </div>
+                )}
+                {location && (
+                    <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs md:text-sm truncate">
+                        <MapPin className="w-4 h-4 shrink-0" />
+                        <span className="truncate sm:hidden">{locationShort}</span>
+                        <span className="hidden sm:inline truncate">{location}</span>
+                    </div>
+                )}
+                <Link
+                    to={linkPath}
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1.5 bg-[#CCFF00] hover:bg-[#b3ff00] text-black! font-black px-5 py-2 rounded-full transition-colors text-[10px] sm:text-xs uppercase tracking-wide w-fit mt-4"
+                >
+                    View Event <ChevronRight className="w-3.5 h-3.5" />
+                </Link>
+            </div>
+
+            {posterImage && (
+                <div className="absolute right-2 sm:right-4 md:right-6 top-1/2 -translate-y-1/2 w-32 sm:w-48 md:w-72 aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-white/10 group-hover:scale-105 transition-transform duration-500">
+                    <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
+                </div>
+            )}
+        </div>
+    );
 };
 
 const FeaturedEventCard = ({ event, index }) => {
@@ -68,9 +169,9 @@ const FeaturedEventCard = ({ event, index }) => {
             <div className={`absolute -inset-1 sm:-inset-1.5 rounded-[28px] blur-xl opacity-20 sm:opacity-30 group-hover:opacity-50 transition-opacity duration-700 ${glowBgColor} -z-10`} />
 
             <div className={`relative flex flex-row items-stretch min-h-[180px] sm:min-h-[220px] bg-[#0F1420] rounded-[24px] overflow-hidden border ${tierColor} shadow-2xl [transform:translateZ(0)]`}>
-                
+
                 {/* Shimmer Effect */}
-                <motion.div 
+                <motion.div
                     className="absolute top-0 bottom-0 left-0 w-[150%] z-30 pointer-events-none"
                     style={{
                         background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)',
@@ -251,15 +352,16 @@ const FeaturedCarousel = ({ events }) => {
 
 const CalendarEventItem = ({ event, index }) => {
     let tierColor = 'border-white/10';
-    let badgeColor = 'bg-white/10 text-gray-400';
     let bgGradient = 'bg-white/5';
 
-    if (event.sapa_status === 'Major') { tierColor = 'border-white/10 hover:border-red-500/50'; badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30'; bgGradient = 'bg-gradient-to-r from-red-500/20 to-transparent'; }
-    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
-    else if (event.sapa_status === 'Gold') { tierColor = 'border-white/10 hover:border-yellow-500/50'; badgeColor = 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'; bgGradient = 'bg-gradient-to-r from-yellow-500/20 to-transparent'; }
-    else if (event.sapa_status === 'Silver') { tierColor = 'border-white/10 hover:border-gray-400/50'; badgeColor = 'bg-gray-500/20 text-gray-300 border border-gray-400/30'; bgGradient = 'bg-gradient-to-r from-gray-400/20 to-transparent'; }
-    else if (event.sapa_status === 'Bronze') { tierColor = 'border-white/10 hover:border-orange-700/50'; badgeColor = 'bg-orange-700/20 text-orange-400 border border-orange-700/30'; bgGradient = 'bg-gradient-to-r from-orange-700/20 to-transparent'; }
-    else if (event.sapa_status === 'FIP event') { tierColor = 'border-white/10 hover:border-blue-500/50'; badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30'; bgGradient = 'bg-gradient-to-r from-blue-500/20 to-transparent'; }
+    if (event.sapa_status === 'Major') { tierColor = 'border-white/10 hover:border-red-500/50'; bgGradient = 'bg-gradient-to-r from-red-500/20 to-transparent'; }
+    else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') { tierColor = 'border-white/10 hover:border-amber-500/50'; bgGradient = 'bg-gradient-to-r from-amber-600/20 to-transparent'; }
+    else if (event.sapa_status === 'Gold') { tierColor = 'border-white/10 hover:border-yellow-500/50'; bgGradient = 'bg-gradient-to-r from-yellow-500/20 to-transparent'; }
+    else if (event.sapa_status === 'Silver') { tierColor = 'border-white/10 hover:border-gray-400/50'; bgGradient = 'bg-gradient-to-r from-gray-400/20 to-transparent'; }
+    else if (event.sapa_status === 'Bronze') { tierColor = 'border-white/10 hover:border-orange-700/50'; bgGradient = 'bg-gradient-to-r from-orange-700/20 to-transparent'; }
+    else if (event.sapa_status === 'FIP event') { tierColor = 'border-white/10 hover:border-blue-500/50'; bgGradient = 'bg-gradient-to-r from-blue-500/20 to-transparent'; }
+
+    const statusColors = getStatusColors(event.sapa_status);
 
     const detailsPath = event.slug ? `/calendar/${event.slug}` : (event.eventId ? `https://rankedin.com/tournament/${event.eventId}` : `/calendar/${event.id}`);
 
@@ -271,9 +373,9 @@ const CalendarEventItem = ({ event, index }) => {
     if (dateStr) {
         const d = new Date(dateStr);
         if (!isNaN(d.getTime())) {
-            dayNum = d.getDate();
-            monthStr = d.toLocaleString('en-US', { month: 'short' });
-            weekdayStr = d.toLocaleString('en-US', { weekday: 'short' });
+            dayNum = String(d.getDate()).padStart(2, '0');
+            monthStr = d.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+            weekdayStr = d.toLocaleString('en-US', { weekday: 'short' }).toUpperCase();
         }
     }
 
@@ -287,17 +389,17 @@ const CalendarEventItem = ({ event, index }) => {
             <Link
                 to={detailsPath}
                 target={event.slug ? "_self" : (event.eventId ? "_blank" : "_self")}
-                className={`group block bg-[#0F1420] hover:bg-[#151A27] border ${tierColor} rounded-2xl p-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
+                className={`group block bg-[#0F1420] hover:bg-[#151A27] border ${tierColor} rounded-2xl py-3 px-4 transition-all duration-300 shadow-xl overflow-hidden relative cursor-pointer`}
             >
                 <div className={`absolute inset-0 ${bgGradient} opacity-10 group-hover:opacity-30 transition-opacity`}></div>
 
                 <div className="flex flex-row items-center gap-3 sm:gap-5 relative z-10 w-full min-w-0">
 
                     {/* Date Block (Far Left) */}
-                    <div className="flex flex-col items-center justify-center w-12 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 py-1">
-                        <span className="text-white text-lg sm:text-2xl font-black leading-none">{dayNum}</span>
-                        <span className="text-gray-400 text-[10px] sm:text-xs font-bold uppercase mt-0.5">{monthStr}</span>
-                        <span className="text-[#CCFF00] text-[9px] sm:text-[10px] font-bold uppercase mt-1 tracking-wider">{weekdayStr}</span>
+                    <div className="flex flex-col items-center justify-center w-12 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4">
+                        <span className="text-white text-lg sm:text-2xl font-bold leading-none mb-0.5">{dayNum}</span>
+                        <span className="text-padel-green text-[9px] sm:text-[10px] font-black uppercase tracking-widest mb-0.5">{monthStr}</span>
+                        <span className="text-gray-400 text-[8px] sm:text-[9px] font-bold uppercase tracking-widest">{weekdayStr}</span>
                     </div>
 
                     {/* Image Block */}
@@ -319,18 +421,18 @@ const CalendarEventItem = ({ event, index }) => {
                     <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 sm:gap-1.5 py-1">
                         {/* Status Row */}
                         <div className="flex items-center gap-2 mb-0.5">
-                            <span className={`px-2 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-widest ${badgeColor}`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
                                 {event.sapa_status}
                             </span>
                             {event.is_league && (
-                                <span className="bg-blue-500/20 text-blue-400 border border-blue-500/30 px-2 py-0.5 rounded-md text-[8px] sm:text-[9px] font-black uppercase tracking-widest">
+                                <span className="px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-blue-500/40 text-blue-500 bg-transparent">
                                     League
                                 </span>
                             )}
                         </div>
 
                         {/* Date */}
-                        <div className="flex items-center gap-1 text-[#CCFF00] font-bold text-[9px] sm:text-[10px] mt-0.5">
+                        <div className="flex items-center gap-1 text-padel-green font-bold text-[9px] sm:text-[10px] mt-0.5">
                             <CalendarIcon className="w-3 h-3" />
                             <span>
                                 {event.event_dates ||
@@ -487,7 +589,7 @@ const Calendar = () => {
                 .order('id', { ascending: true });
 
             if (error) throw error;
-            
+
             let eventsData = data || [];
 
             // Calculate dynamic registration counts for manual events
@@ -498,7 +600,7 @@ const Calendar = () => {
                     .select('event_id, full_name, partner_name')
                     .in('event_id', manualEventIds)
                     .neq('status', 'withdrawn');
-                
+
                 if (regs) {
                     const counts = {};
                     regs.forEach(reg => {
@@ -506,7 +608,7 @@ const Calendar = () => {
                         if (reg.full_name) counts[reg.event_id].add(reg.full_name.toLowerCase());
                         if (reg.partner_name) counts[reg.event_id].add(reg.partner_name.toLowerCase());
                     });
-                    
+
                     eventsData = eventsData.map(event => {
                         if (event.is_manual) {
                             return {
@@ -751,15 +853,15 @@ const Calendar = () => {
 
             <main className="relative z-10 pb-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
                 {/* Unified Header */}
-                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
+                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-8">
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-4 max-w-fit">
                         <CalendarIcon className="w-3 h-3" />
                         <span>Events Schedule</span>
                     </div>
 
-                    <div className="overflow-hidden mb-6">
+                    <div className="overflow-hidden mb-1">
                         <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
-                            TOUR <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">CALENDAR</span>
+                            CALENDAR
                         </h1>
                     </div>
 
@@ -769,7 +871,7 @@ const Calendar = () => {
                 </section>
 
                 {/* Search & Command Deck */}
-                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-6 md:mb-12">
+                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-8 relative z-20 mb-6 md:mb-8">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -941,7 +1043,7 @@ const Calendar = () => {
                 </AnimatePresence>
 
                 {/* Primary Tab Navigation */}
-                <div className="flex justify-center mb-10 md:mb-12 relative z-50">
+                <div className="flex justify-center mb-8 md:mb-10 relative z-50">
                     <div className="flex overflow-x-auto hide-scrollbar space-x-2 sm:space-x-3 px-4 mx-auto max-w-full flex-nowrap shrink-0 snap-x snap-mandatory">
                         {[
                             { id: 'all', label: 'All Events', icon: CalendarIcon },
@@ -976,14 +1078,14 @@ const Calendar = () => {
 
                 {/* Event Spotlight */}
                 {featuredEvents.length > 0 && (
-                    <div className="mb-12 px-4 sm:px-0 max-w-4xl mx-auto">
-                        <div className="flex items-center gap-2 mb-6">
-                            <Star className="w-5 h-5 md:w-6 md:h-6 text-[#CCFF00] fill-[#CCFF00]" />
-                            <h2 className="text-lg md:text-xl font-bold text-[#CCFF00] uppercase tracking-widest">
+                    <div className="mb-8 px-4 sm:px-0 max-w-4xl mx-auto">
+                        <div className="flex items-center gap-1.5 mb-4">
+                            <Star className="w-3.5 h-3.5 text-padel-green fill-padel-green shrink-0" />
+                            <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">
                                 Event Spotlight
                             </h2>
                         </div>
-                        <FeaturedEventCard event={featuredEvents[0]} index={0} />
+                        <FeaturedTournamentSpotlight event={featuredEvents[0]} />
                     </div>
                 )}
 
@@ -1012,10 +1114,10 @@ const Calendar = () => {
                     <>
                         {viewMode === 'list' ? (
                             /* Premium List View */
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-3 mb-2 px-1">
-                                    <h2 className="text-xl sm:text-2xl font-display font-black text-white tracking-tight">Upcoming Events</h2>
-                                    <div className="bg-[#CCFF00]/10 border border-[#CCFF00]/20 text-[#CCFF00] px-2.5 py-0.5 rounded-lg text-sm font-black">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 mb-3 px-1">
+                                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">Upcoming Events</h2>
+                                    <div className="bg-padel-green/10 border border-padel-green/20 text-padel-green px-2 py-0.5 rounded-full text-[10px] font-black">
                                         {filteredEvents.length}
                                     </div>
                                 </div>
@@ -1027,7 +1129,7 @@ const Calendar = () => {
 
                                 {/* Pagination Controls */}
                                 {totalPages > 1 && (
-                                    <div className="mt-12 flex justify-center items-center gap-4">
+                                    <div className="mt-8 flex justify-center items-center gap-4">
                                         <button
                                             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                             disabled={currentPage === 1}
@@ -1091,8 +1193,8 @@ const Calendar = () => {
                     </>
                 )}
 
-                <div className="mt-16 bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-3xl text-sm text-gray-400 leading-relaxed text-center max-w-4xl mx-auto shadow-xl">
-                    <p className="mb-4"><strong className="text-white uppercase tracking-widest text-xs">Note</strong> <br />Further information on all events will be released in due course. Please note event information is subject to change.</p>
+                <div className="mt-10 bg-white/5 backdrop-blur-sm border border-white/10 p-6 rounded-3xl text-sm text-gray-400 leading-relaxed text-center max-w-4xl mx-auto shadow-xl">
+                    <p className="mb-3"><strong className="text-white uppercase tracking-widest text-xs">Note</strong> <br />Further information on all events will be released in due course. Please note event information is subject to change.</p>
                     <p>All players are required to have a valid SAPA Player's license for all Gold and Major events. Registration for events is strictly through 4M Padel.</p>
                 </div>
             </main>
