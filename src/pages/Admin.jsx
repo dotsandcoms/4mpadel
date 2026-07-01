@@ -99,8 +99,12 @@ const Admin = () => {
     };
 
     useEffect(() => {
-        if (!permissionsLoading && !hasPermission(activeTab)) {
-            setActiveTab('dashboard');
+        if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
+            const allTabs = ['dashboard', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const firstAllowed = allTabs.find(tab => hasPermission(tab));
+            if (firstAllowed) {
+                setActiveTab(firstAllowed);
+            }
         }
     }, [activeTab, permissions, permissionsLoading]);
 

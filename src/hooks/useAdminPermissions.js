@@ -76,6 +76,9 @@ export const useAdminPermissions = (userEmail) => {
         if (!permissions) return false;
         if (permissions.role === 'super_admin') return true;
         
+        if (tabId === 'event-mgmt' && permissions.module_permissions?.['event-mgmt']?.allowedEvents?.length > 0) return true;
+        if (tabId === 'gallery' && permissions.module_permissions?.gallery?.allowedAlbums?.length > 0) return true;
+
         return permissions.allowed_tabs && permissions.allowed_tabs.includes(tabId);
     };
 
