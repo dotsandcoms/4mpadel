@@ -418,7 +418,7 @@ const RecentResultCard = ({ title, label, startDateStr, linkPath, status, winner
         <div className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl">
             {/* Rotating shimmer along the border */}
             <div
-                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:4s] pointer-events-none"
+                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
                 style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
             />
             <Link to={linkPath} className="relative z-10 flex items-center gap-4 p-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">
@@ -482,7 +482,7 @@ const UpcomingEventListItem = ({ title, label, startDateStr, linkPath, status, v
         <div className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl">
             {/* Rotating shimmer along the border */}
             <div
-                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:4s] pointer-events-none"
+                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
                 style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
             />
             <Link to={linkPath} className="relative z-10 flex items-center py-3 px-4 bg-[#0A0F1C] rounded-[15px] transition-colors duration-300">

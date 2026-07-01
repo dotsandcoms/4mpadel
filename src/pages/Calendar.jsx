@@ -69,49 +69,57 @@ const FeaturedTournamentSpotlight = ({ event }) => {
     const linkPath = `/calendar/${event.slug || event.id}`;
 
     return (
-        <div
-            onClick={() => { window.location.href = linkPath; }}
-            className="relative w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[28px] overflow-hidden cursor-pointer group border border-white/10"
-        >
-            <img src={featuredBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/20" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+        <div className="relative rounded-[28px] p-[1px] overflow-hidden bg-white/5 shadow-2xl group">
+            {/* Rotating shimmer along the border */}
+            <div
+                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
+                style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
+            />
+            <div
+                onClick={() => { window.location.href = linkPath; }}
+                className="relative z-10 w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[27px] overflow-hidden cursor-pointer border border-white/10"
+            >
+                <img src={featuredBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/95 via-black/70 to-black/20" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
 
-            <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
-                {event.sapa_status && (
-                    <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
-                        {event.sapa_status}
-                    </span>
-                )}
-                <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white mb-3 uppercase tracking-tight leading-tight line-clamp-2">
-                    {event.event_name}
-                </h3>
-                {dateLabel && (
-                    <div className="flex items-center gap-2 text-padel-green font-bold text-xs sm:text-sm md:text-base mb-2">
-                        <CalendarIcon className="w-4 h-4 shrink-0" /> {dateLabel}
-                    </div>
-                )}
-                {location && (
-                    <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs md:text-sm truncate">
-                        <MapPin className="w-4 h-4 shrink-0" />
-                        <span className="truncate sm:hidden">{locationShort}</span>
-                        <span className="hidden sm:inline truncate">{location}</span>
-                    </div>
-                )}
-                <Link
-                    to={linkPath}
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 bg-[#CCFF00] hover:bg-[#b3ff00] text-black! font-black px-5 py-2 rounded-full transition-colors text-[10px] sm:text-xs uppercase tracking-wide w-fit mt-4"
-                >
-                    View Event <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-            </div>
-
-            {posterImage && (
-                <div className="absolute right-2 sm:right-4 md:right-6 top-1/2 -translate-y-1/2 w-32 sm:w-48 md:w-72 aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-white/10 group-hover:scale-105 transition-transform duration-500">
-                    <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
+                <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
+                    {event.sapa_status && (
+                        <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
+                            {event.sapa_status}
+                        </span>
+                    )}
+                    <h3 className="text-base sm:text-lg md:text-2xl font-bold text-white mb-3 uppercase tracking-tight leading-tight line-clamp-2">
+                        {event.event_name}
+                    </h3>
+                    {dateLabel && (
+                        <div className="flex items-center gap-2 text-padel-green font-bold text-xs sm:text-sm md:text-base mb-2">
+                            <CalendarIcon className="w-4 h-4 shrink-0" /> {dateLabel}
+                        </div>
+                    )}
+                    {location && (
+                        <div className="flex items-center gap-2 text-white/60 text-[11px] sm:text-xs md:text-sm truncate">
+                            <MapPin className="w-4 h-4 shrink-0 text-padel-green" />
+                            <span className="truncate sm:hidden">{locationShort}</span>
+                            <span className="hidden sm:inline truncate">{location}</span>
+                        </div>
+                    )}
+                    <Link
+                        to={linkPath}
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 bg-[#CCFF00] hover:bg-[#b3ff00] text-black! font-black px-5 py-2 rounded-full transition-colors text-[10px] sm:text-xs uppercase tracking-wide w-fit mt-4"
+                    >
+                        View Event <ChevronRight className="w-3.5 h-3.5" />
+                    </Link>
                 </div>
-            )}
+
+                {posterImage && (
+                    <div className="absolute right-0 sm:right-3 md:right-0 top-2 bottom-2 sm:top-3 sm:bottom-3 md:top-0 md:bottom-0 aspect-[4/5] rounded-xl md:rounded-none overflow-hidden shadow-2xl md:shadow-none border border-white/10 md:border-0 group-hover:scale-105 md:group-hover:scale-100 transition-transform duration-500">
+                        <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
+                        <div className="hidden md:block absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-black/80 to-transparent pointer-events-none" />
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
