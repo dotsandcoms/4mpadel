@@ -171,11 +171,11 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                 </div>
               )}
             </div>
-            <div className="flex-1 flex items-start justify-between min-w-0">
-              <div>
+            <div className="flex-1 flex flex-col sm:flex-row items-start justify-between min-w-0 gap-3 sm:gap-0">
+              <div className="w-full sm:w-auto">
                 <h2 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-2">
-                  {playerRecord.name}
-                  <span className="w-2.5 h-2.5 rounded-full bg-padel-green"></span>
+                  <span className="truncate">{playerRecord.name}</span>
+                  <span className="w-2.5 h-2.5 shrink-0 rounded-full bg-padel-green"></span>
                 </h2>
                 <div className="flex flex-col gap-1 mt-1 text-xs text-gray-400 font-medium">
                   {playerRecord.nationality && (
@@ -195,21 +195,6 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                   )}
                 </div>
               </div>
-
-              {/* Tournament Wins Badges */}
-              {Object.keys(uniqueWins).length > 0 && (
-                <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
-                  <span className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-0.5">Tournament Wins</span>
-                  {Object.entries(uniqueWins).map(([tier, count]) => (
-                    <div key={tier} className="flex items-center gap-1.5 bg-white/5 border border-white/5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
-                       <Trophy className={`w-3 h-3 ${getTierColor(tier)}`} />
-                       <span className="text-white flex items-center gap-1">
-                         {tier} <span className={getTierColor(tier)}>{count}</span>
-                       </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
@@ -239,6 +224,23 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 nice-scrollbar">
             {activeTab === 'overview' && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
+                {/* Tournament Wins Badges (Centered above stats) */}
+                {Object.keys(uniqueWins).length > 0 && (
+                  <div className="flex flex-col items-center justify-center gap-2 pt-2">
+                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest">Tournament Wins</span>
+                    <div className="flex flex-wrap justify-center items-center gap-2">
+                      {Object.entries(uniqueWins).map(([tier, count]) => (
+                        <div key={tier} className="flex items-center gap-1.5 bg-[#151b29] border border-white/5 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap">
+                           <Trophy className={`w-3.5 h-3.5 ${getTierColor(tier)}`} />
+                           <span className="text-white flex items-center gap-1.5">
+                             {tier} <span className={getTierColor(tier)}>{count}</span>
+                           </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-3 gap-3">
                   <div className="bg-[#151b29] rounded-2xl p-4 flex flex-col items-center justify-center text-center border border-white/5">
                     <span className="text-[10px] font-black uppercase text-gray-500 tracking-widest mb-1">National</span>
