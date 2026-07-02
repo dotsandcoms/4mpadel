@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Share2 } from 'lucide-react';
+import { ArrowLeft, Share2, Trophy } from 'lucide-react';
 
 const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel }) => {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'tournaments'
@@ -57,6 +57,53 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   const displayRank = rankingData?.rank || player.rawRank;
   const displayPoints = rankingData?.points || player.points;
   const details = rankingData?.details || [];
+
+  // Compute Trophy Wins across all rankings to get a holistic view of the player's wins
+  const uniqueWins = useMemo(() => {
+    if (!playerRecord?.rankings || !Array.isArray(playerRecord.rankings)) return {};
+    const winsMap = new Map();
+    
+    playerRecord.rankings.forEach(ranking => {
+      if (ranking.details && Array.isArray(ranking.details)) {
+        ranking.details.forEach(tourney => {
+          if (String(tourney.place) === '1') {
+            const key = `${tourney.date}-${tourney.name}`;
+            if (!winsMap.has(key)) {
+              winsMap.set(key, tourney.name);
+            }
+          }
+        });
+      }
+    });
+
+    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0 };
+    winsMap.forEach((name) => {
+      const upperName = name.toUpperCase();
+      if (upperName.includes('MAJOR')) counts.Major++;
+      else if (upperName.includes('SUPER GOLD')) counts['Super Gold']++;
+      else if (upperName.includes('GOLD')) counts.Gold++;
+      else if (upperName.includes('SILVER')) counts.Silver++;
+      else if (upperName.includes('BRONZE')) counts.Bronze++;
+    });
+
+    // Remove empty counts
+    Object.keys(counts).forEach(k => {
+      if (counts[k] === 0) delete counts[k];
+    });
+
+    return counts;
+  }, [playerRecord]);
+
+  const getTierColor = (tier) => {
+    switch (tier) {
+      case 'Major': return 'text-purple-400';
+      case 'Super Gold': return 'text-yellow-400';
+      case 'Gold': return 'text-yellow-500';
+      case 'Silver': return 'text-gray-300';
+      case 'Bronze': return 'text-amber-600';
+      default: return 'text-padel-green';
+    }
+  };
 
   // Sort details by points descending and slice for Best 8 if needed
   const sortedDetails = [...details].sort((a, b) => Number(b.points) - Number(a.points));
@@ -124,25 +171,45 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
                 </div>
               )}
             </div>
-            <div>
-              <h2 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-2">
-                {playerRecord.name}
-                <span className="w-2.5 h-2.5 rounded-full bg-padel-green"></span>
-              </h2>
-              <div className="flex flex-col gap-1 mt-1 text-xs text-gray-400 font-medium">
-                {playerRecord.nationality && (
-                  <div className="flex items-center gap-1.5">
-                    <img src={`https://flagcdn.com/w20/${playerRecord.nationality.toLowerCase() === 'south africa' ? 'za' : 'za'}.png`} alt="flag" className="w-4 h-auto" onError={(e) => e.target.style.display='none'}/>
-                    <span>{playerRecord.nationality}</span>
-                  </div>
-                )}
-                {playerRecord.home_club && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-4 flex justify-center text-[10px]">📍</span>
-                    <span>{playerRecord.home_club}</span>
-                  </div>
-                )}
+            <div className="flex-1 flex items-start justify-between min-w-0">
+              <div>
+                <h2 className="text-xl font-bold text-white uppercase tracking-tight flex items-center gap-2">
+                  {playerRecord.name}
+                  <span className="w-2.5 h-2.5 rounded-full bg-padel-green"></span>
+                </h2>
+                <div className="flex flex-col gap-1 mt-1 text-xs text-gray-400 font-medium">
+                  {playerRecord.nationality && (
+                    <div className="flex items-center gap-1.5">
+                      <img src={`https://flagcdn.com/w20/${playerRecord.nationality.toLowerCase() === 'south africa' ? 'za' : 'za'}.png`} alt="flag" className="w-4 h-auto" onError={(e) => e.target.style.display='none'}/>
+                      <span>{playerRecord.nationality}</span>
+                    </div>
+                  )}
+                  {playerRecord.home_club && (
+                    <div className="flex items-center gap-1.5 truncate pr-2">
+                      <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <span className="truncate">{playerRecord.home_club}</span>
+                    </div>
+                  )}
+                </div>
               </div>
+
+              {/* Tournament Wins Badges */}
+              {Object.keys(uniqueWins).length > 0 && (
+                <div className="flex flex-col items-end gap-1.5 shrink-0 pl-2">
+                  <span className="text-[9px] font-black uppercase text-gray-500 tracking-widest mb-0.5">Tournament Wins</span>
+                  {Object.entries(uniqueWins).map(([tier, count]) => (
+                    <div key={tier} className="flex items-center gap-1.5 bg-white/5 border border-white/5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider">
+                       <Trophy className={`w-3 h-3 ${getTierColor(tier)}`} />
+                       <span className="text-white flex items-center gap-1">
+                         {tier} <span className={getTierColor(tier)}>{count}</span>
+                       </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
