@@ -1,0 +1,39 @@
+name: Sync Player Matches
+
+on:
+  # Every 5 minutes, Wed/Thu/Fri/Sat/Sun, 04:00-19:00 UTC (~06:00-21:00 SAST).
+  # Restricted to tournament days/hours rather than 24/7 to avoid hammering the
+  # Rankedin API for no benefit while nothing is happening.
+  schedule:
+    - cron: '*/5 4-19 * * 0,3,4,5,6'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Prevent overlapping runs if a run ever takes longer than the 5-minute interval
+# (e.g. player count grows and the per-player rate-limit sleep pushes runtime up).
+concurrency:
+  group: sync-player-matches
+  cancel-in-progress: false
+
+jobs:
+  sync-player-matches:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Player Matches Sync
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/syncPlayerMatches.js

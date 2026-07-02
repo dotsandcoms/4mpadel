@@ -353,8 +353,20 @@ const Hero = () => {
         window.addEventListener('4m:registrations-changed', handleRegistrationsChanged);
         window.addEventListener('visibilitychange', handleVisibility);
 
+        // Periodic refresh so a long-lived open tab doesn't get stuck showing a stale
+        // "next match" — previously this only refetched on login, a registration change,
+        // or the tab regaining focus, so it could sit stale for the full 30-minute cache TTL
+        // (or longer if the tab was never backgrounded).
+        const REFRESH_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+        const refreshIntervalId = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                fetchPlayerEventsAndMatches();
+            }
+        }, REFRESH_INTERVAL_MS);
+
         return () => {
             controller.abort();
+            clearInterval(refreshIntervalId);
             window.removeEventListener('4m:registrations-changed', handleRegistrationsChanged);
             window.removeEventListener('visibilitychange', handleVisibility);
         };

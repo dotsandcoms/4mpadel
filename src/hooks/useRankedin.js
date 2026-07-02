@@ -593,8 +593,10 @@ export const useRankedin = () => {
         setLoading(true);
         setError(null);
         try {
-            // Step 0: Check custom player_matches cache (ONLY for history)
-            if (takeHistory) {
+            // Step 0: Check custom player_matches cache. Covers both upcoming and history —
+            // this table is also populated out-of-band by scripts/syncPlayerMatches.js (cron),
+            // so a fresh cron write is picked up here without waiting on a live Rankedin call.
+            {
                 try {
                     const { data: cacheRow } = await supabase
                         .from('player_matches')
@@ -606,8 +608,9 @@ export const useRankedin = () => {
                         const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
                         // 5 minutes = 300000 ms
                         if (ageMs < 300000) {
-                            if (cacheRow.past_matches !== null) {
-                                return cacheRow.past_matches;
+                            const cachedPayload = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
+                            if (cachedPayload !== null && cachedPayload !== undefined) {
+                                return cachedPayload;
                             }
                         }
                     }
@@ -751,13 +754,15 @@ export const useRankedin = () => {
                 payload = historyMatches;
             }
 
-            // Step 4: Save result to player_matches (ONLY for history)
-            if (takeHistory) {
+            // Step 4: Save result to player_matches (both upcoming and history now share
+            // this cache, kept warm by scripts/syncPlayerMatches.js on its schedule).
+            {
+                const columnToUpdate = takeHistory ? 'past_matches' : 'upcoming_matches';
                 supabase
                     .from('player_matches')
                     .upsert({
                         rankedin_id: rankedinId,
-                        past_matches: payload,
+                        [columnToUpdate]: payload,
                         updated_at: new Date().toISOString()
                     }, { onConflict: 'rankedin_id' })
                     .then(({ error }) => {
