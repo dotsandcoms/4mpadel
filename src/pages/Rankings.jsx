@@ -976,7 +976,7 @@ const Rankings = () => {
           </div>
 
           <p className="relative z-10 text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-            <strong className="text-white font-medium">Official SAPA rankings. Compete. Climb. Be the best.</strong>
+            <strong className="text-white font-medium">Official rankings list. Compete. Climb. Be the best.</strong>
           </p>
         </section>
 
