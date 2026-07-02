@@ -605,7 +605,13 @@ export const useRankedin = () => {
                         .maybeSingle();
 
                     if (cacheRow) {
-                        const ageMs = Date.now() - new Date(cacheRow.updated_at).getTime();
+                        // Each payload tracks its own freshness so a write to one (e.g. the
+                        // cron refreshing upcoming matches) doesn't extend/reset the other's
+                        // TTL. Falls back to the shared `updated_at` for rows written before
+                        // the per-column timestamps existed (or if the migration hasn't run).
+                        const specificTimestamp = takeHistory ? cacheRow.past_matches_updated_at : cacheRow.upcoming_matches_updated_at;
+                        const effectiveTimestamp = specificTimestamp || cacheRow.updated_at;
+                        const ageMs = effectiveTimestamp ? Date.now() - new Date(effectiveTimestamp).getTime() : Infinity;
                         // 5 minutes = 300000 ms
                         if (ageMs < 300000) {
                             const cachedPayload = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
@@ -758,12 +764,15 @@ export const useRankedin = () => {
             // this cache, kept warm by scripts/syncPlayerMatches.js on its schedule).
             {
                 const columnToUpdate = takeHistory ? 'past_matches' : 'upcoming_matches';
+                const timestampColumnToUpdate = takeHistory ? 'past_matches_updated_at' : 'upcoming_matches_updated_at';
+                const now = new Date().toISOString();
                 supabase
                     .from('player_matches')
                     .upsert({
                         rankedin_id: rankedinId,
                         [columnToUpdate]: payload,
-                        updated_at: new Date().toISOString()
+                        [timestampColumnToUpdate]: now,
+                        updated_at: now // kept for admin/debug visibility of "last touched"
                     }, { onConflict: 'rankedin_id' })
                     .then(({ error }) => {
                         if (error) console.error("player_matches write error:", error);

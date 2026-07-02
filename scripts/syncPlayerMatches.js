@@ -78,13 +78,16 @@ async function run() {
                 const upcoming = upcomingRaw?.Payload || [];
                 const history = historyRaw?.Payload || [];
 
+                const nowIso = new Date().toISOString();
                 const { error: upsertError } = await supabase
                     .from('player_matches')
                     .upsert({
                         rankedin_id: player.rankedin_id,
                         upcoming_matches: upcoming,
                         past_matches: history,
-                        updated_at: new Date().toISOString()
+                        upcoming_matches_updated_at: nowIso,
+                        past_matches_updated_at: nowIso,
+                        updated_at: nowIso
                     }, { onConflict: 'rankedin_id' });
 
                 if (upsertError) {

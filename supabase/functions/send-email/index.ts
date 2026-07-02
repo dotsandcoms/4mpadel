@@ -841,6 +841,59 @@ async function generateEmailBody(
   return { subject, html };
 }
 
+// ---------------------------------------------------------------------------
+// Caller authorization
+// ---------------------------------------------------------------------------
+// This function is invoked from two different contexts:
+//   1. Server-to-server (paystack-webhook, confirm-manual-payment, paystack-refund,
+//      and local recovery scripts) — these already pass the service-role key as
+//      the bearer token, so they're recognized and pass straight through.
+//   2. The browser, via src/utils/emails.js — every logged-in player's own
+//      session, for transactional templates (welcome, event_entry, partner_invite,
+//      payment_confirmation, etc). These just need to be a real logged-in user.
+// A small set of templates are only ever triggered from the admin panel
+// (broadcast content is fully caller-controlled; the rest are org/event
+// sanction notices) and additionally require the caller to be an admin.
+const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'admin@4mpadel.co.za', 'markstillerman@gmail.com'];
+
+const ADMIN_ONLY_TEMPLATES = new Set([
+  'broadcast',
+  'admin_org_applied',
+  'org_approved',
+  'org_rejected',
+  'event_sanctioned',
+  'event_rejected',
+  'event_pending_sanction',
+]);
+
+function isTrustedServiceCaller(authHeader: string | null): boolean {
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  return !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+}
+
+async function getAuthenticatedUser(authHeader: string) {
+  const supabaseUserClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: authHeader } } },
+  );
+  const { data: { user }, error } = await supabaseUserClient.auth.getUser();
+  if (error || !user) return null;
+  return user;
+}
+
+async function isAdminCaller(supabaseAdmin: ReturnType<typeof createClient>, email: string | undefined): Promise<boolean> {
+  const emailLower = email?.toLowerCase();
+  if (!emailLower) return false;
+  if (SUPER_ADMINS.some((e) => e.toLowerCase() === emailLower)) return true;
+  const { data } = await supabaseAdmin
+    .from('admin_sidebar_permissions')
+    .select('email')
+    .ilike('email', emailLower)
+    .maybeSingle();
+  return !!data;
+}
+
 serve(async (req: Request) => {
   // Handle CORS Preflight
   if (req.method === 'OPTIONS') {
@@ -867,6 +920,27 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+
+    // --- Authorization -------------------------------------------------
+    // Trusted server-to-server callers (service-role key) skip straight
+    // through. Everyone else must be a real logged-in user, and admin-only
+    // templates additionally require an admin. This blocks a caller who
+    // only has the public anon key (i.e. no account at all) from sending
+    // email through this function.
+    const authHeader = req.headers.get('Authorization');
+    if (!isTrustedServiceCaller(authHeader)) {
+      const user = authHeader ? await getAuthenticatedUser(authHeader) : null;
+      if (!user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+      }
+      if (ADMIN_ONLY_TEMPLATES.has(template)) {
+        const admin = await isAdminCaller(supabaseAdmin, user.email);
+        if (!admin) {
+          return new Response(JSON.stringify({ error: 'Forbidden: admin-only template' }), { status: 403, headers: corsHeaders });
+        }
+      }
+    }
+    // ---------------------------------------------------------------------
 
     // Make the primary recipient available to template logic (e.g. resolving the
     // registrant's partner from the database) without changing any caller.
