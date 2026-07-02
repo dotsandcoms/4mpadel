@@ -694,12 +694,12 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         </div>
     );
 
-    const maxResultsPage = Math.max(0, Math.ceil((items?.length || 0) / 2) - 1);
+    const maxResultsPage = Math.max(0, (items?.length || 0) - 1);
 
     const imageContent = data.id === 'recent-results' ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0">
             <div className="flex flex-col gap-4 w-full bg-[#060913] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
-                {items?.slice(recentResultsPage * 2, recentResultsPage * 2 + 2).map((t, i) => (
+                {items?.slice(recentResultsPage, recentResultsPage + 1).map((t, i) => (
                     <RecentResultCard
                         key={t.id || t.eventId}
                         title={t.event_name || t.eventName}
@@ -713,7 +713,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     />
                 ))}
 
-                {(items?.length > 2) && (
+                {(items?.length > 1) && (
                     <div className="flex gap-4 justify-center mt-2">
                         <button
                             onClick={() => setRecentResultsPage(p => Math.max(0, p - 1))}
