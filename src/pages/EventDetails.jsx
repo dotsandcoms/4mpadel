@@ -3389,12 +3389,13 @@ const EventDetails = () => {
                         {(activeRegistrationBlock || readyToCompeteBlock) && (
                             <div className="relative z-[60]">
                                 {(() => {
-                                    let accordionGlowClass = "shadow-[0_0_15px_rgba(34,197,94,0.15)] border-green-100";
-                                    if (activeRegistrationBlock) {
-                                        if (manualPartnerAddedBlock && !partnerAddedPaymentConfirmed) {
-                                            accordionGlowClass = "shadow-[0_0_15px_rgba(245,158,11,0.2)] border-amber-200";
+                                    let accordionGlowClass = "";
+                                    if (activeRegistrationBlock || readyToCompeteBlock) {
+                                        const hasPendingAction = (manualPartnerAddedBlock && !partnerAddedPaymentConfirmed) || manualRegStatus?.hasPendingPayment || needsPayment;
+                                        if (hasPendingAction) {
+                                            accordionGlowClass = "!shadow-[0_0_15px_rgba(245,158,11,0.4)] !border-amber-400";
                                         } else {
-                                            accordionGlowClass = "shadow-[0_0_15px_rgba(34,197,94,0.2)] border-green-200";
+                                            accordionGlowClass = "!shadow-[0_0_15px_rgba(34,197,94,0.3)] !border-green-400";
                                         }
                                     }
 
