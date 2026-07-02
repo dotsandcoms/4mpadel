@@ -70,11 +70,6 @@ const FeaturedTournamentSpotlight = ({ event }) => {
 
     return (
         <div className="relative rounded-[28px] p-[1px] overflow-hidden bg-white/5 shadow-2xl group">
-            {/* Rotating shimmer along the border */}
-            <div
-                className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
-                style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
-            />
             <div
                 onClick={() => { window.location.href = linkPath; }}
                 className="relative z-10 w-full min-h-[170px] sm:min-h-[200px] md:min-h-[260px] rounded-[27px] overflow-hidden cursor-pointer border border-white/10"
