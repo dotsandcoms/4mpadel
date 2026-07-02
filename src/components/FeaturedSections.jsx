@@ -455,8 +455,6 @@ const RecentResultCard = ({ title, label, startDateStr, linkPath, status, winner
                         </div>
                     )}
                 </div>
-
-                <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-padel-green shrink-0 group-hover:translate-x-1 transition-transform" />
             </Link>
         </div>
     );
@@ -714,22 +712,22 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ))}
 
                 {(items?.length > 1) && (
-                    <div className="flex gap-4 justify-center md:static">
+                    <>
                         <button
                             onClick={() => setRecentResultsPage(p => Math.max(0, p - 1))}
                             disabled={recentResultsPage === 0}
-                            className={`md:absolute md:-left-4 lg:-left-5 md:top-1/2 md:-translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -left-2 sm:-left-4 lg:-left-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
                             onClick={() => setRecentResultsPage(p => Math.min(maxResultsPage, p + 1))}
                             disabled={recentResultsPage === maxResultsPage}
-                            className={`md:absolute md:-right-4 lg:-right-5 md:top-1/2 md:-translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                            className={`absolute -right-2 sm:-right-4 lg:-right-5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
-                    </div>
+                    </>
                 )}
             </div>
         </div>
