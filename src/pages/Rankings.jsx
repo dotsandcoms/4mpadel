@@ -772,14 +772,38 @@ const Rankings = () => {
   // Fetch local player profiles once rankings load
   useEffect(() => {
     const fetchLocalProfiles = async () => {
-      const { data } = await supabase
-        .from('players')
-        .select('*')
-        .eq('approved', true);
+      let allData = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
 
-      if (data) {
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('players')
+          .select('*')
+          .eq('approved', true)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+        
+        if (error) {
+          console.error('Error fetching profiles:', error);
+          break;
+        }
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          if (data.length < pageSize) {
+            hasMore = false;
+          } else {
+            page++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allData.length > 0) {
         const map = {};
-        data.forEach(p => {
+        allData.forEach(p => {
           if (p.name) {
             // Process sponsors
             let sponsorsList = [];
