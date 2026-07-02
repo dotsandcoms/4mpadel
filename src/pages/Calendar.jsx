@@ -607,16 +607,15 @@ const Calendar = () => {
                 if (regs) {
                     const counts = {};
                     regs.forEach(reg => {
-                        if (!counts[reg.event_id]) counts[reg.event_id] = new Set();
-                        if (reg.full_name) counts[reg.event_id].add(reg.full_name.toLowerCase());
-                        if (reg.partner_name) counts[reg.event_id].add(reg.partner_name.toLowerCase());
+                        if (!counts[reg.event_id]) counts[reg.event_id] = 0;
+                        counts[reg.event_id]++;
                     });
 
                     eventsData = eventsData.map(event => {
                         if (event.is_manual) {
                             return {
                                 ...event,
-                                registered_players: counts[event.id] ? counts[event.id].size : 0
+                                registered_players: counts[event.id] || 0
                             };
                         }
                         return event;

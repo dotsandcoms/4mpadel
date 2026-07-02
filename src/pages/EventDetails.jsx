@@ -1400,14 +1400,22 @@ const EventDetails = () => {
                         }
                     }
 
-                    if (useCache && cacheRow && cacheRow.winners && Array.isArray(cacheRow.winners)) {
-                        const hasPending = cacheRow.winners.some(w => {
+                    if (useCache && cacheRow) {
+                        const winnersArray = Array.isArray(cacheRow.winners) ? cacheRow.winners : [];
+                        const hasPending = winnersArray.some(w => {
                             const wStr = JSON.stringify(w).toLowerCase();
                             return wStr.includes('pending') || wStr.includes('null');
                         });
-                        if (hasPending) {
+                        const isEmpty = winnersArray.length === 0;
+                        
+                        const now = new Date();
+                        const diffHrs = Math.abs(now - new Date(cacheRow.last_synced_at)) / 36e5;
+
+                        // Invalidate if there is pending data, OR if winners are empty and the cache is older than 2 hours.
+                        // This prevents permanently caching an empty state right after a tournament finishes.
+                        if (hasPending || (isEmpty && diffHrs > 2)) {
                             useCache = false;
-                            console.log('Cache invalidated because winners contain Pending or null data');
+                            console.log('Cache invalidated because winners are empty/pending and cache is stale');
                         }
                     }
 

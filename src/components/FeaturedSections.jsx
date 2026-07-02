@@ -511,7 +511,7 @@ const UpcomingEventListItem = ({ title, label, startDateStr, linkPath, status, v
                         <div className="flex items-center gap-1.5 text-gray-400 mt-1">
                             <Users className={`w-3 h-3 shrink-0 ${statusColors.text}`} />
                             <span className="text-[9px] sm:text-[10px] font-medium truncate">
-                                {registeredPlayers} Registered
+                                {registeredPlayers} Entries
                             </span>
                         </div>
                     )}
@@ -892,7 +892,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                         {data.registeredPlayers > 0 && (
                             <div className="flex items-center gap-2.5 overflow-hidden">
                                 <Users className={`w-3.5 h-3.5 ${statusColors.text} shrink-0`} />
-                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.registeredPlayers} Players</span>
+                                <span className="text-[10px] md:text-xs font-medium text-white/60 truncate uppercase tracking-widest">{data.registeredPlayers} Entries</span>
                             </div>
                         )}
                     </div>
@@ -1130,14 +1130,13 @@ const FeaturedSections = () => {
                         if (regs) {
                             const counts = {};
                             regs.forEach(reg => {
-                                if (!counts[reg.event_id]) counts[reg.event_id] = new Set();
-                                if (reg.full_name) counts[reg.event_id].add(reg.full_name.toLowerCase());
-                                if (reg.partner_name) counts[reg.event_id].add(reg.partner_name.toLowerCase());
+                                if (!counts[reg.event_id]) counts[reg.event_id] = 0;
+                                counts[reg.event_id]++;
                             });
 
                             enrichedData = data.map(event =>
                                 event.is_manual
-                                    ? { ...event, registered_players: counts[event.id] ? counts[event.id].size : 0 }
+                                    ? { ...event, registered_players: counts[event.id] || 0 }
                                     : event
                             );
                         }
