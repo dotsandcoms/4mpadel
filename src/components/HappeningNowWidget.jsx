@@ -197,23 +197,21 @@ const HappeningNowWidget = () => {
                                                     }}
                                                     className="relative z-10 flex items-center py-3 px-4 w-full text-left bg-[#0A0F1C] rounded-[15px] transition-colors duration-300"
                                                 >
+                                                    {isLive && (
+                                                        <span className="absolute top-3 right-4 inline-flex items-center gap-1.5 text-red-400 text-[8px] font-black uppercase tracking-widest">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live
+                                                        </span>
+                                                    )}
+                                                    <span className={`absolute bottom-3 right-4 px-1.5 py-[2px] rounded-full text-[7px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                                                        {statusLabel}
+                                                    </span>
                                                     <div className="flex flex-col items-center justify-center w-14 sm:w-16 shrink-0 border-r border-white/10 pr-3 sm:pr-4 mr-3 sm:mr-4">
                                                         <span className="text-[9px] sm:text-[10px] font-black text-padel-green uppercase tracking-widest mb-0.5">{month}</span>
                                                         <span className="text-xl sm:text-2xl font-bold text-white leading-none mb-0.5">{day}</span>
                                                         <span className="text-[8px] sm:text-[9px] font-bold text-padel-green uppercase tracking-widest">{weekday}</span>
                                                     </div>
 
-                                                    <div className="flex-1 min-w-0 pr-2 sm:pr-4">
-                                                        <div className="hidden sm:flex items-center gap-2 mb-1.5">
-                                                            {isLive && (
-                                                                <span className="inline-flex items-center gap-1 text-red-400 text-[8px] font-black uppercase tracking-widest">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live
-                                                                </span>
-                                                            )}
-                                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
-                                                                {statusLabel}
-                                                            </span>
-                                                        </div>
+                                                    <div className={`flex-1 min-w-0 ${isLive ? 'pr-16' : 'pr-12 sm:pr-16'}`}>
                                                         <h3 className="text-xs sm:text-sm font-bold text-white mb-1.5 uppercase tracking-tight truncate group-hover:text-padel-green transition-colors">
                                                             {event.event_name}
                                                         </h3>
@@ -236,16 +234,6 @@ const HappeningNowWidget = () => {
                                                     </div>
 
                                                     <div className="flex items-center gap-2 shrink-0 pl-2">
-                                                        <div className="sm:hidden flex flex-col items-end gap-1">
-                                                            {isLive && (
-                                                                <span className="inline-flex items-center gap-1 text-red-400 text-[8px] font-black uppercase tracking-widest">
-                                                                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> Live
-                                                                </span>
-                                                            )}
-                                                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
-                                                                {statusLabel}
-                                                            </span>
-                                                        </div>
                                                         <ChevronRight className="w-4 h-4 text-padel-green shrink-0 group-hover:translate-x-1 transition-all" />
                                                     </div>
                                                 </button>
