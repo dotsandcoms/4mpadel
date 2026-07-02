@@ -987,7 +987,7 @@ const FeaturedTournamentHero = ({ event }) => {
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
-                        Featured Tournament
+                        Event Spotlight
                     </h2>
                     <button
                         onClick={() => navigate(linkPath)}
@@ -1109,7 +1109,7 @@ const FeaturedSections = () => {
                 const { data, error } = await supabase
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
-                    .eq('featured_event', true)
+                    .or('featured_event.eq.true,is_spotlight.eq.true')
                     .gte('start_date', today)
                     .neq('is_visible', false)
                     .order('start_date', { ascending: true })
@@ -1140,6 +1140,13 @@ const FeaturedSections = () => {
                                     : event
                             );
                         }
+                    }
+
+                    // Sort the spotlight event to the front
+                    const spotlightIndex = enrichedData.findIndex(e => e.is_spotlight);
+                    if (spotlightIndex > 0) {
+                        const [spotlightEvent] = enrichedData.splice(spotlightIndex, 1);
+                        enrichedData.unshift(spotlightEvent);
                     }
 
                     setFeaturedTournaments(enrichedData);
@@ -1242,7 +1249,7 @@ const FeaturedSections = () => {
                                 data={section}
                                 index={index}
                                 liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                                featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments : null}
+                                featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments.slice(1) : null}
                                 liveFeaturedTournaments={null}
                                 onWatchLive={openVideoModal}
                             />
@@ -1267,7 +1274,7 @@ const FeaturedSections = () => {
                     data={section}
                     index={index}
                     liveTournaments={section.id === 'recent-results' ? liveTournaments : null}
-                    featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments : null}
+                    featuredTournaments={section.id === 'upcoming-events' ? featuredTournaments.slice(1) : null}
                     liveFeaturedTournaments={section.id === 'featured-live' ? liveFeaturedTournaments : null}
                     onWatchLive={openVideoModal}
                 />

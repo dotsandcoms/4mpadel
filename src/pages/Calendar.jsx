@@ -725,8 +725,8 @@ const Calendar = () => {
         });
     }, [events, personalEvents, activeTab, searchTerm, statusFilters, cityFilter, leagueFilter, viewMode]);
 
-    const featuredEvents = useMemo(() => {
-        return events.filter(event => event.featured_event === true);
+    const spotlightEvents = useMemo(() => {
+        return events.filter(event => event.is_spotlight === true);
     }, [events]);
 
     // Pagination Logic
@@ -1045,7 +1045,7 @@ const Calendar = () => {
                 </AnimatePresence>
 
                 {/* Event Spotlight */}
-                {featuredEvents.length > 0 && (
+                {spotlightEvents.length > 0 && (
                     <div className="mb-8 px-4 sm:px-0 max-w-4xl mx-auto">
                         <div className="flex items-center gap-1.5 mb-4">
                             <Star className="w-3.5 h-3.5 text-padel-green fill-padel-green shrink-0" />
@@ -1053,7 +1053,7 @@ const Calendar = () => {
                                 Event Spotlight
                             </h2>
                         </div>
-                        <FeaturedTournamentSpotlight event={featuredEvents[0]} />
+                        <FeaturedTournamentSpotlight event={spotlightEvents[0]} />
                     </div>
                 )}
 

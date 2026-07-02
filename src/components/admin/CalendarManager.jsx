@@ -130,6 +130,7 @@ const CalendarManager = () => {
         rankedin_url: '',
         entry_fee: '',
         featured_live: false,
+        is_spotlight: false,
         live_youtube_url: '',
         youtube_playlist_url: '',
         live_players: '',
@@ -429,6 +430,7 @@ const CalendarManager = () => {
             rankedin_url: '',
             entry_fee: '',
             featured_live: false,
+            is_spotlight: false,
             live_youtube_url: '',
             youtube_playlist_url: '',
             live_players: '',
@@ -533,6 +535,7 @@ const CalendarManager = () => {
             rankedin_url: event.rankedin_url || '',
             entry_fee: event.entry_fee !== undefined && event.entry_fee !== null ? String(event.entry_fee) : '',
             featured_live: event.featured_live || false,
+            is_spotlight: event.is_spotlight || false,
             live_youtube_url: event.live_youtube_url || '',
             youtube_playlist_url: event.youtube_playlist_url || '',
             live_players: event.live_players || '',
@@ -830,6 +833,7 @@ const CalendarManager = () => {
                         sponsor_logos: richDetails.sponsor_logos || [],
                         is_league: isLeague,
                         featured_live: false,
+                        is_spotlight: false,
                         live_youtube_url: '',
                         youtube_playlist_url: '',
                         is_visible: true
@@ -1092,6 +1096,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase sticky top-0 bg-[#111827]">Status</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Homepage Featured">★</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Spotlight Event">🌟</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Live Event Featured">📺</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Price Set">💳</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Recent Results Featured">🏆</th>
@@ -1152,6 +1157,13 @@ const CalendarManager = () => {
                                                 <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 mx-auto" title="Featured Event" />
                                             ) : (
                                                 <Star className="w-4 h-4 text-gray-600 mx-auto" />
+                                            )}
+                                        </td>
+                                        <td className="py-3 px-4 align-middle text-center">
+                                            {event.is_spotlight ? (
+                                                <Star className="w-4 h-4 text-cyan-400 fill-cyan-400 mx-auto" title="Spotlight Event" />
+                                            ) : (
+                                                <span className="text-gray-700">-</span>
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-middle text-center">
@@ -1430,6 +1442,20 @@ const CalendarManager = () => {
                                             />
                                             <label htmlFor="featured_live" className="text-sm font-bold text-white uppercase cursor-pointer">
                                                 Featured Live
+                                            </label>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3">
+                                            <input
+                                                type="checkbox"
+                                                id="is_spotlight"
+                                                name="is_spotlight"
+                                                checked={formData.is_spotlight}
+                                                onChange={handleInputChange}
+                                                className="w-5 h-5 rounded border-white/10 bg-black/40 text-cyan-500 focus:ring-cyan-500"
+                                            />
+                                            <label htmlFor="is_spotlight" className="text-sm font-bold text-white uppercase cursor-pointer">
+                                                Spotlight Event
                                             </label>
                                         </div>
                                         <div className="flex items-center gap-2">
