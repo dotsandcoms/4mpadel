@@ -810,6 +810,9 @@ const Rankings = () => {
     return data.map(item => {
       const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
       const localImage = playerRecord?.image_url;
+      if (item.Name?.includes("Ashforth") || item.Name?.includes("Stillerman")) {
+        console.log(`[DEBUG] formatRankings: ${item.Name}, found: ${!!playerRecord}`);
+      }
 
       return {
         id: item.Participant?.Id || item.RankedinId,

@@ -62,6 +62,10 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   const sortedDetails = [...details].sort((a, b) => Number(b.points) - Number(a.points));
   const displayDetails = showBest8 ? sortedDetails.slice(0, 8) : sortedDetails;
 
+  console.log(`[DEBUG] RankingDetailsModal: player=${player.name}, selectedOrgId=${selectedOrgId}, activeOrgLabel=${activeOrgLabel}`);
+  console.log(`[DEBUG] orgCandidates count = ${playerRecord.rankings ? (playerRecord.rankings.filter(r => r.org?.toUpperCase().includes(activeOrgLabel.toUpperCase()))).length : 'NO RANKINGS'}`);
+  console.log(`[DEBUG] rankingData found = ${!!rankingData}, rank = ${rankingData?.rank}, details.length = ${details.length}`);
+
   const handleShare = async () => {
     try {
       const shareUrl = `${window.location.origin}/players?id=${playerRecord.id}`;
