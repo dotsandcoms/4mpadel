@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { User, Trophy, Calendar, ArrowRight, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import padelBg from '../assets/padel_bg.png';
+import padelBg from '../assets/home.jpeg';
 import AuthModal from './AuthModal';
 
 const Services = () => {
@@ -50,7 +50,7 @@ const Services = () => {
                 <img 
                     src={padelBg} 
                     alt="4M Padel Court" 
-                    className="w-full h-full object-cover object-left md:object-center"
+                    className="w-full h-full object-cover object-right md:object-right"
                 />
             </div>
 
