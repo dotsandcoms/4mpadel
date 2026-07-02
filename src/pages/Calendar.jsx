@@ -99,19 +99,11 @@ const FeaturedTournamentSpotlight = ({ event }) => {
                             <span className="hidden sm:inline truncate">{location}</span>
                         </div>
                     )}
-                    <Link
-                        to={linkPath}
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 bg-[#CCFF00] hover:bg-[#b3ff00] text-black! font-black px-5 py-2 rounded-full transition-colors text-[10px] sm:text-xs uppercase tracking-wide w-fit mt-4"
-                    >
-                        View Event <ChevronRight className="w-3.5 h-3.5" />
-                    </Link>
                 </div>
 
                 {posterImage && (
-                    <div className="absolute right-0 sm:right-3 md:right-0 top-2 bottom-2 sm:top-3 sm:bottom-3 md:top-0 md:bottom-0 aspect-[4/5] rounded-xl md:rounded-none overflow-hidden shadow-2xl md:shadow-none border border-white/10 md:border-0 group-hover:scale-105 md:group-hover:scale-100 transition-transform duration-500">
+                    <div className="absolute right-3 sm:right-6 md:right-10 top-1/2 -translate-y-1/2 w-24 sm:w-36 md:w-52 aspect-[4/5] rounded-xl overflow-hidden shadow-2xl border border-white/10 group-hover:scale-105 transition-transform duration-500">
                         <img src={posterImage} alt={event.event_name} className="w-full h-full object-cover" />
-                        <div className="hidden md:block absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-black/80 to-transparent pointer-events-none" />
                     </div>
                 )}
             </div>
@@ -1078,12 +1070,12 @@ const Calendar = () => {
                                         setActiveTab(tab.id);
                                         setSearchParams({ tab: tab.id });
                                     }}
-                                    className={`relative px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-medium text-[12px] sm:text-[14px] flex items-center gap-2 transition-all duration-300 whitespace-nowrap snap-center border ${activeTab === tab.id
+                                    className={`relative px-4 sm:px-5 py-2 sm:py-2.5 rounded-full font-medium text-[11px] sm:text-[12px] flex items-center gap-1.5 transition-all duration-300 whitespace-nowrap snap-center border ${activeTab === tab.id
                                         ? 'bg-[#CCFF00] text-black border-[#CCFF00]'
                                         : 'bg-transparent text-gray-300 border-white/10 hover:border-white/20 hover:text-white'
                                         }`}
                                 >
-                                    <Icon className={`w-4 h-4 ${activeTab === tab.id ? 'text-black' : 'text-gray-400'}`} />
+                                    <Icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-black' : 'text-gray-400'}`} />
                                     <span className="relative z-10">{tab.label}</span>
                                 </button>
                             );
