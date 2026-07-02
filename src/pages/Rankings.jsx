@@ -399,10 +399,12 @@ const FullRankingsTable = ({
             </thead>
             <tbody>
               {paginatedData.length > 0 ? (
-                (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(Math.min(10, podiumIndex + 3)) : paginatedData).map((player) => (
+                paginatedData.map((player, index) => {
+                  const displayRank = (currentPage - 1) * itemsPerPage + index + 1;
+                  return (
                   <tr key={player.id} className="border-b border-white/5 hover:bg-white/[0.03] transition-colors group">
                     <td className="py-4 px-6 text-xl font-black text-gray-500 group-hover:text-padel-green transition-colors">
-                      #{player.rawRank}
+                      #{displayRank}
                     </td>
                     <td className="py-4 px-6">
                       <div
@@ -427,11 +429,7 @@ const FullRankingsTable = ({
                           <span className="text-base font-bold text-white group-hover/link:text-padel-green transition-colors truncate">
                             {player.name}
                           </span>
-                          {player.hasLocalProfile && (
-                            <span className="inline-block px-1.5 py-0.5 rounded bg-padel-green/10 text-padel-green text-[8px] font-black uppercase tracking-widest border border-padel-green/20 flex-shrink-0">
-                              4M
-                            </span>
-                          )}
+                          {/* 4M tag removed as requested */}
                         </div>
                       </div>
                     </td>
@@ -448,7 +446,8 @@ const FullRankingsTable = ({
                       </span>
                     </td>
                   </tr>
-                ))
+                );
+              })
               ) : (
                 <tr>
                   <td colSpan="3" className="py-16 text-center text-gray-500 font-medium">
@@ -473,13 +472,15 @@ const FullRankingsTable = ({
 
           <div className="flex flex-col">
             {paginatedData.length > 0 ? (
-              (searchTerm === '' && currentPage === 1 && paginatedData.length >= 3 ? paginatedData.slice(Math.min(10, podiumIndex + 3)) : paginatedData).map((player) => (
+              paginatedData.map((player, index) => {
+                const displayRank = (currentPage - 1) * itemsPerPage + index + 1;
+                return (
                 <div
                   key={player.id}
                   onClick={() => setSelectedPlayer(player)}
                   className="grid grid-cols-[10%_45%_25%_20%] gap-2 px-4 py-3 items-center border-b border-white/5 hover:bg-white/[0.03] transition-colors cursor-pointer"
                 >
-                  <div className="text-sm font-black text-gray-300 text-center">{player.rawRank}</div>
+                  <div className="text-sm font-black text-gray-300 text-center">{displayRank}</div>
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full overflow-hidden bg-white/10 border border-white/5 flex-shrink-0 flex items-center justify-center">
                       {!imageErrors[player.id] ? (
@@ -489,11 +490,7 @@ const FullRankingsTable = ({
                       )}
                     </div>
                     <span className="text-xs sm:text-sm font-bold text-white truncate">{player.name}</span>
-                    {player.hasLocalProfile && (
-                      <span className="inline-block px-1 py-0.5 rounded bg-padel-green/10 text-padel-green text-[7px] font-black uppercase tracking-widest border border-padel-green/20 flex-shrink-0">
-                        4M
-                      </span>
-                    )}
+                    {/* 4M tag removed as requested */}
                   </div>
                   <div className="text-xs sm:text-sm font-bold text-padel-green text-right">{player.points.toLocaleString()}</div>
                   <div className="text-xs sm:text-sm font-black text-center">
@@ -504,7 +501,8 @@ const FullRankingsTable = ({
                     </span>
                   </div>
                 </div>
-              ))
+              );
+            })
             ) : (
               <div className="py-12 text-center text-gray-500 font-medium text-xs">
                 No players found matching "{searchTerm}"
