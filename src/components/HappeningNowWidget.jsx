@@ -109,9 +109,6 @@ const HappeningNowWidget = () => {
                 if (happeningNow.length > 0) {
                     setLiveEvents(happeningNow);
                     setIsLive(true);
-                } else if (upcomingThisMonth.length > 0) {
-                    setLiveEvents(upcomingThisMonth);
-                    setIsLive(false);
                 } else {
                     setLiveEvents([]);
                 }
@@ -163,26 +160,6 @@ const HappeningNowWidget = () => {
                     transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                     className="relative z-40 w-full"
                 >
-                    <div className="bg-[#12161E] border border-white/10 rounded-2xl p-4 md:p-6 relative overflow-hidden shadow-2xl w-full">
-                        {/* Header */}
-                        <div className="relative z-10 flex items-center justify-between mb-5">
-                            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                <div className="relative flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-white/10 shrink-0">
-                                    <span className="text-base sm:text-lg relative z-10 leading-none">🎾</span>
-                                </div>
-                                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                                    <h2 className="font-black text-white text-sm sm:text-lg md:text-xl uppercase tracking-wide sm:tracking-wider truncate leading-none">
-                                        {isLive ? 'Happening Now!' : 'Happening Next'}
-                                    </h2>
-                                    {isLive && (
-                                        <span className="bg-red-600 text-white text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-1.5 sm:px-2 py-1 rounded animate-pulse-slow flex items-center gap-1 shrink-0">
-                                            <span className="w-1.5 h-1.5 bg-white rounded-full"></span> LIVE
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
                         {/* Events List — matches the "Upcoming Featured Tournaments" card layout, paged 3-at-a-time */}
                         <div ref={scrollRef} className="relative z-10 flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth">
                             {eventPages.map((page, pageIdx) => (
@@ -305,7 +282,6 @@ const HappeningNowWidget = () => {
                                 </button>
                             </div>
                         )}
-                    </div>
                 </motion.section>
             )}
         </AnimatePresence>
