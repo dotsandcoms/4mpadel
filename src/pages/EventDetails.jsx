@@ -414,31 +414,7 @@ const EventDetails = () => {
     // gender, relax to just the right gender, then fall back to whichever SAPA
     // entry has the deepest tournament history).
     const getMainCategoryPoints = useCallback((playerData, genderLabel) => {
-        if (!playerData) return 0;
-        const rankingsArr = playerData.rankings;
-        let matchPoints = 0;
-
-        if (Array.isArray(rankingsArr) && rankingsArr.length > 0) {
-            const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
-            if (orgCandidates.length > 0) {
-                const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
-                
-                let match = orgCandidates.find((r) => {
-                    const matchType = (r.match_type || '').toUpperCase();
-                    const ageGroup = (r.age_group || '').toUpperCase();
-                    const genderMatch = genderKeywords.some((k) => matchType.includes(k));
-                    const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
-                    return genderMatch && isMain;
-                });
-
-                if (!match) match = orgCandidates.find((r) => genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k)));
-                if (!match) match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
-
-                if (match?.points) matchPoints = Number(match.points);
-            }
-        }
-        
-        return matchPoints > 0 ? matchPoints : (playerData.points || 0);
+        return playerData?.points || 0;
     }, []);
 
     // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points
@@ -1766,19 +1742,38 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchPlayerRankings = async () => {
             try {
-                const { data, error } = await supabase
-                    .from('players')
-                    .select('name, rankedin_id, rankings, points');
+                let allData = [];
+                let page = 0;
+                const pageSize = 1000;
+                let hasMore = true;
 
-                if (data && !error) {
-                    const lookup = {};
-                    data.forEach(p => {
-                        const payload = { rankings: p.rankings || [], points: p.points || 0 };
-                        if (p.rankedin_id) lookup[p.rankedin_id.toString()] = payload;
-                        if (p.name) lookup[p.name.toLowerCase().trim()] = payload;
-                    });
-                    setPlayerRankingsMap(lookup);
+                while (hasMore) {
+                    const { data, error } = await supabase
+                        .from('players')
+                        .select('name, rankedin_id, rankings, points')
+                        .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                    if (error) {
+                        console.error("Error fetching player rankings page:", error);
+                        break;
+                    }
+                    
+                    if (data) {
+                        allData = [...allData, ...data];
+                        if (data.length < pageSize) hasMore = false;
+                        else page++;
+                    } else {
+                        hasMore = false;
+                    }
                 }
+
+                const lookup = {};
+                allData.forEach(p => {
+                    const payload = { rankings: p.rankings || [], points: p.points || 0 };
+                    if (p.rankedin_id) lookup[p.rankedin_id.toString()] = payload;
+                    if (p.name) lookup[p.name.toLowerCase().trim()] = payload;
+                });
+                setPlayerRankingsMap(lookup);
             } catch (err) {
                 console.error("Error fetching player rankings:", err);
             }
