@@ -80,7 +80,7 @@ const FeaturedTournamentSpotlight = ({ event }) => {
 
                 <div className="relative z-10 flex flex-col h-full p-5 sm:p-6 md:p-8 justify-center max-w-[58%] sm:max-w-md">
                     {event.sapa_status && (
-                        <span className={`inline-flex w-fit px-3 py-1 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[10px] font-black uppercase tracking-widest mb-4`}>
+                        <span className={`inline-flex w-fit px-2 py-0.5 rounded-full border ${statusColors.border} ${statusColors.text} bg-transparent text-[8px] font-black uppercase tracking-widest mb-4`}>
                             {event.sapa_status}
                         </span>
                     )}
@@ -188,7 +188,7 @@ const FeaturedEventCard = ({ event, index }) => {
                 {/* Left Content */}
                 <div className="flex flex-col justify-center flex-1 p-4 sm:p-6 z-20 overflow-hidden">
                     <div className="mb-2 sm:mb-3">
-                        <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest border ${badgeColor}`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${badgeColor}`}>
                             {event.sapa_status}
                         </span>
                     </div>
@@ -424,11 +424,11 @@ const CalendarEventItem = ({ event, index }) => {
                     <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 sm:gap-1.5 py-1">
                         {/* Status Row */}
                         <div className="flex items-center gap-2 mb-0.5">
-                            <span className={`px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                            <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
                                 {event.sapa_status}
                             </span>
                             {event.is_league && (
-                                <span className="px-2 py-0.5 rounded-full text-[8px] sm:text-[9px] font-black uppercase tracking-widest border border-blue-500/40 text-blue-500 bg-transparent">
+                                <span className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border border-blue-500/40 text-blue-500 bg-transparent">
                                     League
                                 </span>
                             )}
