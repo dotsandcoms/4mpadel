@@ -599,7 +599,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const isLeft = data.align === 'left';
     const isGridSection = data.id === 'recent-results' || data.id === 'upcoming-events' || (data.id === 'upcoming-events' && featuredTournaments?.length > 1) || (data.id === 'featured-live' && liveFeaturedTournaments?.length > 1);
 
-    const isFeatured = data.id === 'featured-tournaments';
+    const isFeatured = data.id === 'upcoming-events'; // Only upcoming-events uses dark text theme
     const isLiveSection = data.id === 'featured-live';
     const bgColors = [
         'bg-[#080C17]',
@@ -698,7 +698,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     const imageContent = data.id === 'recent-results' ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0">
-            <div className="flex flex-col gap-4 w-full bg-[#060913] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
+            <div className="group relative flex flex-col gap-4 w-full bg-[#060913] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
                 {items?.slice(recentResultsPage, recentResultsPage + 1).map((t, i) => (
                     <RecentResultCard
                         key={t.id || t.eventId}
@@ -714,18 +714,18 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ))}
 
                 {(items?.length > 1) && (
-                    <div className="flex gap-4 justify-center mt-2">
+                    <div className="flex gap-4 justify-center md:static">
                         <button
                             onClick={() => setRecentResultsPage(p => Math.max(0, p - 1))}
                             disabled={recentResultsPage === 0}
-                            className={`w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-colors ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-padel-green hover:text-black'}`}
+                            className={`md:absolute md:-left-4 lg:-left-5 md:top-1/2 md:-translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronLeft className="w-4 h-4" />
                         </button>
                         <button
                             onClick={() => setRecentResultsPage(p => Math.min(maxResultsPage, p + 1))}
                             disabled={recentResultsPage === maxResultsPage}
-                            className={`w-10 h-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center transition-colors ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed' : 'hover:bg-padel-green hover:text-black'}`}
+                            className={`md:absolute md:-right-4 lg:-right-5 md:top-1/2 md:-translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${recentResultsPage === maxResultsPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
                         >
                             <ChevronRight className="w-4 h-4" />
                         </button>
@@ -750,10 +750,6 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     />
                 ))}
             </div>
-
-            <button onClick={() => navigate('/calendar')} className="mt-4 w-full py-4 rounded-xl border border-[#CCFF00]/50 text-[#CCFF00] text-[10px] sm:text-xs font-black uppercase tracking-widest hover:bg-[#CCFF00] hover:text-black transition-all flex items-center justify-center gap-2 group">
-                VIEW ALL TOURNAMENTS <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-            </button>
         </div>
     ) : isGridSection ? (
         <div className="relative z-10 w-full mt-4 lg:mt-0 min-w-0">
@@ -792,15 +788,15 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                 ))}
             </div>
 
-            {/* Pagination / Scroll buttons - visible on mobile when > 1 item, on desktop when isSlider */}
+            {/* Pagination / Scroll buttons - visible on hover on desktop, hidden on mobile */}
             {(isSlider || (items && items.length > 1)) && (
-                <div className={`flex gap-4 z-20 mt-8 justify-center min-h-[44px] ${isSlider ? '' : 'md:hidden'}`}>
+                <>
                     <button
                         onClick={() => canScrollLeft && scroll('left')}
                         disabled={!canScrollLeft}
-                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollLeft
-                            ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
-                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                        className={`absolute left-2 lg:-left-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full border items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 hidden md:flex ${!canScrollLeft
+                            ? isFeatured ? 'opacity-0 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-0 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer backdrop-blur-md' : 'bg-black/40 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer backdrop-blur-md'
                             }`}
                     >
                         <ChevronLeft className="w-5 h-5" />
@@ -808,14 +804,14 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
                     <button
                         onClick={() => canScrollRight && scroll('right')}
                         disabled={!canScrollRight}
-                        className={`w-11 h-11 rounded-full border flex items-center justify-center transition-all duration-300 ${!canScrollRight
-                            ? isFeatured ? 'opacity-30 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-30 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
-                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer' : 'bg-white/5 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer'
+                        className={`absolute right-2 lg:-right-5 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full border items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 hidden md:flex ${!canScrollRight
+                            ? isFeatured ? 'opacity-0 cursor-not-allowed border-black/10 bg-black/5 text-black/50' : 'opacity-0 cursor-not-allowed border-white/5 bg-white/5 text-white/50'
+                            : isFeatured ? 'bg-black/10 border-black/20 text-black hover:bg-black hover:text-white cursor-pointer backdrop-blur-md' : 'bg-black/40 border-white/10 text-white hover:bg-padel-green hover:text-black cursor-pointer backdrop-blur-md'
                             }`}
                     >
                         <ChevronRight className="w-5 h-5" />
                     </button>
-                </div>
+                </>
             )}
         </div>
     ) : (
