@@ -413,25 +413,32 @@ const EventDetails = () => {
     // Rankings page's player modal: prefer an Open/Main age group of the right
     // gender, relax to just the right gender, then fall back to whichever SAPA
     // entry has the deepest tournament history).
-    const getMainCategoryPoints = useCallback((rankingsArr, genderLabel) => {
-        if (!Array.isArray(rankingsArr) || rankingsArr.length === 0) return 0;
-        const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
-        if (orgCandidates.length === 0) return 0;
+    const getMainCategoryPoints = useCallback((playerData, genderLabel) => {
+        if (!playerData) return 0;
+        const rankingsArr = playerData.rankings;
+        let matchPoints = 0;
 
-        const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
+        if (Array.isArray(rankingsArr) && rankingsArr.length > 0) {
+            const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
+            if (orgCandidates.length > 0) {
+                const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
+                
+                let match = orgCandidates.find((r) => {
+                    const matchType = (r.match_type || '').toUpperCase();
+                    const ageGroup = (r.age_group || '').toUpperCase();
+                    const genderMatch = genderKeywords.some((k) => matchType.includes(k));
+                    const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
+                    return genderMatch && isMain;
+                });
 
-        let match = orgCandidates.find((r) => {
-            const matchType = (r.match_type || '').toUpperCase();
-            const ageGroup = (r.age_group || '').toUpperCase();
-            const genderMatch = genderKeywords.some((k) => matchType.includes(k));
-            const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
-            return genderMatch && isMain;
-        });
+                if (!match) match = orgCandidates.find((r) => genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k)));
+                if (!match) match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
 
-        if (!match) match = orgCandidates.find((r) => genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k)));
-        if (!match) match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
-
-        return match?.points ? Number(match.points) : 0;
+                if (match?.points) matchPoints = Number(match.points);
+            }
+        }
+        
+        return matchPoints > 0 ? matchPoints : (playerData.points || 0);
     }, []);
 
     // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points
@@ -449,8 +456,16 @@ const EventDetails = () => {
                 const p = item.Participant || {};
                 const players = p.Players || [];
                 const totalPoints = players.reduce((sum, pl) => {
-                    const rankingsArr = playerRankingsMap[(pl.Name || '').toLowerCase().trim()];
-                    return sum + getMainCategoryPoints(rankingsArr, genderLabel);
+                    const rId = pl.RankedinId || pl.Id?.toString();
+                    const pName = (pl.Name || '').toLowerCase().trim();
+                    let mappedData = null;
+                    if (rId && playerRankingsMap[rId]) {
+                        mappedData = playerRankingsMap[rId];
+                    } else if (pName && playerRankingsMap[pName]) {
+                        mappedData = playerRankingsMap[pName];
+                    }
+                    
+                    return sum + getMainCategoryPoints(mappedData, genderLabel);
                 }, 0);
                 return { id: p.Id, name: p.Name, players, totalPoints };
             });
@@ -1753,15 +1768,14 @@ const EventDetails = () => {
             try {
                 const { data, error } = await supabase
                     .from('players')
-                    .select('name, rankedin_id, rankings')
-                    .not('rankings', 'is', null);
+                    .select('name, rankedin_id, rankings, points');
 
                 if (data && !error) {
                     const lookup = {};
                     data.forEach(p => {
-                        if (!Array.isArray(p.rankings) || p.rankings.length === 0) return;
-                        if (p.rankedin_id) lookup[p.rankedin_id.toString()] = p.rankings;
-                        if (p.name) lookup[p.name.toLowerCase().trim()] = p.rankings;
+                        const payload = { rankings: p.rankings || [], points: p.points || 0 };
+                        if (p.rankedin_id) lookup[p.rankedin_id.toString()] = payload;
+                        if (p.name) lookup[p.name.toLowerCase().trim()] = payload;
                     });
                     setPlayerRankingsMap(lookup);
                 }
@@ -3390,7 +3404,7 @@ const EventDetails = () => {
                                     }
 
                                     return (
-                                        <InfoSection title="Registration" icon={CheckCircle} accent={theme.fill} defaultOpen={true} className={accordionGlowClass}>
+                                        <InfoSection title="Registration" icon={CheckCircle} accent={theme.fill} defaultOpen={false} className={accordionGlowClass}>
                                             <div className="-mx-1 -my-1">
                                                 {activeRegistrationBlock ? activeRegistrationBlock : readyToCompeteBlock}
                                             </div>
@@ -4039,137 +4053,124 @@ const EventDetails = () => {
                                                             >
                                                                 {clsParticipants.length > 0 ? (
                                                                     <div className="divide-y divide-gray-50">
-                                                                        {clsParticipants.map((item, pIdx) => {
-                                                                            const p = item.Participant || {};
-                                                                            const isTeam = p.Players && p.Players.length > 0 && !p.FirstPlayer;
-                                                                            const fPlayer = p.FirstPlayer || {};
-                                                                            const sPlayer = p.SecondPlayer || {};
-                                                                            const seed = p.Seed;
-                                                                            const rank = item.Ranking;
-                                                                            const manualSeedInfo = event.is_manual ? manualTeamSeeds[cls.Id]?.teams.find((t) => t.id === p.Id) : null;
+                                                                        {(() => {
+                                                                            const dname = (cls.Name || '').toLowerCase();
+                                                                            const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
+                                                                            
+                                                                            let enrichedParticipants = clsParticipants.map((item) => {
+                                                                                const p = item.Participant || {};
+                                                                                const isTeam = p.Players && p.Players.length > 0 && !p.FirstPlayer;
+                                                                                const players = isTeam ? p.Players : [p.FirstPlayer, p.SecondPlayer].filter(Boolean);
+                                                                                const manualSeedInfo = event.is_manual ? manualTeamSeeds[cls.Id]?.teams.find((t) => t.id === p.Id) : null;
+                                                                                
+                                                                                let p1Points = 0;
+                                                                                let p2Points = 0;
 
-                                                                            const getProfileImage = (playerObj) => {
-                                                                                if (!playerObj) return null;
-                                                                                const rId = playerObj.RankedinId || playerObj.Id?.toString();
-                                                                                const pName = (playerObj.Name || '').toLowerCase();
-                                                                                if (rId && fourMPlayers[rId]) return fourMPlayers[rId];
-                                                                                if (pName && fourMPlayers[pName]) return fourMPlayers[pName];
-                                                                                return playerObj.Image;
-                                                                            };
+                                                                                const getPlayerPoints = (playerObj) => {
+                                                                                    if (!playerObj) return 0;
+                                                                                    const rId = playerObj.RankedinId || playerObj.Id?.toString();
+                                                                                    const pName = (playerObj.Name || '').toLowerCase().trim();
+                                                                                    
+                                                                                    let mappedData = null;
+                                                                                    if (rId && playerRankingsMap[rId]) {
+                                                                                        mappedData = playerRankingsMap[rId];
+                                                                                    } else if (pName && playerRankingsMap[pName]) {
+                                                                                        mappedData = playerRankingsMap[pName];
+                                                                                    }
+                                                                                    
+                                                                                    return getMainCategoryPoints(mappedData, genderLabel);
+                                                                                };
+                                                                                
+                                                                                p1Points = getPlayerPoints(players[0]);
+                                                                                p2Points = getPlayerPoints(players[1]);
+                                                                                
+                                                                                const teamPoints = manualSeedInfo?.totalPoints || (p1Points + p2Points);
+                                                                                const explicitSeed = item.Ranking || p.Seed || manualSeedInfo?.seed || 9999;
+                                                                                
+                                                                                return { ...item, _players: players, _p1Points: p1Points, _p2Points: p2Points, _teamPoints: teamPoints, _explicitSeed: explicitSeed };
+                                                                            });
+                                                                            
+                                                                            enrichedParticipants.sort((a, b) => {
+                                                                                if (a._explicitSeed !== 9999 || b._explicitSeed !== 9999) {
+                                                                                    return a._explicitSeed - b._explicitSeed;
+                                                                                }
+                                                                                return b._teamPoints - a._teamPoints;
+                                                                            });
 
-                                                                            if (isTeam) {
+                                                                            return enrichedParticipants.map((item, pIdx) => {
+                                                                                const p = item.Participant || {};
+                                                                                const players = item._players;
+                                                                                const rank = item.Ranking;
+                                                                                const seed = p.Seed;
+                                                                                const manualSeedInfo = event.is_manual ? manualTeamSeeds[cls.Id]?.teams.find((t) => t.id === p.Id) : null;
+                                                                                
+                                                                                const getProfileImage = (playerObj) => {
+                                                                                    if (!playerObj) return null;
+                                                                                    const rId = playerObj.RankedinId || playerObj.Id?.toString();
+                                                                                    const pName = (playerObj.Name || '').toLowerCase();
+                                                                                    if (rId && fourMPlayers[rId]) return fourMPlayers[rId];
+                                                                                    if (pName && fourMPlayers[pName]) return fourMPlayers[pName];
+                                                                                    return playerObj.Image;
+                                                                                };
+
                                                                                 const seedPills = (
                                                                                     <>
                                                                                         {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
                                                                                         {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
-                                                                                        {manualSeedInfo?.totalPoints > 0 && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{manualSeedInfo.totalPoints.toLocaleString()} pts</span>}
                                                                                         {manualSeedInfo?.seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {manualSeedInfo.seed}</span>}
                                                                                     </>
                                                                                 );
 
                                                                                 return (
-                                                                                    <div key={pIdx} className="px-6 py-4">
-                                                                                        {/* Mobile: overlapping avatars, first names, pills stacked centered */}
-                                                                                        <div className="sm:hidden flex flex-col items-center text-center gap-2">
-                                                                                            <div className="flex items-center justify-center">
-                                                                                                {p.Players.map((player, idx) => (
-                                                                                                    <div
-                                                                                                        key={idx}
-                                                                                                        className={`w-16 h-16 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow-sm flex-shrink-0 flex items-center justify-center ${idx > 0 ? '-ml-4' : ''}`}
-                                                                                                        style={{ zIndex: p.Players.length - idx }}
-                                                                                                    >
-                                                                                                        {getProfileImage(player) ? (
-                                                                                                            <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
-                                                                                                        ) : (
-                                                                                                            <User className="w-7 h-7 text-gray-400" />
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                ))}
+                                                                                    <div key={pIdx} className="bg-white px-6 py-5 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
+                                                                                        <div className="flex items-center justify-between mb-3">
+                                                                                            <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
+                                                                                            <div className="flex flex-wrap gap-2 justify-end">
+                                                                                                {seedPills}
                                                                                             </div>
-                                                                                            <span className="text-base font-bold text-[#0F172A]">
-                                                                                                {p.Players.map((player) => (player.Name || '').split(' ')[0]).join(' & ')}
-                                                                                            </span>
-                                                                                            {(rank || seed || manualSeedInfo?.seed) && (
-                                                                                                <div className="flex flex-wrap gap-2 justify-center">
-                                                                                                    {seedPills}
-                                                                                                </div>
-                                                                                            )}
                                                                                         </div>
-
-                                                                                        {/* Desktop: numbered row, pills top-right, name pill per player */}
-                                                                                        <div className="hidden sm:block">
-                                                                                            <div className="flex items-center justify-between gap-2 mb-3">
-                                                                                                <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
-                                                                                                {(rank || seed || manualSeedInfo?.seed) && (
-                                                                                                    <div className="flex flex-wrap gap-2 justify-end">
-                                                                                                        {seedPills}
-                                                                                                    </div>
-                                                                                                )}
-                                                                                            </div>
-                                                                                            <div className="flex flex-wrap gap-2">
-                                                                                                {p.Players.map((player, idx) => (
-                                                                                                    <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-3 py-2">
-                                                                                                        <div className="w-7 h-7 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                                                                                                            {getProfileImage(player) ? (
-                                                                                                                <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
-                                                                                                            ) : (
-                                                                                                                <User className="w-4 h-4 text-gray-500" />
+                                                                                        
+                                                                                        <div className="flex items-center justify-between">
+                                                                                            <div className="flex items-start gap-6">
+                                                                                                {players.map((player, idx) => {
+                                                                                                    const pts = idx === 0 ? item._p1Points : item._p2Points;
+                                                                                                    const hasPts = pts > 0;
+                                                                                                    const pName = (player.Name || '').split(' ')[0];
+                                                                                                    return (
+                                                                                                        <div key={idx} className="flex flex-col items-center">
+                                                                                                            <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm">
+                                                                                                                {getProfileImage(player) ? (
+                                                                                                                    <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
+                                                                                                                ) : (
+                                                                                                                    <User className="w-6 h-6 text-gray-400" />
+                                                                                                                )}
+                                                                                                            </div>
+                                                                                                            <span className="text-xs font-bold text-slate-800 mt-2 text-center max-w-[80px] truncate">{pName}</span>
+                                                                                                            {hasPts && (
+                                                                                                                <span className="mt-1 bg-[#CCFF00] text-[#0F172A] text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                                                                                                                    {pts.toLocaleString()}
+                                                                                                                </span>
                                                                                                             )}
                                                                                                         </div>
-                                                                                                        <span className="text-xs font-bold text-[#0F172A] truncate">{player.Name}</span>
-                                                                                                    </div>
-                                                                                                ))}
+                                                                                                    );
+                                                                                                })}
                                                                                             </div>
+                                                                                            
+                                                                                            {item._teamPoints > 0 && (
+                                                                                                <div className="flex items-center flex-shrink-0 ml-4 border-l border-gray-100 pl-4 h-10">
+                                                                                                    <div className="text-right">
+                                                                                                        <span className="block text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Team Points</span>
+                                                                                                        <span className="block text-base font-medium text-slate-800 leading-none">
+                                                                                                            {item._teamPoints.toLocaleString()}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
                                                                                         </div>
                                                                                     </div>
                                                                                 );
-                                                                            }
-
-                                                                            return (
-                                                                                <div key={pIdx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 border-b border-gray-50 last:border-0 hover:bg-gray-50/30 transition-colors">
-                                                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                                                                                        <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
-                                                                                        <div className="flex flex-wrap gap-2.5">
-                                                                                            {/* Player 1 */}
-                                                                                            <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5 shadow-sm">
-                                                                                                <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 border border-white flex items-center justify-center">
-                                                                                                    {getProfileImage(fPlayer) ? (
-                                                                                                        <img src={getProfileImage(fPlayer)} alt={fPlayer.Name} className="w-full h-full object-cover" />
-                                                                                                    ) : (
-                                                                                                        <User className="w-3.5 h-3.5 text-gray-500" />
-                                                                                                    )}
-                                                                                                </div>
-                                                                                                <span className="text-xs font-bold text-[#0F172A]">
-                                                                                                    <span className="hidden sm:inline">{fPlayer.Name}</span>
-                                                                                                    <span className="sm:hidden">{formatPlayerName(fPlayer.Name)}</span>
-                                                                                                </span>
-                                                                                            </div>
-
-                                                                                            {/* Player 2 */}
-                                                                                            {sPlayer.Name && (
-                                                                                                <div className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl px-2.5 py-1.5 shadow-sm">
-                                                                                                    <div className="w-6 h-6 rounded-full bg-gray-200 overflow-hidden flex-shrink-0 border border-white flex items-center justify-center">
-                                                                                                        {getProfileImage(sPlayer) ? (
-                                                                                                            <img src={getProfileImage(sPlayer)} alt={sPlayer.Name} className="w-full h-full object-cover" />
-                                                                                                        ) : (
-                                                                                                            <User className="w-3.5 h-3.5 text-gray-500" />
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                    <span className="text-xs font-bold text-[#0F172A]">
-                                                                                                        <span className="hidden sm:inline">{sPlayer.Name}</span>
-                                                                                                        <span className="sm:hidden">{formatPlayerName(sPlayer.Name)}</span>
-                                                                                                    </span>
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-auto">
-                                                                                        {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                        {seed && <span className="text-[8px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full border border-gray-200" style={{ backgroundColor: theme.fill + '15', color: theme.fill, borderColor: theme.fill + '25' }}>Seed {seed}</span>}
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })}
+                                                                            });
+                                                                        })()}
                                                                     </div>
                                                                 ) : (
                                                                     <div className="px-6 py-10 text-center">
