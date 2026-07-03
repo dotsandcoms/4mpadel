@@ -404,7 +404,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       </a>
                     )}
                     {isOrgMember && !isSuperAdmin && (
-                      <a href="/admin" target="_blank" className="flex items-center gap-2 mx-3 my-1 px-4 py-2 text-[10px] font-black bg-padel-green text-black hover:bg-white rounded-lg transition-colors uppercase tracking-widest">
+                      <a href="/admin" target="_blank" style={{ color: '#000000' }} className="flex items-center gap-2 mx-3 my-1 px-4 py-2 text-[10px] font-black bg-padel-green hover:bg-white rounded-lg transition-colors uppercase tracking-widest">
                         <Building className="w-3.5 h-3.5" />Organisation Dashboard
                       </a>
                     )}
@@ -656,7 +656,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       </a>
                     )}
                     {isOrgMember && !isSuperAdmin && (
-                      <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-padel-green hover:bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-padel-green/10 active:scale-95 transition-all">
+                      <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} style={{ color: '#000000' }} className="w-full py-2.5 bg-padel-green hover:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-padel-green/10 active:scale-95 transition-all">
                         <Building className="w-4 h-4" />Organisation Dashboard
                       </a>
                     )}
