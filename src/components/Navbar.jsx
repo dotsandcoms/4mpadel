@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, ChevronDown, Trophy, Search, Bell, MapPin, User, LogOut, ShieldAlert, Home, Users, TrendingUp, Image, GraduationCap, Zap, Mail, ChevronUp, Calendar } from 'lucide-react';
+import { Menu, X, ChevronDown, Trophy, Search, Bell, MapPin, User, LogOut, ShieldAlert, Home, Users, TrendingUp, Image, GraduationCap, Zap, Mail, ChevronUp, Calendar, Building } from 'lucide-react';
 import logo from '../assets/logo_4m_lowercase.png';
 import saFlag from '../assets/Flag_of_South_Africa.svg.png';
 import { supabase } from '../supabaseClient';
@@ -32,6 +32,44 @@ const Navbar = ({ isDark = false, accentColor }) => {
   const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
   const isLoggedIn = !!targetEmail;
   const isSuperAdmin = targetEmail ? SUPER_ADMINS.includes(targetEmail.toLowerCase()) : false;
+  const [isOrgMember, setIsOrgMember] = useState(false);
+
+  // Approved organisation member? → show Organisation Dashboard shortcut
+  useEffect(() => {
+    let cancelled = false;
+    const checkOrgMembership = async () => {
+      if (!targetEmail) { setIsOrgMember(false); return; }
+      try {
+        const { data: memberships } = await supabase
+          .from('organization_members')
+          .select('organization_id, organizations(status)')
+          .ilike('user_email', targetEmail)
+          .limit(5);
+        let member = (memberships || []).some(m => m.organizations?.status === 'approved');
+
+        if (!member) {
+          // Legacy fallback: org created by this user's player record
+          const { data: playerRow } = await supabase
+            .from('players').select('id').ilike('email', targetEmail).maybeSingle();
+          if (playerRow) {
+            const { data: orgRow } = await supabase
+              .from('organizations')
+              .select('id')
+              .eq('created_by', playerRow.id)
+              .eq('status', 'approved')
+              .maybeSingle();
+            member = !!orgRow;
+          }
+        }
+        if (!cancelled) setIsOrgMember(member);
+      } catch (err) {
+        console.warn('Org membership check failed:', err);
+        if (!cancelled) setIsOrgMember(false);
+      }
+    };
+    checkOrgMembership();
+    return () => { cancelled = true; };
+  }, [targetEmail]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -365,6 +403,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-3.5 h-3.5" />Admin Panel
                       </a>
                     )}
+                    {isOrgMember && !isSuperAdmin && (
+                      <a href="/admin" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-padel-green hover:text-white hover:bg-padel-green/10 transition-colors uppercase tracking-widest">
+                        <Building className="w-3.5 h-3.5" />Organisation Dashboard
+                      </a>
+                    )}
                     <a href="/profile" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
                       <User className="w-3.5 h-3.5" />My Profile
                     </a>
@@ -610,6 +653,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
                     {isSuperAdmin && (
                       <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 active:scale-95 transition-all">
                         <ShieldAlert className="w-4 h-4" />Admin Panel
+                      </a>
+                    )}
+                    {isOrgMember && !isSuperAdmin && (
+                      <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-padel-green hover:bg-white text-black rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-padel-green/10 active:scale-95 transition-all">
+                        <Building className="w-4 h-4" />Organisation Dashboard
                       </a>
                     )}
                     <a href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
