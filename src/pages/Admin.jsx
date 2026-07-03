@@ -12,6 +12,7 @@ import SettingsManager from '../components/admin/SettingsManager';
 import AdminManager from '../components/admin/AdminManager';
 import EventManagement from '../components/admin/EventManagement';
 import EmailBroadcastManager from '../components/admin/EmailBroadcastManager';
+import OrganisationManager from '../components/admin/OrganisationManager';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
 import { useAdminFeedNotifications } from '../hooks/useAdminFeedNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -33,6 +34,31 @@ const Admin = () => {
     const targetEmail = sessionStorage.getItem('admin_test_login_email') || session?.user?.email;
     const { permissions, loading: permissionsLoading, hasPermission } = useAdminPermissions(targetEmail);
     const { notifications } = useAdminFeedNotifications();
+
+    // Pending organisation applications + event sanction requests (badge on Organisations tab)
+    const [orgBadgeCount, setOrgBadgeCount] = useState(0);
+
+    useEffect(() => {
+        const canSeeOrgOversight = permissions?.role === 'super_admin'
+            || (permissions?.role === 'custom' && (permissions?.allowed_tabs || []).includes('organizations'));
+        if (!canSeeOrgOversight) return;
+
+        const fetchOrgBadgeCount = async () => {
+            try {
+                const [{ count: pendingOrgs }, { count: pendingEvents }] = await Promise.all([
+                    supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('sanction_status', 'pending')
+                ]);
+                setOrgBadgeCount((pendingOrgs || 0) + (pendingEvents || 0));
+            } catch (err) {
+                console.error('Failed to fetch org badge counts:', err);
+            }
+        };
+
+        fetchOrgBadgeCount();
+        const interval = setInterval(fetchOrgBadgeCount, 30000);
+        return () => clearInterval(interval);
+    }, [permissions]);
 
     useEffect(() => {
         supabase.auth.getSession()
@@ -100,7 +126,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'organizations', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -281,6 +307,7 @@ const Admin = () => {
                 permissions={permissions}
                 player={player}
                 session={session}
+                badgeCounts={{ organizations: orgBadgeCount }}
             />
 
             <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]`}>
@@ -380,6 +407,7 @@ const Admin = () => {
                             ) : (
                                 <>
                                     {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
+                                    {activeTab === 'organizations' && <OrganisationManager permissions={permissions} />}
                                     {activeTab === 'players' && <PlayerManager />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}
