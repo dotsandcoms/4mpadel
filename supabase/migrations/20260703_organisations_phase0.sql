@@ -70,7 +70,9 @@ ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
 CREATE OR REPLACE FUNCTION public.is_super_admin()
 RETURNS BOOLEAN AS $$
     SELECT
-        COALESCE(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'service_role'
+        -- Direct DB access (SQL editor / migrations) has no JWT at all
+        NULLIF(current_setting('request.jwt.claims', true), '') IS NULL
+        OR COALESCE(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'service_role'
         OR EXISTS (
             SELECT 1 FROM public.admin_sidebar_permissions
             WHERE email ILIKE (auth.jwt() ->> 'email')
@@ -82,7 +84,9 @@ $$ LANGUAGE sql STABLE SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION public.is_4m_admin()
 RETURNS BOOLEAN AS $$
     SELECT
-        COALESCE(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'service_role'
+        -- Direct DB access (SQL editor / migrations) has no JWT at all
+        NULLIF(current_setting('request.jwt.claims', true), '') IS NULL
+        OR COALESCE(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'service_role'
         OR EXISTS (
             SELECT 1 FROM public.admin_sidebar_permissions
             WHERE email ILIKE (auth.jwt() ->> 'email')
