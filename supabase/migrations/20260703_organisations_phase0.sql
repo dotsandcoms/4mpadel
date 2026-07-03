@@ -8,6 +8,19 @@
 -- ============================================================
 
 -- ------------------------------------------------------------
+-- 0. SAFETY SEED — the new RLS helpers check admin_sidebar_permissions,
+-- so make sure the primary super admins exist there (frontend has a
+-- hardcoded fallback but the database needs real rows).
+-- ------------------------------------------------------------
+INSERT INTO public.admin_sidebar_permissions (email, role)
+VALUES
+    ('brad@dotsandcoms.co.za', 'super_admin'),
+    ('bradein@dotsandcoms.co.za', 'super_admin'),
+    ('admin@4mpadel.co.za', 'super_admin'),
+    ('markstillerman@gmail.com', 'super_admin')
+ON CONFLICT (email) DO UPDATE SET role = 'super_admin';
+
+-- ------------------------------------------------------------
 -- 1. HELPER FUNCTIONS (replace hardcoded-email checks)
 -- ------------------------------------------------------------
 
