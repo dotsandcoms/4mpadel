@@ -1,10 +1,24 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Share2, Trophy } from 'lucide-react';
+import { supabase } from '../supabaseClient';
 
 const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, categoryLabel }) => {
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' or 'tournaments'
   const [showBest8, setShowBest8] = useState(true);
+  const [calendarEvents, setCalendarEvents] = useState([]);
+
+  useEffect(() => {
+    const fetchCalendar = async () => {
+      try {
+        const { data } = await supabase.from('calendar').select('event_name, sapa_status');
+        if (data) setCalendarEvents(data);
+      } catch (err) {
+        console.error('Error fetching calendar:', err);
+      }
+    };
+    fetchCalendar();
+  }, []);
 
   if (!playerRecord) return null;
 
@@ -76,14 +90,27 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
       }
     });
 
-    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0 };
+    const counts = { Major: 0, 'Super Gold': 0, Gold: 0, Silver: 0, Bronze: 0, Other: 0 };
+    
+    const normalize = (str) => (str || '').toLowerCase().trim();
+
     winsMap.forEach((name) => {
-      const upperName = name.toUpperCase();
-      if (upperName.includes('MAJOR')) counts.Major++;
-      else if (upperName.includes('SUPER GOLD')) counts['Super Gold']++;
-      else if (upperName.includes('GOLD')) counts.Gold++;
-      else if (upperName.includes('SILVER')) counts.Silver++;
-      else if (upperName.includes('BRONZE')) counts.Bronze++;
+      const tourneyName = normalize(name);
+      const calEvent = calendarEvents.find(e => normalize(e.event_name) === tourneyName);
+      
+      let statusStr = '';
+      if (calEvent && calEvent.sapa_status) {
+         statusStr = calEvent.sapa_status.toUpperCase();
+      } else {
+         statusStr = name.toUpperCase();
+      }
+
+      if (statusStr.includes('MAJOR')) counts.Major++;
+      else if (statusStr.includes('SUPER GOLD') || statusStr === 'S GOLD') counts['Super Gold']++;
+      else if (statusStr.includes('GOLD')) counts.Gold++;
+      else if (statusStr.includes('SILVER')) counts.Silver++;
+      else if (statusStr.includes('BRONZE')) counts.Bronze++;
+      else counts.Other++;
     });
 
     // Remove empty counts
@@ -92,7 +119,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
     });
 
     return counts;
-  }, [playerRecord]);
+  }, [playerRecord, calendarEvents]);
 
   const getTierColor = (tier) => {
     switch (tier) {
@@ -101,6 +128,7 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
       case 'Gold': return 'text-yellow-500';
       case 'Silver': return 'text-gray-300';
       case 'Bronze': return 'text-amber-600';
+      case 'Other': return 'text-blue-400';
       default: return 'text-padel-green';
     }
   };
