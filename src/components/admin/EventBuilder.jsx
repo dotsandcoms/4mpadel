@@ -351,6 +351,9 @@ const blankForm = {
 };
 
 const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
+    // Org editing an already-sanctioned event → changes become a draft
+    // amendment that a 4M admin must approve (event stays live meanwhile).
+    const isAmendment = !!(organization && editingEvent && editingEvent.sanction_status === 'approved');
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -412,7 +415,13 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         setRemovedDivisionIds([]);
         setStandardPrice('');
         if (editingEvent) {
-            loadExisting(editingEvent);
+            // If the org has a pending amendment draft, resume editing THAT
+            // draft rather than the live event data.
+            const draft = (organization && editingEvent.sanction_status === 'approved'
+                && ['pending', 'rejected'].includes(editingEvent.pending_changes_status)
+                && editingEvent.pending_changes?.payload)
+                ? editingEvent.pending_changes : null;
+            loadExisting(draft ? { ...editingEvent, ...draft.payload } : editingEvent, draft?.divisions || null);
         } else {
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organization ? {
@@ -440,7 +449,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         return [];
     };
 
-    const loadExisting = async (ev) => {
+    const loadExisting = async (ev, draftDivisions = null) => {
         const prizeBreakdown = parsePrizeBreakdownField(ev.prize_money_breakdown);
         setShowPrizeBreakdown(prizeBreakdown.length > 0);
         setForm({
@@ -456,6 +465,25 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
         });
+        if (draftDivisions && draftDivisions.length > 0) {
+            // Resume divisions from a pending amendment draft
+            setDivisions(
+                draftDivisions.map((d, i) => ({
+                    _key: d.id || `draft_${i}`,
+                    id: d.id || null,
+                    name: d.name || '',
+                    entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
+                    format: d.format || 'Knockout',
+                    entries_close_at: toLocalInput(d.entries_close_at),
+                    license_required: !!d.license_required,
+                    age_category: d.age_category || '',
+                    gender: d.gender || '',
+                    details: d.details || '',
+                    is_active: d.is_active !== false,
+                }))
+            );
+            return;
+        }
         const { data, error } = await supabase
             .from('tournament_divisions')
             .select('*')
@@ -677,6 +705,47 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         try {
             const payload = buildPayload();
             let eventId = editingEvent?.id;
+
+            if (isAmendment) {
+                // Store draft amendment only — live event data stays untouched
+                // until a 4M admin approves. Divisions draft included.
+                const divisionsDraft = divisions
+                    .filter((d) => d.name.trim())
+                    .map((d, i) => ({
+                        id: d.id || null,
+                        name: d.name.trim(),
+                        entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
+                        format: d.format || null,
+                        entries_close_at: safeISOString(d.entries_close_at),
+                        license_required: !!d.license_required,
+                        age_category: d.age_category || null,
+                        gender: d.gender || null,
+                        details: d.details?.trim() || null,
+                        sort_order: i,
+                        is_active: d.is_active !== false,
+                    }));
+
+                const { error } = await supabase
+                    .from('calendar')
+                    .update({
+                        pending_changes: {
+                            payload,
+                            divisions: divisionsDraft,
+                            removed_division_ids: removedDivisionIds,
+                        },
+                        pending_changes_status: 'pending',
+                        pending_changes_notes: null,
+                        pending_changes_submitted_at: new Date().toISOString(),
+                    })
+                    .eq('id', editingEvent.id);
+                if (error) throw error;
+
+                toast.success('Amendment submitted — awaiting 4M Padel approval. Your event stays live with its current details.');
+                onSaved?.({ eventId, isNew: false, isAmendment: true, eventName: payload.event_name });
+                onClose?.();
+                return;
+            }
+
             if (editingEvent) {
                 const { error } = await supabase.from('calendar').update(payload).eq('id', editingEvent.id);
                 if (error) throw error;
@@ -1191,7 +1260,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 </div>
                                 {organization && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
-                                        This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.
+                                        {isAmendment
+                                            ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                            : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
                                     </div>
                                 )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

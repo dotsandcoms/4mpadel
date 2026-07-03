@@ -26,6 +26,8 @@ const OrganisationManager = ({ permissions }) => {
     // Super Admin oversight states
     const [allOrgs, setAllOrgs] = useState([]);
     const [pendingEvents, setPendingEvents] = useState([]);
+    const [pendingAmendments, setPendingAmendments] = useState([]);
+    const [amendmentDiff, setAmendmentDiff] = useState(null); // event whose amendment is being reviewed
     const [stats, setStats] = useState({
         totalOrgs: 0,
         approvedOrgs: 0,
@@ -496,6 +498,16 @@ const OrganisationManager = ({ permissions }) => {
             if (approvedEvsError) throw approvedEvsError;
             setApprovedEvents(approvedEvs || []);
 
+            // 2.6 Pending amendment requests on approved org events
+            const { data: amendments, error: amendmentsError } = await supabase
+                .from('calendar')
+                .select('*, organizations(name, contact_email)')
+                .eq('pending_changes_status', 'pending')
+                .order('pending_changes_submitted_at', { ascending: true });
+
+            if (amendmentsError) throw amendmentsError;
+            setPendingAmendments(amendments || []);
+
             // Fetch live participant counts (paginated — not limited to first 1000 rows)
             const allCounts = await fetchAllParticipantCounts();
             setParticipantCounts(allCounts);
@@ -962,6 +974,85 @@ const OrganisationManager = ({ permissions }) => {
         }
     };
 
+    // Super Admin - Approve a draft amendment: apply payload + divisions
+    const handleApproveAmendment = async (ev) => {
+        const draft = ev.pending_changes;
+        if (!draft?.payload) return toast.error('No amendment draft found on this event.');
+        try {
+            // 1. Apply the drafted event fields and clear the draft
+            const { error } = await supabase
+                .from('calendar')
+                .update({
+                    ...draft.payload,
+                    pending_changes: null,
+                    pending_changes_status: null,
+                    pending_changes_notes: null,
+                    pending_changes_submitted_at: null
+                })
+                .eq('id', ev.id);
+            if (error) throw error;
+
+            // 2. Apply division changes
+            const removedIds = (draft.removed_division_ids || []).filter(Boolean);
+            if (removedIds.length) {
+                await supabase.from('tournament_divisions').delete().in('id', removedIds);
+            }
+            const rows = draft.divisions || [];
+            for (const d of rows) {
+                const record = { ...d, event_id: ev.id };
+                delete record.id;
+                if (d.id) {
+                    const { error: upErr } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
+                    if (upErr) throw upErr;
+                } else {
+                    const { error: insErr } = await supabase.from('tournament_divisions').insert([record]);
+                    if (insErr) throw insErr;
+                }
+            }
+
+            toast.success(`Amendment approved & applied: ${ev.event_name} ✅`);
+            setAmendmentDiff(null);
+            fetchSuperAdminData();
+
+            if (ev.organizations?.contact_email) {
+                sendEmail(ev.organizations.contact_email, 'event_sanctioned', {
+                    eventName: `Amendment approved — ${draft.payload.event_name || ev.event_name}`
+                });
+            }
+        } catch (err) {
+            console.error('Approve amendment error:', err);
+            toast.error(`Failed to apply amendment: ${err.message}`);
+        }
+    };
+
+    // Fields worth surfacing in the amendment review diff
+    const AMENDMENT_DIFF_FIELDS = [
+        ['event_name', 'Event Name'], ['venue', 'Venue'], ['city', 'City'], ['address', 'Address'],
+        ['start_date', 'Start Date'], ['end_date', 'End Date'], ['start_time', 'Start Time'], ['end_time', 'End Time'],
+        ['sapa_status', 'Tier'], ['points', 'Points'], ['prize_money_total', 'Prize Money'],
+        ['registration_closes_at', 'Registration Closes'], ['description', 'Description'],
+        ['balls', 'Balls'], ['courts', 'Courts'], ['tournament_director', 'Tournament Director'],
+        ['organizer_phone', 'Organiser Phone'], ['organizer_email', 'Organiser Email'],
+    ];
+
+    const getAmendmentChanges = (ev) => {
+        const p = ev?.pending_changes?.payload || {};
+        const changes = [];
+        AMENDMENT_DIFF_FIELDS.forEach(([key, label]) => {
+            const oldVal = ev[key];
+            const newVal = p[key];
+            const norm = (v) => (v === null || v === undefined || v === '') ? '—' : String(v);
+            if (key in p && norm(oldVal) !== norm(newVal)) {
+                changes.push({ label, from: norm(oldVal), to: norm(newVal) });
+            }
+        });
+        const draftDivs = ev?.pending_changes?.divisions;
+        if (draftDivs) {
+            changes.push({ label: 'Divisions', from: 'current setup', to: `${draftDivs.length} division(s) in draft` });
+        }
+        return changes;
+    };
+
     // Host Organiser - open the new EventBuilder (replaces legacy wizard)
     const handleStartEditEvent = (ev) => {
         setBuilderEvent(ev);
@@ -969,10 +1060,11 @@ const OrganisationManager = ({ permissions }) => {
     };
 
     // Fired when the EventBuilder saves an org event
-    const handleBuilderSaved = ({ isNew, eventName } = {}) => {
+    const handleBuilderSaved = ({ isNew, isAmendment, eventName } = {}) => {
         setBuilderEvent(null);
         fetchHostData();
-        if (isNew && currentOrg) {
+        if (!currentOrg) return;
+        if (isNew) {
             // Notify org + 4M admin that a sanction request is in
             sendEmail(currentOrg.contact_email, 'event_pending_sanction', {
                 eventName: eventName || 'New event',
@@ -980,6 +1072,12 @@ const OrganisationManager = ({ permissions }) => {
             });
             sendEmail('admin@4mpadel.co.za', 'event_pending_sanction', {
                 eventName: eventName || 'New event',
+                orgName: currentOrg.name
+            });
+        } else if (isAmendment) {
+            // Notify 4M admin an amendment needs review
+            sendEmail('admin@4mpadel.co.za', 'event_pending_sanction', {
+                eventName: `Amendment — ${eventName || 'event'}`,
                 orgName: currentOrg.name
             });
         }
@@ -1131,6 +1229,24 @@ const OrganisationManager = ({ permissions }) => {
                 toast.error(`Declined sanction request: ${targetName}`);
                 sendEmail(targetEmail, 'event_rejected', {
                     eventName: targetName,
+                    notes: notes.trim()
+                });
+            } else if (type === 'amendment') {
+                // Reject the draft amendment — the live event is untouched;
+                // the org keeps the draft (marked rejected) so they can revise.
+                const { error } = await supabase
+                    .from('calendar')
+                    .update({
+                        pending_changes_status: 'rejected',
+                        pending_changes_notes: notes.trim()
+                    })
+                    .eq('id', targetId);
+
+                if (error) throw error;
+
+                toast.error(`Declined amendment: ${targetName}`);
+                sendEmail(targetEmail, 'event_rejected', {
+                    eventName: `Amendment — ${targetName}`,
                     notes: notes.trim()
                 });
             }
@@ -1421,6 +1537,52 @@ const OrganisationManager = ({ permissions }) => {
                             </div>
                         )}
                     </div>
+
+                    {/* Pending Amendment Requests on approved events */}
+                    {pendingAmendments.length > 0 && (
+                        <div className="bg-white/[0.02] border border-amber-500/20 backdrop-blur-md rounded-2xl p-6 shadow-xl">
+                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <Edit3 size={18} className="text-amber-400" />
+                                Amendment Requests ({pendingAmendments.length})
+                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1">
+                                    Live events — changes held until approved
+                                </span>
+                            </h3>
+                            <div className="space-y-3">
+                                {pendingAmendments.map((ev) => (
+                                    <div key={ev.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-black/30 border border-white/5 p-4 rounded-xl">
+                                        <div className="min-w-0">
+                                            <span className="font-bold text-white block truncate">{ev.event_name}</span>
+                                            <span className="text-xs text-gray-500 block mt-0.5">
+                                                {ev.organizations?.name || 'Unknown host'} · submitted {ev.pending_changes_submitted_at ? new Date(ev.pending_changes_submitted_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : '—'}
+                                                · {getAmendmentChanges(ev).length} change(s)
+                                            </span>
+                                        </div>
+                                        <div className="flex gap-2 shrink-0">
+                                            <button
+                                                onClick={() => setAmendmentDiff(ev)}
+                                                className="bg-white/5 border border-white/10 hover:bg-white/10 text-gray-300 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                            >
+                                                <Eye size={12} /> Review Changes
+                                            </button>
+                                            <button
+                                                onClick={() => handleApproveAmendment(ev)}
+                                                className="bg-padel-green text-black font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg hover:bg-white transition-all cursor-pointer flex items-center gap-1"
+                                            >
+                                                <Check size={12} /> Approve & Apply
+                                            </button>
+                                            <button
+                                                onClick={() => openRejectionModal('amendment', ev.id, ev.organizations?.contact_email || '', ev.event_name)}
+                                                className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-wider text-[10px] px-3 py-2 rounded-lg transition-all cursor-pointer"
+                                            >
+                                                Decline
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Sanctioned & Live Tournaments */}
                     <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
@@ -1949,13 +2111,30 @@ const OrganisationManager = ({ permissions }) => {
                                                         >
                                                             <Edit size={12} /> Edit Details
                                                         </button>
-                                                    ) : (
-                                                        <span
-                                                            title="Sanctioned events are locked. Contact 4M Padel to make changes."
-                                                            className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5"
+                                                    ) : ev.pending_changes_status === 'pending' ? (
+                                                        <button
+                                                            onClick={() => handleStartEditEvent(ev)}
+                                                            title="Your amendment is awaiting 4M Padel approval. Click to revise your draft."
+                                                            className="text-[10px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0 animate-pulse"
                                                         >
-                                                            <ShieldCheck size={12} /> Locked
-                                                        </span>
+                                                            <Edit3 size={12} /> Amendment Pending
+                                                        </button>
+                                                    ) : ev.pending_changes_status === 'rejected' ? (
+                                                        <button
+                                                            onClick={() => handleStartEditEvent(ev)}
+                                                            title={`Amendment declined: ${ev.pending_changes_notes || 'see email for feedback'}. Click to revise and resubmit.`}
+                                                            className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                        >
+                                                            <AlertCircle size={12} /> Amendment Declined — Revise
+                                                        </button>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleStartEditEvent(ev)}
+                                                            title="Propose changes to this sanctioned event. Changes only go live once 4M Padel approves them."
+                                                            className="text-[10px] font-black text-gray-400 hover:text-padel-green uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                        >
+                                                            <Edit size={12} /> Request Changes
+                                                        </button>
                                                     )}
                                                 </div>
                                             </div>
@@ -3384,6 +3563,70 @@ const OrganisationManager = ({ permissions }) => {
                         org={membersOrg}
                         onClose={() => setMembersOrg(null)}
                     />
+                )}
+            </AnimatePresence>
+
+            {/* ========================================================
+                AMENDMENT REVIEW (DIFF) MODAL — super admin
+               ======================================================== */}
+            <AnimatePresence>
+                {amendmentDiff && (
+                    <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-[240] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+                            className="max-w-2xl w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-5 text-left max-h-[90vh] overflow-y-auto custom-scrollbar"
+                        >
+                            <button
+                                onClick={() => setAmendmentDiff(null)}
+                                className="absolute top-5 right-5 p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                            >
+                                <X size={16} />
+                            </button>
+
+                            <div className="pr-8">
+                                <span className="text-[10px] text-amber-400 font-black uppercase tracking-widest">Amendment Review</span>
+                                <h3 className="text-xl font-black text-white mt-1 leading-tight">{amendmentDiff.event_name}</h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Requested by {amendmentDiff.organizations?.name || 'Unknown host'} — the live event keeps its current details until you approve.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                {getAmendmentChanges(amendmentDiff).length === 0 ? (
+                                    <p className="text-xs text-gray-500 py-2">No visible field changes detected (may be division-only or rich-text changes).</p>
+                                ) : getAmendmentChanges(amendmentDiff).map((c, i) => (
+                                    <div key={i} className="bg-black/30 border border-white/5 p-3.5 rounded-xl">
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 block mb-1.5">{c.label}</span>
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 text-xs">
+                                            <span className="text-red-400/80 line-through break-all">{c.from}</span>
+                                            <span className="text-gray-600 hidden sm:inline">→</span>
+                                            <span className="text-padel-green font-bold break-all">{c.to}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-2.5 pt-2">
+                                <button
+                                    onClick={() => handleApproveAmendment(amendmentDiff)}
+                                    className="flex-1 bg-padel-green text-black font-black uppercase tracking-widest text-xs py-3.5 rounded-xl hover:bg-white transition-all cursor-pointer flex items-center justify-center gap-2"
+                                >
+                                    <Check size={14} /> Approve & Apply Changes
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        openRejectionModal('amendment', amendmentDiff.id, amendmentDiff.organizations?.contact_email || '', amendmentDiff.event_name);
+                                        setAmendmentDiff(null);
+                                    }}
+                                    className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-xl transition-all cursor-pointer"
+                                >
+                                    Decline
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
                 )}
             </AnimatePresence>
 

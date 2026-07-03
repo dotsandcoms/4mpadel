@@ -45,11 +45,12 @@ const Admin = () => {
 
         const fetchOrgBadgeCount = async () => {
             try {
-                const [{ count: pendingOrgs }, { count: pendingEvents }] = await Promise.all([
+                const [{ count: pendingOrgs }, { count: pendingEvents }, { count: pendingAmendments }] = await Promise.all([
                     supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('sanction_status', 'pending')
+                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('sanction_status', 'pending'),
+                    supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('pending_changes_status', 'pending')
                 ]);
-                setOrgBadgeCount((pendingOrgs || 0) + (pendingEvents || 0));
+                setOrgBadgeCount((pendingOrgs || 0) + (pendingEvents || 0) + (pendingAmendments || 0));
             } catch (err) {
                 console.error('Failed to fetch org badge counts:', err);
             }
