@@ -348,6 +348,13 @@ const blankForm = {
     finance_managed: true,
     allow_payments: true,
     show_in_recent_results: false,
+    // format & capacity
+    golden_point: true,
+    is_league: false,
+    max_teams_capacity: '',
+    partner_requirement: 'Required',
+    back_draw_options: 'Plate Included',
+    event_co_admins: '',
 };
 
 const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
@@ -464,6 +471,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
+            golden_point: ev.golden_point !== false,
+            is_league: !!ev.is_league,
+            max_teams_capacity: ev.max_teams_capacity != null ? String(ev.max_teams_capacity) : '',
+            partner_requirement: ev.partner_requirement || 'Required',
+            back_draw_options: ev.back_draw_options || 'Plate Included',
+            event_co_admins: Array.isArray(ev.event_co_admins) ? ev.event_co_admins.join(', ') : (ev.event_co_admins || ''),
         });
         if (draftDivisions && draftDivisions.length > 0) {
             // Resume divisions from a pending amendment draft
@@ -654,6 +667,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             end_date: form.end_date || null,
             start_time: form.start_time || null,
             end_time: form.end_time || null,
+            max_teams_capacity: form.max_teams_capacity === '' || form.max_teams_capacity == null
+                ? null : Number(form.max_teams_capacity),
+            event_co_admins: String(form.event_co_admins || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
         };
         if (organization) {
             // Org-created events: tie to the org and stay hidden until a 4M
@@ -1258,6 +1277,57 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                         <p className="text-[11px] text-gray-500 mt-1">Event-wide fallback. Per-division close dates take priority.</p>
                                     </div>
                                 </div>
+
+                                {/* Event format & capacity */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Partner Requirement</label>
+                                        <select
+                                            name="partner_requirement"
+                                            value={form.partner_requirement}
+                                            onChange={handleInput}
+                                            className={inputClass}
+                                        >
+                                            <option value="Required">Required (Doubles)</option>
+                                            <option value="Optional">Optional (Free Agent)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Back Draw</label>
+                                        <select
+                                            name="back_draw_options"
+                                            value={form.back_draw_options}
+                                            onChange={handleInput}
+                                            className={inputClass}
+                                        >
+                                            <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
+                                            <option value="No Plate">No Plate (Direct Elimination Only)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Max Team Capacity</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            name="max_teams_capacity"
+                                            value={form.max_teams_capacity}
+                                            onChange={handleInput}
+                                            placeholder="Leave empty for unlimited"
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Event Co-Admins (emails, comma-separated)</label>
+                                        <input
+                                            type="text"
+                                            name="event_co_admins"
+                                            value={form.event_co_admins}
+                                            onChange={handleInput}
+                                            placeholder="name@club.co.za, other@club.co.za"
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                </div>
                                 {organization && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
                                         {isAmendment
@@ -1268,8 +1338,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {(organization ? [
                                         ['allow_payments', 'Allow payments'],
+                                        ['golden_point', 'Golden point'],
+                                        ['is_league', 'League format'],
                                     ] : [
                                         ['allow_payments', 'Allow payments'],
+                                        ['golden_point', 'Golden point'],
+                                        ['is_league', 'League format'],
                                         ['is_visible', 'Visible on website'],
                                         ['featured_event', 'Featured event'],
                                         ['finance_managed', 'Finance manager'],
