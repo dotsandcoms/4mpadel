@@ -404,7 +404,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
                       </a>
                     )}
                     {isOrgMember && !isSuperAdmin && (
-                      <a href="/admin" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-padel-green hover:text-white hover:bg-padel-green/10 transition-colors uppercase tracking-widest">
+                      <a href="/admin" target="_blank" className="flex items-center gap-2 mx-3 my-1 px-4 py-2 text-[10px] font-black bg-padel-green text-black hover:bg-white rounded-lg transition-colors uppercase tracking-widest">
                         <Building className="w-3.5 h-3.5" />Organisation Dashboard
                       </a>
                     )}
