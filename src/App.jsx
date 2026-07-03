@@ -20,6 +20,8 @@ import KitKatLeague from './pages/KitKatLeague';
 import NorthVsSouth from './pages/NorthVsSouth';
 
 import TournamentDraw from './pages/TournamentDraw';
+import Organisations from './pages/Organisations';
+import OrganisationPage from './pages/OrganisationPage';
 import PlayerProfile from './pages/PlayerProfile'; // Added import
 import ApprovedCoaches from './pages/ApprovedCoaches';
 import CoachingVideos from './pages/CoachingVideos';
@@ -127,6 +129,8 @@ function AppContent() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/calendar/:slug" element={<EventDetails />} />
           <Route path="/rankings" element={<Rankings />} />
+          <Route path="/organisations" element={<Organisations />} />
+          <Route path="/organisations/:slug" element={<OrganisationPage />} />
           <Route path="/tournaments/broll" element={<Broll />} />
           <Route path="/tournaments/kit-kat-league" element={<KitKatLeague />} />
           <Route path="/tournaments/north-vs-south" element={<NorthVsSouth />} />
