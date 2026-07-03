@@ -1237,6 +1237,7 @@ const FeaturedSections = () => {
                     <FeaturedTournamentHero event={featuredTournaments[0]} />
                     {featuredData
                         .filter(section => section.id !== 'featured-live')
+                        .filter(section => !(section.id === 'upcoming-events' && featuredTournaments.length <= 1))
                         .map((section, index) => (
                             <FeaturedSectionBlock
                                 key={section.id}
@@ -1262,7 +1263,9 @@ const FeaturedSections = () => {
     return (
         <div className="flex flex-col w-full">
             <FeaturedTournamentHero event={featuredTournaments[0]} />
-            {featuredData.map((section, index) => (
+            {featuredData
+                .filter(section => !(section.id === 'upcoming-events' && featuredTournaments.length <= 1))
+                .map((section, index) => (
                 <FeaturedSectionBlock
                     key={section.id}
                     data={section}
