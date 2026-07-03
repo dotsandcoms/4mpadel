@@ -12,6 +12,7 @@ import {
 import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
+import OrgProfileEditor from './OrgProfileEditor';
 
 const OrganisationManager = ({ permissions }) => {
     const [loading, setLoading] = useState(true);
@@ -1902,123 +1903,15 @@ const OrganisationManager = ({ permissions }) => {
 
                     {/* 3. Host Club Settings Panel */}
                     {activeSection === 'org-settings' && (
-                        <div className="w-full bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 space-y-6 text-left shadow-xl relative overflow-hidden">
-                            {/* Accent Glow Circles */}
+                        <div className="w-full bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 md:p-8 text-left shadow-xl relative overflow-hidden">
                             <div className="absolute top-0 right-0 w-32 h-32 bg-padel-green/5 blur-3xl rounded-full pointer-events-none" />
-                            <div className="absolute bottom-0 left-0 w-32 h-32 bg-blue-500/5 blur-3xl rounded-full pointer-events-none" />
-                            <div className="flex items-center gap-3 pb-4 border-b border-white/5">
-                                <div className="w-10 h-10 bg-padel-green/10 text-padel-green rounded-xl flex items-center justify-center shrink-0 border border-padel-green/20">
-                                    <Building size={20} />
-                                </div>
-                                <div>
-                                    <h3 className="text-lg font-bold text-white">Host Club Settings</h3>
-                                    <p className="text-gray-500 text-xs mt-0.5">Manage your public organization profile, logos, and contact channels</p>
-                                </div>
-                            </div>
-
-                            <form onSubmit={handleSaveOrgSettings} className="space-y-5">
-                                {/* Logo Uploader Grid */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center bg-black/20 border border-white/5 p-5 rounded-2xl">
-                                    <div className="flex flex-col items-center gap-2">
-                                        <span className="text-[10px] text-gray-500 font-black uppercase tracking-wider block mb-1">Club Logo Preview</span>
-                                        {orgSettingsForm.logo_url ? (
-                                            <img
-                                                src={orgSettingsForm.logo_url}
-                                                alt="Club Logo"
-                                                className="w-24 h-24 rounded-2xl object-cover bg-black/20 border border-white/10 shadow-lg"
-                                            />
-                                        ) : (
-                                            <div className="w-24 h-24 bg-padel-green/10 text-padel-green rounded-2xl flex items-center justify-center border border-padel-green/20 shadow-lg">
-                                                <Building size={36} />
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="md:col-span-2 space-y-2">
-                                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider">Upload New Logo</label>
-                                        <label className="flex flex-col items-center justify-center py-5 border border-dashed border-white/10 hover:border-padel-green/50 rounded-xl bg-black/40 hover:bg-black/60 cursor-pointer transition-all">
-                                            <span className="text-xs text-gray-400 font-medium group-hover:text-padel-green transition-colors">
-                                                {isUploadingLogo ? 'Uploading logo...' : 'Click to upload brand logo'}
-                                            </span>
-                                            <span className="text-[10px] text-gray-600 font-bold block mt-1">PNG, JPG, or SVG up to 2MB</span>
-                                            <input
-                                                type="file"
-                                                accept="image/*"
-                                                onChange={handleLogoUpload}
-                                                disabled={isUploadingLogo}
-                                                className="hidden"
-                                            />
-                                        </label>
-                                    </div>
-                                </div>
-
-                                {/* Club Profile Details */}
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Club / Organisation Name</label>
-                                        <input
-                                            type="text"
-                                            required
-                                            value={orgSettingsForm.name}
-                                            onChange={(e) => setOrgSettingsForm(prev => ({ ...prev, name: e.target.value }))}
-                                            className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
-                                            placeholder="e.g. Kyalami Padel Club"
-                                        />
-                                    </div>
-
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Contact Email Address</label>
-                                            <input
-                                                type="email"
-                                                required
-                                                value={orgSettingsForm.contact_email}
-                                                onChange={(e) => setOrgSettingsForm(prev => ({ ...prev, contact_email: e.target.value }))}
-                                                className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
-                                                placeholder="e.g. info@clubname.co.za"
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Contact Phone Number</label>
-                                            <input
-                                                type="tel"
-                                                value={orgSettingsForm.contact_phone}
-                                                onChange={(e) => setOrgSettingsForm(prev => ({ ...prev, contact_phone: e.target.value }))}
-                                                className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
-                                                placeholder="e.g. +27 11 123 4567"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Club Website URL (Optional)</label>
-                                        <input
-                                            type="text"
-                                            value={orgSettingsForm.website_url}
-                                            onChange={(e) => setOrgSettingsForm(prev => ({ ...prev, website_url: e.target.value }))}
-                                            className="w-full bg-black/40 border border-white/10 text-white rounded-xl px-4 py-3.5 focus:outline-none focus:border-padel-green text-sm transition-colors"
-                                            placeholder="e.g. www.kyalamipadel.co.za"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Form Action Buttons */}
-                                <div className="pt-4 border-t border-white/5 flex gap-3.5 justify-end">
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveSection('overview')}
-                                        className="px-6 py-3.5 bg-white/5 hover:bg-white/10 text-white font-bold text-xs rounded-xl transition-all cursor-pointer"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="submit"
-                                        disabled={isSavingOrgSettings || isUploadingLogo}
-                                        className="px-8 py-3.5 bg-padel-green text-black font-black uppercase tracking-widest text-xs rounded-xl hover:shadow-[0_0_20px_rgba(154,233,0,0.3)] hover:scale-105 transition-all disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
-                                    >
-                                        {isSavingOrgSettings ? 'Saving changes...' : 'Save Settings Changes'}
-                                    </button>
-                                </div>
-                            </form>
+                            <OrgProfileEditor
+                                org={localOrgState || currentOrg}
+                                onSaved={(updatedOrg) => {
+                                    setLocalOrgState(updatedOrg);
+                                    if (permissions?.org) Object.assign(permissions.org, updatedOrg);
+                                }}
+                            />
                         </div>
                     )}
 
