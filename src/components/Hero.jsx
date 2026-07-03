@@ -295,7 +295,7 @@ const Hero = () => {
                     winLossStr = `${wins}-${losses}`;
                 }
                 setWinLossStats(winLossStr);
-                
+
                 setEventsLoading(false);
 
                 if (firstNextMatch) {
@@ -647,7 +647,7 @@ const Hero = () => {
                                 className="w-full"
                             >
                                 {/* Glass panel */}
-                                <div className="bg-white/5 backdrop-blur-xl border-t border-l border-white/20 border-r border-b border-white/5 rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
+                                <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
 
                                         {eventsLoading && upcomingEvents.length === 0 && !nextMatch ? (
@@ -694,6 +694,9 @@ const Hero = () => {
                                         ) : (
                                             // ── Actual Data ──
                                             <div className="lg:col-span-12">
+                                                {nextMatch && (
+                                                    <h2 className="text-orange-400 font-semibold text-base px-1 mb-3">You Have A Match Coming Up</h2>
+                                                )}
                                                 {/* Tabs */}
                                                 <div className="flex w-full mb-6 bg-transparent border border-white/10 rounded-xl p-1">
                                                     <button
@@ -801,7 +804,7 @@ const Hero = () => {
                                                 {/* Right Side: My Next Match */}
                                                 {activeHeroTab === 'matches' && (
                                                     nextMatch ? (
-                                                        <div className="w-full animate-fade-in">
+                                                        <div className="w-full animate-fade-in flex flex-col gap-3">
                                                             {/* Match Card */}
                                                             {(() => {
                                                                 const info = nextMatch.Info || {};
@@ -814,74 +817,82 @@ const Hero = () => {
 
                                                                 return (
                                                                     <div
+                                                                        className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] cursor-pointer w-full"
                                                                         onClick={() => navigate('/profile?tab=matches')}
-                                                                        className="w-full bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-orange-500/40 rounded-xl p-3.5 text-left transition-all duration-300 group overflow-hidden cursor-pointer flex flex-col justify-between min-h-[125px] relative hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)]"
                                                                     >
-                                                                        {/* Soft background glow */}
-                                                                        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                                                                        {/* Rotating shimmer along the border */}
+                                                                        <div
+                                                                            className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
+                                                                            style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(249,115,22,0.9) 88%, transparent 96%)' }}
+                                                                        />
 
-                                                                        {/* Top Bar: Event Name and Date */}
-                                                                        <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2">
-                                                                            <div className="flex items-center gap-1.5 min-w-0">
-                                                                                <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
-                                                                                <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
-                                                                                    {info.EventName || 'Next Match'}
-                                                                                </span>
-                                                                            </div>
-                                                                            {info.Date && (
-                                                                                <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
-                                                                                    {info.Date}
-                                                                                </span>
-                                                                            )}
-                                                                        </div>
+                                                                        <div className="relative z-10 w-full bg-[#0A0F1C] rounded-[15px] p-3.5 sm:p-4 text-left flex flex-col justify-between min-h-[125px] overflow-hidden">
+                                                                            {/* Soft background glow */}
+                                                                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
-                                                                        {/* Centered Matchup Section */}
-                                                                        <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
-                                                                            {/* Team 1 (Challengers) */}
-                                                                            <div className="flex-1 flex flex-col items-end text-right min-w-0">
-                                                                                <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                    {team1P1}
-                                                                                </span>
-                                                                                {team1P2 && (
-                                                                                    <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                        {team1P2}
+                                                                            {/* Top Bar: Event Name and Date */}
+                                                                            <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2 relative z-20">
+                                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
+                                                                                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
+                                                                                        {info.EventName || 'Next Match'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {info.Date && (
+                                                                                    <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                                                                                        {info.Date}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
 
-                                                                            {/* VS Badge */}
-                                                                            <div className="relative shrink-0 flex items-center justify-center">
-                                                                                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
-                                                                                    <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
+                                                                            {/* Centered Matchup Section */}
+                                                                            <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
+                                                                                {/* Team 1 (Challengers) */}
+                                                                                <div className="flex-1 flex flex-col items-end text-right min-w-0">
+                                                                                    <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                        {team1P1}
+                                                                                    </span>
+                                                                                    {team1P2 && (
+                                                                                        <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                            {team1P2}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {/* VS Badge */}
+                                                                                <div className="relative shrink-0 flex items-center justify-center">
+                                                                                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
+                                                                                        <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Team 2 (Challenged) */}
+                                                                                <div className="flex-1 flex flex-col items-start text-left min-w-0">
+                                                                                    <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                                                                        {team2P1}
+                                                                                    </span>
+                                                                                    {team2P2 && (
+                                                                                        <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                                                                            {team2P2}
+                                                                                        </span>
+                                                                                    )}
                                                                                 </div>
                                                                             </div>
 
-                                                                            {/* Team 2 (Challenged) */}
-                                                                            <div className="flex-1 flex flex-col items-start text-left min-w-0">
-                                                                                <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                    {team2P1}
-                                                                                </span>
-                                                                                {team2P2 && (
-                                                                                    <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                        {team2P2}
+                                                                            {/* Bottom Bar: Location and Court */}
+                                                                            <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                                                                                <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
+                                                                                    <MapPin size={12} className="text-padel-green shrink-0" />
+                                                                                    <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
+                                                                                        {info.Location || info.Venue || 'Location TBD'}
+                                                                                    </span>
+                                                                                </div>
+                                                                                {info.Court && (
+                                                                                    <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
+                                                                                        {info.Court}
                                                                                     </span>
                                                                                 )}
                                                                             </div>
-                                                                        </div>
-
-                                                                        {/* Bottom Bar: Location and Court */}
-                                                                        <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                                            <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
-                                                                                <MapPin size={12} className="text-padel-green shrink-0" />
-                                                                                <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
-                                                                                    {info.Location || info.Venue || 'Location TBD'}
-                                                                                </span>
-                                                                            </div>
-                                                                            {info.Court && (
-                                                                                <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
-                                                                                    {info.Court}
-                                                                                </span>
-                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                 );
