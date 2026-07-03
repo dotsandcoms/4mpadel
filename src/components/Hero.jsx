@@ -635,7 +635,7 @@ const Hero = () => {
                     </motion.div>
                 </motion.div>
 
-                <div className="relative z-30 px-4 pb-20 lg:pb-5 mt-0 lg:mt-2 w-full lg:px-8 flex flex-col gap-2 container mx-auto">
+                <div className="relative z-30 px-4 pb-0 lg:pb-0 mt-0 lg:mt-2 w-full lg:px-8 flex flex-col gap-2 container mx-auto">
 
                     <AnimatePresence>
                         {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (

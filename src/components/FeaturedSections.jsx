@@ -977,7 +977,7 @@ const FeaturedTournamentHero = ({ event }) => {
     const linkPath = `/calendar/${event.slug || event.id}`;
 
     return (
-        <section className="relative py-6 lg:py-8 border-t border-white/5 bg-[#05070A]">
+        <section className="relative pt-0 pb-6 lg:pt-0 lg:pb-8 border-t border-white/5 bg-[#05070A]">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
