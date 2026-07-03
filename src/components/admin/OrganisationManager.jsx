@@ -11,12 +11,17 @@ import {
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
+import EventBuilder from './EventBuilder';
 
 const OrganisationManager = ({ permissions }) => {
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('overview'); // overview, create-event, my-events
     const [orgEvents, setOrgEvents] = useState([]);
     const [membersOrg, setMembersOrg] = useState(null); // org whose members are being managed
+
+    // New EventBuilder modal (replaces the legacy inline wizard for org hosts)
+    const [builderOpen, setBuilderOpen] = useState(false);
+    const [builderEvent, setBuilderEvent] = useState(null);
 
     // Super Admin oversight states
     const [allOrgs, setAllOrgs] = useState([]);
@@ -957,8 +962,32 @@ const OrganisationManager = ({ permissions }) => {
         }
     };
 
-    // Host Organiser - Start and Cancel Edit modes
+    // Host Organiser - open the new EventBuilder (replaces legacy wizard)
     const handleStartEditEvent = (ev) => {
+        setBuilderEvent(ev);
+        setBuilderOpen(true);
+    };
+
+    // Fired when the EventBuilder saves an org event
+    const handleBuilderSaved = ({ isNew, eventName } = {}) => {
+        setBuilderEvent(null);
+        fetchHostData();
+        if (isNew && currentOrg) {
+            // Notify org + 4M admin that a sanction request is in
+            sendEmail(currentOrg.contact_email, 'event_pending_sanction', {
+                eventName: eventName || 'New event',
+                orgName: currentOrg.name
+            });
+            sendEmail('admin@4mpadel.co.za', 'event_pending_sanction', {
+                eventName: eventName || 'New event',
+                orgName: currentOrg.name
+            });
+        }
+    };
+
+    // LEGACY inline wizard edit loader (unused — kept until UI cleanup pass)
+    // eslint-disable-next-line no-unused-vars
+    const legacyStartEditEvent = (ev) => {
         setEditingEventId(ev.id);
         setNewEventData({
             event_name: ev.event_name || '',
@@ -1182,16 +1211,12 @@ const OrganisationManager = ({ permissions }) => {
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => {
-                                setActiveSection(activeSection === 'create-event' ? 'overview' : 'create-event');
-                                setEventWizardStep(1);
+                                setBuilderEvent(null);
+                                setBuilderOpen(true);
                             }}
                             className="bg-padel-green text-black font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl hover:bg-white transition-all flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-padel-green/10"
                         >
-                            {activeSection === 'create-event' ? (
-                                <>Cancel <X size={14} /></>
-                            ) : (
-                                <>Sanction Event <Plus size={14} /></>
-                            )}
+                            Sanction Event <Plus size={14} />
                         </button>
                     </div>
                 )}
@@ -1660,7 +1685,7 @@ const OrganisationManager = ({ permissions }) => {
                                                 <Trophy size={32} className="opacity-20 mb-2" />
                                                 <p className="text-xs">No tournaments requested yet.</p>
                                                 <button
-                                                    onClick={() => setActiveSection('create-event')}
+                                                    onClick={() => { setBuilderEvent(null); setBuilderOpen(true); }}
                                                     className="mt-4 text-xs font-bold text-padel-green hover:underline cursor-pointer"
                                                 >
                                                     Sanction your first event &rarr;
@@ -1917,12 +1942,21 @@ const OrganisationManager = ({ permissions }) => {
                                                             View Bracket &rarr;
                                                         </a>
                                                     )}
-                                                    <button
-                                                        onClick={() => handleStartEditEvent(ev)}
-                                                        className="text-[10px] font-black text-padel-green hover:text-white uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
-                                                    >
-                                                        <Edit size={12} /> Edit Details
-                                                    </button>
+                                                    {ev.sanction_status !== 'approved' ? (
+                                                        <button
+                                                            onClick={() => handleStartEditEvent(ev)}
+                                                            className="text-[10px] font-black text-padel-green hover:text-white uppercase tracking-widest flex items-center gap-1.5 cursor-pointer bg-transparent border-0"
+                                                        >
+                                                            <Edit size={12} /> Edit Details
+                                                        </button>
+                                                    ) : (
+                                                        <span
+                                                            title="Sanctioned events are locked. Contact 4M Padel to make changes."
+                                                            className="text-[10px] font-black text-gray-600 uppercase tracking-widest flex items-center gap-1.5"
+                                                        >
+                                                            <ShieldCheck size={12} /> Locked
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -3352,6 +3386,18 @@ const OrganisationManager = ({ permissions }) => {
                     />
                 )}
             </AnimatePresence>
+
+            {/* ========================================================
+                NEW EVENT BUILDER (org-scoped) — creates manual events with
+                divisions, per-division deadlines & ManualEventRegistration
+               ======================================================== */}
+            <EventBuilder
+                isOpen={builderOpen}
+                onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
+                onSaved={handleBuilderSaved}
+                editingEvent={builderEvent}
+                organization={!isSuperAdmin ? currentOrg : null}
+            />
 
             {/* ========================================================
                 SUPER ADMIN REJECTION NOTES MODAL

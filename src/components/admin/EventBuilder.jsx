@@ -350,7 +350,7 @@ const blankForm = {
     show_in_recent_results: false,
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -414,7 +414,15 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
         if (editingEvent) {
             loadExisting(editingEvent);
         } else {
-            setForm(blankForm);
+            // Org portal mode: prefill organiser identity from the organisation
+            setForm(organization ? {
+                ...blankForm,
+                organizer_name: organization.name || blankForm.organizer_name,
+                organizer_logo_url: organization.logo_url || '',
+                organizer_email: organization.contact_email || '',
+                organizer_phone: organization.contact_phone || '',
+                organizer_website: organization.website_url || '',
+            } : blankForm);
             setDivisions([emptyDivision()]);
             setShowPrizeBreakdown(false);
         }
@@ -619,6 +627,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             start_time: form.start_time || null,
             end_time: form.end_time || null,
         };
+        if (organization) {
+            // Org-created events: tie to the org and stay hidden until a 4M
+            // admin sanctions them (DB trigger also forces sanction_status).
+            payload.organization_id = organization.id;
+            if (!editingEvent) {
+                payload.is_visible = false;
+                payload.featured_event = false;
+                payload.show_in_recent_results = false;
+            }
+        }
         return payload;
     };
 
@@ -668,8 +686,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                 eventId = data.id;
             }
             await persistDivisions(eventId);
-            toast.success(editingEvent ? 'Manual event updated' : 'Manual event created');
-            onSaved?.();
+            toast.success(
+                organization
+                    ? (editingEvent ? 'Event updated — pending 4M Padel sanctioning' : 'Event submitted for 4M Padel sanctioning')
+                    : (editingEvent ? 'Manual event updated' : 'Manual event created')
+            );
+            onSaved?.({ eventId, isNew: !editingEvent, eventName: payload.event_name });
             onClose?.();
         } catch (err) {
             console.error('Error saving manual event:', err);
@@ -1167,14 +1189,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                         <p className="text-[11px] text-gray-500 mt-1">Event-wide fallback. Per-division close dates take priority.</p>
                                     </div>
                                 </div>
+                                {organization && (
+                                    <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
+                                        This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {[
+                                    {(organization ? [
+                                        ['allow_payments', 'Allow payments'],
+                                    ] : [
                                         ['allow_payments', 'Allow payments'],
                                         ['is_visible', 'Visible on website'],
                                         ['featured_event', 'Featured event'],
                                         ['finance_managed', 'Finance manager'],
                                         ['show_in_recent_results', 'Show in recent results'],
-                                    ].map(([key, label]) => (
+                                    ]).map(([key, label]) => (
                                         <label key={key} className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                             <span className="text-sm font-medium text-gray-200">{label}</span>
                                             <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
