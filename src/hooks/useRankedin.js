@@ -322,6 +322,27 @@ export const useRankedin = () => {
     }, []);
 
     /**
+     * Fetches player profile info including statistics.
+     * @param {string} playerId Rankedin Player ID (e.g. R000328907)
+     * @returns {Promise<Object>} Player profile data
+     */
+    const getPlayerProfile = useCallback(async (playerId, signal) => {
+        if (!playerId) return null;
+        setLoading(true);
+        setError(null);
+        try {
+            const profileData = await fetchWithCache(`${API_BASE}/player/playerprofileinfoasync?rankedinId=${playerId}&language=en`, { signal });
+            return profileData;
+        } catch (err) {
+            console.error('Error fetching player profile:', err);
+            setError(err.message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    /**
      * Fetches events for a specific player by their Rankedin ID.
      * @param {string} playerId Rankedin Player ID (e.g. R000328907)
      * @returns {Promise<Array>} Array of player events
@@ -932,6 +953,7 @@ export const useRankedin = () => {
         getTournamentDetails,
         getTournamentInfo,
         getOrganisationRankings,
+        getPlayerProfile,
         getPlayerEventsAsync,
         getTournamentWinners,
         getTournamentMatches,

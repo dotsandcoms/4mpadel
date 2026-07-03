@@ -38,7 +38,7 @@ const Hero = () => {
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
     const [player, setPlayer] = useState(null);
-    const { getPlayerEventsAsync, getPlayerMatches } = useRankedin();
+    const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile } = useRankedin();
 
     useEffect(() => {
         // Get initial session
@@ -129,10 +129,11 @@ const Hero = () => {
                 if (signal.aborted) return;
 
                 // Fetch events and matches in parallel using the signal
-                const [rawEvents, rawMatches, rawPastMatches] = await Promise.all([
+                const [rawEvents, rawMatches, rawPastMatches, profileData] = await Promise.all([
                     playerData.rankedin_id ? getPlayerEventsAsync(playerData.rankedin_id, signal) : Promise.resolve([]),
                     playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, false, 20, signal) : Promise.resolve([]),
-                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, true, 200, signal) : Promise.resolve([])
+                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, true, 200, signal) : Promise.resolve([]),
+                    playerData.rankedin_id ? getPlayerProfile(playerData.rankedin_id, signal) : Promise.resolve(null)
                 ]);
 
                 if (signal.aborted) return;
@@ -275,20 +276,25 @@ const Hero = () => {
                 setUpcomingEvents(filtered);
                 setNextMatch(firstNextMatch);
                 setMatchesCount(validMatches.length);
-                
-                let wins = 0;
-                let losses = 0;
-                if (rawPastMatches && rawPastMatches.length > 0) {
-                    rawPastMatches.forEach((match) => {
-                        const info = match.Info || {};
-                        const isWinner = info.IsWinner !== undefined
-                            ? info.IsWinner
-                            : info.Challenger?.IsWinner;
-                        if (isWinner) wins++;
-                        else losses++;
-                    });
+                let winLossStr = null;
+                if (profileData?.Statistics?.WinLossDoublesCurrentYear) {
+                    winLossStr = profileData.Statistics.WinLossDoublesCurrentYear;
+                } else {
+                    let wins = 0;
+                    let losses = 0;
+                    if (rawPastMatches && rawPastMatches.length > 0) {
+                        rawPastMatches.forEach((match) => {
+                            const info = match.Info || {};
+                            const isWinner = info.IsWinner !== undefined
+                                ? info.IsWinner
+                                : info.Challenger?.IsWinner;
+                            if (isWinner) wins++;
+                            else losses++;
+                        });
+                    }
+                    winLossStr = `${wins}-${losses}`;
                 }
-                setWinLossStats({ wins, losses });
+                setWinLossStats(winLossStr);
                 
                 setEventsLoading(false);
 
@@ -300,7 +306,7 @@ const Hero = () => {
 
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
-                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length, winLoss: { wins, losses } }));
+                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length, winLoss: winLossStr }));
                 } catch (_) { }
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -572,11 +578,11 @@ const Hero = () => {
                                     <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
                                         <BarChart2 size={14} strokeWidth={1.75} className="text-white" />
                                     </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Win / Loss</p>
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">{new Date().getFullYear()}</p>
                                     <p className="text-white font-black text-base leading-none">
-                                        {winLossStats ? `${winLossStats.wins} - ${winLossStats.losses}` : '—'}
+                                        {typeof winLossStats === 'string' ? winLossStats : (winLossStats ? `${winLossStats.wins}-${winLossStats.losses}` : '—')}
                                     </p>
-                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">All time</p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">W-L</p>
                                 </div>
                             </div>
                         </motion.div>
@@ -795,7 +801,7 @@ const Hero = () => {
                                                 {/* Right Side: My Next Match */}
                                                 {activeHeroTab === 'matches' && (
                                                     nextMatch ? (
-                                                        <div className="w-full animate-fade-in bg-white/5 border border-white/10 rounded-2xl overflow-hidden p-4">
+                                                        <div className="w-full animate-fade-in">
                                                             {/* Match Card */}
                                                             {(() => {
                                                                 const info = nextMatch.Info || {};
