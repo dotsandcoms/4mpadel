@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2 } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
@@ -34,6 +34,7 @@ const Hero = () => {
     const [upcomingEvents, setUpcomingEvents] = useState([]);
     const [nextMatch, setNextMatch] = useState(null);
     const [matchesCount, setMatchesCount] = useState(0);
+    const [winLossStats, setWinLossStats] = useState(null);
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
     const [player, setPlayer] = useState(null);
@@ -128,9 +129,10 @@ const Hero = () => {
                 if (signal.aborted) return;
 
                 // Fetch events and matches in parallel using the signal
-                const [rawEvents, rawMatches] = await Promise.all([
+                const [rawEvents, rawMatches, rawPastMatches] = await Promise.all([
                     playerData.rankedin_id ? getPlayerEventsAsync(playerData.rankedin_id, signal) : Promise.resolve([]),
-                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, false, 20, signal) : Promise.resolve([])
+                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, false, 20, signal) : Promise.resolve([]),
+                    playerData.rankedin_id ? getPlayerMatches(playerData.rankedin_id, true, 200, signal) : Promise.resolve([])
                 ]);
 
                 if (signal.aborted) return;
@@ -270,10 +272,24 @@ const Hero = () => {
 
                 if (signal.aborted) return;
 
-                // Update UI and cache
                 setUpcomingEvents(filtered);
                 setNextMatch(firstNextMatch);
                 setMatchesCount(validMatches.length);
+                
+                let wins = 0;
+                let losses = 0;
+                if (rawPastMatches && rawPastMatches.length > 0) {
+                    rawPastMatches.forEach((match) => {
+                        const info = match.Info || {};
+                        const isWinner = info.IsWinner !== undefined
+                            ? info.IsWinner
+                            : info.Challenger?.IsWinner;
+                        if (isWinner) wins++;
+                        else losses++;
+                    });
+                }
+                setWinLossStats({ wins, losses });
+                
                 setEventsLoading(false);
 
                 if (firstNextMatch) {
@@ -284,7 +300,7 @@ const Hero = () => {
 
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
-                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length }));
+                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length, winLoss: { wins, losses } }));
                 } catch (_) { }
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -301,10 +317,11 @@ const Hero = () => {
         try {
             const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
             if (cachedMatch) {
-                const { ts, match, count } = JSON.parse(cachedMatch);
+                const { ts, match, count, winLoss } = JSON.parse(cachedMatch);
                 if (match) {
                     setNextMatch(match);
                     setMatchesCount(count || 1);
+                    if (winLoss) setWinLossStats(winLoss);
                     hasCachedData = true;
                     hasCachedMatch = true;
                     if (Date.now() - ts < CACHE_TTL) {
@@ -530,26 +547,36 @@ const Hero = () => {
                             <p className="text-white text-base md:text-lg font-bold mb-3">
                                 {getGreeting()}{firstName && <>, <span className="text-padel-green">{firstName}</span></>} <span aria-hidden="true">👋</span>
                             </p>
-                            <div className="grid grid-cols-2 divide-x divide-white/10 max-w-[14rem] sm:max-w-[15.5rem] bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
+                            <div className="grid grid-cols-3 divide-x divide-white/10 max-w-[21rem] sm:max-w-[23rem] bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl overflow-hidden">
                                 <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
-                                    <div className="w-8 h-8 rounded-full bg-padel-green/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(204,255,0,0.15)]">
-                                        <Trophy size={14} strokeWidth={1.75} className="text-padel-green" />
+                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
+                                        <Trophy size={14} strokeWidth={1.75} className="text-white" />
                                     </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none">Ranking</p>
-                                    <p className="text-padel-green font-black text-base leading-none">
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Ranking</p>
+                                    <p className="text-white font-black text-base leading-none">
                                         {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
                                     </p>
                                     <p className="text-white/40 text-[8px] font-medium leading-none truncate">{player.region || 'National Ranking'}</p>
                                 </div>
                                 <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
-                                    <div className="w-8 h-8 rounded-full bg-padel-green/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(204,255,0,0.15)]">
-                                        <Star size={14} strokeWidth={1.75} className="text-padel-green" />
+                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
+                                        <Star size={14} strokeWidth={1.75} className="text-white" />
                                     </div>
-                                    <p className="text-white/60 text-[9px] font-semibold leading-none">Points</p>
-                                    <p className="text-padel-green font-black text-base leading-none">
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Points</p>
+                                    <p className="text-white font-black text-base leading-none">
                                         {player.points !== undefined && player.points !== null ? player.points.toLocaleString() : '—'}
                                     </p>
-                                    <p className="text-white/40 text-[8px] font-medium leading-none">Total Points</p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">Total Points</p>
+                                </div>
+                                <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
+                                    <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
+                                        <BarChart2 size={14} strokeWidth={1.75} className="text-white" />
+                                    </div>
+                                    <p className="text-white/60 text-[9px] font-semibold leading-none uppercase tracking-wider">Win / Loss</p>
+                                    <p className="text-white font-black text-base leading-none">
+                                        {winLossStats ? `${winLossStats.wins} - ${winLossStats.losses}` : '—'}
+                                    </p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">All time</p>
                                 </div>
                             </div>
                         </motion.div>
@@ -602,10 +629,7 @@ const Hero = () => {
                     </motion.div>
                 </motion.div>
 
-                {/* ── Upcoming Events & Next Match strip — pinned to the bottom of the hero ── */}
                 <div className="relative z-30 px-4 pb-20 lg:pb-5 mt-4 lg:mt-6 w-full lg:px-8 flex flex-col gap-4 container mx-auto">
-                    {/* Happening Now Widget — Global live events */}
-                    <HappeningNowWidget />
 
                     <AnimatePresence>
                         {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
@@ -873,6 +897,9 @@ const Hero = () => {
                             </motion.div>
                         )}
                     </AnimatePresence>
+
+                    {/* Happening Now Widget — Global live events */}
+                    <HappeningNowWidget />
                 </div>
             </div>
             <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
