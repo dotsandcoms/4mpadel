@@ -13,6 +13,7 @@ import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
+import OrgAuditLog from './OrgAuditLog';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 const OrganisationManager = ({ permissions }) => {
@@ -1737,6 +1738,9 @@ const OrganisationManager = ({ permissions }) => {
                             </div>
                         )}
                     </div>
+
+                    {/* Immutable activity trail (DB-trigger driven) */}
+                    <OrgAuditLog />
                 </div>
             )}
 
