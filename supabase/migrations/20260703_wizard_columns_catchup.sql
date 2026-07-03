@@ -51,24 +51,28 @@ VALUES ('tournament-media', 'tournament-media', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Allows public access to read any file in the tournament-media bucket
+DROP POLICY IF EXISTS "Public Read Access on tournament-media" ON storage.objects;
 CREATE POLICY "Public Read Access on tournament-media"
 ON storage.objects FOR SELECT
 TO public
 USING (bucket_id = 'tournament-media');
 
 -- Allows authenticated users to upload files to the tournament-media bucket
+DROP POLICY IF EXISTS "Authenticated users can upload to tournament-media" ON storage.objects;
 CREATE POLICY "Authenticated users can upload to tournament-media"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (bucket_id = 'tournament-media');
 
 -- Allows authenticated users to update files in the tournament-media bucket
+DROP POLICY IF EXISTS "Authenticated users can update in tournament-media" ON storage.objects;
 CREATE POLICY "Authenticated users can update in tournament-media"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (bucket_id = 'tournament-media');
 
 -- Allows authenticated users to delete files in the tournament-media bucket
+DROP POLICY IF EXISTS "Authenticated users can delete in tournament-media" ON storage.objects;
 CREATE POLICY "Authenticated users can delete in tournament-media"
 ON storage.objects FOR DELETE
 TO authenticated
