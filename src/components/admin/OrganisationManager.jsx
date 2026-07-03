@@ -914,7 +914,10 @@ const OrganisationManager = ({ permissions }) => {
                 .from('organizations')
                 .update({
                     status: 'approved',
-                    approved_at: new Date().toISOString()
+                    approved_at: new Date().toISOString(),
+                    // Approval = verification (badges on the public org page)
+                    verified: true,
+                    sapa_sanctioned: true
                 })
                 .eq('id', orgId);
 
