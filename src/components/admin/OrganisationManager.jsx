@@ -13,6 +13,7 @@ import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
+import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 const OrganisationManager = ({ permissions }) => {
     const [loading, setLoading] = useState(true);
@@ -978,16 +979,35 @@ const OrganisationManager = ({ permissions }) => {
         }
     };
 
+    // SECURITY: only these keys from an org's amendment draft are ever applied.
+    // Privileged fields (visibility, featuring, sanctioning, org linkage) are
+    // excluded so a crafted draft cannot escalate via the admin's session.
+    const AMENDMENT_ALLOWED_KEYS = [
+        'event_name', 'slug', 'organizer_name', 'organizer_logo_url', 'organizer_badge_text',
+        'city', 'venue', 'address', 'start_date', 'end_date', 'start_time', 'end_time',
+        'sapa_status', 'tournament_tag', 'description', 'points', 'points_breakdown',
+        'prize_money_total', 'prize_money_breakdown', 'balls', 'courts', 'tournament_director',
+        'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
+        'cut_off_times', 'draw_released', 'contact_details', 'organizer_phone',
+        'organizer_email', 'organizer_website', 'custom_image_url', 'sponsor_logos',
+        'registration_closes_at', 'event_dates', 'golden_point', 'is_league',
+        'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
+        'allow_payments'
+    ];
+
     // Super Admin - Approve a draft amendment: apply payload + divisions
     const handleApproveAmendment = async (ev) => {
         const draft = ev.pending_changes;
         if (!draft?.payload) return toast.error('No amendment draft found on this event.');
         try {
-            // 1. Apply the drafted event fields and clear the draft
+            // 1. Apply ONLY whitelisted drafted fields and clear the draft
+            const safePayload = Object.fromEntries(
+                Object.entries(draft.payload).filter(([k]) => AMENDMENT_ALLOWED_KEYS.includes(k))
+            );
             const { error } = await supabase
                 .from('calendar')
                 .update({
-                    ...draft.payload,
+                    ...safePayload,
                     pending_changes: null,
                     pending_changes_status: null,
                     pending_changes_notes: null,
@@ -1001,10 +1021,13 @@ const OrganisationManager = ({ permissions }) => {
             if (removedIds.length) {
                 await supabase.from('tournament_divisions').delete().in('id', removedIds);
             }
+            const DIVISION_ALLOWED_KEYS = ['name', 'entry_fee', 'format', 'entries_close_at', 'license_required', 'age_category', 'gender', 'details', 'sort_order', 'is_active'];
             const rows = draft.divisions || [];
             for (const d of rows) {
-                const record = { ...d, event_id: ev.id };
-                delete record.id;
+                const record = {
+                    ...Object.fromEntries(Object.entries(d).filter(([k]) => DIVISION_ALLOWED_KEYS.includes(k))),
+                    event_id: ev.id
+                };
                 if (d.id) {
                     const { error: upErr } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
                     if (upErr) throw upErr;
@@ -3276,7 +3299,7 @@ const OrganisationManager = ({ permissions }) => {
                                     <span className="block text-gray-500 text-[10px] font-black uppercase tracking-wider mb-1.5">Tournament Regulations & Overview</span>
                                     <div className="bg-black/40 border border-white/5 p-5 rounded-2xl text-sm text-gray-300 max-h-48 overflow-y-auto custom-scrollbar leading-relaxed">
                                         <div
-                                            dangerouslySetInnerHTML={{ __html: selectedEventDetails.description }}
+                                            dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedEventDetails.description) }}
                                             className="prose prose-invert max-w-none text-gray-300 text-xs"
                                         />
                                     </div>

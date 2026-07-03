@@ -20,6 +20,7 @@ import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -260,7 +261,7 @@ const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = fals
                         <div className="px-6 py-5">
                             {text != null ? (
                                 /<[a-z][\s\S]*>/i.test(text) ? (
-                                    <div className="rich-text text-slate-600 leading-snug text-xs font-normal" dangerouslySetInnerHTML={{ __html: text }} />
+                                    <div className="rich-text text-slate-600 leading-snug text-xs font-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }} />
                                 ) : (
                                     <div className="text-slate-600 leading-snug text-xs font-normal whitespace-pre-wrap">{text}</div>
                                 )
@@ -3777,7 +3778,7 @@ const EventDetails = () => {
                                                                 <div className="px-6 py-5">
                                                                     <div
                                                                         className="text-slate-600 leading-snug text-xs font-normal prose max-w-none"
-                                                                        dangerouslySetInnerHTML={{ __html: event.description }}
+                                                                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
                                                                     />
                                                                 </div>
                                                             </motion.div>

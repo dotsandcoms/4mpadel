@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Helmet } from 'react-helmet-async';
 import { supabase } from '../supabaseClient';
+import { safeUrl } from '../utils/sanitizeHtml';
 import {
     Building, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
     CalendarDays, Trophy, ChevronLeft, ChevronRight, Star, Clock,
@@ -272,7 +273,7 @@ const OrganisationPage = () => {
                 {/* ===== INFO CARD ===== */}
                 <div className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-5 md:p-6 space-y-3.5">
                     {org.website_url && (
-                        <a href={org.website_url.startsWith('http') ? org.website_url : `https://${org.website_url}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-gray-200 hover:text-white group">
+                        <a href={safeUrl(org.website_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-sm text-gray-200 hover:text-white group">
                             <Globe size={16} style={{ color: accent }} className="shrink-0" />
                             <span className="truncate">{org.website_url.replace(/^https?:\/\/(www\.)?/, '')}</span>
                             <ChevronRight size={14} className="ml-auto text-gray-600 group-hover:translate-x-0.5 transition-transform" />
@@ -477,19 +478,19 @@ const OrganisationPage = () => {
                         <Section title="Social / Website" accent={accent}>
                             <div className="flex flex-wrap gap-2">
                                 {org.website_url && (
-                                    <a href={org.website_url.startsWith('http') ? org.website_url : `https://${org.website_url}`} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-white transition-all" title="Website"><Globe size={18} /></a>
+                                    <a href={safeUrl(org.website_url)} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-white transition-all" title="Website"><Globe size={18} /></a>
                                 )}
                                 {socials.instagram && (
-                                    <a href={socials.instagram} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-pink-400 transition-all" title="Instagram"><Instagram size={18} /></a>
+                                    <a href={safeUrl(socials.instagram)} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-pink-400 transition-all" title="Instagram"><Instagram size={18} /></a>
                                 )}
                                 {socials.facebook && (
-                                    <a href={socials.facebook} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-blue-400 transition-all" title="Facebook"><Facebook size={18} /></a>
+                                    <a href={safeUrl(socials.facebook)} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-blue-400 transition-all" title="Facebook"><Facebook size={18} /></a>
                                 )}
                                 {socials.tiktok && (
-                                    <a href={socials.tiktok} target="_blank" rel="noopener noreferrer" className="w-11 h-11 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-white transition-all text-[15px] font-black flex items-center justify-center" title="TikTok">♪</a>
+                                    <a href={safeUrl(socials.tiktok)} target="_blank" rel="noopener noreferrer" className="w-11 h-11 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-white transition-all text-[15px] font-black flex items-center justify-center" title="TikTok">♪</a>
                                 )}
                                 {socials.youtube && (
-                                    <a href={socials.youtube} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-red-400 transition-all" title="YouTube"><Youtube size={18} /></a>
+                                    <a href={safeUrl(socials.youtube)} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/10 rounded-2xl text-gray-300 hover:text-red-400 transition-all" title="YouTube"><Youtube size={18} /></a>
                                 )}
                             </div>
                         </Section>

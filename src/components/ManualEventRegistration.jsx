@@ -19,6 +19,7 @@ import { buildPaystackCheckoutConfig, isInAppBrowser } from '../utils/paystackCh
 import PartnerProfileInvite from './PartnerProfileInvite';
 import ManualRegistrationEntryCard from './ManualRegistrationEntryCard';
 import { useMembersOnly } from '../context/MembersOnlyContext';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const STEPS = [
     { id: 1, label: 'Profile' },
@@ -57,7 +58,7 @@ const getDivisionSavedDetails = (division) =>
 const DivisionDetails = ({ division, className = 'text-xs text-slate-600 font-normal leading-snug mt-1 rich-text max-w-none' }) => {
     const html = getDivisionDetailsHtml(division);
     if (html) {
-        return <div className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+        return <div className={className} dangerouslySetInnerHTML={{ __html: sanitizeHtml(html) }} />;
     }
     const fallback = [
         division.format,
@@ -4245,7 +4246,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             {/* Content */}
                             <div className="px-6 py-5 overflow-y-auto text-sm text-slate-700 font-normal space-y-4 prose prose-slate max-w-none">
                                 {event?.rules_regs ? (
-                                    <div dangerouslySetInnerHTML={{ __html: event.rules_regs }} />
+                                    <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.rules_regs) }} />
                                 ) : (
                                     <p className="text-slate-600 italic">No rules and regulations specified for this event.</p>
                                 )}
