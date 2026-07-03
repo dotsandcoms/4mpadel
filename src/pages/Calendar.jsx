@@ -580,6 +580,7 @@ const Calendar = () => {
                 .from('calendar')
                 .select('*')
                 .neq('is_visible', false)
+                .or('sanction_status.eq.approved,sanction_status.is.null')
                 .order('start_date', { ascending: true })
                 .order('id', { ascending: true });
 

@@ -1058,6 +1058,7 @@ const FeaturedSections = () => {
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
                     .eq('featured_result', true)
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
                     .neq('is_visible', false)
                     .order('start_date', { ascending: false })
                     .limit(10);
@@ -1104,6 +1105,7 @@ const FeaturedSections = () => {
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
                     .or('featured_event.eq.true,is_spotlight.eq.true')
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
                     .gte('start_date', today)
                     .neq('is_visible', false)
                     .order('start_date', { ascending: true })
@@ -1184,6 +1186,7 @@ const FeaturedSections = () => {
                     .from('calendar')
                     .select('*, registered_players, start_date, end_date')
                     .eq('featured_live', true)
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
                     .neq('is_visible', false)
                     .order('start_date', { ascending: true })
                     .limit(10);

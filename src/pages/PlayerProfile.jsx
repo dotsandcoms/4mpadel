@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import LicensePaymentModal from '../components/LicensePaymentModal';
 import CoachProfileModal from '../components/CoachProfileModal';
+import OrgHostBanner from '../components/OrgHostBanner';
 import heroBg from '../assets/hero_bg.png';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
@@ -1216,6 +1217,9 @@ const PlayerProfile = () => {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Organisation Host Application / Portal Banner */}
+                        <OrgHostBanner player={player} />
 
                         {/* Mobile Horizontally Scrollable Tabs */}
                         <div className="relative">
@@ -2434,6 +2438,9 @@ const PlayerProfile = () => {
 
                 {/* Main Content Area */}
                 <div className="hidden lg:block container mx-auto px-6 mt-6 lg:-mt-10 pb-24 relative z-20">
+                    {/* Organisation Host Application / Portal Banner */}
+                    <OrgHostBanner player={player} />
+
                     {/* Payment Required Banner - shown when profile is not visible (none or temporary) */}
                     {player && (player.license_type !== 'full') && (
                         <motion.div

@@ -1302,6 +1302,9 @@ const EventDetails = () => {
                     query = query.eq('slug', slug);
                 }
 
+                // Hide unsanctioned org events from the public event page
+                query = query.or('sanction_status.eq.approved,sanction_status.is.null');
+
                 const { data, error } = await query.maybeSingle();
                 if (error) throw error;
                 if (!data) {

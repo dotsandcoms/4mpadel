@@ -42,6 +42,7 @@ const HappeningNowWidget = () => {
                     .from('calendar')
                     .select('*')
                     .neq('is_visible', false)
+                    .or('sanction_status.eq.approved,sanction_status.is.null')
                     .gte('start_date', yesterday.toISOString())
                     .lte('start_date', endOfMonth.toISOString())
                     .order('start_date', { ascending: true });
