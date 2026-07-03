@@ -635,7 +635,7 @@ const Hero = () => {
                     </motion.div>
                 </motion.div>
 
-                <div className="relative z-30 px-4 pb-20 lg:pb-5 mt-4 lg:mt-6 w-full lg:px-8 flex flex-col gap-4 container mx-auto">
+                <div className="relative z-30 px-4 pb-20 lg:pb-5 mt-0 lg:mt-2 w-full lg:px-8 flex flex-col gap-2 container mx-auto">
 
                     <AnimatePresence>
                         {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
@@ -646,6 +646,9 @@ const Hero = () => {
                                 transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                 className="w-full"
                             >
+                                {nextMatch && (
+                                    <h2 className="text-orange-400 font-semibold text-sm md:text-lg lg:text-xl px-1 mb-3">You have a match coming up</h2>
+                                )}
                                 {/* Glass panel */}
                                 <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
@@ -694,9 +697,6 @@ const Hero = () => {
                                         ) : (
                                             // ── Actual Data ──
                                             <div className="lg:col-span-12">
-                                                {nextMatch && (
-                                                    <h2 className="text-orange-400 font-semibold text-base px-1 mb-3">You Have A Match Coming Up</h2>
-                                                )}
                                                 {/* Tabs */}
                                                 <div className="flex w-full mb-6 bg-transparent border border-white/10 rounded-xl p-1">
                                                     <button
