@@ -452,17 +452,21 @@ export const useRankedin = () => {
                                 .filter(cell => cell && (cell.MatchCell || cell.MatchViewModel || cell.WinnerParticipantId !== undefined || cell.Round !== undefined));
 
                             // Identical grouping logic to KnockoutBracket.jsx
+                            // Cells arrive either as { MatchCell: {...} } (legacy) or
+                            // { MatchViewModel: {...} } (current API shape) — support both.
+                            const unwrap = (cell) => cell.MatchCell || cell.MatchViewModel || cell;
+
                             const roundsMap = {};
                             elimination.DrawData.forEach(row => {
 
                                 row.forEach(cell => {
                                     if (!cell || (!cell.MatchCell && !cell.MatchViewModel)) return;
-                                    const m = cell.MatchCell || cell;
+                                    const m = unwrap(cell);
                                     const round = m.Round;
                                     if (typeof round === 'undefined') return;
                                     if (!roundsMap[round]) roundsMap[round] = [];
                                     const matchId = m.MatchId;
-                                    if (!roundsMap[round].some(existing => (existing.MatchCell || existing).MatchId === matchId)) {
+                                    if (!roundsMap[round].some(existing => unwrap(existing).MatchId === matchId)) {
                                         roundsMap[round].push(cell);
                                     }
                                 });
@@ -470,22 +474,46 @@ export const useRankedin = () => {
 
                             const sortedRounds = Object.keys(roundsMap).map(Number).sort((a, b) => a - b).map(roundKey => {
                                 return roundsMap[roundKey].sort((a, b) => {
-                                    const ordA = (a.MatchCell || a).MatchOrder || 0;
-                                    const ordB = (b.MatchCell || b).MatchOrder || 0;
+                                    const ordA = unwrap(a).MatchOrder || 0;
+                                    const ordB = unwrap(b).MatchOrder || 0;
                                     return ordA - ordB;
                                 });
                             });
 
-                            const finalRound = sortedRounds.length > 0 ? sortedRounds[sortedRounds.length - 1] : [];
-                            const semiFinalRound = sortedRounds.length > 1 ? sortedRounds[sortedRounds.length - 2] : [];
-                            const finalCell = finalRound.length > 0 ? finalRound[0] : null;
+                            // A match counts as decided when it has been played or has
+                            // a winner/score — placeholder slots ("Pending") don't.
+                            const isDecided = (cell) => {
+                                const m = unwrap(cell);
+                                return !!(m.IsPlayed || m.WinnerParticipantId
+                                    || m.MatchResults?.WinnerParticipantId
+                                    || m.Score || m.MatchResults?.Score
+                                    || cell.Score || cell.WinnerParticipantId);
+                            };
+
+                            // Walk back from the last round to the last DECIDED match —
+                            // avoids picking an unplayed placeholder final.
+                            let finalRoundIdx = -1;
+                            let finalCell = null;
+                            for (let r = sortedRounds.length - 1; r >= 0 && !finalCell; r--) {
+                                finalCell = sortedRounds[r].find(isDecided) || null;
+                                if (finalCell) finalRoundIdx = r;
+                            }
+                            if (!finalCell && sortedRounds.length > 0) {
+                                finalRoundIdx = sortedRounds.length - 1;
+                                finalCell = sortedRounds[finalRoundIdx][0] || null;
+                            }
+                            const semiFinalRound = finalRoundIdx > 0 ? sortedRounds[finalRoundIdx - 1] : [];
+
+                            // RankedIn uses "Pending" as a placeholder participant name.
+                            const cleanName = (n) => (!n || /^pending$/i.test(String(n).trim())) ? null : n;
 
                             const extractNames = (participant) => {
                                 if (!participant) return null;
-                                let names = participant.Name;
+                                let names = cleanName(participant.Name);
                                 if (!names && participant.FirstPlayer) {
-                                    names = participant.FirstPlayer.Name;
-                                    if (participant.SecondPlayer) names += ` & ${participant.SecondPlayer.Name}`;
+                                    const first = cleanName(participant.FirstPlayer.Name);
+                                    const second = cleanName(participant.SecondPlayer?.Name);
+                                    names = first ? (second ? `${first} & ${second}` : first) : null;
                                 }
                                 return names;
                             };
@@ -508,7 +536,9 @@ export const useRankedin = () => {
                                 }
 
                                 if (!winningParticipant) {
-                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner || m.MatchViewModel?.IsFirstParticipantWinner || false;
+                                    const isFirstWinner = scoreObj?.IsFirstParticipantWinner
+                                        || m.IsFirstParticipantWinner
+                                        || m.MatchViewModel?.IsFirstParticipantWinner || false;
                                     winningParticipant = isFirstWinner ? p1 : p2;
                                 }
 
