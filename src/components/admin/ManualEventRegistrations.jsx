@@ -2,13 +2,31 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
 import { sendEmail } from '../../utils/emails';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
+
+const isLicensePaymentRow = (payment) => {
+    if (!payment) return false;
+    const type = String(payment.payment_type || '').toLowerCase();
+    if (type.includes('license') || type === 'membership') return true;
+    if (String(payment.reference || '').startsWith('LIC-')) return true;
+    const covers = payment.metadata?.covers;
+    return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
+};
+
+const isPaystackEntryPayment = (reg, payment, refundByRegMap = null) => {
+    if (!registrationCountsAsPaid(reg, refundByRegMap)) return false;
+    if (payment && payment.status !== 'success') return false;
+    const method = String(reg.payment_method || payment?.payment_method || '').toLowerCase();
+    if (method === 'manual' || method === 'cash') return false;
+    if (method === 'paystack') return true;
+    return !!payment && !isLicensePaymentRow(payment);
+};
 
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
 const ACTIVE_CHECKOUT_WINDOW_MS = 60 * 60 * 1000;
@@ -24,6 +42,31 @@ const labelPaymentMethod = (method) => {
     if (!method) return '';
     const key = String(method).toLowerCase();
     return PAYMENT_METHOD_LABELS[key] || method;
+};
+
+const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
+
+const NON_CONFIRMED_PAYMENT_STATUSES = new Set([
+    'pending', 'unpaid', 'processing', 'refunded', 'failed', 'cancelled', 'abandoned',
+]);
+
+const hasProcessedRefund = (regId, refundByRegMap) => {
+    if (!regId || !refundByRegMap) return false;
+    const entry = refundByRegMap.get(regId);
+    if (!entry) return false;
+    if (entry.statuses.some((s) => s === 'failed' || s === 'needs_attention')) return false;
+    return entry.statuses.length > 0 && entry.statuses.every((s) => s === 'processed');
+};
+
+/** Active entry fee counts as collected / paid-to-club only when confirmed paid on the registration row. */
+const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
+    if (!reg) return false;
+    if (isWithdrawnRegistration(reg)) return false;
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return false;
+    if (paymentStatus !== 'paid') return false;
+    if (hasProcessedRefund(reg.id, refundByRegMap)) return false;
+    return true;
 };
 
 const buildPlayersByEmail = buildPlayersByEmailMap;
@@ -59,6 +102,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [divisionFilter, setDivisionFilter] = useState('all');
     const [sortBy, setSortBy] = useState('division'); // 'division' | 'name' | 'recent'
     const [profileResults, setProfileResults] = useState([]); // profiles not yet entered (for invite)
+    const [matchingProfileReg, setMatchingProfileReg] = useState(null);
+    const [profileLinkSearch, setProfileLinkSearch] = useState('');
+    const [profileLinkResults, setProfileLinkResults] = useState([]);
+    const [profileLinkBusy, setProfileLinkBusy] = useState(false);
     const [searchingProfiles, setSearchingProfiles] = useState(false);
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list'
     const [expandedDivisions, setExpandedDivisions] = useState({});
@@ -101,7 +148,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             const players = await fetchPlayersByEmails(
                 supabase,
                 emails,
-                'id, email, license_type, paid_registration, image_url, points, temporary_licenses(event_id, event_date)',
+                'id, name, email, license_type, paid_registration, image_url, points, temporary_licenses(event_id, event_date)',
             );
             setPlayersByEmail(buildPlayersByEmail(players));
         } else {
@@ -120,10 +167,23 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         [divisions]
     );
 
+    const refundByReg = useMemo(() => {
+        const m = new Map();
+        for (const rf of refunds) {
+            const id = rf.event_registration_id;
+            if (!id) continue;
+            const cur = m.get(id) || { amount: 0, statuses: [] };
+            cur.amount += Number(rf.amount || 0);
+            cur.statuses.push(rf.status);
+            m.set(id, cur);
+        }
+        return m;
+    }, [refunds]);
+
     const stats = useMemo(() => {
-        const active = registrations.filter((r) => r.status !== 'withdrawn');
-        const paid = active.filter((r) => r.payment_status === 'paid').length;
-        const pending = active.filter((r) => r.payment_status !== 'paid').length;
+        const active = registrations.filter((r) => !isWithdrawnRegistration(r));
+        const paid = active.filter((r) => registrationCountsAsPaid(r, refundByReg)).length;
+        const pending = active.length - paid;
         const revenue = payments.filter((p) => p.status === 'success').reduce((s, p) => s + Number(p.amount || 0), 0);
         const now = Date.now();
         const activeCheckouts = payments.filter((p) => {
@@ -144,20 +204,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             abandonedCheckoutCount: abandonedCheckouts.length,
             withdrawn: registrations.length - active.length,
         };
-    }, [registrations, payments]);
-
-    const refundByReg = useMemo(() => {
-        const m = new Map();
-        for (const rf of refunds) {
-            const id = rf.event_registration_id;
-            if (!id) continue;
-            const cur = m.get(id) || { amount: 0, statuses: [] };
-            cur.amount += Number(rf.amount || 0);
-            cur.statuses.push(rf.status);
-            m.set(id, cur);
-        }
-        return m;
-    }, [refunds]);
+    }, [registrations, payments, refundByReg]);
 
     const refundSummaryFor = (regId) => {
         const e = refundByReg.get(regId);
@@ -170,11 +217,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
     const filtered = useMemo(() => {
         let rows = registrations;
-        if (statusFilter === 'withdrawn') rows = rows.filter((r) => r.status === 'withdrawn');
+        if (statusFilter === 'withdrawn') rows = rows.filter((r) => isWithdrawnRegistration(r));
         else {
-            rows = rows.filter((r) => r.status !== 'withdrawn');
-            if (statusFilter === 'paid') rows = rows.filter((r) => r.payment_status === 'paid');
-            if (statusFilter === 'pending') rows = rows.filter((r) => r.payment_status !== 'paid');
+            rows = rows.filter((r) => !isWithdrawnRegistration(r));
+            if (statusFilter === 'paid') rows = rows.filter((r) => registrationCountsAsPaid(r, refundByReg));
+            if (statusFilter === 'pending') rows = rows.filter((r) => !registrationCountsAsPaid(r, refundByReg));
         }
         if (divisionFilter !== 'all') {
             rows = rows.filter((r) => r.division === divisionFilter);
@@ -195,7 +242,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
         // 'recent' keeps the load order (created_at desc)
         return sorted;
-    }, [registrations, statusFilter, search, divisionFilter, sortBy]);
+    }, [registrations, statusFilter, search, divisionFilter, sortBy, refundByReg]);
 
     const openMarkPaidModal = (reg) => {
         setMarkPaidTarget(reg);
@@ -802,7 +849,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [findPaymentForReg, resolvePaymentPayer]);
 
     const formatPaymentMethodForExport = useCallback((r) => {
-        if (r.payment_status !== 'paid') return '';
+        if (!registrationCountsAsPaid(r)) return '';
 
         if (r.payment_method) return labelPaymentMethod(r.payment_method);
 
@@ -813,7 +860,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [findPaymentForReg]);
 
     const getPaymentDetails = useCallback((reg) => {
-        if (reg.payment_status !== 'paid') return null;
+        if (!registrationCountsAsPaid(reg, refundByReg)) return null;
 
         const payment = findPaymentForReg(reg);
         const { isPartnerPaid, payerName } = resolvePaymentPayer(reg, payment);
@@ -822,7 +869,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const isAdminMarked = !!payment?.metadata?.marked_by_admin || method === 'manual' || method === 'cash';
 
         return { isPartnerPaid, payerName, method, note, isAdminMarked, payment };
-    }, [findPaymentForReg, resolvePaymentPayer]);
+    }, [findPaymentForReg, resolvePaymentPayer, refundByReg]);
 
     const renderPaymentDetails = useCallback((reg) => {
         const details = getPaymentDetails(reg);
@@ -873,7 +920,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         return 'None';
     }, [playersByEmail, payments, event?.id]);
 
-    const activeRegistrations = useMemo(() => registrations.filter(r => r.status !== 'withdrawn'), [registrations]);
+    const activeRegistrations = useMemo(
+        () => registrations.filter((r) => !isWithdrawnRegistration(r)),
+        [registrations],
+    );
 
     const orderTeamPlayers = useCallback((players) => {
         if (players.length <= 1) return [...players];
@@ -929,6 +979,94 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         return Number(getPlayerProfile(reg)?.points || 0);
     }, [getPlayerProfile]);
 
+    const renderProfileLink = useCallback((reg) => {
+        const profile = getPlayerProfile(reg);
+        if (profile) {
+            return (
+                <div className="flex items-center gap-2 text-padel-green font-bold text-sm min-w-0">
+                    <CheckCircle size={14} className="shrink-0" />
+                    <span className="truncate">{profile.name || reg.full_name}</span>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setMatchingProfileReg(reg);
+                            setProfileLinkSearch(profile.name || reg.full_name || '');
+                        }}
+                        className="text-gray-500 hover:text-white transition-colors shrink-0"
+                        title="Change linked profile"
+                    >
+                        <Link2 size={12} />
+                    </button>
+                </div>
+            );
+        }
+        return (
+            <button
+                type="button"
+                onClick={() => {
+                    setMatchingProfileReg(reg);
+                    setProfileLinkSearch(reg.full_name || reg.email || '');
+                }}
+                className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors italic text-sm"
+            >
+                <UserPlus size={14} className="shrink-0" />
+                Link Profile
+            </button>
+        );
+    }, [getPlayerProfile]);
+
+    const searchProfilesForLink = useCallback(async (query) => {
+        const q = (query || '').trim();
+        if (q.length < 2) {
+            setProfileLinkResults([]);
+            return;
+        }
+        setSearchingProfiles(true);
+        try {
+            const { data, error } = await supabase
+                .from('players')
+                .select('id, name, email, contact_number')
+                .or(`name.ilike.%${q}%,email.ilike.%${q}%`)
+                .order('name')
+                .limit(20);
+            if (error) throw error;
+            setProfileLinkResults(data || []);
+        } catch (err) {
+            console.error('Profile search failed:', err.message);
+            setProfileLinkResults([]);
+        } finally {
+            setSearchingProfiles(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!matchingProfileReg) {
+            setProfileLinkResults([]);
+            return;
+        }
+        const seed = (matchingProfileReg.full_name || matchingProfileReg.email || '').trim();
+        if (seed.length >= 2) searchProfilesForLink(seed);
+    }, [matchingProfileReg, searchProfilesForLink]);
+
+    const linkRegistrationToProfile = async (reg, player) => {
+        setProfileLinkBusy(true);
+        try {
+            const { error } = await supabase
+                .from('event_registrations')
+                .update({ email: player.email, full_name: player.name })
+                .eq('id', reg.id);
+            if (error) throw error;
+            toast.success(`Linked ${reg.full_name} to ${player.name}`);
+            setMatchingProfileReg(null);
+            setProfileLinkSearch('');
+            load();
+        } catch (err) {
+            toast.error(err.message || 'Failed to link profile');
+        } finally {
+            setProfileLinkBusy(false);
+        }
+    };
+
     const licenseBadge = useCallback((reg) => {
         const license = formatLicenseForExport(reg);
         if (license.includes('Full')) {
@@ -941,11 +1079,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [formatLicenseForExport]);
 
     const paymentBadge = useCallback((reg) => {
-        if (reg.payment_status === 'paid') {
+        if (registrationCountsAsPaid(reg, refundByReg)) {
             return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Paid</span>;
         }
         return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/10 text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Pending</span>;
-    }, []);
+    }, [refundByReg]);
 
     const teamsWithSeedsByDivision = useMemo(() => {
         const result = {};
@@ -1008,7 +1146,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         activeRegistrations.forEach((r) => {
             const fee = divFee(r.division);
             expected += fee;
-            if (r.payment_status === 'paid') collected += fee;
+            if (registrationCountsAsPaid(r, refundByReg)) collected += fee;
 
             const email = (r.email || '').toLowerCase().trim();
             if (email) uniqueEmails.add(email);
@@ -1036,25 +1174,30 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             paidCount: stats.paid,
             totalEntries: stats.total,
         };
-    }, [activeRegistrations, divFee, formatLicenseForExport, refunds, stats.paid, stats.total]);
+    }, [activeRegistrations, divFee, formatLicenseForExport, refundByReg, refunds, stats.paid, stats.total]);
 
     const overviewStats = useMemo(() => {
         let paid4M = 0;
         let paidClub = 0;
         let collected4M = 0;
+        let licenseRevenue4M = 0;
         let unique = new Set(activeRegistrations.map(r => r.email)).size;
         let fullLicenses = 0;
         let tempLicenses = 0;
         let noLicenses = 0;
         
         activeRegistrations.forEach(r => {
-            if (r.payment_status === 'paid') {
-                const method = formatPaymentMethodForExport(r);
-                if (method === 'Paystack') {
-                    paid4M++;
-                } else {
-                    paidClub++;
-                }
+            if (!registrationCountsAsPaid(r, refundByReg)) return;
+
+            const payment = findPaymentForReg(r);
+            const method = formatPaymentMethodForExport(r);
+            if (method === 'Paystack') {
+                paid4M++;
+            } else {
+                paidClub++;
+            }
+            if (isPaystackEntryPayment(r, payment, refundByReg)) {
+                collected4M += divFee(r.division);
             }
             
             const license = formatLicenseForExport(r);
@@ -1064,8 +1207,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         });
         
         payments.forEach(p => {
-            if (p.status === 'success' && p.payment_method !== 'manual') {
-                collected4M += Number(p.amount || 0);
+            if (p.status !== 'success') return;
+            if (String(p.payment_method || '').toLowerCase() === 'manual') return;
+            if (isLicensePaymentRow(p)) {
+                licenseRevenue4M += Number(p.amount || 0);
             }
         });
         
@@ -1073,9 +1218,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         const dueToOrg = collected4M - commission;
         
         return {
-            unique, paid4M, paidClub, collected4M, commission, dueToOrg, fullLicenses, tempLicenses, noLicenses
+            unique, paid4M, paidClub, collected4M, licenseRevenue4M, commission, dueToOrg, fullLicenses, tempLicenses, noLicenses
         };
-    }, [activeRegistrations, payments, playersByEmail, formatPaymentMethodForExport, formatLicenseForExport]);
+    }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
 
     const exportCsv = () => {
         const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'License', 'Payment Status', 'Payment Method', 'Status', 'Registered'];
@@ -1305,6 +1450,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
                                             <span className="text-xl font-black text-padel-green">{fmtR(overviewStats.collected4M)}</span>
+                                            <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
                                         </div>
                                         <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
@@ -1313,6 +1459,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
                                             <span className="text-lg font-black text-red-400">{fmtR(overviewStats.commission)}</span>
+                                            {overviewStats.licenseRevenue4M > 0 && (
+                                                <p className="text-[9px] text-gray-500 mt-2">
+                                                    SAPA license revenue via 4M (not paid to organiser): {fmtR(overviewStats.licenseRevenue4M)}
+                                                </p>
+                                            )}
                                         </div>
                                     </div>
                                 </motion.div>
@@ -1373,6 +1524,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                     <th className="py-3 px-4">Team (Players)</th>
                                                                     <th className="py-3 px-4">Team Points</th>
                                                                     <th className="py-3 px-4">Players</th>
+                                                                    <th className="py-3 px-4">4M Profile</th>
                                                                     <th className="py-3 px-4">Payment</th>
                                                                     <th className="py-3 px-4">Amount Paid</th>
                                                                     <th className="py-3 px-4">License Status</th>
@@ -1440,6 +1592,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                         <td className="py-4 px-4">
                                                                             <div className="space-y-1.5">
                                                                                 {team.players.map((p) => (
+                                                                                    <div key={`profile-${p.id}`}>{renderProfileLink(p)}</div>
+                                                                                ))}
+                                                                            </div>
+                                                                        </td>
+                                                                        <td className="py-4 px-4">
+                                                                            <div className="space-y-1.5">
+                                                                                {team.players.map((p) => (
                                                                                     <div key={p.id}>
                                                                                         {paymentBadge(p)}
                                                                                         {renderPaymentDetails(p)}
@@ -1451,7 +1610,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                             <div className="space-y-1.5">
                                                                                 {team.players.map((p) => (
                                                                                     <div key={p.id} className="text-sm font-bold text-white">
-                                                                                        {p.payment_status === 'paid' ? fmtR(fee) : '—'}
+                                                                                        {registrationCountsAsPaid(p, refundByReg) ? fmtR(fee) : '—'}
                                                                                     </div>
                                                                                 ))}
                                                                             </div>
@@ -1655,6 +1814,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             <thead className="sticky top-0 bg-[#0F172A] z-10">
                                                 <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
                                                     <th className="py-3 px-6">Player</th>
+                                                    <th className="py-3 px-4">4M Profile</th>
                                                     <th className="py-3 px-4">Division</th>
                                                     <th className="py-3 px-4">Partner</th>
                                                     <th className="py-3 px-4">Status</th>
@@ -1668,6 +1828,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                             <div className="font-bold text-white">{r.full_name}</div>
                                                             <div className="text-[11px] text-gray-500">{r.email}</div>
                                                         </td>
+                                                        <td className="py-3 px-4">{renderProfileLink(r)}</td>
                                                         <td className="py-3 px-4 text-gray-300">{r.division}</td>
                                                         <td className="py-3 px-4 text-gray-400">
                                                             {r.partner_name || '—'}
@@ -1929,6 +2090,69 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         Cancel
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {matchingProfileReg && (
+                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !profileLinkBusy && setMatchingProfileReg(null)}>
+                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                                <h3 className="text-xl font-black text-white mb-1">Link 4M Padel Profile</h3>
+                                <p className="text-gray-400 text-sm mb-5">
+                                    Linking: <span className="text-padel-green font-bold">{matchingProfileReg.full_name}</span>
+                                    {matchingProfileReg.email && (
+                                        <span className="text-gray-500"> · {matchingProfileReg.email}</span>
+                                    )}
+                                </p>
+
+                                <div className="relative mb-4">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" size={14} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search players by name or email…"
+                                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-10 pr-3 text-sm text-white outline-none focus:border-padel-green/50"
+                                        value={profileLinkSearch}
+                                        onChange={(e) => {
+                                            setProfileLinkSearch(e.target.value);
+                                            searchProfilesForLink(e.target.value);
+                                        }}
+                                    />
+                                </div>
+
+                                <div className="space-y-2 max-h-[320px] overflow-y-auto custom-scrollbar">
+                                    {searchingProfiles ? (
+                                        <div className="flex justify-center py-8"><Loader2 className="animate-spin text-gray-500" size={20} /></div>
+                                    ) : profileLinkResults.length === 0 ? (
+                                        <p className="text-xs text-gray-500 text-center py-6">No profiles found — try a different search.</p>
+                                    ) : (
+                                        profileLinkResults.map((player) => (
+                                            <button
+                                                key={player.id}
+                                                type="button"
+                                                disabled={profileLinkBusy}
+                                                onClick={() => linkRegistrationToProfile(matchingProfileReg, player)}
+                                                className="w-full bg-white/5 hover:bg-padel-green hover:text-black p-4 rounded-xl border border-white/5 text-left transition-all group disabled:opacity-50"
+                                            >
+                                                <div className="flex justify-between items-center gap-3">
+                                                    <div className="min-w-0">
+                                                        <p className="font-bold truncate">{player.name}</p>
+                                                        <p className="text-xs opacity-60 truncate">{player.email}</p>
+                                                    </div>
+                                                    <CheckCircle size={18} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                                </div>
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setMatchingProfileReg(null)}
+                                    disabled={profileLinkBusy}
+                                    className="w-full mt-5 py-2.5 text-gray-500 hover:text-white transition-colors font-bold text-sm disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         </div>
                     )}

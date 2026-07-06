@@ -15,6 +15,31 @@ import ManualEventRegistrations from './ManualEventRegistrations';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
+const isLicensePaymentRow = (payment) => {
+    if (!payment) return false;
+    const type = String(payment.payment_type || '').toLowerCase();
+    if (type.includes('license') || type === 'membership') return true;
+    if (String(payment.reference || '').startsWith('LIC-')) return true;
+    const covers = payment.metadata?.covers;
+    return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
+};
+
+const isPaystackEntryPayment = (participant, payment, refundByRegMap = null) => {
+    const reg = participant?._reg;
+    if (reg && !registrationCountsAsPaid(reg, refundByRegMap)) return false;
+    if (!participant?.is_paid) return false;
+    if (payment && payment.status !== 'success') return false;
+    const method = String(
+        participant.registration_payment_method
+        || payment?.payment_method
+        || participant.actual_payment?.payment_method
+        || '',
+    ).toLowerCase();
+    if (method === 'manual' || method === 'cash') return false;
+    if (method === 'paystack') return true;
+    return !!payment && !isLicensePaymentRow(payment);
+};
+
 const getParticipantEntryFee = (p, event) => {
     if (p?._divisionFee != null && p._divisionFee !== '') {
         return Number(p._divisionFee) || 0;
@@ -62,6 +87,30 @@ const getParticipantPaidAmount = (p) => {
     if (p.actual_payment?.amount != null) return Number(p.actual_payment.amount) || 0;
     if (p._divisionFee != null) return Number(p._divisionFee) || 0;
     return 0;
+};
+
+const isWithdrawnRegistration = (reg) => String(reg?.status || '').toLowerCase() === 'withdrawn';
+
+const NON_CONFIRMED_PAYMENT_STATUSES = new Set([
+    'pending', 'unpaid', 'processing', 'refunded', 'failed', 'cancelled', 'abandoned',
+]);
+
+const hasProcessedRefund = (regId, refundByRegMap) => {
+    if (!regId || !refundByRegMap) return false;
+    const entry = refundByRegMap.get(regId);
+    if (!entry) return false;
+    if (entry.statuses.some((s) => s === 'failed' || s === 'needs_attention')) return false;
+    return entry.statuses.length > 0 && entry.statuses.every((s) => s === 'processed');
+};
+
+const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
+    if (!reg) return false;
+    if (isWithdrawnRegistration(reg)) return false;
+    const paymentStatus = String(reg.payment_status || 'pending').toLowerCase();
+    if (NON_CONFIRMED_PAYMENT_STATUSES.has(paymentStatus)) return false;
+    if (paymentStatus !== 'paid') return false;
+    if (hasProcessedRefund(reg.id, refundByRegMap)) return false;
+    return true;
 };
 
 const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) => {
@@ -179,6 +228,19 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         [refunds],
     );
 
+    const refundByReg = useMemo(() => {
+        const m = new Map();
+        for (const rf of refunds) {
+            const id = rf.event_registration_id;
+            if (!id) continue;
+            const cur = m.get(id) || { amount: 0, statuses: [] };
+            cur.amount += Number(rf.amount || 0);
+            cur.statuses.push(rf.status);
+            m.set(id, cur);
+        }
+        return m;
+    }, [refunds]);
+
     const dashboardStats = useMemo(() => {
         if (!selectedEvent) return { expected: 0, outstanding: 0, licenses: { full: 0, temp: 0, none: 0 }, uniquePlayers: 0 };
         
@@ -210,12 +272,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType]);
 
     const financialSummary = useMemo(() => {
-        if (!selectedEvent) return { paid4M: 0, paidClub: 0, collected4M: 0, commission: 0, dueToOrg: 0 };
+        if (!selectedEvent) return { paid4M: 0, paidClub: 0, collected4M: 0, licenseRevenue4M: 0, commission: 0, dueToOrg: 0 };
 
         let paid4M = 0;
         let paidClub = 0;
 
         localParticipants.forEach((p) => {
+            if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return;
             if (!p.is_paid) return;
             const method = String(
                 p.actual_payment?.payment_method
@@ -230,15 +293,23 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             }
         });
 
-        const collected4M = (eventPayments || [])
+        const collected4M = localParticipants
+            .filter((p) => {
+                if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return false;
+                return p.is_paid && isPaystackEntryPayment(p, p.actual_payment, refundByReg);
+            })
+            .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
+
+        const licenseRevenue4M = (eventPayments || [])
             .filter((p) => p.status === 'success' && String(p.payment_method || '').toLowerCase() !== 'manual')
+            .filter((p) => isLicensePaymentRow(p))
             .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
         const commission = collected4M * 0.05;
         const dueToOrg = collected4M - commission;
 
-        return { paid4M, paidClub, collected4M, commission, dueToOrg };
-    }, [localParticipants, selectedEvent, eventPayments]);
+        return { paid4M, paidClub, collected4M, licenseRevenue4M, commission, dueToOrg };
+    }, [localParticipants, selectedEvent, eventPayments, refundByReg]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -342,7 +413,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         // Count registrant row
                         es.entries++;
                         es._manualBilled = (es._manualBilled || 0) + fee;
-                        if (r.payment_status === 'paid') {
+                        if (registrationCountsAsPaid(r)) {
                             es.paidCount++;
                             es._manualCollected = (es._manualCollected || 0) + fee;
                         }
@@ -452,19 +523,30 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 // Refunds for this event (by its successful payments) — includes
                 // refunds tied to now-withdrawn registrations, for accurate net.
                 const successPayIds = (payData || []).map(p => p.id);
+                let refundByRegId = new Map();
                 if (successPayIds.length) {
                     const { data: refundRows } = await supabase
                         .from('payment_refunds')
                         .select('*')
                         .in('payment_id', successPayIds);
                     setRefunds(refundRows || []);
+                    for (const rf of refundRows || []) {
+                        const id = rf.event_registration_id;
+                        if (!id) continue;
+                        const cur = refundByRegId.get(id) || { amount: 0, statuses: [] };
+                        cur.amount += Number(rf.amount || 0);
+                        cur.statuses.push(rf.status);
+                        refundByRegId.set(id, cur);
+                    }
+                } else {
+                    setRefunds([]);
                 }
                 setEventPayments(payData || []);
 
                 // Map registrations → participant shape
                 const mapped = (regRows || []).map(r => {
                     const divFee = Number(r.tournament_divisions?.entry_fee || 0);
-                    const isPaid = r.payment_status === 'paid';
+                    const isPaid = registrationCountsAsPaid(r, refundByRegId);
                     const payment = findManualRegistrationPayment(payData, {
                         id: r.id,
                         email: r.email,
@@ -1663,6 +1745,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
                                 <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
+                                <p className="text-[9px] text-gray-500 mt-1">Entry fees via Paystack only</p>
                             </div>
                             <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
@@ -1671,6 +1754,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
                                 <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
                                 <span className="text-lg font-black text-red-400">{fmtR(financialSummary.commission)}</span>
+                                {financialSummary.licenseRevenue4M > 0 && (
+                                    <p className="text-[9px] text-gray-500 mt-2">
+                                        SAPA license revenue via 4M (not paid to organiser): {fmtR(financialSummary.licenseRevenue4M)}
+                                    </p>
+                                )}
                             </div>
                         </div>
                     </motion.div>
