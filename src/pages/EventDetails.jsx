@@ -3484,6 +3484,11 @@ const EventDetails = () => {
                                                                 icon: Trophy,
                                                                 valueColor: theme.accentText,
                                                             }] : []),
+                                                            ...(event.partner_requirement ? [{ label: 'Partner', value: event.partner_requirement === 'Optional' ? 'Optional (Free Agent)' : 'Required (Doubles)', icon: User }] : []),
+                                                            ...(event.back_draw_options ? [{ label: 'Back Draw', value: event.back_draw_options, icon: Award }] : []),
+                                                            ...(event.max_teams_capacity ? [{ label: 'Team Capacity', value: `${event.max_teams_capacity} teams`, icon: User }] : []),
+                                                            ...(event.golden_point === false ? [{ label: 'Scoring', value: 'Advantage (No Golden Point)', icon: Award }] : (event.golden_point === true ? [{ label: 'Scoring', value: 'Golden Point', icon: Award }] : [])),
+                                                            ...(event.is_league ? [{ label: 'Format', value: 'League', icon: Trophy }] : []),
                                                             { label: 'Status', value: computedStatus, icon: Clock }
                                                         ].map((item, idx) => (
                                                             <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
