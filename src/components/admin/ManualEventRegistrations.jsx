@@ -2,30 +2,29 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import {
+    formatRegistrationLicenseLabel,
+    resolveRegistrationLicenseCategory,
+} from '../../utils/registrationLicense';
+import {
+    findPaymentForRegistration,
+    findStrictPaystackEntryPayment,
+    isExplicitAdminMarkedPayment,
+    isLicensePaymentRow,
+    registrationHasPaystackEntryPayment,
+    resolveRegistrationPaymentMethod,
+} from '../../utils/paymentRegistrationMatch';
 import { sendEmail } from '../../utils/emails';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
-const isLicensePaymentRow = (payment) => {
-    if (!payment) return false;
-    const type = String(payment.payment_type || '').toLowerCase();
-    if (type.includes('license') || type === 'membership') return true;
-    if (String(payment.reference || '').startsWith('LIC-')) return true;
-    const covers = payment.metadata?.covers;
-    return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
-};
-
-const isPaystackEntryPayment = (reg, payment, refundByRegMap = null) => {
+const isPaystackEntryPayment = (reg, payments, refundByRegMap = null) => {
     if (!registrationCountsAsPaid(reg, refundByRegMap)) return false;
-    if (payment && payment.status !== 'success') return false;
-    const method = String(reg.payment_method || payment?.payment_method || '').toLowerCase();
-    if (method === 'manual' || method === 'cash') return false;
-    if (method === 'paystack') return true;
-    return !!payment && !isLicensePaymentRow(payment);
+    return registrationHasPaystackEntryPayment(reg, (payments || []).filter((p) => p.status === 'success'));
 };
 
 const ABANDONED_CHECKOUT_AFTER_MS = 24 * 60 * 60 * 1000;
@@ -71,6 +70,42 @@ const registrationCountsAsPaid = (reg, refundByRegMap = null) => {
 
 const buildPlayersByEmail = buildPlayersByEmailMap;
 
+const PaymentNoteButton = ({ note, regId, openId, onOpen }) => {
+    if (!note?.trim()) return null;
+    const isOpen = openId === regId;
+
+    return (
+        <span className="relative inline-flex shrink-0 align-middle">
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onOpen(isOpen ? null : regId);
+                }}
+                className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-gray-500/50 text-gray-400 hover:text-amber-300 hover:border-amber-400/60 transition-colors"
+                aria-label="View payment note"
+                title="View payment note"
+            >
+                <Info size={9} strokeWidth={2.5} />
+            </button>
+            {isOpen && (
+                <>
+                    <button
+                        type="button"
+                        className="fixed inset-0 z-[100] cursor-default"
+                        aria-label="Close payment note"
+                        onClick={() => onOpen(null)}
+                    />
+                    <div className="absolute left-0 bottom-full mb-1.5 z-[101] min-w-[180px] max-w-[260px] rounded-lg border border-white/10 bg-[#0F172A] px-2.5 py-2 text-[10px] text-gray-200 shadow-2xl">
+                        <p className="text-[9px] font-bold uppercase tracking-wider text-gray-500 mb-1">Payment note</p>
+                        <p className="leading-snug whitespace-pre-wrap">{note}</p>
+                    </div>
+                </>
+            )}
+        </span>
+    );
+};
+
 const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'modal' }) => {
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
@@ -82,7 +117,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [playerSearch, setPlayerSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all'); // all | paid | pending | withdrawn
+    const [paymentFilter, setPaymentFilter] = useState('all'); // all | paid | manual | pending | refunded | withdrawn
+    const [licenseFilter, setLicenseFilter] = useState('all'); // all | full | temp | none
     const [markingId, setMarkingId] = useState(null);
     const [markPaidTarget, setMarkPaidTarget] = useState(null);
     const [markPaidNote, setMarkPaidNote] = useState('');
@@ -109,6 +145,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [searchingProfiles, setSearchingProfiles] = useState(false);
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list'
     const [expandedDivisions, setExpandedDivisions] = useState({});
+    const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -127,9 +164,31 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             supabase.from('payments').select('*').eq('event_id', event.id),
             supabase.from('tournament_divisions').select('*').eq('event_id', event.id),
         ]);
-        const regs = regRes.data || [];
+        let regs = regRes.data || [];
+        const payRows = payRes.data || [];
+        const successPayments = payRows.filter((p) => p.status === 'success');
+
+        const paymentMethodPatches = [];
+        for (const reg of regs) {
+            if (isWithdrawnRegistration(reg)) continue;
+            if (reg.payment_status !== 'paid') continue;
+            if (String(reg.payment_method || '').toLowerCase() === 'paystack') continue;
+            if (!findStrictPaystackEntryPayment(successPayments, reg)) continue;
+            paymentMethodPatches.push(reg.id);
+        }
+        if (paymentMethodPatches.length > 0) {
+            await Promise.all(
+                paymentMethodPatches.map((id) => supabase
+                    .from('event_registrations')
+                    .update({ payment_method: 'paystack' })
+                    .eq('id', id)),
+            );
+            const patched = new Set(paymentMethodPatches);
+            regs = regs.map((r) => (patched.has(r.id) ? { ...r, payment_method: 'paystack' } : r));
+        }
+
         setRegistrations(regs);
-        setPayments(payRes.data || []);
+        setPayments(payRows);
         setDivisions(divRes.data || []);
 
         const regIds = regs.map((r) => r.id);
@@ -159,7 +218,15 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [event?.id]);
 
     useEffect(() => {
-        if (isActive) { load(); setSearch(''); setPlayerSearch(''); setStatusFilter('all'); setDivisionFilter('all'); setSortBy('division'); }
+        if (isActive) {
+            load();
+            setSearch('');
+            setPlayerSearch('');
+            setPaymentFilter('all');
+            setLicenseFilter('all');
+            setDivisionFilter('all');
+            setSortBy('division');
+        }
     }, [isActive, load]);
 
     const divFee = useCallback(
@@ -215,39 +282,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         return { amount: e.amount, status };
     };
 
-    const filtered = useMemo(() => {
-        let rows = registrations;
-        if (statusFilter === 'withdrawn') rows = rows.filter((r) => isWithdrawnRegistration(r));
-        else {
-            rows = rows.filter((r) => !isWithdrawnRegistration(r));
-            if (statusFilter === 'paid') rows = rows.filter((r) => registrationCountsAsPaid(r, refundByReg));
-            if (statusFilter === 'pending') rows = rows.filter((r) => !registrationCountsAsPaid(r, refundByReg));
-        }
-        if (divisionFilter !== 'all') {
-            rows = rows.filter((r) => r.division === divisionFilter);
-        }
-        if (search.trim()) {
-            const q = search.toLowerCase();
-            rows = rows.filter((r) =>
-                [r.full_name, r.email, r.division, r.partner_name, r.partner_email].filter(Boolean).some((v) => v.toLowerCase().includes(q))
-            );
-        }
-        const sorted = [...rows];
-        if (sortBy === 'division') {
-            sorted.sort((a, b) =>
-                (a.division || '').localeCompare(b.division || '')
-                || (a.full_name || '').localeCompare(b.full_name || ''));
-        } else if (sortBy === 'name') {
-            sorted.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
-        }
-        // 'recent' keeps the load order (created_at desc)
-        return sorted;
-    }, [registrations, statusFilter, search, divisionFilter, sortBy, refundByReg]);
-
     const openMarkPaidModal = (reg) => {
+        const reference = `MANUAL-ADMIN-${reg.id}`;
+        const existingPayment = payments.find((p) => p.reference === reference)
+            || payments.find((p) => p.status === 'success' && p.metadata?.registration_id === reg.id);
         setMarkPaidTarget(reg);
-        setMarkPaidNote('');
-        setMarkPaidMethod('manual');
+        setMarkPaidNote(
+            existingPayment?.metadata?.note
+            || existingPayment?.metadata?.payment_note
+            || '',
+        );
+        setMarkPaidMethod(reg.payment_method || existingPayment?.payment_method || 'manual');
     };
 
     const closeMarkPaidModal = () => {
@@ -261,6 +306,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         if (!markPaidTarget) return;
         const reg = markPaidTarget;
         const note = markPaidNote.trim();
+        if (!note) {
+            toast.error('A payment note is required for manual payments');
+            return;
+        }
         setMarkPaidBusy(true);
         setMarkingId(reg.id);
         try {
@@ -274,9 +323,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             if (error) throw error;
 
             const reference = `MANUAL-ADMIN-${reg.id}`;
-            const { data: existing } = await supabase.from('payments').select('id').eq('reference', reference).maybeSingle();
-            if (!existing) {
-                await supabase.from('payments').insert([{
+            const paymentMetadata = {
+                source: 'manual_event_admin',
+                division: reg.division,
+                email: reg.email,
+                registration_id: reg.id,
+                marked_by_admin: true,
+                note,
+                payment_note: note,
+            };
+            const { data: existing } = await supabase.from('payments').select('id, metadata').eq('reference', reference).maybeSingle();
+            if (existing) {
+                const { error: payErr } = await supabase
+                    .from('payments')
+                    .update({
+                        payment_method: markPaidMethod,
+                        amount: divFee(reg.division),
+                        metadata: { ...(existing.metadata || {}), ...paymentMetadata },
+                    })
+                    .eq('id', existing.id);
+                if (payErr) throw payErr;
+            } else {
+                const { error: payErr } = await supabase.from('payments').insert([{
                     event_id: event.id,
                     amount: divFee(reg.division),
                     currency: 'ZAR',
@@ -284,18 +352,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                     payment_type: 'event_entry_fee',
                     payment_method: markPaidMethod,
                     reference,
-                    metadata: {
-                        source: 'manual_event_admin',
-                        division: reg.division,
-                        email: reg.email,
-                        registration_id: reg.id,
-                        marked_by_admin: true,
-                        note: note || null,
-                    },
+                    metadata: paymentMetadata,
                 }]);
+                if (payErr) throw payErr;
             }
 
-            toast.success(`Marked ${reg.full_name} as paid${note ? ` — ${note}` : ''}`);
+            toast.success(`Marked ${reg.full_name} as paid — ${note}`);
             closeMarkPaidModal();
             load();
         } catch (err) {
@@ -770,48 +832,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         }
     };
 
-    const findPaymentForReg = useCallback((reg) => {
-        if (!reg) return null;
-        const email = (reg.email || '').toLowerCase();
-        const division = reg.division;
-        const matches = [];
-
-        for (const p of payments.filter((x) => x.status === 'success')) {
-            if (p.metadata?.registration_id === reg.id) {
-                matches.push(p);
-                continue;
-            }
-            if (
-                p.metadata?.source === 'manual_event_admin'
-                && (p.metadata?.email || '').toLowerCase() === email
-                && p.metadata?.division === division
-            ) {
-                matches.push(p);
-                continue;
-            }
-            const covers = p.metadata?.covers;
-            if (Array.isArray(covers)) {
-                const covered = covers.some(
-                    (c) => c.type === 'entry'
-                        && (c.email || '').toLowerCase() === email
-                        && (!c.division || c.division === division),
-                );
-                if (covered) {
-                    matches.push(p);
-                    continue;
-                }
-            }
-            if ((p.metadata?.email || p.metadata?.registrant_email || '').toLowerCase() === email) {
-                matches.push(p);
-            }
-        }
-
-        if (matches.length === 0) return null;
-        const selfPayment = matches.find(
-            (p) => (p.metadata?.registrant_email || p.metadata?.email || '').toLowerCase() === email,
-        );
-        return selfPayment || matches[0];
-    }, [payments]);
+    const findPaymentForReg = useCallback(
+        (reg) => findPaymentForRegistration(payments.filter((p) => p.status === 'success'), reg),
+        [payments],
+    );
 
     const resolvePaymentPayer = useCallback((reg, payment) => {
         const selfEmail = (reg.email || '').toLowerCase();
@@ -851,74 +875,138 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const formatPaymentMethodForExport = useCallback((r) => {
         if (!registrationCountsAsPaid(r)) return '';
 
-        if (r.payment_method) return labelPaymentMethod(r.payment_method);
+        if (isPaystackEntryPayment(r, payments, refundByReg)) return 'Paystack';
 
         const payment = findPaymentForReg(r);
-        if (payment?.payment_method) return labelPaymentMethod(payment.payment_method);
+        const method = resolveRegistrationPaymentMethod(r, payment);
+        if (method && method !== 'paystack') return labelPaymentMethod(method);
 
-        return '';
-    }, [findPaymentForReg]);
+        return 'Manual';
+    }, [findPaymentForReg, payments, refundByReg]);
 
     const getPaymentDetails = useCallback((reg) => {
         if (!registrationCountsAsPaid(reg, refundByReg)) return null;
 
         const payment = findPaymentForReg(reg);
         const { isPartnerPaid, payerName } = resolvePaymentPayer(reg, payment);
-        const method = reg.payment_method || payment?.payment_method || (isPartnerPaid ? 'partner' : 'paystack');
+        const method = resolveRegistrationPaymentMethod(reg, payment) || (isPartnerPaid ? 'partner' : 'paystack');
         const note = payment?.metadata?.note || payment?.metadata?.payment_note || null;
-        const isAdminMarked = !!payment?.metadata?.marked_by_admin || method === 'manual' || method === 'cash';
+        const isExplicitAdminMark = isExplicitAdminMarkedPayment(payment);
+        const isPaystackChannel = isPaystackEntryPayment(reg, payments, refundByReg);
+        const isManualChannel = !isPartnerPaid && !isPaystackChannel;
 
-        return { isPartnerPaid, payerName, method, note, isAdminMarked, payment };
-    }, [findPaymentForReg, resolvePaymentPayer, refundByReg]);
+        return {
+            isPartnerPaid,
+            payerName,
+            method,
+            note,
+            isExplicitAdminMark,
+            isManualChannel,
+            payment,
+        };
+    }, [findPaymentForReg, resolvePaymentPayer, refundByReg, payments]);
+
+    const isManualChannelRegistration = useCallback((reg) => {
+        const details = getPaymentDetails(reg);
+        return !!details?.isManualChannel;
+    }, [getPaymentDetails]);
 
     const renderPaymentDetails = useCallback((reg) => {
         const details = getPaymentDetails(reg);
         if (!details) return null;
 
+        const channelLabel = details.isPartnerPaid ? (
+            <span className="text-[9px] font-bold text-sky-300">
+                Paid by {details.payerName || 'partner'}
+            </span>
+        ) : details.isManualChannel ? (
+            <span className="text-[9px] font-bold text-amber-300">
+                Manual{details.method && details.method !== 'paystack' ? ` · ${labelPaymentMethod(details.method)}` : ''}
+            </span>
+        ) : (
+            <span className="text-[9px] font-bold text-gray-400">
+                Via {labelPaymentMethod(details.method) || 'Paystack'}
+            </span>
+        );
+
         return (
-            <div className="mt-1 space-y-0.5">
-                {details.isPartnerPaid ? (
-                    <span className="text-[9px] font-bold text-sky-300 block">
-                        Paid by {details.payerName || 'partner'}
-                    </span>
-                ) : (
-                    <span className="text-[9px] font-bold text-gray-400 block">
-                        Via {labelPaymentMethod(details.method) || 'Paystack'}
-                        {details.isAdminMarked && details.method !== 'paystack' ? ' · Admin' : ''}
-                    </span>
-                )}
-                {details.note && (
-                    <span className="text-[9px] text-gray-500 italic block max-w-[180px] truncate" title={details.note}>
-                        {details.note}
-                    </span>
-                )}
+            <div className="mt-1 flex items-center gap-1 flex-wrap">
+                {channelLabel}
+                <PaymentNoteButton
+                    note={details.note}
+                    regId={reg.id}
+                    openId={openPaymentNoteId}
+                    onOpen={setOpenPaymentNoteId}
+                />
             </div>
         );
-    }, [getPaymentDetails]);
+    }, [getPaymentDetails, openPaymentNoteId]);
 
     const formatLicenseForExport = useCallback((r) => {
         const email = (r.email || '').toLowerCase();
-        if (!email) return '';
+        const player = playersByEmail.get(email);
+        return formatRegistrationLicenseLabel(email, event?.id, player, payments);
+    }, [playersByEmail, payments, event?.id]);
 
-        for (const p of payments.filter((x) => x.status === 'success')) {
-            const cover = (p.metadata?.covers || []).find(
-                (c) => c.type === 'license' && (c.email || '').toLowerCase() === email,
-            );
-            if (cover) {
-                return cover.license === 'full' ? 'Full (purchased for event)' : 'Temporary (purchased for event)';
+    const getLicenseCategory = useCallback((reg) => {
+        const email = (reg.email || '').toLowerCase();
+        const player = playersByEmail.get(email);
+        return resolveRegistrationLicenseCategory(email, event?.id, player, payments);
+    }, [playersByEmail, payments, event?.id]);
+
+    const regMatchesPaymentFilter = useCallback((reg) => {
+        if (paymentFilter === 'all') return true;
+        if (paymentFilter === 'paid') return registrationCountsAsPaid(reg, refundByReg);
+        if (paymentFilter === 'refunded') {
+            const ps = String(reg.payment_status || '').toLowerCase();
+            return ps === 'refunded' || hasProcessedRefund(reg.id, refundByReg);
+        }
+        if (paymentFilter === 'pending') {
+            if (isWithdrawnRegistration(reg)) return false;
+            const ps = String(reg.payment_status || 'pending').toLowerCase();
+            return !registrationCountsAsPaid(reg, refundByReg) && ps !== 'refunded';
+        }
+        if (paymentFilter === 'manual') return isManualChannelRegistration(reg);
+        return true;
+    }, [paymentFilter, refundByReg, isManualChannelRegistration]);
+
+    const regMatchesLicenseFilter = useCallback((reg) => {
+        if (licenseFilter === 'all') return true;
+        return getLicenseCategory(reg) === licenseFilter;
+    }, [licenseFilter, getLicenseCategory]);
+
+    const filtered = useMemo(() => {
+        let rows = registrations;
+        if (paymentFilter === 'withdrawn') {
+            rows = rows.filter((r) => isWithdrawnRegistration(r));
+        } else {
+            rows = rows.filter((r) => !isWithdrawnRegistration(r));
+            if (paymentFilter !== 'all') {
+                rows = rows.filter((r) => regMatchesPaymentFilter(r));
             }
         }
-
-        const player = playersByEmail.get(email);
-        if (!player) return 'Not on file';
-        if (String(player.license_type || '').toLowerCase() === 'full') return 'Full';
-        const hasTempForEvent = (player.temporary_licenses || []).some(
-            (lic) => Number(lic.event_id) === Number(event?.id),
-        );
-        if (hasTempForEvent) return 'Temporary';
-        if (player.paid_registration) return 'Active';
-        return 'None';
-    }, [playersByEmail, payments, event?.id]);
+        if (licenseFilter !== 'all') {
+            rows = rows.filter((r) => regMatchesLicenseFilter(r));
+        }
+        if (divisionFilter !== 'all') {
+            rows = rows.filter((r) => r.division === divisionFilter);
+        }
+        if (search.trim()) {
+            const q = search.toLowerCase();
+            rows = rows.filter((r) =>
+                [r.full_name, r.email, r.division, r.partner_name, r.partner_email].filter(Boolean).some((v) => v.toLowerCase().includes(q))
+            );
+        }
+        const sorted = [...rows];
+        if (sortBy === 'division') {
+            sorted.sort((a, b) =>
+                (a.division || '').localeCompare(b.division || '')
+                || (a.full_name || '').localeCompare(b.full_name || ''));
+        } else if (sortBy === 'name') {
+            sorted.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || ''));
+        }
+        return sorted;
+    }, [registrations, paymentFilter, licenseFilter, search, divisionFilter, sortBy, regMatchesPaymentFilter, regMatchesLicenseFilter]);
 
     const activeRegistrations = useMemo(
         () => registrations.filter((r) => !isWithdrawnRegistration(r)),
@@ -1079,11 +1167,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [formatLicenseForExport]);
 
     const paymentBadge = useCallback((reg) => {
-        if (registrationCountsAsPaid(reg, refundByReg)) {
-            return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Paid</span>;
+        const details = getPaymentDetails(reg);
+        if (details) {
+            if (details.isManualChannel) {
+                return (
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Manual
+                    </span>
+                );
+            }
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> Paid
+                </span>
+            );
         }
-        return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/10 text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Pending</span>;
-    }, [refundByReg]);
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-amber-500/10 text-amber-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Pending
+            </span>
+        );
+    }, [getPaymentDetails]);
 
     const teamsWithSeedsByDivision = useMemo(() => {
         const result = {};
@@ -1153,9 +1257,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
             if (email && !licenseCounted.has(email)) {
                 licenseCounted.add(email);
-                const license = formatLicenseForExport(r);
-                if (license.includes('Full')) licenseCounts.full++;
-                else if (license.includes('Temporary')) licenseCounts.temp++;
+                const player = playersByEmail.get(email);
+                const category = resolveRegistrationLicenseCategory(email, event?.id, player, payments);
+                if (category === 'full') licenseCounts.full++;
+                else if (category === 'temp') licenseCounts.temp++;
                 else licenseCounts.none++;
             }
         });
@@ -1196,7 +1301,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             } else {
                 paidClub++;
             }
-            if (isPaystackEntryPayment(r, payment, refundByReg)) {
+            if (isPaystackEntryPayment(r, payments, refundByReg)) {
                 collected4M += divFee(r.division);
             }
             
@@ -1223,12 +1328,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     }, [activeRegistrations, payments, divFee, formatPaymentMethodForExport, formatLicenseForExport, findPaymentForReg, refundByReg]);
 
     const exportCsv = () => {
-        const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'License', 'Payment Status', 'Payment Method', 'Status', 'Registered'];
+        const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'License', 'Payment Status', 'Payment Channel', 'Payment Note', 'Registration Status', 'Registered'];
         const lines = [headers.join(',')];
         for (const r of registrations) {
+            const details = getPaymentDetails(r);
+            let channel = '';
+            if (details) {
+                if (details.isPartnerPaid) channel = `Partner (${details.payerName || 'partner'})`;
+                else if (details.isManualChannel) channel = `Manual (${labelPaymentMethod(details.method) || 'Admin'})`;
+                else channel = labelPaymentMethod(details.method) || 'Paystack';
+            }
             const row = [
                 r.full_name, r.email, r.phone || '', r.division, r.partner_name || '', r.partner_email || '',
-                formatLicenseForExport(r), formatPaymentStatusForExport(r), formatPaymentMethodForExport(r), r.status || '',
+                formatLicenseForExport(r), formatPaymentStatusForExport(r), channel,
+                details?.note || '',
+                r.status || '',
                 r.created_at ? new Date(r.created_at).toLocaleString() : '',
             ].map((v) => `"${String(v).replace(/"/g, '""')}"`);
             lines.push(row.join(','));
@@ -1517,14 +1631,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             {isExpanded && (
                                                 clsTeams.length > 0 ? (
                                                     <div className="overflow-x-auto">
-                                                        <table className="w-full text-sm min-w-[900px]">
+                                                        <table className="w-full text-sm min-w-[800px]">
                                                             <thead>
                                                                 <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
                                                                     <th className="py-3 px-4 w-10">#</th>
                                                                     <th className="py-3 px-4">Team (Players)</th>
                                                                     <th className="py-3 px-4">Team Points</th>
                                                                     <th className="py-3 px-4">Players</th>
-                                                                    <th className="py-3 px-4">4M Profile</th>
                                                                     <th className="py-3 px-4">Payment</th>
                                                                     <th className="py-3 px-4">Amount Paid</th>
                                                                     <th className="py-3 px-4">License Status</th>
@@ -1586,13 +1699,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                             <div className="space-y-1">
                                                                                 {team.players.map((p) => (
                                                                                     <div key={p.id} className="text-sm text-gray-300">{p.full_name}</div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="space-y-1.5">
-                                                                                {team.players.map((p) => (
-                                                                                    <div key={`profile-${p.id}`}>{renderProfileLink(p)}</div>
                                                                                 ))}
                                                                             </div>
                                                                         </td>
@@ -1763,17 +1869,28 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                             className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-white text-sm focus:border-padel-green focus:outline-none"
                                         />
                                     </div>
-                                    <div className="flex gap-1">
-                                        {['all', 'paid', 'pending', 'withdrawn'].map((f) => (
-                                            <button
-                                                key={f}
-                                                onClick={() => setStatusFilter(f)}
-                                                className={`px-3 py-2 rounded-lg text-xs font-bold capitalize ${statusFilter === f ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
-                                            >
-                                                {f}
-                                            </button>
-                                        ))}
-                                    </div>
+                                    <select
+                                        value={paymentFilter}
+                                        onChange={(e) => setPaymentFilter(e.target.value)}
+                                        className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                                    >
+                                        <option value="all">Payment status: All</option>
+                                        <option value="paid">Paid</option>
+                                        <option value="manual">Manual</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="refunded">Refunded</option>
+                                        <option value="withdrawn">Withdrawn</option>
+                                    </select>
+                                    <select
+                                        value={licenseFilter}
+                                        onChange={(e) => setLicenseFilter(e.target.value)}
+                                        className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                                    >
+                                        <option value="all">License type: All</option>
+                                        <option value="full">Full SAPA</option>
+                                        <option value="temp">Temporary</option>
+                                        <option value="none">None / not on file</option>
+                                    </select>
                                     <select
                                         value={divisionFilter}
                                         onChange={(e) => setDivisionFilter(e.target.value)}
@@ -1817,6 +1934,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                     <th className="py-3 px-4">4M Profile</th>
                                                     <th className="py-3 px-4">Division</th>
                                                     <th className="py-3 px-4">Partner</th>
+                                                    <th className="py-3 px-4">License type</th>
                                                     <th className="py-3 px-4">Status</th>
                                                     <th className="py-3 px-4 text-right">Action</th>
                                                 </tr>
@@ -1834,9 +1952,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                             {r.partner_name || '—'}
                                                             {r.partner_email && <div className="text-[10px] text-gray-600">{r.partner_email}</div>}
                                                         </td>
+                                                        <td className="py-3 px-4">{licenseBadge(r)}</td>
                                                         <td className="py-3 px-4">
-                                                            {statusBadge(r)}
-                                                            {renderPaymentDetails(r)}
+                                                            <div className="space-y-1.5">
+                                                                {paymentBadge(r)}
+                                                                {statusBadge(r)}
+                                                                {renderPaymentDetails(r)}
                                                             {(() => {
                                                                 const rf = refundSummaryFor(r.id);
                                                                 if (!rf) return null;
@@ -1851,6 +1972,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                     </div>
                                                                 );
                                                             })()}
+                                                            </div>
                                                         </td>
                                                         <td className="py-3 px-4 text-right">
                                                             <div className="inline-flex items-center gap-2 justify-end">
@@ -2064,19 +2186,25 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     <option value="paystack">Paystack (offline fix)</option>
                                 </select>
 
-                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">Payment note</label>
+                                <label className="block text-[11px] font-bold uppercase tracking-wide text-gray-500 mb-1.5">
+                                    Payment note <span className="text-red-400">*</span>
+                                </label>
                                 <textarea
                                     value={markPaidNote}
                                     onChange={(e) => setMarkPaidNote(e.target.value)}
                                     placeholder='e.g. "EFT paid 6 Jul", "Cash at desk", "Comp entry"'
                                     rows={3}
-                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-4 resize-none"
+                                    required
+                                    className="w-full bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-emerald-500/50 mb-1 resize-none"
                                 />
+                                <p className={`text-[11px] mb-4 min-h-[1rem] ${markPaidNote.trim() ? 'invisible' : 'text-amber-400/90'}`}>
+                                    Required — explain how payment was received.
+                                </p>
 
                                 <div className="flex flex-col gap-2">
                                     <button
                                         onClick={confirmMarkPaid}
-                                        disabled={markPaidBusy}
+                                        disabled={markPaidBusy || !markPaidNote.trim()}
                                         className="w-full py-2.5 rounded-lg text-sm font-bold bg-emerald-500 text-black hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2"
                                     >
                                         {markPaidBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

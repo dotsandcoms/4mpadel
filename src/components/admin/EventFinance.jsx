@@ -11,33 +11,36 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import {
+    findPaymentForRegistration,
+    isLicensePaymentRow,
+    registrationHasPaystackEntryPayment,
+} from '../../utils/paymentRegistrationMatch';
+import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
 import ManualEventRegistrations from './ManualEventRegistrations';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
-const isLicensePaymentRow = (payment) => {
-    if (!payment) return false;
-    const type = String(payment.payment_type || '').toLowerCase();
-    if (type.includes('license') || type === 'membership') return true;
-    if (String(payment.reference || '').startsWith('LIC-')) return true;
-    const covers = payment.metadata?.covers;
-    return Array.isArray(covers) && covers.length > 0 && covers.every((c) => c.type === 'license');
-};
-
-const isPaystackEntryPayment = (participant, payment, refundByRegMap = null) => {
-    const reg = participant?._reg;
-    if (reg && !registrationCountsAsPaid(reg, refundByRegMap)) return false;
+const isPaystackEntryPayment = (participant, allPayments, refundByRegMap = null) => {
+    const reg = participant?._reg || {
+        id: participant?.id,
+        email: participant?.email,
+        division: participant?.class_name,
+        payment_status: participant?.is_paid ? 'paid' : 'pending',
+        payment_method: participant?.registration_payment_method,
+        status: participant?.status,
+    };
     if (!participant?.is_paid) return false;
-    if (payment && payment.status !== 'success') return false;
-    const method = String(
-        participant.registration_payment_method
-        || payment?.payment_method
-        || participant.actual_payment?.payment_method
-        || '',
-    ).toLowerCase();
-    if (method === 'manual' || method === 'cash') return false;
-    if (method === 'paystack') return true;
-    return !!payment && !isLicensePaymentRow(payment);
+    if (reg && !registrationCountsAsPaid(reg, refundByRegMap)) return false;
+
+    const successPayments = (allPayments || []).filter((p) => p.status === 'success');
+    if (registrationHasPaystackEntryPayment(reg, successPayments)) return true;
+
+    const payment = participant?.actual_payment;
+    if (payment?.status === 'success' && String(payment.payment_method || '').toLowerCase() === 'paystack' && !isLicensePaymentRow(payment)) {
+        return true;
+    }
+    return false;
 };
 
 const getParticipantEntryFee = (p, event) => {
@@ -48,38 +51,8 @@ const getParticipantEntryFee = (p, event) => {
     return Number(event.category_fees?.[p.class_name] || event.entry_fee || 0);
 };
 
-const findManualRegistrationPayment = (payData, reg) => {
-    const email = (reg.email || '').toLowerCase();
-    const division = reg.division || reg.class_name;
-
-    for (const pay of payData || []) {
-        if (pay.status !== 'success') continue;
-        const meta = pay.metadata || {};
-
-        if (meta.registration_id === reg.id) return pay;
-        if ((meta.email || '').toLowerCase() === email) return pay;
-
-        const covers = meta.covers;
-        if (Array.isArray(covers)) {
-            const covered = covers.some((c) =>
-                c.type === 'entry'
-                && (c.email || '').toLowerCase() === email
-                && (!c.division || !division || c.division === division)
-            );
-            if (covered) return pay;
-        }
-
-        if (
-            meta.source === 'manual_event_admin'
-            && (meta.email || '').toLowerCase() === email
-            && (!meta.division || meta.division === division)
-        ) {
-            return pay;
-        }
-    }
-
-    return null;
-};
+const findManualRegistrationPayment = (payData, reg) =>
+    findPaymentForRegistration((payData || []).filter((p) => p.status === 'success'), reg);
 
 const getParticipantPaidAmount = (p) => {
     if (!p?.is_paid) return 0;
@@ -280,13 +253,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         localParticipants.forEach((p) => {
             if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return;
             if (!p.is_paid) return;
-            const method = String(
-                p.actual_payment?.payment_method
-                || p.registration_payment_method
-                || p.metadata?.payment_method
-                || '',
-            ).toLowerCase();
-            if (method === 'paystack' || (p.actual_payment && method !== 'manual' && method !== 'cash')) {
+            if (isPaystackEntryPayment(p, eventPayments, refundByReg)) {
                 paid4M++;
             } else {
                 paidClub++;
@@ -296,7 +263,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         const collected4M = localParticipants
             .filter((p) => {
                 if (p._isManualReg && p._reg && !registrationCountsAsPaid(p._reg, refundByReg)) return false;
-                return p.is_paid && isPaystackEntryPayment(p, p.actual_payment, refundByReg);
+                return p.is_paid && isPaystackEntryPayment(p, eventPayments, refundByReg);
             })
             .reduce((sum, p) => sum + getParticipantEntryFee(p, selectedEvent), 0);
 
@@ -398,6 +365,31 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         .in('event_id', manualEventIds)
                         .neq('status', 'withdrawn');
 
+                    const manualEmails = [...new Set(
+                        (manualRegs || [])
+                            .map((r) => (r.email || '').toLowerCase().trim())
+                            .filter(Boolean),
+                    )];
+                    const manualPlayers = manualEmails.length > 0
+                        ? await fetchPlayersByEmails(
+                            supabase,
+                            manualEmails,
+                            'id, email, license_type, paid_registration, temporary_licenses(id, event_id)',
+                        )
+                        : [];
+                    const manualPlayersByEmail = buildPlayersByEmailMap(manualPlayers);
+
+                    const { data: manualPayments } = await supabase
+                        .from('payments')
+                        .select('event_id, status, metadata')
+                        .in('event_id', manualEventIds)
+                        .eq('status', 'success');
+                    const paymentsByEvent = {};
+                    (manualPayments || []).forEach((pay) => {
+                        if (!paymentsByEvent[pay.event_id]) paymentsByEvent[pay.event_id] = [];
+                        paymentsByEvent[pay.event_id].push(pay);
+                    });
+
                     (manualRegs || []).forEach(r => {
                         const eid = r.event_id;
                         if (!statsByEvent[eid]) {
@@ -424,15 +416,13 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                             if (!manualLicenseCounted[eid]) manualLicenseCounted[eid] = new Set();
                             if (!manualLicenseCounted[eid].has(profileKey)) {
                                 manualLicenseCounted[eid].add(profileKey);
-                                const playerId = emailToPlayerId[profileKey];
-                                let lic = 'none';
-                                if (playerId) {
-                                    if (playerLicenses[playerId] === 'full') {
-                                        lic = 'full';
-                                    } else if (tempLicenses.some(t => t.event_id === eid && t.player_id === playerId)) {
-                                        lic = 'temp';
-                                    }
-                                }
+                                const player = manualPlayersByEmail.get(profileKey);
+                                const lic = resolveRegistrationLicenseCategory(
+                                    profileKey,
+                                    eid,
+                                    player,
+                                    paymentsByEvent[eid] || [],
+                                );
                                 es.licenses[lic]++;
                             }
                         }
