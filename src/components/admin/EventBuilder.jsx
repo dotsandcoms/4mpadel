@@ -342,6 +342,7 @@ const blankForm = {
     custom_image_url: '',
     sponsor_logos: [],
     // settings
+    registration_opens_at: '',
     registration_closes_at: '',
     featured_event: false,
     is_visible: true,
@@ -440,6 +441,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             ...Object.fromEntries(Object.keys(blankForm).map((k) => [k, ev[k] ?? blankForm[k]])),
             start_date: ev.start_date ? ev.start_date.substring(0, 10) : '',
             end_date: ev.end_date ? ev.end_date.substring(0, 10) : '',
+            registration_opens_at: toLocalInput(ev.registration_opens_at),
             registration_closes_at: toLocalInput(ev.registration_closes_at),
             prize_money_total: ev.prize_money_total != null ? String(ev.prize_money_total) : '',
             prize_money_breakdown: prizeBreakdown,
@@ -613,6 +615,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             prize_money_breakdown: (form.prize_money_breakdown || [])
                 .filter((r) => r.label && r.amount)
                 .map((r) => ({ label: r.label, amount: r.amount })),
+            registration_opens_at: safeISOString(form.registration_opens_at),
             registration_closes_at: safeISOString(form.registration_closes_at),
             start_date: form.start_date || null,
             end_date: form.end_date || null,
@@ -1130,6 +1133,42 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                         {step === 5 && (
                             <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className={labelClass} style={{ marginBottom: 0 }}>Registration Opens At</label>
+                                            <button
+                                                type="button"
+                                                onClick={() => setField('registration_opens_at',
+                                                    form.registration_opens_at ? '' : (() => {
+                                                        const now = new Date();
+                                                        const offsetMs = now.getTimezoneOffset() * 60000;
+                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                    })()
+                                                )}
+                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                    form.registration_opens_at ? 'bg-padel-green' : 'bg-white/20'
+                                                }`}
+                                            >
+                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                    form.registration_opens_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                }`} />
+                                            </button>
+                                        </div>
+                                        {form.registration_opens_at ? (
+                                            <input
+                                                type="datetime-local"
+                                                name="registration_opens_at"
+                                                value={form.registration_opens_at}
+                                                onChange={handleInput}
+                                                className={inputClass}
+                                            />
+                                        ) : (
+                                            <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                Open immediately
+                                            </div>
+                                        )}
+                                        <p className="text-[11px] text-gray-500 mt-1">Registrations are locked until this date &amp; time.</p>
+                                    </div>
                                     <div>
                                         <div className="flex items-center justify-between mb-2">
                                             <label className={labelClass} style={{ marginBottom: 0 }}>Registration Closes At</label>

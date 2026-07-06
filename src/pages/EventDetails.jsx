@@ -518,6 +518,19 @@ const EventDetails = () => {
 
     const registrationClosed = event?.is_manual ? isManualRegClosed : isRankedinRegistrationClosed;
 
+    // Registration hasn't opened yet (registration_opens_at in the future)
+    const registrationNotYetOpen = useMemo(() => {
+        if (!event?.registration_opens_at) return false;
+        return new Date(event.registration_opens_at) > new Date();
+    }, [event]);
+
+    const registrationOpensLabel = useMemo(() => {
+        if (!event?.registration_opens_at) return '';
+        return new Date(event.registration_opens_at).toLocaleDateString('en-ZA', {
+            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+        });
+    }, [event]);
+
     const stripHtml = (html) => {
         if (!html) return '';
         const tmp = document.createElement('DIV');
@@ -3354,6 +3367,7 @@ const EventDetails = () => {
                                     if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                     if (isEventPassed) return 'Completed';
                                     if (isLive) return 'Live Today';
+                                    if (registrationNotYetOpen) return `Reg. Opens ${registrationOpensLabel}`;
                                     if (registrationClosed) return 'Registration Closed';
                                     return 'Registration Open';
                                 })();
@@ -3465,6 +3479,7 @@ const EventDetails = () => {
                                                             if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
                                                             if (isEventPassed) return 'Completed';
                                                             if (isLive) return 'Live Today';
+                                                            if (registrationNotYetOpen) return `Reg. Opens ${registrationOpensLabel}`;
                                                             if (registrationClosed) return 'Registration Closed';
                                                             return 'Registration Open';
                                                         })();
@@ -3695,7 +3710,18 @@ const EventDetails = () => {
                                     </div>
                                     <div className="w-full space-y-6">
                                         {/* Manual event registration & checkout */}
-                                        {event.is_manual && (
+                                        {event.is_manual && registrationNotYetOpen && (
+                                            <div id="manual-registration" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                                                <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+                                                    <Clock className="w-6 h-6 text-gray-400" />
+                                                </div>
+                                                <h3 className="text-lg font-bold text-[#0F172A]">Registration Not Open Yet</h3>
+                                                <p className="text-sm text-gray-500 mt-1.5">
+                                                    Entries for this event open on <span className="font-bold text-[#0F172A]">{registrationOpensLabel}</span>. Check back then!
+                                                </p>
+                                            </div>
+                                        )}
+                                        {event.is_manual && !registrationNotYetOpen && (
                                             <div id="manual-registration">
                                                 <ManualEventRegistration
                                                     event={event}
