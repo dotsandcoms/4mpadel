@@ -51,6 +51,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
     const [sortBy, setSortBy] = useState('division'); // 'division' | 'name' | 'recent'
     const [profileResults, setProfileResults] = useState([]); // profiles not yet entered (for invite)
     const [searchingProfiles, setSearchingProfiles] = useState(false);
+    const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list'
+    const [expandedDivisions, setExpandedDivisions] = useState({});
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -621,6 +623,70 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
         return 'None';
     }, [playersByEmail, payments, event?.id]);
 
+    const activeRegistrations = useMemo(() => registrations.filter(r => r.status !== 'withdrawn'), [registrations]);
+
+    const teamsByDivision = useMemo(() => {
+        const result = {};
+        divisions.forEach(d => {
+            result[d.name] = [];
+            const divRegs = activeRegistrations.filter(r => r.division === d.name);
+            const processed = new Set();
+            
+            divRegs.forEach(reg => {
+                if (processed.has(reg.id)) return;
+                processed.add(reg.id);
+                
+                const partner = divRegs.find(r => r.id !== reg.id && (r.email || '').toLowerCase() === (reg.partner_email || '').toLowerCase());
+                if (partner) {
+                    processed.add(partner.id);
+                    result[d.name].push({ id: `team_${reg.id}`, players: [reg, partner] });
+                } else {
+                    result[d.name].push({ id: `team_${reg.id}`, players: [reg] });
+                }
+            });
+        });
+        return result;
+    }, [activeRegistrations, divisions]);
+
+    const overviewStats = useMemo(() => {
+        let paid4M = 0;
+        let paidClub = 0;
+        let collected4M = 0;
+        let unique = new Set(activeRegistrations.map(r => r.email)).size;
+        let fullLicenses = 0;
+        let tempLicenses = 0;
+        let noLicenses = 0;
+        
+        activeRegistrations.forEach(r => {
+            if (r.payment_status === 'paid') {
+                const method = formatPaymentMethodForExport(r);
+                if (method === 'Paystack') {
+                    paid4M++;
+                } else {
+                    paidClub++;
+                }
+            }
+            
+            const license = formatLicenseForExport(r);
+            if (license.includes('Full')) fullLicenses++;
+            else if (license.includes('Temporary')) tempLicenses++;
+            else noLicenses++;
+        });
+        
+        payments.forEach(p => {
+            if (p.status === 'success' && p.payment_method !== 'manual') {
+                collected4M += Number(p.amount || 0);
+            }
+        });
+        
+        const commission = collected4M * 0.05;
+        const dueToOrg = collected4M - commission;
+        
+        return {
+            unique, paid4M, paidClub, collected4M, commission, dueToOrg, fullLicenses, tempLicenses, noLicenses
+        };
+    }, [activeRegistrations, payments, playersByEmail, formatPaymentMethodForExport, formatLicenseForExport]);
+
     const exportCsv = () => {
         const headers = ['Name', 'Email', 'Phone', 'Division', 'Partner', 'Partner Email', 'License', 'Payment Status', 'Payment Method', 'Status', 'Registered'];
         const lines = [headers.join(',')];
@@ -662,181 +728,336 @@ const ManualEventRegistrations = ({ isOpen, onClose, event }) => {
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-                        <div>
-                            <h2 className="text-xl font-bold text-white">Registrations & Payments</h2>
-                            <p className="text-xs text-gray-400 truncate max-w-[60vw]">{event.event_name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10">
-                                <Download size={16} /> Export CSV
-                            </button>
-                            <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
-                                <X size={20} />
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-6 py-4 border-b border-white/5">
-                        {[
-                            { label: 'Entries', value: stats.total, icon: Users, color: '#beff00' },
-                            { label: 'Paid', value: stats.paid, icon: CheckCircle, color: '#22c55e' },
-                            { label: 'Pending', value: stats.pending, icon: Clock, color: '#f59e0b' },
-                            { label: 'Revenue', value: fmtR(stats.revenue), icon: DollarSign, color: '#beff00' },
-                        ].map((s) => (
-                            <div key={s.label} className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">{s.label}</p>
-                                    <s.icon size={16} style={{ color: s.color }} />
-                                </div>
-                                <p className="text-2xl font-black text-white mt-1">{s.value}</p>
+                    <div className="px-6 pt-4 border-b border-white/10">
+                        <div className="flex items-start justify-between mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-white">Event Manager</h2>
+                                <p className="text-xs text-gray-400 truncate max-w-[60vw]">{event.event_name}</p>
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Controls */}
-                    <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-white/5">
-                        <div className="relative flex-1 min-w-[200px]">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-                            <input
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search name, email, division..."
-                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-white text-sm focus:border-padel-green focus:outline-none"
-                            />
+                            <div className="flex items-center gap-2">
+                                <button onClick={exportCsv} className="bg-white/5 text-white border border-white/10 px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-white/10">
+                                    <Download size={16} /> Export CSV
+                                </button>
+                                <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
+                                    <X size={20} />
+                                </button>
+                            </div>
                         </div>
-                        <div className="flex gap-1">
-                            {['all', 'paid', 'pending', 'withdrawn'].map((f) => (
+                        <div className="flex gap-6 overflow-x-auto no-scrollbar">
+                            {['overview', 'players', 'list'].map(tab => (
                                 <button
-                                    key={f}
-                                    onClick={() => setStatusFilter(f)}
-                                    className={`px-3 py-2 rounded-lg text-xs font-bold capitalize ${statusFilter === f ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                                    key={tab}
+                                    onClick={() => setActiveTab(tab)}
+                                    className={`py-3 text-sm font-bold capitalize border-b-2 transition-colors whitespace-nowrap ${activeTab === tab ? 'border-padel-green text-padel-green' : 'border-transparent text-gray-400 hover:text-white'}`}
                                 >
-                                    {f}
+                                    {tab === 'list' ? 'Registrations List' : tab}
                                 </button>
                             ))}
                         </div>
-                        <select
-                            value={divisionFilter}
-                            onChange={(e) => setDivisionFilter(e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
-                            title="Filter by division"
-                        >
-                            <option value="all">All divisions ({stats.total})</option>
-                            {divisions.map((d) => {
-                                const count = registrations.filter(r => r.status !== 'withdrawn' && r.division === d.name).length;
-                                return (
-                                    <option key={d.id} value={d.name}>{d.name} ({count})</option>
-                                );
-                            })}
-                        </select>
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
-                            title="Sort by"
-                        >
-                            <option value="division">Sort: Division</option>
-                            <option value="name">Sort: Player name</option>
-                            <option value="recent">Sort: Most recent</option>
-                        </select>
                     </div>
 
-                    {/* Table */}
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        {loading ? (
-                            <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-gray-500" /></div>
-                        ) : filtered.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-gray-500">
-                                <UserX size={36} className="mb-3 opacity-40" />
-                                <p className="text-sm">No registrations found</p>
+                        {activeTab === 'overview' && (
+                            <div className="p-6 space-y-6">
+                                {/* Event Summary */}
+                                <div>
+                                    <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><div className="w-1 h-4 bg-padel-green rounded-full"></div> Event Summary</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Total Entries</p>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-3xl font-black text-white">{stats.total}</span>
+                                                <span className="text-xs text-gray-400 font-medium">{overviewStats.unique} unique</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Total Amount Billed</p>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-2xl font-black text-padel-green">{fmtR(stats.revenue)}</span>
+                                                <span className="text-xs text-padel-green/70 font-medium">collected</span>
+                                            </div>
+                                            {stats.pending > 0 && <p className="text-[10px] text-red-400 mt-1 font-medium">Outstanding entries: {stats.pending}</p>}
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Licenses</p>
+                                            <div className="flex gap-4">
+                                                <div className="text-center">
+                                                    <div className="text-lg font-bold text-white">{overviewStats.fullLicenses}</div>
+                                                    <div className="text-[9px] uppercase tracking-wider text-padel-green">Full</div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="text-lg font-bold text-white">{overviewStats.tempLicenses}</div>
+                                                    <div className="text-[9px] uppercase tracking-wider text-amber-500">Temp</div>
+                                                </div>
+                                                <div className="text-center">
+                                                    <div className="text-lg font-bold text-white">{overviewStats.noLicenses}</div>
+                                                    <div className="text-[9px] uppercase tracking-wider text-red-400">None</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Payment Status</p>
+                                            <div className="flex items-baseline gap-1">
+                                                <span className="text-3xl font-black text-white">{stats.paid}</span>
+                                                <span className="text-xs text-gray-400 font-medium">/ {stats.total} paid</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Financial Summary */}
+                                <div>
+                                    <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2"><div className="w-1 h-4 bg-emerald-500 rounded-full"></div> Financial Summary</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid via 4M</p>
+                                            <span className="text-xl font-black text-white">{overviewStats.paid4M}</span>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid to club</p>
+                                            <span className="text-xl font-black text-white">{overviewStats.paidClub}</span>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
+                                            <span className="text-xl font-black text-emerald-400">{fmtR(overviewStats.collected4M)}</span>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
+                                            <span className="text-3xl font-black text-emerald-400">{fmtR(overviewStats.dueToOrg)}</span>
+                                        </div>
+                                        <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
+                                            <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
+                                            <span className="text-lg font-black text-red-400">{fmtR(overviewStats.commission)}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <thead className="sticky top-0 bg-[#0F172A] z-10">
-                                    <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
-                                        <th className="py-3 px-6">Player</th>
-                                        <th className="py-3 px-4">Division</th>
-                                        <th className="py-3 px-4">Partner</th>
-                                        <th className="py-3 px-4">Status</th>
-                                        <th className="py-3 px-4 text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filtered.map((r) => (
-                                        <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
-                                            <td className="py-3 px-6">
-                                                <div className="font-bold text-white">{r.full_name}</div>
-                                                <div className="text-[11px] text-gray-500">{r.email}</div>
-                                            </td>
-                                            <td className="py-3 px-4 text-gray-300">{r.division}</td>
-                                            <td className="py-3 px-4 text-gray-400">
-                                                {r.partner_name || '—'}
-                                                {r.partner_email && <div className="text-[10px] text-gray-600">{r.partner_email}</div>}
-                                            </td>
-                                            <td className="py-3 px-4">
-                                                {statusBadge(r)}
-                                                {(() => {
-                                                    const rf = refundSummaryFor(r.id);
-                                                    if (!rf) return null;
-                                                    const cfg = rf.status === 'processed'
-                                                        ? { cls: 'bg-emerald-500/10 text-emerald-400', text: `Refunded ${fmtR(rf.amount)}` }
-                                                        : rf.status === 'failed'
-                                                            ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
-                                                            : { cls: 'bg-sky-500/10 text-sky-400', text: `Refund pending ${fmtR(rf.amount)}` };
-                                                    return (
-                                                        <div className={`mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
-                                                            {cfg.text}
+                        )}
+
+                        {activeTab === 'players' && (
+                            <div className="p-6 space-y-4">
+                                {divisions.map(cls => {
+                                    const clsTeams = teamsByDivision[cls.name] || [];
+                                    const isExpanded = expandedDivisions[cls.id] ?? true;
+                                    return (
+                                        <div key={cls.id} className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
+                                            <div 
+                                                onClick={() => setExpandedDivisions(prev => ({...prev, [cls.id]: !isExpanded}))}
+                                                className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-white/5 transition-colors border-b border-white/5"
+                                            >
+                                                <h3 className="font-bold text-white">{cls.name}</h3>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-padel-green bg-padel-green/10 px-2.5 py-1 rounded-md">
+                                                        {clsTeams.length} Teams
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            {isExpanded && (
+                                                <div className="divide-y divide-white/5">
+                                                    {clsTeams.length > 0 ? clsTeams.map((team, idx) => (
+                                                        <div key={team.id} className="p-4 hover:bg-white/5 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                                            <div className="flex items-center gap-3 w-full md:w-auto">
+                                                                <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0 font-bold text-gray-400 text-xs">
+                                                                    {idx + 1}
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    {team.players.map((p, i) => (
+                                                                        <div key={p.id} className="flex items-center gap-2">
+                                                                            <span className="font-bold text-sm text-white">{p.full_name}</span>
+                                                                            {statusBadge(p)}
+                                                                        </div>
+                                                                    ))}
+                                                                    {team.players.length === 1 && team.players[0].partner_name && (
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="font-bold text-sm text-gray-500 italic">{team.players[0].partner_name}</span>
+                                                                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-500/10 text-gray-500">Not entered</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                {team.players.map(r => (
+                                                                    <div key={`actions-${r.id}`} className="flex gap-1">
+                                                                        {r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
+                                                                            <button onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }} className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2 py-1 rounded text-[10px] font-bold hover:bg-sky-500 hover:text-white" title="Add Partner">
+                                                                                + Partner
+                                                                            </button>
+                                                                        )}
+                                                                        {r.payment_status !== 'paid' && (
+                                                                            <button onClick={() => markPaid(r)} disabled={markingId === r.id} className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded text-[10px] font-bold hover:bg-emerald-500 hover:text-white disabled:opacity-50" title="Mark Paid">
+                                                                                Mark Paid
+                                                                            </button>
+                                                                        )}
+                                                                        <button onClick={() => { setMoveDivId(''); setMoveTarget(r); }} className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-2 py-1 rounded text-[10px] font-bold hover:bg-violet-500 hover:text-white" title="Move">
+                                                                            Move
+                                                                        </button>
+                                                                        <button onClick={() => { setRemovePair(false); setRemoveTarget(r); }} className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-1 rounded text-[10px] font-bold hover:bg-red-500 hover:text-white" title="Remove">
+                                                                            Remove
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         </div>
-                                                    );
-                                                })()}
-                                            </td>
-                                            <td className="py-3 px-4 text-right">
-                                                <div className="inline-flex items-center gap-2 justify-end">
-                                                    {r.status !== 'withdrawn' && r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
-                                                        <button
-                                                            onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
-                                                            className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-500 hover:text-white inline-flex items-center gap-1.5"
-                                                        >
-                                                            <UserPlus size={12} />
-                                                            Add Partner
-                                                        </button>
-                                                    )}
-                                                    {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
-                                                        <button
-                                                            onClick={() => markPaid(r)}
-                                                            disabled={markingId === r.id}
-                                                            className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50"
-                                                        >
-                                                            {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                                                            Mark Paid
-                                                        </button>
-                                                    )}
-                                                    {r.status !== 'withdrawn' && (
-                                                        <button
-                                                            onClick={() => { setMoveDivId(''); setMoveTarget(r); }}
-                                                            className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-violet-500 hover:text-white inline-flex items-center gap-1.5"
-                                                        >
-                                                            <ArrowRightLeft size={12} />
-                                                            Move
-                                                        </button>
-                                                    )}
-                                                    {r.status !== 'withdrawn' && (
-                                                        <button
-                                                            onClick={() => { setRemovePair(false); setRemoveTarget(r); }}
-                                                            className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white inline-flex items-center gap-1.5"
-                                                        >
-                                                            <Trash2 size={12} />
-                                                            Remove
-                                                        </button>
+                                                    )) : (
+                                                        <div className="p-6 text-center text-xs font-bold text-gray-500 uppercase tracking-widest">
+                                                            No teams in this division
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        {activeTab === 'list' && (
+                            <div className="flex flex-col h-full">
+                                {/* Controls */}
+                                <div className="flex flex-wrap items-center gap-3 px-6 py-3 border-b border-white/5">
+                                    <div className="relative flex-1 min-w-[200px]">
+                                        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+                                        <input
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                            placeholder="Search name, email, division..."
+                                            className="w-full bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-white text-sm focus:border-padel-green focus:outline-none"
+                                        />
+                                    </div>
+                                    <div className="flex gap-1">
+                                        {['all', 'paid', 'pending', 'withdrawn'].map((f) => (
+                                            <button
+                                                key={f}
+                                                onClick={() => setStatusFilter(f)}
+                                                className={`px-3 py-2 rounded-lg text-xs font-bold capitalize ${statusFilter === f ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
+                                            >
+                                                {f}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <select
+                                        value={divisionFilter}
+                                        onChange={(e) => setDivisionFilter(e.target.value)}
+                                        className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                                        title="Filter by division"
+                                    >
+                                        <option value="all">All divisions ({stats.total})</option>
+                                        {divisions.map((d) => {
+                                            const count = registrations.filter(r => r.status !== 'withdrawn' && r.division === d.name).length;
+                                            return (
+                                                <option key={d.id} value={d.name}>{d.name} ({count})</option>
+                                            );
+                                        })}
+                                    </select>
+                                    <select
+                                        value={sortBy}
+                                        onChange={(e) => setSortBy(e.target.value)}
+                                        className="bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold focus:border-padel-green focus:outline-none"
+                                        title="Sort by"
+                                    >
+                                        <option value="division">Sort: Division</option>
+                                        <option value="name">Sort: Player name</option>
+                                        <option value="recent">Sort: Most recent</option>
+                                    </select>
+                                </div>
+
+                                {/* Table */}
+                                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                                    {loading ? (
+                                        <div className="flex items-center justify-center py-16"><Loader2 className="animate-spin text-gray-500" /></div>
+                                    ) : filtered.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+                                            <UserX size={36} className="mb-3 opacity-40" />
+                                            <p className="text-sm">No registrations found</p>
+                                        </div>
+                                    ) : (
+                                        <table className="w-full text-sm">
+                                            <thead className="sticky top-0 bg-[#0F172A] z-10">
+                                                <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
+                                                    <th className="py-3 px-6">Player</th>
+                                                    <th className="py-3 px-4">Division</th>
+                                                    <th className="py-3 px-4">Partner</th>
+                                                    <th className="py-3 px-4">Status</th>
+                                                    <th className="py-3 px-4 text-right">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filtered.map((r) => (
+                                                    <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
+                                                        <td className="py-3 px-6">
+                                                            <div className="font-bold text-white">{r.full_name}</div>
+                                                            <div className="text-[11px] text-gray-500">{r.email}</div>
+                                                        </td>
+                                                        <td className="py-3 px-4 text-gray-300">{r.division}</td>
+                                                        <td className="py-3 px-4 text-gray-400">
+                                                            {r.partner_name || '—'}
+                                                            {r.partner_email && <div className="text-[10px] text-gray-600">{r.partner_email}</div>}
+                                                        </td>
+                                                        <td className="py-3 px-4">
+                                                            {statusBadge(r)}
+                                                            {(() => {
+                                                                const rf = refundSummaryFor(r.id);
+                                                                if (!rf) return null;
+                                                                const cfg = rf.status === 'processed'
+                                                                    ? { cls: 'bg-emerald-500/10 text-emerald-400', text: `Refunded ${fmtR(rf.amount)}` }
+                                                                    : rf.status === 'failed'
+                                                                        ? { cls: 'bg-red-500/10 text-red-400', text: 'Refund failed' }
+                                                                        : { cls: 'bg-sky-500/10 text-sky-400', text: `Refund pending ${fmtR(rf.amount)}` };
+                                                                return (
+                                                                    <div className={`mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase ${cfg.cls}`}>
+                                                                        {cfg.text}
+                                                                    </div>
+                                                                );
+                                                            })()}
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right">
+                                                            <div className="inline-flex items-center gap-2 justify-end">
+                                                                {r.status !== 'withdrawn' && r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim() && (
+                                                                    <button
+                                                                        onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
+                                                                        className="bg-sky-500/10 text-sky-400 border border-sky-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-sky-500 hover:text-white inline-flex items-center gap-1.5"
+                                                                    >
+                                                                        <UserPlus size={12} />
+                                                                        Add Partner
+                                                                    </button>
+                                                                )}
+                                                                {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
+                                                                    <button
+                                                                        onClick={() => markPaid(r)}
+                                                                        disabled={markingId === r.id}
+                                                                        className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50"
+                                                                    >
+                                                                        {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                                                        Mark Paid
+                                                                    </button>
+                                                                )}
+                                                                {r.status !== 'withdrawn' && (
+                                                                    <button
+                                                                        onClick={() => { setMoveDivId(''); setMoveTarget(r); }}
+                                                                        className="bg-violet-500/10 text-violet-300 border border-violet-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-violet-500 hover:text-white inline-flex items-center gap-1.5"
+                                                                    >
+                                                                        <ArrowRightLeft size={12} />
+                                                                        Move
+                                                                    </button>
+                                                                )}
+                                                                {r.status !== 'withdrawn' && (
+                                                                    <button
+                                                                        onClick={() => { setRemovePair(false); setRemoveTarget(r); }}
+                                                                        className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-500 hover:text-white inline-flex items-center gap-1.5"
+                                                                    >
+                                                                        <Trash2 size={12} />
+                                                                        Remove
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                            </div>
                         )}
                     </div>
 
