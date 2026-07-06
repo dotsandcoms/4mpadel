@@ -5,7 +5,6 @@ import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, Calenda
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
-import ManualEventRegistrations from './ManualEventRegistrations';
 import {
     PieChart,
     Pie,
@@ -94,7 +93,6 @@ const CalendarManager = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isBuilderOpen, setIsBuilderOpen] = useState(false);
     const [builderEvent, setBuilderEvent] = useState(null);
-    const [regsEvent, setRegsEvent] = useState(null);
 
     const openBuilder = (event = null) => {
         setBuilderEvent(event);
@@ -1210,15 +1208,6 @@ const CalendarManager = () => {
                                                 >
                                                     <RefreshCw size={14} className={isSyncing ? "animate-spin" : ""} />
                                                 </button>
-                                                {event.is_manual && (
-                                                    <button
-                                                        onClick={() => setRegsEvent(event)}
-                                                        className="p-1.5 bg-padel-green/10 text-padel-green rounded-lg hover:bg-padel-green hover:text-black"
-                                                        title="View Registrations & Payments"
-                                                    >
-                                                        <Users size={14} />
-                                                    </button>
-                                                )}
                                                 <button
                                                     onClick={() => (event.is_manual ? openBuilder(event) : handleEdit(event))}
                                                     className="p-1.5 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500 hover:text-white"
@@ -1866,12 +1855,6 @@ const CalendarManager = () => {
                 editingEvent={builderEvent}
                 onClose={() => { setIsBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={fetchEvents}
-            />
-
-            <ManualEventRegistrations
-                isOpen={!!regsEvent}
-                event={regsEvent || {}}
-                onClose={() => setRegsEvent(null)}
             />
         </div>
     );

@@ -11,7 +11,31 @@ import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
 import { useClubs } from '../hooks/useClubs';
 import SearchableSelect from '../components/SearchableSelect';
-import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X } from 'lucide-react';
+import { User, Phone, Save, AlertCircle, CheckCircle, CheckCircle2, Image as PhotoIcon, Briefcase, MapPin, Trophy, ShieldCheck, Shield, Mail, ChevronDown, CreditCard, Lock, Calendar as CalendarIcon, ExternalLink, Users, Instagram, TrendingUp, Edit3, X, RotateCcw } from 'lucide-react';
+
+const REFUND_REASON_LABELS = {
+    owner_withdraw: 'Withdrawal',
+    partner_withdraw: 'Partner withdrew',
+    owner_removed_partner: 'Partner removed',
+    admin_removal: 'Admin removal',
+    admin_cash_refund: 'Cash refund',
+    division_switch: 'Division switch',
+};
+
+const formatRefundReason = (reason) => REFUND_REASON_LABELS[reason] || reason?.replace(/_/g, ' ') || 'Refund';
+
+const formatRefundStatus = (status) => {
+    const labels = {
+        processed: 'Refunded',
+        pending: 'Refund pending',
+        processing: 'Refunding',
+        failed: 'Refund failed',
+        needs_attention: 'Refund issue',
+    };
+    return labels[status] || (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Refund');
+};
+
+const formatTransactionAmount = (amount) => `R ${Number(amount || 0).toLocaleString('en-ZA', { minimumFractionDigits: 2 })}`;
 
 const PlayerProfile = () => {
     const [loading, setLoading] = useState(true);
@@ -258,24 +282,117 @@ const PlayerProfile = () => {
                 const { data: pData } = await supabase.from('players').select('id').ilike('email', email).maybeSingle();
                 if (!pData) return;
 
-                const { data, error } = await supabase
+                let paymentsQuery = supabase
                     .from('payments')
                     .select('*, calendar(event_name)')
-                    .eq('player_id', pData.id)
-                    .order('created_at', { ascending: false });
+                    .order('created_at', { ascending: false })
+                    .limit(50);
 
+                paymentsQuery = paymentsQuery.or(`player_id.eq.${pData.id},metadata->>email.ilike.${email}`);
+
+                const { data: paymentsData, error } = await paymentsQuery;
                 if (error) throw error;
 
-                if (data) {
-                    setTransactions(data.map(t => ({
-                        id: t.reference || t.id,
-                        date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
-                        amount: `R ${t.amount}`,
-                        status: t.status.charAt(0).toUpperCase() + t.status.slice(1),
-                        payment_type: t.payment_type,
-                        event_name: t.calendar?.event_name || t.metadata?.event_name
-                    })));
+                const paymentIds = (paymentsData || []).map((p) => p.id);
+                const refundQueries = [];
+
+                if (paymentIds.length > 0) {
+                    refundQueries.push(
+                        supabase
+                            .from('payment_refunds')
+                            .select('*')
+                            .in('payment_id', paymentIds),
+                    );
                 }
+
+                refundQueries.push(
+                    supabase
+                        .from('payment_refunds')
+                        .select('*, payments(*, calendar(event_name))')
+                        .ilike('initiated_by', email),
+                );
+
+                const { data: userRegs } = await supabase
+                    .from('event_registrations')
+                    .select('id')
+                    .ilike('email', email);
+
+                const regIds = (userRegs || []).map((r) => r.id);
+                if (regIds.length > 0) {
+                    refundQueries.push(
+                        supabase
+                            .from('payment_refunds')
+                            .select('*, payments(*, calendar(event_name))')
+                            .in('event_registration_id', regIds),
+                    );
+                }
+
+                const refundResults = await Promise.all(refundQueries);
+                const refundsById = new Map();
+                for (const result of refundResults) {
+                    for (const rf of result.data || []) {
+                        refundsById.set(rf.id, rf);
+                    }
+                }
+                const allRefunds = Array.from(refundsById.values());
+
+                const refundsByPaymentId = new Map();
+                for (const rf of allRefunds) {
+                    if (!rf.payment_id) continue;
+                    const list = refundsByPaymentId.get(rf.payment_id) || [];
+                    list.push(rf);
+                    refundsByPaymentId.set(rf.payment_id, list);
+                }
+
+                const paymentsById = new Map((paymentsData || []).map((p) => [p.id, p]));
+
+                const paymentTxns = (paymentsData || []).map((t) => {
+                    const refunds = refundsByPaymentId.get(t.id) || [];
+                    const refundedTotal = refunds
+                        .filter((rf) => rf.status === 'processed')
+                        .reduce((sum, rf) => sum + Number(rf.amount || 0), 0);
+                    const isFullyRefunded = refundedTotal > 0 && refundedTotal >= Number(t.amount || 0);
+
+                    return {
+                        kind: 'payment',
+                        id: t.reference || t.id,
+                        paymentId: t.id,
+                        date: t.metadata?.original_trx?.date || new Date(t.created_at).toLocaleDateString(),
+                        sortDate: new Date(t.created_at).getTime(),
+                        amount: formatTransactionAmount(t.amount),
+                        status: isFullyRefunded ? 'Refunded' : t.status.charAt(0).toUpperCase() + t.status.slice(1),
+                        payment_type: t.payment_type,
+                        event_name: t.calendar?.event_name || t.metadata?.event_name,
+                        refunds,
+                        refundedTotal,
+                    };
+                });
+
+                const refundTxns = allRefunds.map((rf) => {
+                    const linkedPayment = paymentsById.get(rf.payment_id) || rf.payments;
+                    return {
+                        kind: 'refund',
+                        id: rf.paystack_reference || rf.paystack_refund_id || rf.id,
+                        refundId: rf.id,
+                        paymentId: rf.payment_id,
+                        date: rf.processed_at
+                            ? new Date(rf.processed_at).toLocaleDateString()
+                            : new Date(rf.created_at).toLocaleDateString(),
+                        sortDate: new Date(rf.processed_at || rf.created_at).getTime(),
+                        amount: `-${formatTransactionAmount(rf.amount)}`,
+                        status: formatRefundStatus(rf.status),
+                        payment_type: 'refund',
+                        event_name: linkedPayment?.calendar?.event_name || linkedPayment?.metadata?.event_name,
+                        reason: formatRefundReason(rf.reason),
+                        relatedReference: linkedPayment?.reference,
+                    };
+                });
+
+                const merged = [...paymentTxns, ...refundTxns]
+                    .sort((a, b) => b.sortDate - a.sortDate)
+                    .slice(0, 50);
+
+                setTransactions(merged);
             } catch (err) {
                 console.error("Failed to fetch transactions:", err);
             } finally {
@@ -1690,20 +1807,37 @@ const PlayerProfile = () => {
                                     ) : transactions.length > 0 ? (
                                         <div className="space-y-3">
                                             {currentTransactionsList.map((t, idx) => (
-                                                <div key={idx} className="bg-slate-900/60 border border-white/10 rounded-2xl p-4 flex items-center justify-between shadow-lg backdrop-blur-xl">
+                                                <div key={`${t.kind}-${t.refundId || t.paymentId || t.id}-${idx}`} className={`bg-slate-900/60 border rounded-2xl p-4 flex items-center justify-between shadow-lg backdrop-blur-xl ${t.kind === 'refund' ? 'border-orange-500/20' : 'border-white/10'}`}>
                                                     <div className="min-w-0 space-y-1">
-                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-block ${t.status?.toLowerCase() === 'success'
-                                                            ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
-                                                            : 'bg-red-500/10 border border-red-500/20 text-red-400'
-                                                            }`}>
+                                                        <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider inline-block ${
+                                                            t.kind === 'refund'
+                                                                ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400'
+                                                                : t.status?.toLowerCase() === 'success'
+                                                                    ? 'bg-blue-500/10 border border-blue-500/20 text-blue-400'
+                                                                    : t.status?.toLowerCase() === 'refunded'
+                                                                        ? 'bg-orange-500/10 border border-orange-500/20 text-orange-400'
+                                                                        : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                                                        }`}>
                                                             {t.status}
                                                         </span>
-                                                        <h5 className="font-extrabold text-xs text-white uppercase tracking-tight truncate leading-tight mt-1">{t.event_name || 'License Fee'}</h5>
+                                                        <h5 className="font-extrabold text-xs text-white uppercase tracking-tight truncate leading-tight mt-1">
+                                                            {t.kind === 'refund' ? (t.reason || 'Refund') : (t.event_name || 'License Fee')}
+                                                        </h5>
                                                         <span className="text-[8px] text-gray-500 font-bold uppercase block">{t.date}</span>
+                                                        {t.kind === 'refund' && t.relatedReference && (
+                                                            <span className="text-[7px] text-gray-600 font-mono block truncate">Ref: {t.relatedReference}</span>
+                                                        )}
+                                                        {t.kind === 'payment' && t.refundedTotal > 0 && t.status?.toLowerCase() !== 'refunded' && (
+                                                            <span className="text-[7px] text-orange-400 font-bold uppercase block">
+                                                                Partial refund {formatTransactionAmount(t.refundedTotal)}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     <div className="text-right shrink-0">
-                                                        <span className="text-xs font-black text-blue-400">{t.amount}</span>
-                                                        <span className="text-[7.5px] text-gray-500 font-semibold block uppercase tracking-widest mt-1">{t.payment_type?.replace(/_/g, ' ')}</span>
+                                                        <span className={`text-xs font-black ${t.kind === 'refund' ? 'text-orange-400' : 'text-blue-400'}`}>{t.amount}</span>
+                                                        <span className="text-[7.5px] text-gray-500 font-semibold block uppercase tracking-widest mt-1">
+                                                            {t.kind === 'refund' ? 'refund' : t.payment_type?.replace(/_/g, ' ')}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             ))}
@@ -3622,10 +3756,13 @@ const PlayerProfile = () => {
                                                             </div>
 
                                                             {currentTransactionsList.map((trx) => (
-                                                                <div key={trx.id} className="group bg-white/[0.03] backdrop-blur-md border border-white/10 rounded-2xl p-6 transition-all duration-300 flex flex-col md:grid md:grid-cols-5 md:items-center gap-4 hover:bg-white/[0.08] hover:border-white/20">
+                                                                <div key={`${trx.kind}-${trx.refundId || trx.paymentId || trx.id}`} className={`group bg-white/[0.03] backdrop-blur-md border rounded-2xl p-6 transition-all duration-300 flex flex-col md:grid md:grid-cols-5 md:items-center gap-4 hover:bg-white/[0.08] ${trx.kind === 'refund' ? 'border-orange-500/20 hover:border-orange-500/30' : 'border-white/10 hover:border-white/20'}`}>
                                                                     <div className="flex flex-col text-sm border-b md:border-none border-white/10 pb-2 md:pb-0">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Reference</span>
                                                                         <span className="font-mono text-gray-400">{trx.id}</span>
+                                                                        {trx.kind === 'refund' && trx.relatedReference && (
+                                                                            <span className="text-[9px] text-gray-600 font-mono mt-1">Payment: {trx.relatedReference}</span>
+                                                                        )}
                                                                     </div>
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Date</span>
@@ -3634,11 +3771,14 @@ const PlayerProfile = () => {
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Type</span>
                                                                         <div className="flex flex-col gap-0.5">
-                                                                            <span className="text-white font-black uppercase text-[10px] tracking-tight">
-                                                                                {trx.payment_type?.replace('_', ' ') || 'Payment'}
+                                                                            <span className="text-white font-black uppercase text-[10px] tracking-tight flex items-center gap-1.5">
+                                                                                {trx.kind === 'refund' && <RotateCcw size={12} className="text-orange-400 shrink-0" />}
+                                                                                {trx.kind === 'refund'
+                                                                                    ? (trx.reason || 'Refund')
+                                                                                    : (trx.payment_type?.replace('_', ' ') || 'Payment')}
                                                                             </span>
                                                                             {trx.event_name && (
-                                                                                <span className="text-[10px] text-padel-green font-bold">
+                                                                                <span className={`text-[10px] font-bold ${trx.kind === 'refund' ? 'text-orange-300/80' : 'text-padel-green'}`}>
                                                                                     {trx.event_name}
                                                                                 </span>
                                                                             )}
@@ -3646,16 +3786,30 @@ const PlayerProfile = () => {
                                                                     </div>
                                                                     <div className="flex flex-col text-sm">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Amount</span>
-                                                                        <span className="text-white font-black">{trx.amount}</span>
+                                                                        <span className={`font-black ${trx.kind === 'refund' ? 'text-orange-400' : 'text-white'}`}>{trx.amount}</span>
+                                                                        {trx.kind === 'payment' && trx.refundedTotal > 0 && trx.status?.toLowerCase() !== 'refunded' && (
+                                                                            <span className="text-[9px] text-orange-400 font-bold mt-1">
+                                                                                -{formatTransactionAmount(trx.refundedTotal)} refunded
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <div className="flex flex-col items-start md:items-end">
                                                                         <span className="md:hidden text-[8px] font-black text-gray-500 uppercase tracking-widest mb-1">Status</span>
-                                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${trx.status?.toLowerCase() === 'success'
-                                                                            ? 'bg-padel-green text-black'
-                                                                            : trx.status?.toLowerCase() === 'failed'
-                                                                                ? 'bg-red-500/20 text-red-500 border border-red-500/20'
-                                                                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20'
-                                                                            }`}>
+                                                                        <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                                            trx.kind === 'refund'
+                                                                                ? trx.status?.toLowerCase() === 'refunded'
+                                                                                    ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20'
+                                                                                    : trx.status?.toLowerCase().includes('failed') || trx.status?.toLowerCase().includes('issue')
+                                                                                        ? 'bg-red-500/20 text-red-500 border border-red-500/20'
+                                                                                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/20'
+                                                                                : trx.status?.toLowerCase() === 'success'
+                                                                                    ? 'bg-padel-green text-black'
+                                                                                    : trx.status?.toLowerCase() === 'refunded'
+                                                                                        ? 'bg-orange-500/20 text-orange-400 border border-orange-500/20'
+                                                                                        : trx.status?.toLowerCase() === 'failed'
+                                                                                            ? 'bg-red-500/20 text-red-500 border border-red-500/20'
+                                                                                            : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/20'
+                                                                        }`}>
                                                                             {trx.status}
                                                                         </span>
                                                                     </div>

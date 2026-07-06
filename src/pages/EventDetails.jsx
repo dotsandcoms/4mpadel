@@ -869,6 +869,11 @@ const EventDetails = () => {
             const closeAt = div?.entries_close_at || event.registration_closes_at;
             const divClosed = closeAt ? new Date(closeAt).getTime() < Date.now() : false;
             const canWithdraw = !!div && !divClosed && reg.status !== 'withdrawn';
+            const canAddPartner = isPaid
+                && !hasPartner
+                && reg.status !== 'withdrawn'
+                && !!div
+                && !divClosed;
             return {
                 id: reg.id,
                 division: reg.division,
@@ -891,7 +896,7 @@ const EventDetails = () => {
                 statusText: isPaid ? 'Paid & Confirmed' : 'Payment Pending',
                 statusClassName: isPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
                 partnerStatusClassName: partnerPaid ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700',
-                canAddPartner: false,
+                canAddPartner,
             };
         });
 
@@ -2818,63 +2823,72 @@ const EventDetails = () => {
         </div>
     );
 
-    const partnerAddedEntries = (manualRegStatus.entries || []).filter((e) => e.wasAddedByPartner);
-    const selfRegisteredPaidEntries = (manualRegStatus.entries || []).filter((e) => e.isPaid && !e.wasAddedByPartner);
+    const manualEntries = manualRegStatus.entries || [];
+    const partnerAddedEntries = manualEntries.filter((e) => e.wasAddedByPartner);
     const partnerAddedNeedsPayment = partnerAddedEntries.some((e) => !e.isPaid);
     const partnerAddedByName = partnerAddedEntries[0]?.addedByName || 'Your partner';
-    const partnerAddedPaymentConfirmed = partnerAddedEntries.length > 0 && !partnerAddedNeedsPayment;
+    const hasManualRegistrations = event.is_manual && manualUserEmail && manualEntries.length > 0;
+    const manualAllPaid = manualEntries.length > 0 && manualEntries.every((e) => e.isPaid);
+    const manualHasPending = manualEntries.some((e) => !e.isPaid);
 
-    const manualPartnerAddedBlock = event.is_manual && manualUserEmail && partnerAddedEntries.length > 0 && (
-        <div className={`rounded-2xl shadow-sm overflow-hidden ${partnerAddedPaymentConfirmed
-                ? 'border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC]'
-                : 'border border-amber-200/80 bg-gradient-to-br from-amber-50 to-[#FFFBEB]'
+    const manualAllRegistrationsBlock = hasManualRegistrations && (
+        <div className={`rounded-2xl shadow-sm overflow-hidden ${manualHasPending
+                ? 'border border-amber-200/80 bg-gradient-to-br from-amber-50 to-[#FFFBEB]'
+                : 'border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC]'
             }`}>
             <div className="p-4 sm:p-5">
                 <div className="flex items-center gap-3 mb-4">
-                    <div className={`w-11 h-11 rounded-full bg-white border-2 flex items-center justify-center shadow-sm shrink-0 ${partnerAddedPaymentConfirmed ? 'border-emerald-500' : 'border-amber-500'
+                    <div className={`w-11 h-11 rounded-full bg-white border-2 flex items-center justify-center shadow-sm shrink-0 ${manualHasPending ? 'border-amber-500' : 'border-emerald-500'
                         }`}>
-                        {partnerAddedPaymentConfirmed ? (
-                            <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
-                        ) : (
+                        {manualHasPending ? (
                             <AlertCircle className="w-5 h-5 text-amber-600" strokeWidth={2.5} />
+                        ) : (
+                            <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
                         )}
                     </div>
                     <div className="min-w-0">
-                        <p className={`text-[10px] font-bold uppercase tracking-widest ${partnerAddedPaymentConfirmed ? 'text-emerald-700' : 'text-amber-700'
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${manualHasPending ? 'text-amber-700' : 'text-emerald-700'
                             }`}>
-                            Your partner entered you
+                            You are registered for{manualEntries.length > 1 ? ` (${manualEntries.length} divisions)` : ''}
                         </p>
-                        <p className={`text-xs leading-relaxed mt-1 ${partnerAddedPaymentConfirmed ? 'text-emerald-900/90' : 'text-amber-900/90'
-                            }`}>
-                            {partnerAddedNeedsPayment
-                                ? `${partnerAddedByName} added you to this event. Pay your entry fee to confirm your spot, or decline if you don't want to play.`
-                                : `${partnerAddedByName} added you to this event. You're confirmed — decline below if your plans have changed.`}
-                        </p>
+                        {partnerAddedEntries.length > 0 && (
+                            <p className={`text-xs leading-relaxed mt-1 ${manualHasPending ? 'text-amber-900/90' : 'text-emerald-900/90'
+                                }`}>
+                                {partnerAddedNeedsPayment
+                                    ? `${partnerAddedByName} added you to ${partnerAddedEntries.length > 1 ? 'some divisions' : 'a division'}. Pay your entry fee to confirm, or decline if you don't want to play.`
+                                    : partnerAddedEntries.length === manualEntries.length
+                                        ? `${partnerAddedByName} added you to this event.`
+                                        : `Includes ${partnerAddedEntries.length} division${partnerAddedEntries.length > 1 ? 's' : ''} added by ${partnerAddedByName}.`}
+                            </p>
+                        )}
                     </div>
                 </div>
 
                 <div className="space-y-3">
-                    {partnerAddedEntries.map((entry) => (
+                    {manualEntries.map((entry) => (
                         <ManualRegistrationEntryCard
                             key={entry.id}
                             entry={entry}
-                            playerName={loggedInPlayer?.name || 'You'}
+                            playerName={entry.wasAddedByPartner ? (loggedInPlayer?.name || 'You') : 'You'}
                             playerAvatar={loggedInPlayer?.image_url}
                             partnerAvatar={entry.partnerName ? fourMPlayers[entry.partnerName.toLowerCase().trim()] : null}
                             variant="banner"
                             accent={theme?.fill || '#CCFF00'}
                             showActions
-                            withdrawLabel={entry.isPaid ? 'Withdraw' : 'Decline'}
+                            withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
+                            onAddPartner={entry.canAddPartner
+                                ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
+                                : undefined}
                             onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
                             onRemovePartner={() => manualRegActionsRef.current?.openRemovePartner?.(entry.id)}
                         />
                     ))}
                 </div>
 
-                {(partnerAddedNeedsPayment || manualRegStatus.canAddDivision) && (
-                    <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${partnerAddedPaymentConfirmed ? 'border-emerald-200/60' : 'border-amber-200/60'
+                {(manualRegStatus.hasPendingPayment || manualRegStatus.canAddDivision) && (
+                    <div className={`flex flex-col gap-2.5 mt-4 pt-4 border-t ${manualAllPaid ? 'border-emerald-200/60' : 'border-amber-200/60'
                         }`}>
-                        {partnerAddedNeedsPayment && (
+                        {manualRegStatus.hasPendingPayment && (
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openPayFlow?.()}
@@ -2888,7 +2902,7 @@ const EventDetails = () => {
                             <button
                                 type="button"
                                 onClick={() => manualRegActionsRef.current?.openRegistration?.()}
-                                className={`flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ${partnerAddedPaymentConfirmed
+                                className={`flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl font-semibold text-sm transition-colors ${manualAllPaid
                                         ? 'border border-emerald-600 text-emerald-700 bg-white/80 hover:bg-white'
                                         : 'border border-amber-600/60 text-amber-800 bg-white hover:bg-amber-50/50'
                                     }`}
@@ -2902,59 +2916,7 @@ const EventDetails = () => {
         </div>
     );
 
-    const manualRegistrationBlock = event.is_manual && manualUserEmail && selfRegisteredPaidEntries.length > 0 && (
-        <div className="rounded-2xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50 to-[#F4FAEC] shadow-sm overflow-hidden">
-            <div className="p-4 sm:p-5">
-                <div className="flex items-center gap-3 mb-4">
-                    <div className="w-11 h-11 rounded-full bg-white border-2 border-emerald-500 flex items-center justify-center shadow-sm shrink-0">
-                        <Check className="w-5 h-5 text-emerald-600" strokeWidth={2.5} />
-                    </div>
-                    <div className="min-w-0">
-                        <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-widest">
-                            You are registered for
-                        </p>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    {(manualRegStatus.entries || [])
-                        .filter((entry) => entry.isPaid && !entry.wasAddedByPartner)
-                        .map((entry) => (
-                            <ManualRegistrationEntryCard
-                                key={entry.id}
-                                entry={entry}
-                                playerName="You"
-                                playerAvatar={loggedInPlayer?.image_url}
-                                partnerAvatar={entry.partnerName ? fourMPlayers[entry.partnerName.toLowerCase().trim()] : null}
-                                variant="banner"
-                                accent={theme?.fill || '#CCFF00'}
-                                showActions
-                                withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
-                                onAddPartner={entry.canAddPartner
-                                    ? () => manualRegActionsRef.current?.openAddPartner?.(entry.id)
-                                    : undefined}
-                                onWithdraw={() => manualRegActionsRef.current?.openWithdraw?.(entry.id)}
-                                onRemovePartner={() => manualRegActionsRef.current?.openRemovePartner?.(entry.id)}
-                            />
-                        ))}
-                </div>
-
-                {manualRegStatus.canAddDivision && (
-                    <div className="mt-4 pt-4 border-t border-emerald-200/60">
-                        <button
-                            type="button"
-                            onClick={() => manualRegActionsRef.current?.openRegistration?.()}
-                            className="flex w-full items-center justify-center gap-1.5 px-4 py-3 rounded-xl border border-emerald-600 text-emerald-700 bg-white/80 hover:bg-white transition-colors font-semibold text-sm"
-                        >
-                            <span className="text-base leading-none">+</span> Add Division
-                        </button>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-
-    const activeRegistrationBlock = registrationBlock || manualPartnerAddedBlock || manualRegistrationBlock;
+    const activeRegistrationBlock = registrationBlock || manualAllRegistrationsBlock;
 
     const isRegistrationAllowed = !isEventPassed && !isLive && !isRankedinRegistrationClosed;
     const needsRegistration = !isRegistered && isRegistrationAllowed;
@@ -3405,7 +3367,7 @@ const EventDetails = () => {
                                 {(() => {
                                     let accordionGlowClass = "";
                                     if (activeRegistrationBlock || readyToCompeteBlock) {
-                                        const hasPendingAction = (manualPartnerAddedBlock && !partnerAddedPaymentConfirmed) || manualRegStatus?.hasPendingPayment || needsPayment;
+                                        const hasPendingAction = manualRegStatus?.hasPendingPayment || needsPayment;
                                         if (hasPendingAction) {
                                             accordionGlowClass = "!shadow-[0_0_15px_rgba(245,158,11,0.4)] !border-amber-400";
                                         } else {

@@ -11,6 +11,9 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import ManualEventRegistrations from './ManualEventRegistrations';
+
+const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
 const getParticipantEntryFee = (p, event) => {
     if (p?._divisionFee != null && p._divisionFee !== '') {
@@ -82,6 +85,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
     const [filterWhatsApp, setFilterWhatsApp] = useState('all');
     const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
     const [refunds, setRefunds] = useState([]);
+    const [eventPayments, setEventPayments] = useState([]);
 
     const { getTournamentPlayerTabs, getTournamentParticipants } = useRankedin();
 
@@ -204,6 +208,37 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             uniquePlayers: uniqueProfiles.size
         };
     }, [localParticipants, selectedEvent, totalCollected, getResolvedLicenseType]);
+
+    const financialSummary = useMemo(() => {
+        if (!selectedEvent) return { paid4M: 0, paidClub: 0, collected4M: 0, commission: 0, dueToOrg: 0 };
+
+        let paid4M = 0;
+        let paidClub = 0;
+
+        localParticipants.forEach((p) => {
+            if (!p.is_paid) return;
+            const method = String(
+                p.actual_payment?.payment_method
+                || p.registration_payment_method
+                || p.metadata?.payment_method
+                || '',
+            ).toLowerCase();
+            if (method === 'paystack' || (p.actual_payment && method !== 'manual' && method !== 'cash')) {
+                paid4M++;
+            } else {
+                paidClub++;
+            }
+        });
+
+        const collected4M = (eventPayments || [])
+            .filter((p) => p.status === 'success' && String(p.payment_method || '').toLowerCase() !== 'manual')
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+        const commission = collected4M * 0.05;
+        const dueToOrg = collected4M - commission;
+
+        return { paid4M, paidClub, collected4M, commission, dueToOrg };
+    }, [localParticipants, selectedEvent, eventPayments]);
 
     useEffect(() => {
         const fetchInitialData = async () => {
@@ -386,6 +421,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
         if (!eventId) return;
         setLoading(prev => ({ ...prev, matching: true }));
         setRefunds([]);
+        setEventPayments([]);
         try {
             // Determine if this is a manual event — query directly to avoid stale closure on `events`
             const { data: evMeta } = await supabase
@@ -423,6 +459,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         .in('payment_id', successPayIds);
                     setRefunds(refundRows || []);
                 }
+                setEventPayments(payData || []);
 
                 // Map registrations → participant shape
                 const mapped = (regRows || []).map(r => {
@@ -607,6 +644,7 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 };
             });
 
+            setEventPayments(payData || []);
             setLocalParticipants(enriched);
         } catch (err) {
             console.error("Fetch participants error:", err);
@@ -1420,7 +1458,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
             </div>
             )}
 
-            {selectedEventId && viewMode !== 'list' && (
+            {selectedEventId && viewMode !== 'list' && isEventManagementModule && selectedEvent?.is_manual ? (
+                <ManualEventRegistrations
+                    variant="inline"
+                    isOpen
+                    event={selectedEvent}
+                    onBack={() => {
+                        setSelectedEventId(null);
+                        setViewMode('list');
+                    }}
+                />
+            ) : selectedEventId && viewMode !== 'list' && (
                 <React.Fragment>
                 <div className="space-y-6 text-white pt-2">
                     {/* Navigation Bar */}
@@ -1590,6 +1638,41 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                                 />
                             </div>
                         </motion.div>
+                    </motion.div>
+
+                    {/* Financial Summary */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.2 }}
+                        className="space-y-3"
+                    >
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            <div className="w-1 h-4 bg-emerald-500 rounded-full" />
+                            Financial Summary
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid via 4M</p>
+                                <span className="text-xl font-black text-white">{financialSummary.paid4M}</span>
+                            </div>
+                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid to club</p>
+                                <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
+                            </div>
+                            <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Collected by 4M</p>
+                                <span className="text-xl font-black text-padel-green">{fmtR(financialSummary.collected4M)}</span>
+                            </div>
+                            <div className="bg-[#1E293B]/50 border border-emerald-500/30 bg-emerald-500/5 rounded-xl p-4 md:row-span-2 flex flex-col justify-center">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Due to organiser</p>
+                                <span className="text-3xl font-black text-padel-green">{fmtR(financialSummary.dueToOrg)}</span>
+                            </div>
+                            <div className="bg-[#1E293B]/50 border border-red-500/20 rounded-xl p-4 md:col-span-3">
+                                <p className="text-[10px] font-bold uppercase tracking-widest text-red-400 mb-1">5% Commission to 4M</p>
+                                <span className="text-lg font-black text-red-400">{fmtR(financialSummary.commission)}</span>
+                            </div>
+                        </div>
                     </motion.div>
 
                     {viewMode === 'dashboard' && (

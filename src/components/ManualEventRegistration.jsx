@@ -456,7 +456,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             .from('event_registrations')
             .select('*')
             .eq('event_id', event.id)
-            .eq('email', userEmail)
+            .ilike('email', userEmail)
             .neq('status', 'withdrawn');
         let regs = data || [];
 
@@ -598,7 +598,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const registrationEntries = useMemo(
         () => myRegs.map((reg) => {
-            const div = divisions.find((d) => d.id === reg.division_id);
+            const div = divisions.find((d) => d.id === reg.division_id)
+                || divisions.find((d) => d.name === reg.division);
             const fee = Number(div?.entry_fee || 0);
             const isPaid = reg.payment_status === 'paid' || fee === 0;
             const hasPartner = !!(reg.partner_name?.trim() || reg.partner_email?.trim());
@@ -651,12 +652,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
         [myRegs, divisions, divisionRegs, userEmail, event],
     );
 
-    const panelEntries = useMemo(
-        () => registrationEntries.filter((e) => !e.wasAddedByPartner),
-        [registrationEntries],
-    );
-    const onlyPartnerAddedEntries = registrationEntries.length > 0
-        && registrationEntries.every((e) => e.wasAddedByPartner);
+    const panelEntries = registrationEntries;
 
     const divisionsAvailableToRegister = useMemo(
         () => divisions.filter((d) => !registeredDivisionIds.has(d.id) && !isClosed(d, event)),
@@ -3745,13 +3741,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             <Trophy className="w-4 h-4 text-[#0F172A]" />
                         </div>
                         <h2 className="text-sm font-semibold text-slate-900 tracking-normal">
-                            {onlyPartnerAddedEntries
-                                ? 'Your Registration'
-                                : hasRegistrations
-                                    ? 'You are Registered for this Event'
-                                    : hasPendingPayment
-                                        ? 'Complete Your Registration'
-                                        : 'Divisions'}
+                            {hasAnyRegistration
+                                ? registrationEntries.length > 1
+                                    ? `You are Registered for this Event (${registrationEntries.length} divisions)`
+                                    : 'You are Registered for this Event'
+                                : hasPendingPayment
+                                    ? 'Complete Your Registration'
+                                    : 'Divisions'}
                         </h2>
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 shrink-0 ${divisionsBlockOpen ? '' : '-rotate-90'}`} />
@@ -3767,9 +3763,9 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                             className="overflow-hidden"
                         >
                             <div className="px-6 py-4">
-                    {hasRegistrations || hasPendingPayment ? (
+                    {hasAnyRegistration || hasPendingPayment ? (
                         <>
-                            {hasPendingPayment && !onlyPartnerAddedEntries && (
+                            {hasPendingPayment && (
                                 <div className="flex items-start gap-2.5 mb-4 p-3 rounded-xl bg-amber-50/80 border border-amber-100">
                                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                                     <p className="text-xs text-amber-900 leading-relaxed">
@@ -3779,12 +3775,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                     </p>
                                 </div>
                             )}
-                            {onlyPartnerAddedEntries && (
-                                <p className="text-xs text-slate-500 mb-4">
-                                    Your partner entry is shown at the top of the page — pay, decline, or add another division below.
-                                </p>
-                            )}
-                            {!hasPendingPayment && hasRegistrations && panelEntries.length > 0 && (
+                            {panelEntries.length > 0 && (
                                 <p className="text-xs font-medium text-slate-500 mb-3">Your entries</p>
                             )}
                             {panelEntries.length > 0 && (
@@ -3808,7 +3799,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                             onPay={needsPay && !hasPendingPayment ? openPayWizard : undefined}
                                             onWithdraw={reg && entry.canWithdraw ? () => { setWithdrawAll(false); setSwitchMode(false); setSwitchTargetDivId(''); setWithdrawTarget(reg); } : undefined}
                                             onRemovePartner={reg ? () => setRemovePartnerTarget(reg) : undefined}
-                                            withdrawLabel={entry.wasAddedByPartner ? 'Decline' : 'Withdraw'}
+                                            withdrawLabel={entry.wasAddedByPartner && !entry.isPaid ? 'Decline' : 'Withdraw'}
                                         />
                                     );
                                 })}
@@ -3818,7 +3809,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                 <p className="text-xs text-slate-500 mb-4 -mt-2">You can add a partner to any solo entry at any time.</p>
                             )}
                             <div className="flex flex-col gap-2.5 pt-1">
-                                {hasPendingPayment && !onlyPartnerAddedEntries && (
+                                {hasPendingPayment && (
                                     <PrimaryBtn onClick={openPayWizard}>
                                         Pay Entry <CreditCard className="w-4 h-4" />
                                     </PrimaryBtn>
