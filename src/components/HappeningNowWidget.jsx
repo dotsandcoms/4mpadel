@@ -181,10 +181,19 @@ const HappeningNowWidget = () => {
                                         }
 
                                         return (
-                                            <div key={event.id} className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl">
+                                            <div key={event.id} className="group relative rounded-[16px] p-[1px] overflow-visible bg-white/5 shadow-xl mt-2.5 first:mt-3">
+                                                {isLive && (
+                                                    <div className="absolute top-0 left-4 flex items-center -translate-y-1/2 z-30 pointer-events-none">
+                                                        <div className="h-px w-4 bg-white/15 shrink-0" />
+                                                        <span className="px-2 text-[9px] font-bold uppercase tracking-[0.2em] text-white/80 bg-black shrink-0">
+                                                            Now On
+                                                        </span>
+                                                        <div className="h-px w-10 bg-white/15 shrink-0" />
+                                                    </div>
+                                                )}
                                                 {/* Rotating shimmer along the border */}
                                                 <div
-                                                    className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
+                                                    className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none rounded-[16px] overflow-hidden"
                                                     style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(204,255,0,0.9) 88%, transparent 96%)' }}
                                                 />
                                                 <button

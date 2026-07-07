@@ -1,14 +1,39 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, useScroll, useTransform, AnimatePresence, useMotionValue, useSpring } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2 } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronLeft, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, Bell } from 'lucide-react';
 import VideoModal from './VideoModal';
-import { useEffect } from 'react';
 import { useRankedin } from '../hooks/useRankedin';
+import { usePendingPayments } from '../hooks/usePendingPayments';
 import HappeningNowWidget from './HappeningNowWidget';
+
+const parseMatchDate = (dateStr) => {
+    if (!dateStr) return new Date(0);
+    if (dateStr.includes('T') || dateStr.includes('-')) {
+        return new Date(dateStr);
+    }
+    const [datePart, timePart] = dateStr.split(' ');
+    const [day, month, year] = datePart.split('/');
+    return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
+};
+
+const getEventEndDate = (event) => {
+    const eventEnd = event.end_date ? new Date(event.end_date) : new Date(event.start_date);
+    eventEnd.setHours(23, 59, 59, 999);
+    return eventEnd;
+};
+
+const getEventStatusColors = (sapaStatus) => {
+    if (sapaStatus === 'Major') return { border: 'border-red-500/40', text: 'text-red-500' };
+    if (sapaStatus === 'Super Gold' || sapaStatus === 'S Gold') return { border: 'border-amber-500/40', text: 'text-amber-500' };
+    if (sapaStatus === 'Gold') return { border: 'border-yellow-400/40', text: 'text-yellow-400' };
+    if (sapaStatus === 'Silver') return { border: 'border-gray-400/40', text: 'text-gray-400' };
+    if (sapaStatus === 'Bronze') return { border: 'border-orange-700/40', text: 'text-orange-700' };
+    return { border: 'border-padel-green/40', text: 'text-padel-green' };
+};
 
 const Hero = () => {
     const { scrollY } = useScroll();
@@ -32,13 +57,47 @@ const Hero = () => {
     const [videoModal, setVideoModal] = useState({ isOpen: false, url: '', title: '' });
     const [session, setSession] = useState(null);
     const [upcomingEvents, setUpcomingEvents] = useState([]);
+    const [pastEvents, setPastEvents] = useState([]);
     const [nextMatch, setNextMatch] = useState(null);
+    const [upcomingMatchesList, setUpcomingMatchesList] = useState([]);
+    const [pastMatchesList, setPastMatchesList] = useState([]);
     const [matchesCount, setMatchesCount] = useState(0);
     const [winLossStats, setWinLossStats] = useState(null);
     const [eventsLoading, setEventsLoading] = useState(false);
     const [activeHeroTab, setActiveHeroTab] = useState('matches'); // 'events' | 'matches'
+    const [scheduleTimeFilter, setScheduleTimeFilter] = useState('upcoming'); // 'upcoming' | 'past'
+    const [pastEventSlide, setPastEventSlide] = useState(0);
+    const [pastMatchSlide, setPastMatchSlide] = useState(0);
     const [player, setPlayer] = useState(null);
     const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile } = useRankedin();
+
+    const scheduleEmail = session?.user
+        ? (sessionStorage.getItem('admin_test_login_email') || session.user.email)
+        : null;
+    const { pendingPayments } = usePendingPayments(scheduleEmail);
+
+    const primaryScheduleNotification = useMemo(() => {
+        if (pendingPayments.length > 0) {
+            const payment = pendingPayments[0];
+            return {
+                label: `You have a pending payment — ${payment.name}`,
+                href: `/calendar/${payment.slug}?register=true`,
+            };
+        }
+        if (player && !player.region) {
+            return {
+                label: 'Please complete your profile — region missing',
+                href: '/profile?edit=true',
+            };
+        }
+        return null;
+    }, [pendingPayments, player]);
+
+    const hasScheduleContent = upcomingEvents.length > 0
+        || pastEvents.length > 0
+        || upcomingMatchesList.length > 0
+        || pastMatchesList.length > 0
+        || eventsLoading;
 
     useEffect(() => {
         // Get initial session
@@ -75,7 +134,10 @@ const Hero = () => {
     useEffect(() => {
         if (!session?.user) {
             setUpcomingEvents([]);
+            setPastEvents([]);
             setNextMatch(null);
+            setUpcomingMatchesList([]);
+            setPastMatchesList([]);
             setMatchesCount(0);
             setEventsLoading(false);
             return;
@@ -202,26 +264,16 @@ const Hero = () => {
                 });
                 const uniqueEvents = Array.from(uniqueEventsMap.values());
 
-                let filtered = uniqueEvents
-                    .filter(e => {
-                        const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
-                        eventEnd.setHours(23, 59, 59, 999);
-                        return eventEnd >= startOfToday && e.state !== 2;
-                    })
-                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+                const isUpcomingEvent = (event) => {
+                    const eventEnd = getEventEndDate(event);
+                    return eventEnd >= startOfToday && event.state !== 2;
+                };
+                const isPastEvent = (event) => {
+                    const eventEnd = getEventEndDate(event);
+                    return eventEnd < startOfToday || event.state === 2;
+                };
 
-                const currentMonthEvents = filtered.filter(e => {
-                    const eventEnd = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
-                    return eventEnd.getMonth() === currentMonth && eventEnd.getFullYear() === currentYear;
-                });
-
-                if (currentMonthEvents.length > 0) {
-                    filtered = currentMonthEvents;
-                } else {
-                    filtered = filtered.slice(0, 3);
-                }
-
-                if (filtered.length > 0) {
+                if (uniqueEvents.length > 0) {
                     const [dbEventsRes, paidParticipantsRes] = await Promise.all([
                         supabase.from('calendar').select('id, slug, rankedin_url, sapa_status, entry_fee, category_fees, venue, city'),
                         supabase.from('tournament_participants').select('event_id')
@@ -237,7 +289,7 @@ const Hero = () => {
                     ]);
 
                     if (dbEventsRes.data) {
-                        filtered.forEach(e => {
+                        uniqueEvents.forEach((e) => {
                             const match = e.id?.toString().startsWith('local_')
                                 ? dbEventsRes.data.find(dbE => dbE.id === e.db_id)
                                 : dbEventsRes.data.find(dbE => dbE.rankedin_url?.includes(`/tournament/${e.id}/`));
@@ -257,24 +309,42 @@ const Hero = () => {
                     }
                 }
 
-                // Filter & sort matches in ascending chronological order to find next match
+                let upcomingFiltered = uniqueEvents
+                    .filter(isUpcomingEvent)
+                    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date));
+
+                const pastFiltered = uniqueEvents
+                    .filter(isPastEvent)
+                    .sort((a, b) => new Date(b.start_date) - new Date(a.start_date))
+                    .slice(0, 15);
+
+                const currentMonthEvents = upcomingFiltered.filter((e) => {
+                    const eventEnd = getEventEndDate(e);
+                    return eventEnd.getMonth() === currentMonth && eventEnd.getFullYear() === currentYear;
+                });
+
+                if (currentMonthEvents.length > 0) {
+                    upcomingFiltered = currentMonthEvents;
+                } else {
+                    upcomingFiltered = upcomingFiltered.slice(0, 3);
+                }
+
                 const validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
-                const parseDate = (dateStr) => {
-                    if (!dateStr) return new Date(0);
-                    if (dateStr.includes('T') || dateStr.includes('-')) {
-                        return new Date(dateStr);
-                    }
-                    const [datePart, timePart] = dateStr.split(' ');
-                    const [day, month, year] = datePart.split('/');
-                    return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
-                };
-                validMatches.sort((a, b) => parseDate(a.Info?.Date) - parseDate(b.Info?.Date));
+                validMatches.sort((a, b) => parseMatchDate(a.Info?.Date) - parseMatchDate(b.Info?.Date));
                 const firstNextMatch = validMatches[0] || null;
+
+                const validPastMatches = (rawPastMatches || [])
+                    .filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName')
+                    .sort((a, b) => parseMatchDate(b.Info?.Date) - parseMatchDate(a.Info?.Date))
+                    .slice(0, 15);
 
                 if (signal.aborted) return;
 
-                setUpcomingEvents(filtered);
+                setUpcomingEvents(upcomingFiltered);
+                setPastEvents(pastFiltered);
                 setNextMatch(firstNextMatch);
+                setUpcomingMatchesList(validMatches);
+                setPastMatchesList(validPastMatches);
                 setMatchesCount(validMatches.length);
                 let winLossStr = null;
                 if (profileData?.Statistics?.WinLossDoublesCurrentYear) {
@@ -300,12 +370,12 @@ const Hero = () => {
 
                 if (firstNextMatch) {
                     setActiveHeroTab('matches');
-                } else if (filtered.length > 0) {
+                } else if (upcomingFiltered.length > 0) {
                     setActiveHeroTab('events');
                 }
 
                 try {
-                    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: filtered }));
+                    localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: upcomingFiltered }));
                     localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length, winLoss: winLossStr }));
                 } catch (_) { }
             } catch (err) {
@@ -425,6 +495,19 @@ const Hero = () => {
             });
     }, [session]);
 
+    useEffect(() => {
+        setPastEventSlide(0);
+        setPastMatchSlide(0);
+    }, [activeHeroTab, scheduleTimeFilter]);
+
+    useEffect(() => {
+        setPastEventSlide(0);
+    }, [pastEvents.length]);
+
+    useEffect(() => {
+        setPastMatchSlide(0);
+    }, [pastMatchesList.length]);
+
     const getGreeting = () => {
         const hour = new Date().getHours();
         if (hour < 12) return 'Good Morning';
@@ -433,6 +516,253 @@ const Hero = () => {
     };
 
     const firstName = player?.name ? player.name.split(' ')[0] : null;
+
+    const handleEventClick = (event) => {
+        if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
+        else if (!event.id?.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
+    };
+
+    const renderScheduleTimeSwitch = () => (
+        <div className="flex w-full mb-4 bg-transparent border border-white/10 rounded-xl p-1">
+            {[
+                { key: 'upcoming', label: 'Upcoming' },
+                { key: 'past', label: 'Past' },
+            ].map(({ key, label }) => (
+                <button
+                    key={key}
+                    type="button"
+                    onClick={() => setScheduleTimeFilter(key)}
+                    className={`flex-1 py-2 rounded-lg transition-all text-xs font-bold ${
+                        scheduleTimeFilter === key
+                            ? 'border border-white/40 bg-white/5 text-white shadow-md'
+                            : 'text-white/50 hover:text-white'
+                    }`}
+                >
+                    {label}
+                </button>
+            ))}
+        </div>
+    );
+
+    const renderSingleEventCard = (event, keySuffix = '') => {
+        const startDate = new Date(event.start_date);
+        const day = startDate.getDate();
+        const month = startDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+        const weekday = startDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+        const location = [event.venue, event.city].filter(Boolean).join(', ');
+        const statusColors = getEventStatusColors(event.sapa_status);
+
+        return (
+            <button
+                key={`${event.id}${keySuffix}`}
+                type="button"
+                onClick={() => handleEventClick(event)}
+                className="flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full"
+            >
+                <div className="flex items-center gap-3 shrink-0">
+                    <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
+                    <div className="flex flex-col items-center leading-none">
+                        <span className="text-white font-bold text-xl leading-none">{day}</span>
+                        <span className="text-padel-green text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>
+                        <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
+                    </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-bold uppercase truncate">{event.event_name}</p>
+                    <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1.5 flex-wrap min-w-0">
+                        {location && (
+                            <span className="flex items-center gap-1 min-w-0">
+                                <MapPin size={12} className="text-white/40 shrink-0" />
+                                <span className="truncate">{location}</span>
+                            </span>
+                        )}
+                        {location && <span className="text-white/20 font-light">|</span>}
+                        <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
+                            {event.sapa_status || 'SAPA'}
+                        </span>
+                    </p>
+                </div>
+                <ChevronRight size={18} className="text-padel-green shrink-0 transition-transform group-hover:translate-x-0.5" />
+            </button>
+        );
+    };
+
+    const renderPastPager = (items, page, setPage, renderItem) => {
+        const maxPage = Math.max(0, items.length - 1);
+
+        return (
+            <div className="group relative flex flex-col gap-4 w-full bg-white/5 border border-white/10 rounded-2xl animate-fade-in overflow-visible">
+                <div className="overflow-hidden rounded-2xl">
+                    {items.slice(page, page + 1).map((item, idx) => renderItem(item, `_${page}_${idx}`))}
+                </div>
+                {items.length > 1 && (
+                    <>
+                        <button
+                            type="button"
+                            onClick={() => setPage((p) => Math.max(0, p - 1))}
+                            disabled={page === 0}
+                            className={`absolute -left-2 sm:-left-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === 0 ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+                            disabled={page === maxPage}
+                            className={`absolute -right-2 sm:-right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full border border-white/10 bg-[#060913] flex items-center justify-center transition-all duration-300 md:opacity-0 md:group-hover:opacity-100 text-white shadow-xl z-50 ${page === maxPage ? 'opacity-50 cursor-not-allowed md:opacity-0 md:pointer-events-none' : 'hover:bg-padel-green hover:text-black hover:border-padel-green'}`}
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    const renderEventRows = (events) => (
+        <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
+            <div className="flex flex-col">
+                {events.map((event, idx) => (
+                    <div key={`${event.id}_${idx}`} className={idx !== events.length - 1 ? 'border-b border-white/10' : ''}>
+                        {renderSingleEventCard(event, `_${idx}`)}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
+    const renderFeaturedMatchCard = (match) => {
+        const info = match.Info || {};
+        const team1P1 = info.Challenger?.Name || 'TBD';
+        const team1P2 = info.Challenger1?.Name;
+        const team2P1 = info.Challenged?.Name || 'TBD';
+        const team2P2 = info.Challenged1?.Name;
+
+        return (
+            <div
+                className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] cursor-pointer w-full"
+                onClick={() => navigate('/profile?tab=matches')}
+                onKeyDown={(e) => { if (e.key === 'Enter') navigate('/profile?tab=matches'); }}
+                role="button"
+                tabIndex={0}
+            >
+                <div
+                    className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
+                    style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(249,115,22,0.9) 88%, transparent 96%)' }}
+                />
+                <div className="relative z-10 w-full bg-[#0A0F1C] rounded-[15px] p-3.5 sm:p-4 text-left flex flex-col justify-between min-h-[125px] overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2 relative z-20">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
+                            <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
+                                {info.EventName || 'Next Match'}
+                            </span>
+                        </div>
+                        {info.Date && (
+                            <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
+                                {info.Date}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
+                        <div className="flex-1 flex flex-col items-end text-right min-w-0">
+                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                {team1P1}
+                            </span>
+                            {team1P2 && (
+                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                    {team1P2}
+                                </span>
+                            )}
+                        </div>
+                        <div className="relative shrink-0 flex items-center justify-center">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
+                                <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
+                            </div>
+                        </div>
+                        <div className="flex-1 flex flex-col items-start text-left min-w-0">
+                            <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
+                                {team2P1}
+                            </span>
+                            {team2P2 && (
+                                <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
+                                    {team2P2}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                    <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
+                        <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
+                            <MapPin size={12} className="text-padel-green shrink-0" />
+                            <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
+                                {info.Location || info.Venue || 'Location TBD'}
+                            </span>
+                        </div>
+                        {info.Court && (
+                            <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
+                                {info.Court}
+                            </span>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+    const renderCompactMatchRow = (match, idx, total) => {
+        const info = match.Info || {};
+        const matchDate = parseMatchDate(info.Date);
+        const day = matchDate.getDate() || '—';
+        const month = Number.isNaN(matchDate.getTime()) ? '' : matchDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+        const weekday = Number.isNaN(matchDate.getTime()) ? '' : matchDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
+        const isWinner = info.IsWinner !== undefined ? info.IsWinner : info.Challenger?.IsWinner;
+
+        return (
+            <button
+                key={`${info.EventName}_${info.Date}_${idx}`}
+                type="button"
+                onClick={() => navigate('/profile?tab=matches')}
+                className={`flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left group w-full ${idx !== total - 1 ? 'border-b border-white/10' : ''}`}
+            >
+                <div className="flex items-center gap-3 shrink-0">
+                    <Trophy size={18} strokeWidth={1.75} className="text-orange-400" />
+                    <div className="flex flex-col items-center leading-none">
+                        <span className="text-white font-bold text-xl leading-none">{day}</span>
+                        {month && <span className="text-orange-400 text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>}
+                        {weekday && <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>}
+                    </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-bold uppercase truncate">{info.EventName || 'Match'}</p>
+                    <div className="flex items-center gap-2 mt-1 min-w-0">
+                        <p className="text-[11px] text-white/50 truncate flex-1 min-w-0">
+                            {(info.Challenger?.Name || 'TBD')} vs {(info.Challenged?.Name || 'TBD')}
+                        </p>
+                        {scheduleTimeFilter === 'past' && isWinner !== undefined && (
+                            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${isWinner ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                {isWinner ? 'Win' : 'Loss'}
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <ChevronRight size={18} className="text-orange-400 shrink-0 transition-transform group-hover:translate-x-0.5" />
+            </button>
+        );
+    };
+
+    const renderMatchRows = (matches, { featuredFirst = false } = {}) => (
+        <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
+            <div className="flex flex-col">
+                {featuredFirst && matches[0] && (
+                    <div className="p-4 border-b border-white/10">
+                        {renderFeaturedMatchCard(matches[0])}
+                    </div>
+                )}
+                {(featuredFirst ? matches.slice(1) : matches).map((match, idx, arr) => renderCompactMatchRow(match, idx, arr.length))}
+            </div>
+        </div>
+    );
 
     return (
         <div className="relative w-full bg-black">
@@ -638,7 +968,7 @@ const Hero = () => {
                 <div className="relative z-30 px-4 pb-0 lg:pb-0 mt-0 lg:mt-2 w-full lg:px-8 flex flex-col gap-2 container mx-auto">
 
                     <AnimatePresence>
-                        {session && (upcomingEvents.length > 0 || nextMatch || eventsLoading) && (
+                        {session && (hasScheduleContent || primaryScheduleNotification) && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -646,14 +976,24 @@ const Hero = () => {
                                 transition={{ delay: 1.1, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
                                 className="w-full"
                             >
-                                {nextMatch && (
-                                    <h2 className="text-orange-400 font-semibold text-sm md:text-lg lg:text-xl px-1 mb-3">You have a match coming up</h2>
+                                {primaryScheduleNotification && (
+                                    <a
+                                        href={primaryScheduleNotification.href}
+                                        className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 !text-rose-600 hover:!text-rose-500 hover:bg-rose-500/15 hover:border-rose-500/40 transition-colors group"
+                                    >
+                                        <Bell size={16} className="shrink-0 !text-rose-600 group-hover:animate-pulse" />
+                                        <span className="text-sm font-semibold truncate !text-rose-600">{primaryScheduleNotification.label}</span>
+                                        <ChevronRight size={14} className="shrink-0 !text-rose-600 opacity-80" />
+                                    </a>
                                 )}
+                                {hasScheduleContent && (
+                                <>
+                                <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em] px-1 mb-3">My Schedule</h2>
                                 {/* Glass panel */}
                                 <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
 
-                                        {eventsLoading && upcomingEvents.length === 0 && !nextMatch ? (
+                                        {eventsLoading && upcomingEvents.length === 0 && upcomingMatchesList.length === 0 && pastEvents.length === 0 && pastMatchesList.length === 0 ? (
                                             // ── Shimmering Skeleton UI ──
                                             <>
                                                 {/* Left Side Skeleton: Upcoming Events */}
@@ -723,187 +1063,69 @@ const Hero = () => {
                                                     </button>
                                                 </div>
 
-                                                {/* Left Side: Upcoming Events */}
+                                                {renderScheduleTimeSwitch()}
+
+                                                {/* Events */}
                                                 {activeHeroTab === 'events' && (
-                                                    upcomingEvents.length > 0 ? (
-                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl overflow-hidden animate-fade-in">
-                                                            <div className="flex flex-col">
-                                                                {upcomingEvents.map((event, idx) => {
-                                                                    const startDate = new Date(event.start_date);
-                                                                    const day = startDate.getDate();
-                                                                    const month = startDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
-                                                                    const weekday = startDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
-                                                                    const location = [event.venue, event.city].filter(Boolean).join(', ');
-
-                                                                    let statusColors = { border: 'border-padel-green/40', text: 'text-padel-green' };
-                                                                    if (event.sapa_status === 'Major') {
-                                                                        statusColors = { border: 'border-red-500/40', text: 'text-red-500' };
-                                                                    } else if (event.sapa_status === 'Super Gold' || event.sapa_status === 'S Gold') {
-                                                                        statusColors = { border: 'border-amber-500/40', text: 'text-amber-500' };
-                                                                    } else if (event.sapa_status === 'Gold') {
-                                                                        statusColors = { border: 'border-yellow-400/40', text: 'text-yellow-400' };
-                                                                    } else if (event.sapa_status === 'Silver') {
-                                                                        statusColors = { border: 'border-gray-400/40', text: 'text-gray-400' };
-                                                                    } else if (event.sapa_status === 'Bronze') {
-                                                                        statusColors = { border: 'border-orange-700/40', text: 'text-orange-700' };
-                                                                    }
-
-                                                                    return (
-                                                                        <button
-                                                                            key={event.id}
-                                                                            onClick={() => {
-                                                                                if (event.slug || event.db_id) navigate(`/calendar/${event.slug || event.db_id}`);
-                                                                                else if (!event.id.toString().startsWith('local_')) window.open(`https://www.rankedin.com/en/tournament/${event.id}`, '_blank');
-                                                                            }}
-                                                                            className={`flex items-center gap-4 p-4 hover:bg-white/5 transition-colors text-left group ${idx !== upcomingEvents.length - 1 ? 'border-b border-white/10' : ''}`}
-                                                                        >
-                                                                            <div className="flex items-center gap-3 shrink-0">
-                                                                                <Calendar size={18} strokeWidth={1.75} className="text-padel-green" />
-                                                                                <div className="flex flex-col items-center leading-none">
-                                                                                    <span className="text-white font-bold text-xl leading-none">{day}</span>
-                                                                                    <span className="text-padel-green text-[9px] font-black uppercase tracking-widest mt-1.5">{month}</span>
-                                                                                    <span className="text-white/40 text-[8px] font-bold uppercase tracking-widest mt-0.5">{weekday}</span>
-                                                                                </div>
-                                                                            </div>
-                                                                            <div className="flex-1 min-w-0">
-                                                                                <p className="text-white text-sm font-bold uppercase truncate">{event.event_name}</p>
-                                                                                <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1.5 flex-wrap min-w-0">
-                                                                                    {location && (
-                                                                                        <span className="flex items-center gap-1 min-w-0">
-                                                                                            <MapPin size={12} className="text-white/40 shrink-0" />
-                                                                                            <span className="truncate">{location}</span>
-                                                                                        </span>
-                                                                                    )}
-                                                                                    {location && <span className="text-white/20 font-light">|</span>}
-                                                                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest border ${statusColors.border} ${statusColors.text} bg-transparent`}>
-                                                                                        {event.sapa_status || 'SAPA'}
-                                                                                    </span>
-                                                                                </p>
-                                                                            </div>
-                                                                            <ChevronRight size={18} className="text-padel-green shrink-0 transition-transform group-hover:translate-x-0.5" />
-                                                                        </button>
-                                                                    );
-                                                                })}
+                                                    scheduleTimeFilter === 'upcoming' ? (
+                                                        upcomingEvents.length > 0 ? (
+                                                            renderEventRows(upcomingEvents)
+                                                        ) : (
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                                <h3 className="text-white font-bold text-sm mb-1">You have no upcoming events.</h3>
+                                                                <p className="text-white/50 text-[11px] font-medium mb-6">Explore the calendar to find your next event.</p>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => navigate('/calendar')}
+                                                                    className="text-padel-green text-xs font-bold flex items-center gap-1 hover:text-padel-green/80 transition-colors"
+                                                                >
+                                                                    Explore Calendar <ChevronRight size={14} />
+                                                                </button>
                                                             </div>
-                                                        </div>
+                                                        )
                                                     ) : (
-                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                            <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
-                                                            <h3 className="text-white font-bold text-sm mb-1">You have no upcoming events.</h3>
-                                                            <p className="text-white/50 text-[11px] font-medium mb-6">Explore the calendar to find your next event.</p>
-                                                            <button
-                                                                onClick={() => navigate('/calendar')}
-                                                                className="text-padel-green text-xs font-bold flex items-center gap-1 hover:text-padel-green/80 transition-colors"
-                                                            >
-                                                                Explore Calendar <ChevronRight size={14} />
-                                                            </button>
-                                                        </div>
+                                                        pastEvents.length > 0 ? (
+                                                            renderPastPager(pastEvents, pastEventSlide, setPastEventSlide, renderSingleEventCard)
+                                                        ) : (
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                                <h3 className="text-white font-bold text-sm mb-1">No past events yet.</h3>
+                                                                <p className="text-white/50 text-[11px] font-medium">Your completed events will appear here.</p>
+                                                            </div>
+                                                        )
                                                     )
                                                 )}
 
-                                                {/* Right Side: My Next Match */}
+                                                {/* Matches */}
                                                 {activeHeroTab === 'matches' && (
-                                                    nextMatch ? (
-                                                        <div className="w-full animate-fade-in flex flex-col gap-3">
-                                                            {/* Match Card */}
-                                                            {(() => {
-                                                                const info = nextMatch.Info || {};
-
-                                                                // Parse partners and names
-                                                                const team1P1 = info.Challenger?.Name || 'TBD';
-                                                                const team1P2 = info.Challenger1?.Name;
-                                                                const team2P1 = info.Challenged?.Name || 'TBD';
-                                                                const team2P2 = info.Challenged1?.Name;
-
-                                                                return (
-                                                                    <div
-                                                                        className="group relative rounded-[16px] p-[1px] overflow-hidden bg-white/5 shadow-xl transition-all duration-300 hover:-translate-y-1 hover:scale-[1.02] hover:shadow-[0_0_20px_rgba(249,115,22,0.15)] cursor-pointer w-full"
-                                                                        onClick={() => navigate('/profile?tab=matches')}
-                                                                    >
-                                                                        {/* Rotating shimmer along the border */}
-                                                                        <div
-                                                                            className="absolute inset-0 animate-spin opacity-60 group-hover:opacity-100 transition-opacity duration-300 [animation-duration:6s] pointer-events-none"
-                                                                            style={{ background: 'conic-gradient(from 0deg, transparent 0%, transparent 78%, rgba(249,115,22,0.9) 88%, transparent 96%)' }}
-                                                                        />
-
-                                                                        <div className="relative z-10 w-full bg-[#0A0F1C] rounded-[15px] p-3.5 sm:p-4 text-left flex flex-col justify-between min-h-[125px] overflow-hidden">
-                                                                            {/* Soft background glow */}
-                                                                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(249,115,22,0.08)_0%,transparent_75%)] pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-
-                                                                            {/* Top Bar: Event Name and Date */}
-                                                                            <div className="flex justify-between items-start gap-3 border-b border-white/5 pb-2 relative z-20">
-                                                                                <div className="flex items-center gap-1.5 min-w-0">
-                                                                                    <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.8)] shrink-0" />
-                                                                                    <span className="text-xs font-bold text-orange-400 uppercase tracking-widest truncate">
-                                                                                        {info.EventName || 'Next Match'}
-                                                                                    </span>
-                                                                                </div>
-                                                                                {info.Date && (
-                                                                                    <span className="text-xs font-medium text-white/70 whitespace-nowrap bg-white/5 border border-white/10 px-1.5 py-0.5 rounded shrink-0">
-                                                                                        {info.Date}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-
-                                                                            {/* Centered Matchup Section */}
-                                                                            <div className="flex items-center justify-center gap-4 sm:gap-6 py-2.5 relative">
-                                                                                {/* Team 1 (Challengers) */}
-                                                                                <div className="flex-1 flex flex-col items-end text-right min-w-0">
-                                                                                    <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                        {team1P1}
-                                                                                    </span>
-                                                                                    {team1P2 && (
-                                                                                        <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                            {team1P2}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-
-                                                                                {/* VS Badge */}
-                                                                                <div className="relative shrink-0 flex items-center justify-center">
-                                                                                    <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-orange-500 via-amber-500 to-yellow-500 flex items-center justify-center shadow-[0_0_12px_rgba(249,115,22,0.4)] border border-orange-400/30 group-hover:scale-110 transition-transform duration-300">
-                                                                                        <span className="text-[10px] font-bold text-black tracking-widest font-sans scale-90">VS</span>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                {/* Team 2 (Challenged) */}
-                                                                                <div className="flex-1 flex flex-col items-start text-left min-w-0">
-                                                                                    <span className="text-sm font-semibold text-white truncate w-full uppercase tracking-tight group-hover:text-orange-400 transition-colors">
-                                                                                        {team2P1}
-                                                                                    </span>
-                                                                                    {team2P2 && (
-                                                                                        <span className="text-xs font-medium text-white/70 truncate w-full uppercase tracking-wider mt-0.5">
-                                                                                            {team2P2}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </div>
-                                                                            </div>
-
-                                                                            {/* Bottom Bar: Location and Court */}
-                                                                            <div className="flex items-center justify-between border-t border-white/5 pt-2 mt-auto">
-                                                                                <div className="flex items-center gap-1.5 min-w-0 max-w-[70%]">
-                                                                                    <MapPin size={12} className="text-padel-green shrink-0" />
-                                                                                    <span className="text-xs font-medium text-white/70 truncate uppercase tracking-wider">
-                                                                                        {info.Location || info.Venue || 'Location TBD'}
-                                                                                    </span>
-                                                                                </div>
-                                                                                {info.Court && (
-                                                                                    <span className="text-[10px] font-bold bg-orange-500/10 border border-orange-500/25 text-orange-400 px-1.5 py-0.5 rounded uppercase tracking-widest whitespace-nowrap scale-95 shrink-0">
-                                                                                        {info.Court}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                );
-                                                            })()}
-                                                        </div>
+                                                    scheduleTimeFilter === 'upcoming' ? (
+                                                        upcomingMatchesList.length > 0 ? (
+                                                            <div className="w-full animate-fade-in flex flex-col gap-3">
+                                                                {renderMatchRows(upcomingMatchesList, { featuredFirst: true })}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                                <h3 className="text-white font-bold text-sm mb-1">You have no upcoming matches.</h3>
+                                                                <p className="text-white/50 text-[11px] font-medium mb-6">Your next match will appear here when draws are published.</p>
+                                                            </div>
+                                                        )
                                                     ) : (
-                                                        <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                            <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
-                                                            <h3 className="text-white font-bold text-sm mb-1">You have no upcoming matches.</h3>
-                                                            <p className="text-white/50 text-[11px] font-medium mb-6">Your next match will appear here when draws are published.</p>
-                                                        </div>
+                                                        pastMatchesList.length > 0 ? (
+                                                            renderPastPager(
+                                                                pastMatchesList,
+                                                                pastMatchSlide,
+                                                                setPastMatchSlide,
+                                                                (match) => renderCompactMatchRow(match, 0, 1),
+                                                            )
+                                                        ) : (
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                                <h3 className="text-white font-bold text-sm mb-1">No past matches yet.</h3>
+                                                                <p className="text-white/50 text-[11px] font-medium">Your match history will appear here.</p>
+                                                            </div>
+                                                        )
                                                     )
                                                 )}
                                             </div>
@@ -911,6 +1133,8 @@ const Hero = () => {
 
                                     </div>
                                 </div>
+                                </>
+                                )}
                             </motion.div>
                         )}
                     </AnimatePresence>
