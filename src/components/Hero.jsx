@@ -858,7 +858,9 @@ const Hero = () => {
     return (
         <div className="relative w-full bg-black">
             <div
-                className="relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-center min-h-[90vh] lg:min-h-[80vh]"
+                // Logged in: keep the tall hero — greeting, stats and My Schedule fill it.
+                // Logged out: hug the content so there's no dead space below the tagline.
+                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-center ${session ? 'min-h-[90vh] lg:min-h-[80vh]' : 'pb-8 lg:pb-12'}`}
                 onMouseMove={handleMouseMove}
             >
                 {/* Solid base background — text sits on this, never on the photo */}
