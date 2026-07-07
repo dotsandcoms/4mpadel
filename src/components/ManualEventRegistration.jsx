@@ -2941,7 +2941,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
                                                     <div className="flex items-end gap-3">
                                                         <div className="relative flex-1 min-w-0">
-                                                            <label className="block text-[11px] text-slate-600 font-normal mb-1">{addPartnerLocked ? 'Search for your partner' : 'Add a partner (optional)'}</label>
+                                                            <label className="block text-xs text-rose-600 font-semibold mb-1">{addPartnerLocked ? 'Search for your partner' : 'Add a partner (optional)'}</label>
                                                             <div className="relative">
                                                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
                                                                 <input
