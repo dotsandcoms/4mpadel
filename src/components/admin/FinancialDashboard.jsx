@@ -188,19 +188,32 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                             return d.getMonth() === i && d.getFullYear() === currentYear;
                         };
                         const monthPayments = filteredPayments.filter(p => inMonth(p.created_at));
-                        // Refunds count as negative revenue in the month they were processed.
-                        const monthRefunds = refunds.filter(r => inMonth(r.processed_at || r.created_at))
-                            .reduce((acc, r) => acc + Number(r.amount || 0), 0);
+                        // Refunds count as negative revenue in the month they were processed,
+                        // attributed to the same bucket as the original payment.
+                        const monthEntryRefunds = refunds
+                            .filter(r => inMonth(r.processed_at || r.created_at))
+                            .reduce((acc, r) => {
+                                const pay = paymentById.get(r.payment_id);
+                                if (!pay || !isEntryRow(pay)) return acc;
+                                return acc + Number(r.amount || 0);
+                            }, 0);
+                        const monthLicenseRefunds = refunds
+                            .filter(r => inMonth(r.processed_at || r.created_at))
+                            .reduce((acc, r) => {
+                                const pay = paymentById.get(r.payment_id);
+                                if (!pay || isEntryRow(pay)) return acc;
+                                return acc + Number(r.amount || 0);
+                            }, 0);
 
                         const licenseRev = monthPayments.filter(p => !isEntryRow(p))
-                            .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthLicenseRefunds;
                         const entryRev = monthPayments.filter(isEntryRow)
-                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthRefunds;
+                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthEntryRefunds;
 
                         return {
                             name: m,
                             revenue: Math.max(0, licenseRev + entryRev),
-                            licenses: licenseRev,
+                            licenses: Math.max(0, licenseRev),
                             entries: Math.max(0, entryRev),
                         };
                     });
