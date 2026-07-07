@@ -358,6 +358,13 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
 
     const accent = theme?.fill || '#CCFF00';
     const btnTextColor = theme?.primaryText?.includes('text-white') ? '#ffffff' : '#0F172A';
+    // Tier-aware gradient shared with the hero "Registered" chip on EventDetails —
+    // used for all primary CTA buttons so logged-in/out states look identical.
+    const accentGradientStyle = {
+        background: `linear-gradient(145deg, color-mix(in srgb, ${accent} 68%, white 32%) 0%, ${accent} 50%, color-mix(in srgb, ${accent} 82%, black 18%) 100%)`,
+        color: btnTextColor,
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,${btnTextColor === '#ffffff' ? 0.28 : 0.45}), 0 2px 12px color-mix(in srgb, ${accent} 40%, transparent)`,
+    };
 
     const hasLicense = licenseInfo.active;
 
@@ -2678,8 +2685,8 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
             type="button"
             onClick={onClick}
             disabled={disabled}
-            className={`w-full font-bold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 transition-opacity hover:opacity-90 disabled:opacity-40 ${theme.glow || ''} ${className}`}
-            style={{ backgroundColor: accent, color: btnTextColor }}
+            className={`w-full font-bold text-sm py-3.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:brightness-110 disabled:opacity-40 ${theme.glow || ''} ${className}`}
+            style={accentGradientStyle}
         >
             {children}
         </button>
@@ -3824,7 +3831,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
                                                 ? 'border border-gray-200 bg-white text-slate-700 hover:bg-gray-50'
                                                 : 'text-white'
                                         }`}
-                                        style={hasPendingPayment ? undefined : { backgroundColor: accent, color: btnTextColor }}
+                                        style={hasPendingPayment ? undefined : accentGradientStyle}
                                     >
                                         Add Division <ArrowRight className="w-4 h-4" />
                                     </button>

@@ -3062,8 +3062,8 @@ const EventDetails = () => {
                     <button
                         type="button"
                         onClick={handleRankedinRedirect}
-                        className={`w-full block text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all font-bold ${theme.primary} ${theme.glow}`}
-                        style={registerNowStyle}
+                        className="w-full block text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all font-bold hover:brightness-110"
+                        style={registeredStatusStyle}
                     >
                         Register Now
                     </button>
@@ -3071,8 +3071,8 @@ const EventDetails = () => {
                 {needsPayment && (
                     <button
                         onClick={openRegistrationModal}
-                        className={`w-full text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                        className="w-full text-center text-[10px] font-semibold tracking-normal px-4 py-3 rounded-xl transition-all hover:brightness-110"
+                        style={registeredStatusStyle}
                     >
                         Pay Entry Fee
                     </button>
@@ -3239,8 +3239,8 @@ const EventDetails = () => {
                                                         <button
                                                             type="button"
                                                             onClick={openManualPayFlow}
-                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            className="flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
+                                                            style={registeredStatusStyle}
                                                         >
                                                             <CreditCard className="w-4 h-4" />
                                                             Pay Entry
@@ -3263,8 +3263,8 @@ const EventDetails = () => {
                                                     <button
                                                         type="button"
                                                         onClick={openManualRegistration}
-                                                        className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                        style={registerNowStyle}
+                                                        className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
+                                                        style={registeredStatusStyle}
                                                     >
                                                         Register Now <ArrowRight className="w-4 h-4" />
                                                     </button>
@@ -3305,8 +3305,8 @@ const EventDetails = () => {
                                                             <button
                                                                 type="button"
                                                                 onClick={handleRankedinRedirect}
-                                                                className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                                style={registerNowStyle}
+                                                                className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
+                                                                style={registeredStatusStyle}
                                                             >
                                                                 Register Now <ArrowRight className="w-4 h-4" />
                                                             </button>
@@ -3316,8 +3316,8 @@ const EventDetails = () => {
                                                         <button
                                                             type="button"
                                                             onClick={openRegistrationModal}
-                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                            className="flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
+                                                            style={registeredStatusStyle}
                                                         >
                                                             <CreditCard className="w-4 h-4" />
                                                             Pay Fee
@@ -3330,8 +3330,8 @@ const EventDetails = () => {
                                             return (
                                                 <Link
                                                     to={`/draws/${event.slug || rId}`}
-                                                    className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                    className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
+                                                    style={registeredStatusStyle}
                                                 >
                                                     <GitBranch className="w-4 h-4" />
                                                     Draws & Results
@@ -4441,8 +4441,8 @@ const EventDetails = () => {
                             return (
                                 <Link
                                     to={`/draws/${event.slug || rId}`}
-                                    className={`flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-semibold text-xs tracking-normal transition-all ${theme.primary} ${theme.glow}`}
-                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                    className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-semibold text-xs tracking-normal transition-all hover:brightness-110"
+                                    style={registeredStatusStyle}
                                 >
                                     <GitBranch className="w-4 h-4" />
                                     View Draws & Results
