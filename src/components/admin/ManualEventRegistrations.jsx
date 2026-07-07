@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle, Pencil
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -1250,10 +1250,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                         type="button"
                         onClick={() => openMarkPaidModal(reg)}
                         disabled={markingId === reg.id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-colors"
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/25 hover:bg-sky-500/20 hover:text-sky-300 disabled:opacity-50 transition-colors"
                     >
-                        {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
-                        Mark paid
+                        {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Pencil size={10} />}
+                        Add Note
                     </button>
                 ) : (
                     <>
@@ -1869,14 +1869,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                                         </div>
                                                                                     </div>
                                                                                 ) : (
-                                                                                    <div className="rounded-xl border border-black/10 bg-amber-400 p-2.5 space-y-2 shadow-lg shadow-amber-400/20">
-                                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-black/70">Solo entry</p>
+                                                                                    <div className="rounded-xl border border-amber-400/30 bg-amber-400/10 p-2.5 space-y-2">
+                                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-amber-300">Solo entry</p>
                                                                                         <div className="flex items-center gap-1.5 justify-end flex-nowrap">
                                                                                             {team.players[0].payment_status === 'paid' && !team.players[0].partner_name?.trim() && !team.players[0].partner_email?.trim() && (
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(team.players[0]); }}
-                                                                                                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500 hover:text-white transition-colors shrink-0"
+                                                                                                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-sky-600 text-white border-sky-700 hover:bg-sky-500 transition-colors shrink-0"
                                                                                                 >
                                                                                                     <UserPlus size={11} /> Partner
                                                                                                 </button>
@@ -1884,14 +1884,14 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => openMovePlayer(team.players[0])}
-                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/20 hover:bg-violet-500 hover:text-white transition-colors shrink-0"
+                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-600 text-white border-violet-700 hover:bg-violet-500 transition-colors shrink-0"
                                                                                             >
                                                                                                 <ArrowRightLeft size={11} /> Move
                                                                                             </button>
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => { setRemovePair(false); setRemoveTarget(team.players[0]); }}
-                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shrink-0"
+                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-red-600 text-white border-red-700 hover:bg-red-500 transition-colors shrink-0"
                                                                                             >
                                                                                                 <Trash2 size={11} /> Remove
                                                                                             </button>
