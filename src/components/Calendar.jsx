@@ -179,6 +179,7 @@ const Calendar = () => {
             .from('calendar')
             .select('*')
             .eq('featured_event', true)
+            .or('sanction_status.eq.approved,sanction_status.is.null')
             .order('start_date', { ascending: true })
             .limit(10);
 

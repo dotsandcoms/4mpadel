@@ -349,9 +349,19 @@ const blankForm = {
     finance_managed: true,
     allow_payments: true,
     show_in_recent_results: false,
+    // format & capacity
+    golden_point: true,
+    is_league: false,
+    max_teams_capacity: '',
+    partner_requirement: 'Required',
+    back_draw_options: 'Plate Included',
+    event_co_admins: '',
 };
 
-const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
+const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
+    // Org editing an already-sanctioned event → changes become a draft
+    // amendment that a 4M admin must approve (event stays live meanwhile).
+    const isAmendment = !!(organization && editingEvent && editingEvent.sanction_status === 'approved');
     const [step, setStep] = useState(1);
     const [form, setForm] = useState(blankForm);
     const [divisions, setDivisions] = useState([emptyDivision()]);
@@ -413,9 +423,23 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
         setRemovedDivisionIds([]);
         setStandardPrice('');
         if (editingEvent) {
-            loadExisting(editingEvent);
+            // If the org has a pending amendment draft, resume editing THAT
+            // draft rather than the live event data.
+            const draft = (organization && editingEvent.sanction_status === 'approved'
+                && ['pending', 'rejected'].includes(editingEvent.pending_changes_status)
+                && editingEvent.pending_changes?.payload)
+                ? editingEvent.pending_changes : null;
+            loadExisting(draft ? { ...editingEvent, ...draft.payload } : editingEvent, draft?.divisions || null);
         } else {
-            setForm(blankForm);
+            // Org portal mode: prefill organiser identity from the organisation
+            setForm(organization ? {
+                ...blankForm,
+                organizer_name: organization.name || blankForm.organizer_name,
+                organizer_logo_url: organization.logo_url || '',
+                organizer_email: organization.contact_email || '',
+                organizer_phone: organization.contact_phone || '',
+                organizer_website: organization.website_url || '',
+            } : blankForm);
             setDivisions([emptyDivision()]);
             setShowPrizeBreakdown(false);
         }
@@ -433,7 +457,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
         return [];
     };
 
-    const loadExisting = async (ev) => {
+    const loadExisting = async (ev, draftDivisions = null) => {
         const prizeBreakdown = parsePrizeBreakdownField(ev.prize_money_breakdown);
         setShowPrizeBreakdown(prizeBreakdown.length > 0);
         setForm({
@@ -449,7 +473,32 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
+            golden_point: ev.golden_point !== false,
+            is_league: !!ev.is_league,
+            max_teams_capacity: ev.max_teams_capacity != null ? String(ev.max_teams_capacity) : '',
+            partner_requirement: ev.partner_requirement || 'Required',
+            back_draw_options: ev.back_draw_options || 'Plate Included',
+            event_co_admins: Array.isArray(ev.event_co_admins) ? ev.event_co_admins.join(', ') : (ev.event_co_admins || ''),
         });
+        if (draftDivisions && draftDivisions.length > 0) {
+            // Resume divisions from a pending amendment draft
+            setDivisions(
+                draftDivisions.map((d, i) => ({
+                    _key: d.id || `draft_${i}`,
+                    id: d.id || null,
+                    name: d.name || '',
+                    entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
+                    format: d.format || 'Knockout',
+                    entries_close_at: toLocalInput(d.entries_close_at),
+                    license_required: !!d.license_required,
+                    age_category: d.age_category || '',
+                    gender: d.gender || '',
+                    details: d.details || '',
+                    is_active: d.is_active !== false,
+                }))
+            );
+            return;
+        }
         const { data, error } = await supabase
             .from('tournament_divisions')
             .select('*')
@@ -621,7 +670,23 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
             end_date: form.end_date || null,
             start_time: form.start_time || null,
             end_time: form.end_time || null,
+            max_teams_capacity: form.max_teams_capacity === '' || form.max_teams_capacity == null
+                ? null : Number(form.max_teams_capacity),
+            event_co_admins: String(form.event_co_admins || '')
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean),
         };
+        if (organization) {
+            // Org-created events: tie to the org and stay hidden until a 4M
+            // admin sanctions them (DB trigger also forces sanction_status).
+            payload.organization_id = organization.id;
+            if (!editingEvent) {
+                payload.is_visible = false;
+                payload.featured_event = false;
+                payload.show_in_recent_results = false;
+            }
+        }
         return payload;
     };
 
@@ -662,6 +727,47 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
         try {
             const payload = buildPayload();
             let eventId = editingEvent?.id;
+
+            if (isAmendment) {
+                // Store draft amendment only — live event data stays untouched
+                // until a 4M admin approves. Divisions draft included.
+                const divisionsDraft = divisions
+                    .filter((d) => d.name.trim())
+                    .map((d, i) => ({
+                        id: d.id || null,
+                        name: d.name.trim(),
+                        entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
+                        format: d.format || null,
+                        entries_close_at: safeISOString(d.entries_close_at),
+                        license_required: !!d.license_required,
+                        age_category: d.age_category || null,
+                        gender: d.gender || null,
+                        details: d.details?.trim() || null,
+                        sort_order: i,
+                        is_active: d.is_active !== false,
+                    }));
+
+                const { error } = await supabase
+                    .from('calendar')
+                    .update({
+                        pending_changes: {
+                            payload,
+                            divisions: divisionsDraft,
+                            removed_division_ids: removedDivisionIds,
+                        },
+                        pending_changes_status: 'pending',
+                        pending_changes_notes: null,
+                        pending_changes_submitted_at: new Date().toISOString(),
+                    })
+                    .eq('id', editingEvent.id);
+                if (error) throw error;
+
+                toast.success('Amendment submitted — awaiting 4M Padel approval. Your event stays live with its current details.');
+                onSaved?.({ eventId, isNew: false, isAmendment: true, eventName: payload.event_name });
+                onClose?.();
+                return;
+            }
+
             if (editingEvent) {
                 const { error } = await supabase.from('calendar').update(payload).eq('id', editingEvent.id);
                 if (error) throw error;
@@ -671,8 +777,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                 eventId = data.id;
             }
             await persistDivisions(eventId);
-            toast.success(editingEvent ? 'Manual event updated' : 'Manual event created');
-            onSaved?.();
+            toast.success(
+                organization
+                    ? (editingEvent ? 'Event updated — pending 4M Padel sanctioning' : 'Event submitted for 4M Padel sanctioning')
+                    : (editingEvent ? 'Manual event updated' : 'Manual event created')
+            );
+            onSaved?.({ eventId, isNew: !editingEvent, eventName: payload.event_name });
             onClose?.();
         } catch (err) {
             console.error('Error saving manual event:', err);
@@ -1206,14 +1316,78 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null }) => {
                                         <p className="text-[11px] text-gray-500 mt-1">Event-wide fallback. Per-division close dates take priority.</p>
                                     </div>
                                 </div>
+
+                                {/* Event format & capacity */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className={labelClass}>Partner Requirement</label>
+                                        <select
+                                            name="partner_requirement"
+                                            value={form.partner_requirement}
+                                            onChange={handleInput}
+                                            className={inputClass}
+                                        >
+                                            <option value="Required">Required (Doubles)</option>
+                                            <option value="Optional">Optional (Free Agent)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Back Draw</label>
+                                        <select
+                                            name="back_draw_options"
+                                            value={form.back_draw_options}
+                                            onChange={handleInput}
+                                            className={inputClass}
+                                        >
+                                            <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
+                                            <option value="No Plate">No Plate (Direct Elimination Only)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Max Team Capacity</label>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            name="max_teams_capacity"
+                                            value={form.max_teams_capacity}
+                                            onChange={handleInput}
+                                            placeholder="Leave empty for unlimited"
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className={labelClass}>Event Co-Admins (emails, comma-separated)</label>
+                                        <input
+                                            type="text"
+                                            name="event_co_admins"
+                                            value={form.event_co_admins}
+                                            onChange={handleInput}
+                                            placeholder="name@club.co.za, other@club.co.za"
+                                            className={inputClass}
+                                        />
+                                    </div>
+                                </div>
+                                {organization && (
+                                    <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
+                                        {isAmendment
+                                            ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                            : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {[
+                                    {(organization ? [
                                         ['allow_payments', 'Allow payments'],
+                                        ['golden_point', 'Golden point'],
+                                        ['is_league', 'League format'],
+                                    ] : [
+                                        ['allow_payments', 'Allow payments'],
+                                        ['golden_point', 'Golden point'],
+                                        ['is_league', 'League format'],
                                         ['is_visible', 'Visible on website'],
                                         ['featured_event', 'Featured event'],
                                         ['finance_managed', 'Finance manager'],
                                         ['show_in_recent_results', 'Show in recent results'],
-                                    ].map(([key, label]) => (
+                                    ]).map(([key, label]) => (
                                         <label key={key} className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                             <span className="text-sm font-medium text-gray-200">{label}</span>
                                             <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />

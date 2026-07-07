@@ -1,11 +1,12 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Trophy, Settings, LogOut, FileText, Calendar, DollarSign, Image as ImageIcon, UserPlus, X, Shield, ExternalLink, Home, User, ChevronLeft, ChevronRight, Mail, Building } from 'lucide-react';
 import logo from '../../assets/logo_4m_lowercase.png';
 
-const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session }) => {
+const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session, badgeCounts = {} }) => {
     const allMenuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'organizations', label: 'Organisations', icon: Building },
         { id: 'players', label: 'Players', icon: Users },
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'calendar', label: 'Calendar', icon: Calendar },
@@ -101,8 +102,18 @@ const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDe
                                     />
                                 )}
                                 <span className={`relative z-10 flex items-center ${isDesktopCollapsed ? 'justify-center' : 'gap-3 w-full'}`}>
-                                    <Icon size={20} className="shrink-0" />
+                                    <span className="relative shrink-0 flex">
+                                        <Icon size={20} className="shrink-0" />
+                                        {isDesktopCollapsed && badgeCounts[item.id] > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-red-500 rounded-full border border-black" />
+                                        )}
+                                    </span>
                                     {!isDesktopCollapsed && <span className="truncate">{item.label}</span>}
+                                    {!isDesktopCollapsed && badgeCounts[item.id] > 0 && (
+                                        <span className={`ml-auto shrink-0 min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center ${isActive ? 'bg-black/20 text-black' : 'bg-red-500 text-white'}`}>
+                                            {badgeCounts[item.id] > 99 ? '99+' : badgeCounts[item.id]}
+                                        </span>
+                                    )}
                                 </span>
                             </button>
                         );

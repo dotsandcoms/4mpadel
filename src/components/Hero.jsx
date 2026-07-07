@@ -115,6 +115,7 @@ const Hero = () => {
                 .from('calendar')
                 .select('*')
                 .eq('featured_live', true)
+                .or('sanction_status.eq.approved,sanction_status.is.null')
                 .neq('is_visible', false)
                 .order('start_date', { ascending: true })
                 .limit(1)

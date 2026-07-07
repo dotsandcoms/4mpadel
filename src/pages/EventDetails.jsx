@@ -20,6 +20,7 @@ import { PAYSTACK_PUBLIC_KEY, isPaystackTestMode as isTestMode } from '../utils/
 const tournamentHero = 'https://images.unsplash.com/photo-1554068865-24cecd4e34b8?auto=format&fit=crop&q=80';
 import logo4m from '../assets/logo_4m_lowercase.png';
 import { getEventImage, getDefaultEventBackground } from '../utils/imageUtils';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 const formatPlayerName = (fullName) => {
     if (!fullName) return '';
@@ -260,7 +261,7 @@ const InfoSection = ({ title, icon: Icon, accent = '#9AE900', defaultOpen = fals
                         <div className="px-6 py-5">
                             {text != null ? (
                                 /<[a-z][\s\S]*>/i.test(text) ? (
-                                    <div className="rich-text text-slate-600 leading-snug text-xs font-normal" dangerouslySetInnerHTML={{ __html: text }} />
+                                    <div className="rich-text text-slate-600 leading-snug text-xs font-normal" dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }} />
                                 ) : (
                                     <div className="text-slate-600 leading-snug text-xs font-normal whitespace-pre-wrap">{text}</div>
                                 )
@@ -1319,6 +1320,9 @@ const EventDetails = () => {
                 } else {
                     query = query.eq('slug', slug);
                 }
+
+                // Hide unsanctioned org events from the public event page
+                query = query.or('sanction_status.eq.approved,sanction_status.is.null');
 
                 const { data, error } = await query.maybeSingle();
                 if (error) throw error;
@@ -3457,6 +3461,11 @@ const EventDetails = () => {
                                                                 icon: Trophy,
                                                                 valueColor: theme.accentText,
                                                             }] : []),
+                                                            ...(event.partner_requirement ? [{ label: 'Partner', value: event.partner_requirement === 'Optional' ? 'Optional (Free Agent)' : 'Required (Doubles)', icon: User }] : []),
+                                                            ...(event.back_draw_options ? [{ label: 'Back Draw', value: event.back_draw_options, icon: Award }] : []),
+                                                            ...(event.max_teams_capacity ? [{ label: 'Team Capacity', value: `${event.max_teams_capacity} teams`, icon: User }] : []),
+                                                            ...(event.golden_point === false ? [{ label: 'Scoring', value: 'Advantage (No Golden Point)', icon: Award }] : (event.golden_point === true ? [{ label: 'Scoring', value: 'Golden Point', icon: Award }] : [])),
+                                                            ...(event.is_league ? [{ label: 'Format', value: 'League', icon: Trophy }] : []),
                                                             { label: 'Status', value: computedStatus, icon: Clock }
                                                         ].map((item, idx) => (
                                                             <div key={idx} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
@@ -3762,7 +3771,7 @@ const EventDetails = () => {
                                                                 <div className="px-6 py-5">
                                                                     <div
                                                                         className="text-slate-600 leading-snug text-xs font-normal prose max-w-none"
-                                                                        dangerouslySetInnerHTML={{ __html: event.description }}
+                                                                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(event.description) }}
                                                                     />
                                                                 </div>
                                                             </motion.div>
