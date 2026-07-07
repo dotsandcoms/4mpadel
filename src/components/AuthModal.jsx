@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, Search, Calendar, ChevronRight, Check } from 'lucide-react';
+import { X, Mail, Lock, User, Phone, CheckCircle, AlertCircle, Eye, EyeOff, Info, Camera, Upload, Search, Calendar, ChevronRight, Check, Building, GraduationCap, Landmark, ChevronLeft } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { useNavigate, useLocation } from 'react-router-dom';
 import PaystackPop from '@paystack/inline-js';
@@ -12,6 +12,36 @@ import { Trophy } from 'lucide-react';
 import { fetchUpcomingCalendarEvents } from '../utils/calendarEvents';
 
 import { PAYSTACK_PUBLIC_KEY, isPaystackConfigured } from '../utils/paystackConfig';
+import RegisterOrganisationForm from './RegisterOrganisationForm';
+import RegisterCoachForm from './RegisterCoachForm';
+
+const REGISTRATION_OPTIONS = [
+    {
+        id: 'profile',
+        label: 'Profile',
+        description: 'Create your player profile and enter tournaments.',
+        icon: User,
+    },
+    {
+        id: 'organisation',
+        label: 'Organisation',
+        description: 'Apply to host approved tournaments on 4M Padel.',
+        icon: Building,
+    },
+    {
+        id: 'coach',
+        label: 'Coach',
+        description: 'Apply to join the approved coach network.',
+        icon: GraduationCap,
+    },
+    {
+        id: 'club',
+        label: 'Club',
+        description: 'Register your padel club on the platform.',
+        icon: Landmark,
+        comingSoon: true,
+    },
+];
 
 console.log('Paystack Config Check:', {
     keyPrefix: PAYSTACK_PUBLIC_KEY ? PAYSTACK_PUBLIC_KEY.substring(0, 12) + '...' : 'MISSING',
@@ -66,6 +96,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
     const [selectedEventId, setSelectedEventId] = useState('');
     const [eventSearchQuery, setEventSearchQuery] = useState('');
     const [eventsLoading, setEventsLoading] = useState(false);
+    const [registerType, setRegisterType] = useState(null);
     const { clubs } = useClubs();
 
     const filteredEvents = upcomingEvents.filter((event) =>
@@ -115,6 +146,13 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
         setRacketBrand('');
         setCustomRacketBrand('');
         setMessage(null);
+        setRegisterType(null);
+    };
+
+    const handleSelectRegisterType = (type) => {
+        if (type === 'club') return;
+        setRegisterType(type);
+        setStep(1);
     };
 
     const showMessage = (text, type = 'success') => {
@@ -417,7 +455,11 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                     initial={{ opacity: 0, scale: 0.95, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95, y: 20 }}
-                    className="relative w-full max-w-md max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                    className={`relative w-full max-h-[90vh] flex flex-col bg-[#0F172A] border border-white/10 rounded-2xl shadow-2xl overflow-hidden ${
+                        activeTab === 'register' && (registerType === 'organisation' || registerType === 'coach')
+                            ? 'max-w-lg'
+                            : 'max-w-md'
+                    }`}
                 >
                     <button
                         onClick={onClose}
@@ -428,13 +470,27 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
 
                     <div className="pt-8 pb-6 px-8 text-center border-b border-white/5 bg-white/5">
                         <h2 className="text-2xl font-bold text-white mb-2">
-                            {activeTab === 'login' ? 'Welcome Back' : activeTab === 'register' ? 'Create Profile' : 'Reset Password'}
+                            {activeTab === 'login'
+                                ? 'Welcome Back'
+                                : activeTab === 'register'
+                                    ? (registerType === 'organisation'
+                                        ? 'Organisation Registration'
+                                        : registerType === 'coach'
+                                            ? 'Coach Registration'
+                                            : 'Create Profile')
+                                    : 'Reset Password'}
                         </h2>
                         <p className="text-gray-400 text-sm">
                             {activeTab === 'login'
                                 ? 'Enter your credentials to access your profile'
                                 : activeTab === 'register'
-                                    ? 'Register to manage your player profile and stats'
+                                    ? (registerType === null
+                                        ? 'What are you registering for?'
+                                        : registerType === 'organisation'
+                                            ? 'Apply to host sanctioned tournaments on 4M Padel'
+                                            : registerType === 'coach'
+                                                ? 'Apply to join the approved 4M Padel coach network'
+                                                : 'Register to manage your player profile and stats')
                                     : 'Retrieve your account access'}
                         </p>
                     </div>
@@ -462,11 +518,65 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                             </div>
                         )}
 
+                        {activeTab === 'register' && registerType === null ? (
+                            <div className="space-y-3">
+                                {REGISTRATION_OPTIONS.map((option) => {
+                                    const Icon = option.icon;
+                                    const isDisabled = option.comingSoon;
+                                    return (
+                                        <button
+                                            key={option.id}
+                                            type="button"
+                                            disabled={isDisabled}
+                                            onClick={() => handleSelectRegisterType(option.id)}
+                                            className={`w-full text-left rounded-xl border p-4 transition-all flex items-center gap-4 ${
+                                                isDisabled
+                                                    ? 'border-white/5 bg-white/[0.02] opacity-50 cursor-not-allowed'
+                                                    : 'border-white/10 bg-black/30 hover:border-padel-green/40 hover:bg-black/50 cursor-pointer'
+                                            }`}
+                                        >
+                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isDisabled ? 'bg-white/5' : 'bg-padel-green/10'}`}>
+                                                <Icon size={18} className={isDisabled ? 'text-gray-500' : 'text-padel-green'} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-white text-sm">{option.label}</span>
+                                                    {option.comingSoon && (
+                                                        <span className="text-[9px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                                                            Coming soon
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-0.5">{option.description}</p>
+                                            </div>
+                                            {!isDisabled && <ChevronRight size={16} className="text-gray-600 shrink-0" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : activeTab === 'register' && registerType === 'organisation' ? (
+                            <RegisterOrganisationForm
+                                onBack={() => setRegisterType(null)}
+                                onClose={onClose}
+                            />
+                        ) : activeTab === 'register' && registerType === 'coach' ? (
+                            <RegisterCoachForm
+                                onBack={() => setRegisterType(null)}
+                                onClose={onClose}
+                            />
+                        ) : (
                         <form onSubmit={activeTab === 'login' ? handleLogin : activeTab === 'register' ? handleRegistrationSubmit : handleForgotPassword} className="space-y-4">
-                            {activeTab === 'register' ? (
+                            {activeTab === 'register' && registerType === 'profile' ? (
                                 <>
                                     {step === 1 ? (
                                         <div className="space-y-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setRegisterType(null)}
+                                                className="flex items-center gap-1.5 text-gray-400 hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                                            >
+                                                <ChevronLeft size={14} /> Back to registration options
+                                            </button>
                                             <div className="flex items-center justify-between mb-2">
                                                 <span className="text-padel-green text-[10px] font-black uppercase tracking-widest">Step 1: Personal</span>
                                                 <span className="text-gray-500 text-[10px] font-bold">1 / 3</span>
@@ -1065,6 +1175,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                                 </div>
                             )}
                         </form>
+                        )}
                     </div>
                 </motion.div>
 
