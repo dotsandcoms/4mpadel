@@ -15,6 +15,7 @@ import {
     findPaymentForRegistration,
     isLicensePaymentRow,
     registrationHasPaystackEntryPayment,
+    resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
 import { resolveRegistrationLicenseCategory } from '../../utils/registrationLicense';
 import ManualEventRegistrations from './ManualEventRegistrations';
@@ -552,9 +553,17 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         profile_id: null,
                         players: null, // will be populated below
                         actual_payment: payment,
-                        paid_by_name: r.registered_by && r.registered_by.toLowerCase() !== r.email?.toLowerCase()
-                            ? (r.partner_name || r.registered_by)
-                            : null,
+                        paid_by_name: (() => {
+                            // Only a payment that names a different payer AND covers this
+                            // player counts as partner-paid. registered_by is the booker,
+                            // not the payer — never infer payment from it.
+                            const info = resolveRegistrationPayer(payment, { id: r.id, email: r.email });
+                            if (!info.isPartnerPaid) return null;
+                            return (regRows || []).find((x) => (x.email || '').toLowerCase() === info.payerEmail)?.full_name
+                                || ((r.partner_email || '').toLowerCase() === info.payerEmail ? r.partner_name : null)
+                                || payment?.metadata?.paid_by_name
+                                || info.payerEmail;
+                        })(),
                         registration_payment_method: r.payment_method || null,
                         whatsapp_added: false,
                         metadata: {},
@@ -673,9 +682,16 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                 });
 
                 let paidByName = payment?.metadata?.paid_by_name || null;
-                const registeredBy = (registration?.registered_by || '').toLowerCase();
-                if (!paidByName && registeredBy && registeredBy !== playerEmail) {
-                    paidByName = registration.partner_name || payerNameByEmail[registeredBy] || null;
+                if (!paidByName && payment) {
+                    // Partner-paid only from actual payment evidence — never from
+                    // registered_by (the booker), since teams book together but
+                    // pay separately.
+                    const info = resolveRegistrationPayer(payment, { id: null, email: p.players?.email || p.email });
+                    if (info.isPartnerPaid) {
+                        paidByName = payerNameByEmail[info.payerEmail]
+                            || ((registration?.partner_email || '').toLowerCase() === info.payerEmail ? registration?.partner_name : null)
+                            || info.payerEmail;
+                    }
                 }
 
                 // Resolve the payment method even when the matcher above didn't bind a

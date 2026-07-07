@@ -187,3 +187,63 @@ export function isExplicitAdminMarkedPayment(payment) {
         || String(payment.reference || '').startsWith('MANUAL-ADMIN-')
     );
 }
+
+/**
+ * The email of the person who actually MADE a payment, checked across every
+ * metadata layer Paystack/sync flows use. Returns null when unknown.
+ */
+export function paymentPayerEmailFor(payment) {
+    const meta = payment?.metadata || {};
+    const { top, inner } = getPaymentMetadataLayers(meta);
+    return norm(
+        top.registrant_email || inner.registrant_email
+        || top.paid_by_email || inner.paid_by_email
+        || meta.original_trx?.user
+        || top.email || inner.email
+    ) || null;
+}
+
+/** True when a payment's covers[] / registration_rows explicitly include this email. */
+export function paymentExplicitlyCoversEmail(payment, email) {
+    const meta = payment?.metadata || {};
+    const { top, inner } = getPaymentMetadataLayers(meta);
+    const target = norm(email);
+    if (!target) return false;
+    if (paymentEntryCoversFor(meta).some((c) => norm(c?.email) === target)) return true;
+    return [...(top.registration_rows || []), ...(inner.registration_rows || [])]
+        .some((row) => norm(row?.email) === target);
+}
+
+/**
+ * Who actually paid for this registration.
+ *
+ * Partner-paid is ONLY concluded when the matched payment names a payer other
+ * than the registrant AND that payment explicitly covers the registrant
+ * (covers[] / registration_rows / registration_id).
+ *
+ * IMPORTANT: `registered_by` is who CREATED the team booking, not who paid --
+ * one player books the pair and each pays separately all the time, so it must
+ * never be used as a payment signal. Unknown payer defaults to self-paid.
+ */
+export function resolveRegistrationPayer(payment, reg) {
+    if (!payment || !reg) return { isPartnerPaid: false, payerEmail: null };
+    // Admin marked-as-paid rows record the covered player, not a payer
+    if (isExplicitAdminMarkedPayment(payment)) return { isPartnerPaid: false, payerEmail: null };
+
+    const selfEmail = norm(reg.email);
+    const payerEmail = paymentPayerEmailFor(payment);
+    if (!selfEmail || !payerEmail || payerEmail === selfEmail) {
+        return { isPartnerPaid: false, payerEmail: payerEmail || null };
+    }
+
+    const meta = payment.metadata || {};
+    const explicitlyCovers = meta.registration_id === reg.id
+        || paymentExplicitlyCoversEmail(payment, selfEmail);
+    if (!explicitlyCovers) {
+        // A differently-owned payment that doesn't explicitly cover this player
+        // is a matching artefact -- never report it as partner-paid.
+        return { isPartnerPaid: false, payerEmail: null };
+    }
+
+    return { isPartnerPaid: true, payerEmail };
+}

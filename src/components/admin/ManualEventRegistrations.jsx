@@ -17,6 +17,7 @@ import {
     isLicensePaymentRow,
     registrationHasPaystackEntryPayment,
     resolveRegistrationPaymentMethod,
+    resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
 import { sendEmail } from '../../utils/emails';
 
@@ -838,29 +839,18 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     );
 
     const resolvePaymentPayer = useCallback((reg, payment) => {
-        const selfEmail = (reg.email || '').toLowerCase();
-        const registeredBy = (reg.registered_by || '').toLowerCase();
+        // Partner-paid ONLY when the payment names a different payer AND that
+        // payment explicitly covers this registration. Who created the booking
+        // (registered_by) is NOT a payment signal — teams register together but
+        // pay separately all the time.
+        const { isPartnerPaid, payerEmail } = resolveRegistrationPayer(payment, reg);
+        if (!isPartnerPaid) return { isPartnerPaid: false, payerName: null };
 
-        if (payment) {
-            const paidByEmail = (payment.metadata?.registrant_email || payment.metadata?.email || '').toLowerCase();
-            if (paidByEmail === selfEmail) {
-                return { isPartnerPaid: false, payerName: null };
-            }
-            const payerName = registrations.find((x) => (x.email || '').toLowerCase() === paidByEmail)?.full_name
-                || reg.partner_name
-                || paidByEmail;
-            return { isPartnerPaid: true, payerName };
-        }
-
-        if (registeredBy && registeredBy !== selfEmail) {
-            let payerName = reg.partner_name;
-            if (!payerName || (reg.partner_email || '').toLowerCase() !== registeredBy) {
-                payerName = registrations.find((x) => (x.email || '').toLowerCase() === registeredBy)?.full_name;
-            }
-            return { isPartnerPaid: true, payerName: payerName || registeredBy };
-        }
-
-        return { isPartnerPaid: false, payerName: null };
+        const payerName = registrations.find((x) => (x.email || '').toLowerCase() === payerEmail)?.full_name
+            || ((reg.partner_email || '').toLowerCase() === payerEmail ? reg.partner_name : null)
+            || payment?.metadata?.paid_by_name
+            || payerEmail;
+        return { isPartnerPaid: true, payerName };
     }, [registrations]);
 
     const formatPaymentStatusForExport = useCallback((r) => {
