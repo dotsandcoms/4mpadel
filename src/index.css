@@ -1,8 +1,47 @@
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+
+@font-face {
+  font-family: "SF Pro Rounded";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: local("SF Pro Rounded"),
+    local("SFProRounded-Regular"),
+    local("SFProRounded-Medium");
+}
+
+@font-face {
+  font-family: "SF Pro Rounded";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: local("SF Pro Rounded Semibold"),
+    local("SFProRounded-Semibold");
+}
+
+@font-face {
+  font-family: "SF Pro Rounded";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: local("SF Pro Rounded Bold"),
+    local("SFProRounded-Bold");
+}
+
+@font-face {
+  font-family: "SF Pro Rounded";
+  font-style: normal;
+  font-weight: 800 900;
+  font-display: swap;
+  src: local("SF Pro Rounded Heavy"),
+    local("SFProRounded-Heavy"),
+    local("SF Pro Rounded Black"),
+    local("SFProRounded-Black");
+}
 
 @theme {
-  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-sans: "SF Pro Rounded", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --color-padel-green: #CCFF00;
   --animate-blob-1: fluid-blob-1 14s infinite ease-in-out;
   --animate-blob-2: fluid-blob-2 18s infinite ease-in-out;
@@ -10,7 +49,7 @@
 }
 
 :root {
-  font-family: "Montserrat", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "SF Pro Rounded", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -76,7 +115,7 @@ h3,
 h4,
 h5,
 h6 {
-  font-family: "Montserrat", sans-serif;
+  font-family: "SF Pro Rounded", "Nunito", ui-rounded, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   letter-spacing: -0.02em;
 }
 

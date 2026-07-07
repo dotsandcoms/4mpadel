@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info
+    X, Users, CheckCircle, Clock, DollarSign, Download, Loader2, Check, Search, UserX, Trash2, RotateCcw, UserPlus, ArrowRightLeft, User, ChevronDown, Calendar, Trophy, Link2, Info, MessageCircle, XCircle
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
@@ -107,6 +107,20 @@ const PaymentNoteButton = ({ note, regId, openId, onOpen }) => {
     );
 };
 
+/** Stacks per-player cells with a divider between teammates in a table row. */
+const TeamPlayerRows = ({ players, children }) => (
+    <div className="flex flex-col justify-center">
+        {players.map((player, index) => (
+            <div key={player.id}>
+                {index > 0 && <div className="border-t border-white/10" />}
+                <div className="flex items-center py-2.5 min-h-[36px]">
+                    {children(player, index)}
+                </div>
+            </div>
+        ))}
+    </div>
+);
+
 const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'modal' }) => {
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
@@ -147,6 +161,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [activeTab, setActiveTab] = useState('overview'); // 'overview', 'players', 'list'
     const [expandedDivisions, setExpandedDivisions] = useState({});
     const [openPaymentNoteId, setOpenPaymentNoteId] = useState(null);
+    const [updatingWhatsApp, setUpdatingWhatsApp] = useState(null);
 
     const load = useCallback(async () => {
         if (!event?.id) return;
@@ -301,6 +316,27 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         setMarkPaidNote('');
         setMarkPaidMethod('manual');
         setMarkPaidBusy(false);
+    };
+
+    const handleToggleWhatsApp = async (reg) => {
+        setUpdatingWhatsApp(reg.id);
+        const newState = !reg.whatsapp_added;
+        try {
+            const { error } = await supabase
+                .from('event_registrations')
+                .update({ whatsapp_added: newState })
+                .eq('id', reg.id);
+            if (error) throw error;
+            setRegistrations((prev) => prev.map((r) => (
+                r.id === reg.id ? { ...r, whatsapp_added: newState } : r
+            )));
+            toast.success(`${reg.full_name} ${newState ? 'marked as added to WhatsApp' : 'unmarked from WhatsApp'}`);
+        } catch (err) {
+            console.error('WhatsApp toggle error:', err);
+            toast.error('Failed to update WhatsApp status');
+        } finally {
+            setUpdatingWhatsApp(null);
+        }
     };
 
     const confirmMarkPaid = async () => {
@@ -910,9 +946,11 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                 Paid by {details.payerName || 'partner'}
             </span>
         ) : details.isManualChannel ? (
-            <span className="text-[9px] font-bold text-amber-300">
-                Manual{details.method && details.method !== 'paystack' ? ` · ${labelPaymentMethod(details.method)}` : ''}
-            </span>
+            details.method && details.method !== 'paystack' ? (
+                <span className="text-[9px] font-bold text-amber-300">
+                    {labelPaymentMethod(details.method)}
+                </span>
+            ) : null
         ) : (
             <span className="text-[9px] font-bold text-gray-400">
                 Via {labelPaymentMethod(details.method) || 'Paystack'}
@@ -1148,10 +1186,10 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const licenseBadge = useCallback((reg) => {
         const license = formatLicenseForExport(reg);
         if (license.includes('Full')) {
-            return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><Check size={10} /> Full SAPA license</span>;
+            return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"><Check size={10} /> Full license</span>;
         }
         if (license.includes('Temporary')) {
-            return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20"><Check size={10} /> Temp SAPA license</span>;
+            return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-sky-500/10 text-sky-400 border border-sky-500/20"><Check size={10} /> Temp license</span>;
         }
         return <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase bg-red-500/10 text-red-400 border border-red-500/20">No license</span>;
     }, [formatLicenseForExport]);
@@ -1178,6 +1216,87 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             </span>
         );
     }, [getPaymentDetails]);
+
+    const canMarkRegistrationPaid = useCallback((reg) => (
+        String(reg?.status || '').toLowerCase() !== 'withdrawn'
+        && !registrationCountsAsPaid(reg, refundByReg)
+    ), [refundByReg]);
+
+    const renderPaymentCell = useCallback((reg) => {
+        const details = getPaymentDetails(reg);
+        const channelLabel = details ? (
+            details.isPartnerPaid ? (
+                <span className="text-[9px] font-bold text-sky-300">
+                    Paid by {details.payerName || 'partner'}
+                </span>
+            ) : details.isManualChannel ? (
+                details.method && details.method !== 'paystack' ? (
+                    <span className="text-[9px] font-bold text-amber-300">
+                        {labelPaymentMethod(details.method)}
+                    </span>
+                ) : null
+            ) : (
+                <span className="text-[9px] font-bold text-gray-400">
+                    Via {labelPaymentMethod(details.method) || 'Paystack'}
+                </span>
+            )
+        ) : null;
+
+        return (
+            <div className="flex flex-wrap items-center gap-1.5">
+                {paymentBadge(reg)}
+                {canMarkRegistrationPaid(reg) ? (
+                    <button
+                        type="button"
+                        onClick={() => openMarkPaidModal(reg)}
+                        disabled={markingId === reg.id}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-colors"
+                    >
+                        {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+                        Mark paid
+                    </button>
+                ) : (
+                    <>
+                        {channelLabel}
+                        {details && (
+                            <PaymentNoteButton
+                                note={details.note}
+                                regId={reg.id}
+                                openId={openPaymentNoteId}
+                                onOpen={setOpenPaymentNoteId}
+                            />
+                        )}
+                    </>
+                )}
+            </div>
+        );
+    }, [paymentBadge, canMarkRegistrationPaid, markingId, getPaymentDetails, openPaymentNoteId]);
+
+    const renderWhatsAppToggle = useCallback((reg) => (
+        <button
+            type="button"
+            onClick={() => handleToggleWhatsApp(reg)}
+            disabled={updatingWhatsApp === reg.id}
+            className={`group relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border transition-all ${
+                reg.whatsapp_added
+                    ? 'bg-green-500/10 border-green-500/20 text-green-500'
+                    : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
+            }`}
+            title={reg.whatsapp_added ? 'Mark as not added' : 'Mark as added to WhatsApp'}
+        >
+            {updatingWhatsApp === reg.id ? (
+                <Loader2 size={12} className="animate-spin" />
+            ) : reg.whatsapp_added ? (
+                <Check size={12} className="group-hover:hidden" />
+            ) : (
+                <MessageCircle size={12} />
+            )}
+            {reg.whatsapp_added && <XCircle size={12} className="hidden group-hover:block text-red-500" />}
+            <span className="text-[9px] font-black uppercase tracking-tight">
+                {reg.whatsapp_added ? 'On Group' : 'Add'}
+            </span>
+        </button>
+    ), [updatingWhatsApp]);
 
     const teamsWithSeedsByDivision = useMemo(() => {
         const result = {};
@@ -1592,6 +1711,9 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                         ? clsTeams.length > 0
                                         : (expandedDivisions[cls.id] ?? false);
                                     const fee = Number(cls.entry_fee || 0);
+                                    const soloCount = clsTeams.filter((team) => team.players.length === 1).length;
+                                    const pairedCount = clsTeams.filter((team) => team.players.length > 1).length;
+                                    const teamsCount = soloCount > 0 ? pairedCount : clsTeams.length;
                                     if (playerSearch.trim() && clsTeams.length === 0) return null;
                                     return (
                                         <div key={cls.id} className="bg-[#1E293B]/30 rounded-2xl border border-white/10 overflow-hidden">
@@ -1611,10 +1733,17 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                         </span>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-[10px] font-bold uppercase tracking-widest text-padel-green bg-padel-green/10 px-2.5 py-1 rounded-md">
-                                                        {clsTeams.length} Teams
-                                                    </span>
+                                                <div className="flex items-center gap-2">
+                                                    {soloCount > 0 && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-black bg-amber-400 shadow-lg shadow-amber-400/20 px-2.5 py-1 rounded-md">
+                                                            {soloCount} solo
+                                                        </span>
+                                                    )}
+                                                    {(teamsCount > 0 || soloCount === 0) && (
+                                                        <span className="text-[10px] font-bold uppercase tracking-widest text-padel-green bg-padel-green/10 px-2.5 py-1 rounded-md">
+                                                            {teamsCount} teams
+                                                        </span>
+                                                    )}
                                                     <ChevronDown size={16} className={`text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                                 </div>
                                             </div>
@@ -1624,27 +1753,39 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                         <table className="w-full text-sm min-w-[800px]">
                                                             <thead>
                                                                 <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-gray-500 border-b border-white/10">
-                                                                    <th className="py-3 px-4 w-10">#</th>
+                                                                    <th className="py-3 px-4 w-14">#</th>
                                                                     <th className="py-3 px-4">Team (Players)</th>
-                                                                    <th className="py-3 px-4">Team Points</th>
                                                                     <th className="py-3 px-4">Players</th>
                                                                     <th className="py-3 px-4">Payment</th>
                                                                     <th className="py-3 px-4">Amount Paid</th>
                                                                     <th className="py-3 px-4">License Status</th>
-                                                                    <th className="py-3 px-4">Seed</th>
-                                                                    <th className="py-3 px-4 text-right min-w-[220px]">Manage</th>
+                                                                    <th className="py-3 px-4">WhatsApp</th>
+                                                                    <th className="py-3 px-4 text-right min-w-[160px]">Manage</th>
                                                                 </tr>
                                                             </thead>
                                                             <tbody className="divide-y divide-white/5">
-                                                                {clsTeams.map((team, idx) => (
-                                                                    <tr key={team.id} className="hover:bg-white/5 transition-colors align-top">
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-bold text-gray-400 text-xs">
-                                                                                {idx + 1}
+                                                                {clsTeams.map((team, idx) => {
+                                                                    const isSoloEntry = team.players.length === 1;
+                                                                    return (
+                                                                    <tr key={team.id} className={`transition-colors align-middle ${isSoloEntry ? 'bg-amber-400/5 hover:bg-amber-400/10' : 'hover:bg-white/5'}`}>
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <div className="flex flex-col items-center justify-center gap-1.5">
+                                                                                {team.seed ? (
+                                                                                    <div className="w-8 h-8 rounded-lg bg-amber-400 text-black flex items-center justify-center font-black text-xs shadow-lg shadow-amber-400/20">
+                                                                                        {team.seed}
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center font-bold text-gray-400 text-xs">
+                                                                                        {idx + 1}
+                                                                                    </div>
+                                                                                )}
+                                                                                <span className="text-[10px] font-bold text-gray-400 tabular-nums">
+                                                                                    {team.totalPoints > 0 ? team.totalPoints.toLocaleString() : '—'}
+                                                                                </span>
                                                                             </div>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="flex items-center gap-3">
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <div className="flex items-center justify-center gap-3">
                                                                                 {team.players.map((p, pi) => {
                                                                                     const img = getPlayerImage(p);
                                                                                     const pts = getPlayerPoints(p);
@@ -1682,145 +1823,81 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                                 )}
                                                                             </div>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <span className="text-lg font-black text-white">{team.totalPoints > 0 ? team.totalPoints.toLocaleString() : '—'}</span>
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <TeamPlayerRows players={team.players}>
+                                                                                {(p) => <div className="text-sm text-gray-300">{p.full_name}</div>}
+                                                                            </TeamPlayerRows>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="space-y-1">
-                                                                                {team.players.map((p) => (
-                                                                                    <div key={p.id} className="text-sm text-gray-300">{p.full_name}</div>
-                                                                                ))}
-                                                                            </div>
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <TeamPlayerRows players={team.players}>
+                                                                                {(p) => renderPaymentCell(p)}
+                                                                            </TeamPlayerRows>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="space-y-1.5">
-                                                                                {team.players.map((p) => (
-                                                                                    <div key={p.id}>
-                                                                                        {paymentBadge(p)}
-                                                                                        {renderPaymentDetails(p)}
-                                                                                    </div>
-                                                                                ))}
-                                                                            </div>
-                                                                        </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="space-y-1.5">
-                                                                                {team.players.map((p) => (
-                                                                                    <div key={p.id} className="text-sm font-bold text-white">
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <TeamPlayerRows players={team.players}>
+                                                                                {(p) => (
+                                                                                    <div className="text-sm font-bold text-white">
                                                                                         {registrationCountsAsPaid(p, refundByReg) ? fmtR(fee) : '—'}
                                                                                     </div>
-                                                                                ))}
-                                                                            </div>
+                                                                                )}
+                                                                            </TeamPlayerRows>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            <div className="space-y-1.5">
-                                                                                {team.players.map((p) => (
-                                                                                    <div key={p.id}>{licenseBadge(p)}</div>
-                                                                                ))}
-                                                                            </div>
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <TeamPlayerRows players={team.players}>
+                                                                                {(p) => licenseBadge(p)}
+                                                                            </TeamPlayerRows>
                                                                         </td>
-                                                                        <td className="py-4 px-4">
-                                                                            {team.seed ? (
-                                                                                <span className="inline-block px-3 py-1.5 rounded-lg text-[10px] font-black uppercase bg-amber-400 text-black shadow-lg shadow-amber-400/20">
-                                                                                    Seed {team.seed}
-                                                                                </span>
-                                                                            ) : (
-                                                                                <span className="text-gray-600 text-xs">—</span>
-                                                                            )}
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <TeamPlayerRows players={team.players}>
+                                                                                {(p) => renderWhatsAppToggle(p)}
+                                                                            </TeamPlayerRows>
                                                                         </td>
-                                                                        <td className="py-4 px-4 align-top">
-                                                                            <div className="flex flex-col gap-2 min-w-[220px] ml-auto">
+                                                                        <td className="py-4 px-4 align-middle">
+                                                                            <div className="flex flex-col justify-center gap-2 min-w-[160px] ml-auto">
                                                                                 {team.players.length > 1 ? (
-                                                                                    <>
-                                                                                        <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-2.5">
-                                                                                            <p className="text-[9px] font-black uppercase tracking-widest text-violet-300/80 mb-2">Whole team</p>
-                                                                                            <div className="grid grid-cols-2 gap-1.5">
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => openMoveTeam(team)}
-                                                                                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-500/15 text-violet-200 border-violet-500/30 hover:bg-violet-500 hover:text-white transition-colors"
-                                                                                                >
-                                                                                                    <ArrowRightLeft size={11} /> Move
-                                                                                                </button>
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => { setRemovePair(true); setRemoveTarget(team.players[0]); }}
-                                                                                                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white transition-colors"
-                                                                                                >
-                                                                                                    <Trash2 size={11} /> Remove
-                                                                                                </button>
-                                                                                            </div>
+                                                                                    <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-2.5">
+                                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-violet-300/80 mb-2">Whole team</p>
+                                                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => openMoveTeam(team)}
+                                                                                                className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-500/15 text-violet-200 border-violet-500/30 hover:bg-violet-500 hover:text-white transition-colors"
+                                                                                            >
+                                                                                                <ArrowRightLeft size={11} /> Move
+                                                                                            </button>
+                                                                                            <button
+                                                                                                type="button"
+                                                                                                onClick={() => { setRemovePair(true); setRemoveTarget(team.players[0]); }}
+                                                                                                className="inline-flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white transition-colors"
+                                                                                            >
+                                                                                                <Trash2 size={11} /> Remove
+                                                                                            </button>
                                                                                         </div>
-                                                                                        <div className="space-y-1.5">
-                                                                                            {team.players.map((r) => {
-                                                                                                const firstName = (r.full_name || '').split(' ')[0];
-                                                                                                const needsPay = r.payment_status !== 'paid';
-                                                                                                const needsPartner = r.payment_status === 'paid' && !r.partner_name?.trim() && !r.partner_email?.trim();
-                                                                                                return (
-                                                                                                    <div key={`actions-${r.id}`} className="flex items-center justify-between gap-2 rounded-lg bg-white/[0.02] border border-white/5 px-2 py-1.5 min-h-[32px]">
-                                                                                                        <span className="text-[10px] font-bold text-gray-400 truncate max-w-[72px]">{firstName}</span>
-                                                                                                        <div className="flex justify-end shrink-0">
-                                                                                                            {needsPay ? (
-                                                                                                                <button
-                                                                                                                    type="button"
-                                                                                                                    onClick={() => openMarkPaidModal(r)}
-                                                                                                                    disabled={markingId === r.id}
-                                                                                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-colors"
-                                                                                                                >
-                                                                                                                    {markingId === r.id ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
-                                                                                                                    Mark paid
-                                                                                                                </button>
-                                                                                                            ) : needsPartner ? (
-                                                                                                                <button
-                                                                                                                    type="button"
-                                                                                                                    onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(r); }}
-                                                                                                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500 hover:text-white transition-colors"
-                                                                                                                >
-                                                                                                                    <UserPlus size={10} /> Add partner
-                                                                                                                </button>
-                                                                                                            ) : (
-                                                                                                                <span className="text-[9px] font-bold uppercase text-emerald-500/60 px-1">All set</span>
-                                                                                                            )}
-                                                                                                        </div>
-                                                                                                    </div>
-                                                                                                );
-                                                                                            })}
-                                                                                        </div>
-                                                                                    </>
+                                                                                    </div>
                                                                                 ) : (
-                                                                                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-2.5 space-y-2">
-                                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Solo entry</p>
-                                                                                        <div className="flex flex-wrap gap-1.5 justify-end">
+                                                                                    <div className="rounded-xl border border-black/10 bg-amber-400 p-2.5 space-y-2 shadow-lg shadow-amber-400/20">
+                                                                                        <p className="text-[9px] font-black uppercase tracking-widest text-black/70">Solo entry</p>
+                                                                                        <div className="flex items-center gap-1.5 justify-end flex-nowrap">
                                                                                             {team.players[0].payment_status === 'paid' && !team.players[0].partner_name?.trim() && !team.players[0].partner_email?.trim() && (
                                                                                                 <button
                                                                                                     type="button"
                                                                                                     onClick={() => { setLinkSearch(''); setProfileResults([]); setLinkTarget(team.players[0]); }}
-                                                                                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500 hover:text-white transition-colors"
+                                                                                                    className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-sky-500/10 text-sky-400 border-sky-500/20 hover:bg-sky-500 hover:text-white transition-colors shrink-0"
                                                                                                 >
                                                                                                     <UserPlus size={11} /> Partner
-                                                                                                </button>
-                                                                                            )}
-                                                                                            {team.players[0].payment_status !== 'paid' && (
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    onClick={() => openMarkPaidModal(team.players[0])}
-                                                                                                    disabled={markingId === team.players[0].id}
-                                                                                                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500 hover:text-white disabled:opacity-50 transition-colors"
-                                                                                                >
-                                                                                                    {markingId === team.players[0].id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
-                                                                                                    Mark paid
                                                                                                 </button>
                                                                                             )}
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => openMovePlayer(team.players[0])}
-                                                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/20 hover:bg-violet-500 hover:text-white transition-colors"
+                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-violet-500/10 text-violet-300 border-violet-500/20 hover:bg-violet-500 hover:text-white transition-colors shrink-0"
                                                                                             >
                                                                                                 <ArrowRightLeft size={11} /> Move
                                                                                             </button>
                                                                                             <button
                                                                                                 type="button"
                                                                                                 onClick={() => { setRemovePair(false); setRemoveTarget(team.players[0]); }}
-                                                                                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-bold border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white transition-colors"
+                                                                                                className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold border bg-red-500/10 text-red-400 border-red-500/20 hover:bg-red-500 hover:text-white transition-colors shrink-0"
                                                                                             >
                                                                                                 <Trash2 size={11} /> Remove
                                                                                             </button>
@@ -1830,7 +1907,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                             </div>
                                                                         </td>
                                                                     </tr>
-                                                                ))}
+                                                                    );
+                                                                })}
                                                             </tbody>
                                                         </table>
                                                     </div>
