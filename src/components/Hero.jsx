@@ -331,7 +331,12 @@ const Hero = () => {
 
                 const validMatches = (rawMatches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
                 validMatches.sort((a, b) => parseMatchDate(a.Info?.Date) - parseMatchDate(b.Info?.Date));
-                const firstNextMatch = validMatches[0] || null;
+
+                // RankedIn's "upcoming" matches list can include recent past matches.
+                // Ensure "Upcoming" really means >= now.
+                const now = new Date();
+                const upcomingMatchesOnly = validMatches.filter((m) => parseMatchDate(m.Info?.Date) >= now);
+                const firstNextMatch = upcomingMatchesOnly[0] || null;
 
                 const validPastMatches = (rawPastMatches || [])
                     .filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName')
@@ -343,9 +348,9 @@ const Hero = () => {
                 setUpcomingEvents(upcomingFiltered);
                 setPastEvents(pastFiltered);
                 setNextMatch(firstNextMatch);
-                setUpcomingMatchesList(validMatches);
+                setUpcomingMatchesList(upcomingMatchesOnly);
                 setPastMatchesList(validPastMatches);
-                setMatchesCount(validMatches.length);
+                setMatchesCount(upcomingMatchesOnly.length);
                 let winLossStr = null;
                 if (profileData?.Statistics?.WinLossDoublesCurrentYear) {
                     winLossStr = profileData.Statistics.WinLossDoublesCurrentYear;
@@ -395,15 +400,18 @@ const Hero = () => {
             if (cachedMatch) {
                 const { ts, match, count, winLoss } = JSON.parse(cachedMatch);
                 if (match) {
-                    setNextMatch(match);
-                    setMatchesCount(count || 1);
-                    if (winLoss) setWinLossStats(winLoss);
-                    hasCachedData = true;
-                    hasCachedMatch = true;
-                    if (Date.now() - ts < CACHE_TTL) {
-                        isCacheExpired = false;
+                    const cachedDate = parseMatchDate(match.Info?.Date);
+                    if (cachedDate >= new Date()) {
+                        setNextMatch(match);
+                        setMatchesCount(count || 1);
+                        if (winLoss) setWinLossStats(winLoss);
+                        hasCachedData = true;
+                        hasCachedMatch = true;
+                        if (Date.now() - ts < CACHE_TTL) {
+                            isCacheExpired = false;
+                        }
+                        setActiveHeroTab('matches');
                     }
-                    setActiveHeroTab('matches');
                 }
             }
         } catch (_) { }
