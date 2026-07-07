@@ -5,6 +5,49 @@ import { supabase } from '../supabaseClient';
 const API_BASE = 'https://api.rankedin.com/v1';
 const SAPA_ORG_ID = '11331';
 
+const formatRankedinMatchDate = (rawDate, fallbackIso) => {
+    const tryFormat = (value) => {
+        if (!value) return null;
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime()) || d.getFullYear() <= 1) return null;
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        const hours = String(d.getHours()).padStart(2, '0');
+        const mins = String(d.getMinutes()).padStart(2, '0');
+        return {
+            label: `${day}/${month}/${year} ${hours}:${mins}`,
+            time: d.getTime(),
+        };
+    };
+    return tryFormat(rawDate) || tryFormat(fallbackIso);
+};
+
+const getRankedinMatchSortTime = (match) => {
+    const info = match.Info || {};
+    const formatted = formatRankedinMatchDate(info.Date);
+    if (formatted) return formatted.time;
+    if (info.EventStartDate) {
+        const d = new Date(info.EventStartDate);
+        if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+    return 0;
+};
+
+const sortPastMatchesLatestFirst = (matches) => (
+    [...(matches || [])].sort((a, b) => getRankedinMatchSortTime(b) - getRankedinMatchSortTime(a))
+);
+
+const sortUpcomingMatchesSoonestFirst = (matches) => {
+    const now = Date.now();
+    return [...(matches || [])]
+        .filter((match) => {
+            const t = getRankedinMatchSortTime(match);
+            return t > 0 && t >= now;
+        })
+        .sort((a, b) => getRankedinMatchSortTime(a) - getRankedinMatchSortTime(b));
+};
+
 // Global cache for the anonymous token to avoid redundant fetches
 let cachedAnonymousToken = null;
 
@@ -734,18 +777,8 @@ export const useRankedin = () => {
                         const eventMatches = [];
                         // Normalize to match structure
                         filtered.forEach(m => {
-                            // Format ISO date to DD/MM/YYYY HH:MM
-                            let formattedDate = m.Date;
-                            try {
-                                const d = new Date(m.Date);
-
-                                const day = String(d.getDate()).padStart(2, '0');
-                                const month = String(d.getMonth() + 1).padStart(2, '0');
-                                const year = d.getFullYear();
-                                const hours = String(d.getHours()).padStart(2, '0');
-                                const mins = String(d.getMinutes()).padStart(2, '0');
-                                formattedDate = `${day}/${month}/${year} ${hours}:${mins}`;
-                            } catch (e) { }
+                            const formatted = formatRankedinMatchDate(m.Date, event.start_date);
+                            const formattedDate = formatted?.label || '';
 
                             // Determine if Team 1 (Challenger) won
                             const winnerId = m.MatchResult?.WinnerParticipantId || m.MatchResult?.Score?.WinnerParticipantId;
@@ -774,6 +807,7 @@ export const useRankedin = () => {
                                 Info: {
                                     EventName: event.event_name,
                                     Date: formattedDate,
+                                    EventStartDate: event.start_date,
                                     Challenger: {
                                         Name: m.Challenger?.Name,
                                         Id: m.Challenger?.Player1Id,
@@ -809,6 +843,12 @@ export const useRankedin = () => {
                 const results = await Promise.all(matchPromises);
                 historyMatches.push(...results.flat());
                 payload = historyMatches;
+            }
+
+            if (takeHistory && payload.length > 0) {
+                payload = sortPastMatchesLatestFirst(payload);
+            } else if (!takeHistory && payload.length > 0) {
+                payload = sortUpcomingMatchesSoonestFirst(payload);
             }
 
             // Step 4: Save result to player_matches (both upcoming and history now share

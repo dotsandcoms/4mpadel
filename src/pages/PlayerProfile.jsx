@@ -24,6 +24,43 @@ const REFUND_REASON_LABELS = {
 
 const formatRefundReason = (reason) => REFUND_REASON_LABELS[reason] || reason?.replace(/_/g, ' ') || 'Refund';
 
+const parseProfileMatchDate = (dateStr) => {
+    if (!dateStr) return null;
+    if (dateStr.includes('T') || dateStr.includes('-')) {
+        const d = new Date(dateStr);
+        return !Number.isNaN(d.getTime()) && d.getFullYear() > 1 ? d : null;
+    }
+    const [datePart, timePart] = dateStr.split(' ');
+    const parts = datePart?.split('/');
+    if (!parts || parts.length < 3) return null;
+    const [day, month, year] = parts;
+    const y = parseInt(year, 10);
+    if (!y || y <= 1) return null;
+    const d = new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
+    return !Number.isNaN(d.getTime()) ? d : null;
+};
+
+const getProfileMatchSortTime = (match) => {
+    const info = match.Info || {};
+    const fromMatchDate = parseProfileMatchDate(info.Date);
+    if (fromMatchDate) return fromMatchDate.getTime();
+    if (info.EventStartDate) {
+        const d = new Date(info.EventStartDate);
+        if (!Number.isNaN(d.getTime())) return d.getTime();
+    }
+    return 0;
+};
+
+const isFutureProfileMatch = (match) => {
+    const t = getProfileMatchSortTime(match);
+    return t > 0 && t >= Date.now();
+};
+
+const getProfileMatchDedupeKey = (match) => {
+    const info = match.Info || {};
+    return `${info.EventName || ''}|${info.Date || ''}|${info.Challenger?.Name || ''}|${info.Challenged?.Name || ''}`;
+};
+
 const formatRefundStatus = (status) => {
     const labels = {
         processed: 'Refunded',
@@ -623,43 +660,50 @@ const PlayerProfile = () => {
             const fetchMatches = async () => {
                 setLoadingMatches(true);
                 try {
-                    // Helper to parse "DD/MM/YYYY HH:MM" date format
-                    const parseDate = (dateStr) => {
-                        if (!dateStr) return new Date(0);
-                        // Handle ISO format (2026-03-13T10:00:00)
-                        if (dateStr.includes('T') || dateStr.includes('-')) {
-                            const d = new Date(dateStr);
-                            return d.getFullYear() <= 1 ? new Date() : d;
-                        }
-                        // Handle Rankedin custom format (DD/MM/YYYY HH:MM)
-                        const [datePart, timePart] = dateStr.split(' ');
-                        const [day, month, year] = datePart.split('/');
-                        if (year === '1' || parseInt(year) <= 1) return new Date();
-                        return new Date(`${year}-${month}-${day}T${timePart || '00:00'}:00`);
-                    };
-
-                    const [upcoming, history] = await Promise.all([
+                    const [upcoming, history, events] = await Promise.all([
                         getPlayerMatches(player.rankedin_id, false),
-                        getPlayerMatches(player.rankedin_id, true)
+                        getPlayerMatches(player.rankedin_id, true),
+                        getPlayerEventsAsync(player.rankedin_id),
                     ]);
 
                     const filterValid = (matches) => {
                         return (matches || []).filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName');
                     };
 
-                    const validUpcoming = filterValid(upcoming);
-                    const validHistory = filterValid(history);
+                    const eventDateByName = new Map(
+                        (events || [])
+                            .filter((e) => e.event_name && e.start_date)
+                            .map((e) => [e.event_name.toLowerCase().trim(), e.start_date]),
+                    );
 
-                    const sorter = (a, b) => {
-                        const dateA = parseDate(a.Info?.Date);
-                        const dateB = parseDate(b.Info?.Date);
-                        return dateB - dateA;
+                    const enrichWithEventDate = (match) => {
+                        const info = match.Info || {};
+                        if (parseProfileMatchDate(info.Date) || info.EventStartDate) return match;
+                        const eventStart = eventDateByName.get(info.EventName?.toLowerCase().trim());
+                        if (!eventStart) return match;
+                        return { ...match, Info: { ...info, EventStartDate: eventStart } };
                     };
 
-                    validUpcoming.sort(sorter);
-                    validHistory.sort(sorter);
+                    const enrichedUpcoming = filterValid(upcoming).map(enrichWithEventDate);
+                    const enrichedHistory = filterValid(history).map(enrichWithEventDate);
 
-                    setMatchHistory({ upcoming: validUpcoming, history: validHistory });
+                    const futureUpcoming = enrichedUpcoming.filter(isFutureProfileMatch);
+                    const passedFromUpcoming = enrichedUpcoming.filter((match) => !isFutureProfileMatch(match));
+
+                    const historyKeys = new Set(enrichedHistory.map(getProfileMatchDedupeKey));
+                    const mergedHistory = [...enrichedHistory];
+                    passedFromUpcoming.forEach((match) => {
+                        const key = getProfileMatchDedupeKey(match);
+                        if (!historyKeys.has(key)) {
+                            historyKeys.add(key);
+                            mergedHistory.push(match);
+                        }
+                    });
+
+                    futureUpcoming.sort((a, b) => getProfileMatchSortTime(a) - getProfileMatchSortTime(b));
+                    mergedHistory.sort((a, b) => getProfileMatchSortTime(b) - getProfileMatchSortTime(a));
+
+                    setMatchHistory({ upcoming: futureUpcoming, history: mergedHistory });
                 } catch (err) {
                     console.error("Match fetch error:", err);
                 } finally {
@@ -669,7 +713,7 @@ const PlayerProfile = () => {
             };
             fetchMatches();
         }
-    }, [player?.rankedin_id, getPlayerMatches, hasFetchedMatches, loadingMatches]);
+    }, [player?.rankedin_id, getPlayerMatches, getPlayerEventsAsync, hasFetchedMatches, loadingMatches]);
 
     const handleInitiatePasswordReset = async () => {
         if (!player?.email) return;

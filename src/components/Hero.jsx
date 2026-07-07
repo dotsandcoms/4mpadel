@@ -338,8 +338,25 @@ const Hero = () => {
                 const upcomingMatchesOnly = validMatches.filter((m) => parseMatchDate(m.Info?.Date) >= now);
                 const firstNextMatch = upcomingMatchesOnly[0] || null;
 
-                const validPastMatches = (rawPastMatches || [])
+                const getMatchDedupeKey = (match) => {
+                    const info = match.Info || {};
+                    return `${info.EventName || ''}|${info.Date || ''}|${info.Challenger?.Name || ''}|${info.Challenged?.Name || ''}`;
+                };
+
+                let validPastMatches = (rawPastMatches || [])
                     .filter(m => m.Info?.EventName && m.Info.EventName !== 'EventName')
+                    .sort((a, b) => parseMatchDate(b.Info?.Date) - parseMatchDate(a.Info?.Date));
+
+                const passedFromUpcoming = validMatches.filter((m) => parseMatchDate(m.Info?.Date) < now);
+                const pastKeys = new Set(validPastMatches.map(getMatchDedupeKey));
+                passedFromUpcoming.forEach((match) => {
+                    const key = getMatchDedupeKey(match);
+                    if (!pastKeys.has(key)) {
+                        pastKeys.add(key);
+                        validPastMatches.push(match);
+                    }
+                });
+                validPastMatches = validPastMatches
                     .sort((a, b) => parseMatchDate(b.Info?.Date) - parseMatchDate(a.Info?.Date))
                     .slice(0, 15);
 
