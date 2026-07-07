@@ -1157,7 +1157,9 @@ const PlayerProfile = () => {
                     </div>
 
                     {/* Avatar & Player Info card overlap - shifted up to where the title used to be */}
-                    <div className="px-5 -mt-14 relative z-20 space-y-4 pb-6">
+                    <div className="px-5 -mt-14 relative z-20 space-y-3 pb-6">
+                        <OrgHostBanner player={player} variant="top" />
+
                         <div className="bg-[#0F172A]/70 backdrop-blur-2xl border border-white/10 rounded-3xl p-5 shadow-2xl flex items-center gap-4 sm:gap-6">
                             {/* Avatar Column */}
                             <div className="relative group shrink-0">
@@ -1378,9 +1380,6 @@ const PlayerProfile = () => {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Organisation Host Application / Portal Banner */}
-                        <OrgHostBanner player={player} />
 
                         {/* Mobile Horizontally Scrollable Tabs */}
                         <div className="relative">
