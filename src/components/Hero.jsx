@@ -987,7 +987,7 @@ const Hero = () => {
                                 {primaryScheduleNotification && (
                                     <a
                                         href={primaryScheduleNotification.href}
-                                        className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-xl border border-rose-500/30 bg-rose-500/10 !text-rose-600 hover:!text-rose-500 hover:bg-rose-500/15 hover:border-rose-500/40 transition-colors group"
+                                        className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-xl bg-rose-500/10 !text-rose-600 hover:!text-rose-500 hover:bg-rose-500/15 transition-colors group"
                                     >
                                         <Bell size={16} className="shrink-0 !text-rose-600 group-hover:animate-pulse" />
                                         <span className="text-sm font-semibold truncate !text-rose-600">{primaryScheduleNotification.label}</span>
@@ -998,7 +998,7 @@ const Hero = () => {
                                 <>
                                 <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em] px-1 mb-3">My Schedule</h2>
                                 {/* Glass panel */}
-                                <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden">
+                                <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden border border-white/10">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
 
                                         {eventsLoading && upcomingEvents.length === 0 && upcomingMatchesList.length === 0 && pastEvents.length === 0 && pastMatchesList.length === 0 ? (
@@ -1079,10 +1079,10 @@ const Hero = () => {
                                                         upcomingEvents.length > 0 ? (
                                                             renderEventRows(upcomingEvents)
                                                         ) : (
-                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                                <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Calendar size={28} strokeWidth={1.5} className="text-white/20 mb-2" />
                                                                 <h3 className="text-white font-bold text-sm mb-1">You have no upcoming events.</h3>
-                                                                <p className="text-white/50 text-[11px] font-medium mb-6">Explore the calendar to find your next event.</p>
+                                                                <p className="text-white/50 text-[11px] font-medium mb-3">Explore the calendar to find your next event.</p>
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => navigate('/calendar')}
@@ -1096,8 +1096,8 @@ const Hero = () => {
                                                         pastEvents.length > 0 ? (
                                                             renderPastPager(pastEvents, pastEventSlide, setPastEventSlide, renderSingleEventCard)
                                                         ) : (
-                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                                <Calendar size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Calendar size={28} strokeWidth={1.5} className="text-white/20 mb-2" />
                                                                 <h3 className="text-white font-bold text-sm mb-1">No past events yet.</h3>
                                                                 <p className="text-white/50 text-[11px] font-medium">Your completed events will appear here.</p>
                                                             </div>
@@ -1113,10 +1113,10 @@ const Hero = () => {
                                                                 {renderMatchRows(upcomingMatchesList, { featuredFirst: true })}
                                                             </div>
                                                         ) : (
-                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                                <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Trophy size={28} strokeWidth={1.5} className="text-white/20 mb-2" />
                                                                 <h3 className="text-white font-bold text-sm mb-1">You have no upcoming matches.</h3>
-                                                                <p className="text-white/50 text-[11px] font-medium mb-6">Your next match will appear here when draws are published.</p>
+                                                                <p className="text-white/50 text-[11px] font-medium">Your next match will appear here when draws are published.</p>
                                                             </div>
                                                         )
                                                     ) : (
@@ -1128,8 +1128,8 @@ const Hero = () => {
                                                                 (match) => renderCompactMatchRow(match, 0, 1),
                                                             )
                                                         ) : (
-                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-fade-in">
-                                                                <Trophy size={32} strokeWidth={1.5} className="text-white/20 mb-4" />
+                                                            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-5 flex flex-col items-center justify-center text-center animate-fade-in">
+                                                                <Trophy size={28} strokeWidth={1.5} className="text-white/20 mb-2" />
                                                                 <h3 className="text-white font-bold text-sm mb-1">No past matches yet.</h3>
                                                                 <p className="text-white/50 text-[11px] font-medium">Your match history will appear here.</p>
                                                             </div>
