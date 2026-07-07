@@ -48,6 +48,11 @@ const sortUpcomingMatchesSoonestFirst = (matches) => {
         .sort((a, b) => getRankedinMatchSortTime(a) - getRankedinMatchSortTime(b));
 };
 
+const finalizeMatchesPayload = (payload, takeHistory) => {
+    if (!payload?.length) return payload || [];
+    return takeHistory ? sortPastMatchesLatestFirst(payload) : sortUpcomingMatchesSoonestFirst(payload);
+};
+
 // Global cache for the anonymous token to avoid redundant fetches
 let cachedAnonymousToken = null;
 
@@ -709,8 +714,11 @@ export const useRankedin = () => {
                         // 5 minutes = 300000 ms
                         if (ageMs < 300000) {
                             const cachedPayload = takeHistory ? cacheRow.past_matches : cacheRow.upcoming_matches;
-                            if (cachedPayload !== null && cachedPayload !== undefined) {
-                                return cachedPayload;
+                            const isEmptyHistoryCache = takeHistory
+                                && Array.isArray(cachedPayload)
+                                && cachedPayload.length === 0;
+                            if (cachedPayload !== null && cachedPayload !== undefined && !isEmptyHistoryCache) {
+                                return finalizeMatchesPayload(cachedPayload, takeHistory);
                             }
                         }
                     }

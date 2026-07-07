@@ -153,7 +153,9 @@ const Hero = () => {
         const targetEmail = impersonationEmail || session.user.email;
 
         const CACHE_KEY = `hero_events_${targetEmail}`;
+        const PAST_EVENTS_CACHE_KEY = `hero_past_events_${targetEmail}`;
         const MATCH_CACHE_KEY = `hero_match_${targetEmail}`;
+        const PAST_MATCHES_CACHE_KEY = `hero_past_matches_${targetEmail}`;
         const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
         const fetchPlayerEventsAndMatches = async () => {
@@ -201,12 +203,17 @@ const Hero = () => {
 
                 if (signal.aborted) return;
 
-                const localRegsRes = await supabase
-                    .from('event_registrations')
-                    .select('*, calendar(*)')
-                    .or(`email.ilike.${playerData.email},partner_email.ilike.${playerData.email}`)
-                    .neq('status', 'withdrawn');
-                const localRegs = localRegsRes.data || [];
+                let localRegs = [];
+                try {
+                    const localRegsRes = await supabase
+                        .from('event_registrations')
+                        .select('*, calendar(*)')
+                        .or(`email.ilike.${playerData.email},partner_email.ilike.${playerData.email}`)
+                        .neq('status', 'withdrawn');
+                    localRegs = localRegsRes.data || [];
+                } catch (localRegsErr) {
+                    console.warn('Hero local registrations fetch failed:', localRegsErr);
+                }
 
                 const activeManualEventIds = new Set(
                     localRegs.map((r) => r.event_id || r.calendar?.id).filter(Boolean),
@@ -271,7 +278,7 @@ const Hero = () => {
                 };
                 const isPastEvent = (event) => {
                     const eventEnd = getEventEndDate(event);
-                    return eventEnd < startOfToday || event.state === 2;
+                    return event.state === 4 || (eventEnd < startOfToday && event.state !== 2);
                 };
 
                 if (uniqueEvents.length > 0) {
@@ -399,7 +406,9 @@ const Hero = () => {
 
                 try {
                     localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), events: upcomingFiltered }));
-                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: validMatches.length, winLoss: winLossStr }));
+                    localStorage.setItem(PAST_EVENTS_CACHE_KEY, JSON.stringify({ ts: Date.now(), events: pastFiltered }));
+                    localStorage.setItem(MATCH_CACHE_KEY, JSON.stringify({ ts: Date.now(), match: firstNextMatch, count: upcomingMatchesOnly.length, winLoss: winLossStr }));
+                    localStorage.setItem(PAST_MATCHES_CACHE_KEY, JSON.stringify({ ts: Date.now(), matches: validPastMatches }));
                 } catch (_) { }
             } catch (err) {
                 if (err.name === 'AbortError') return;
@@ -412,6 +421,28 @@ const Hero = () => {
         let hasCachedData = false;
         let isCacheExpired = true;
         let hasCachedMatch = false;
+
+        try {
+            const cachedPastEvents = localStorage.getItem(PAST_EVENTS_CACHE_KEY);
+            if (cachedPastEvents) {
+                const { events } = JSON.parse(cachedPastEvents);
+                if (events && Array.isArray(events)) {
+                    setPastEvents(events);
+                    hasCachedData = true;
+                }
+            }
+        } catch (_) { }
+
+        try {
+            const cachedPastMatches = localStorage.getItem(PAST_MATCHES_CACHE_KEY);
+            if (cachedPastMatches) {
+                const { matches } = JSON.parse(cachedPastMatches);
+                if (matches && Array.isArray(matches)) {
+                    setPastMatchesList(matches);
+                    hasCachedData = true;
+                }
+            }
+        } catch (_) { }
 
         try {
             const cachedMatch = localStorage.getItem(MATCH_CACHE_KEY);
@@ -462,7 +493,9 @@ const Hero = () => {
         const handleRegistrationsChanged = () => {
             try {
                 localStorage.removeItem(CACHE_KEY);
+                localStorage.removeItem(PAST_EVENTS_CACHE_KEY);
                 localStorage.removeItem(MATCH_CACHE_KEY);
+                localStorage.removeItem(PAST_MATCHES_CACHE_KEY);
             } catch (_) { }
             fetchPlayerEventsAndMatches();
         };
