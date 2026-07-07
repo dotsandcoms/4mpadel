@@ -50,7 +50,7 @@ const summarise = (row) => {
  * Immutable activity trail for all organisation actions.
  * Rows are written by DB triggers only — nothing here can be edited.
  */
-const OrgAuditLog = () => {
+const OrgAuditLog = ({ embedded = false }) => {
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(0);
@@ -82,15 +82,17 @@ const OrgAuditLog = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, filter]);
 
-    return (
-        <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <ScrollText size={18} className="text-gray-400" />
-                    Activity Log
-                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Immutable</span>
-                </h3>
-                <div className="flex items-center gap-2">
+    const content = (
+        <>
+            <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${embedded ? '' : 'mb-5'}`}>
+                {!embedded && (
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <ScrollText size={18} className="text-gray-400" />
+                        Activity Log
+                        <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Immutable</span>
+                    </h3>
+                )}
+                <div className={`flex items-center gap-2 ${embedded ? 'w-full justify-between mb-4' : ''}`}>
                     {['all', 'organization', 'member', 'event'].map(f => (
                         <button
                             key={f}
@@ -149,6 +151,14 @@ const OrgAuditLog = () => {
                     Older →
                 </button>
             </div>
+        </>
+    );
+
+    if (embedded) return content;
+
+    return (
+        <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
+            {content}
         </div>
     );
 };

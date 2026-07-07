@@ -7,7 +7,7 @@ import {
     Building, Users, Trophy, DollarSign, Calendar, Plus, Check, X,
     AlertCircle, RefreshCw, Mail, Phone, Edit3, Trash2, ArrowLeft,
     ShieldCheck, CheckCircle2, ChevronRight, MessageSquare, Globe, PlusCircle, HelpCircle,
-    ChevronDown, Eye, Edit, ExternalLink
+    ChevronDown, Eye, Edit, ExternalLink, ScrollText
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
@@ -15,6 +15,61 @@ import EventBuilder from './EventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
 import OrgAuditLog from './OrgAuditLog';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
+
+const CollapsibleSection = ({
+    open,
+    onToggle,
+    title,
+    icon: Icon,
+    iconClassName = 'text-padel-green',
+    count,
+    badge,
+    subtitle,
+    borderClassName = 'border-white/10',
+    children,
+}) => (
+    <div className={`bg-white/[0.02] border ${borderClassName} backdrop-blur-md rounded-2xl shadow-xl overflow-hidden`}>
+        <button
+            type="button"
+            onClick={onToggle}
+            className="w-full flex items-center justify-between gap-4 p-6 text-left hover:bg-white/[0.02] transition-colors cursor-pointer"
+        >
+            <h3 className="text-lg font-bold text-white flex items-center gap-2 min-w-0 flex-wrap">
+                {Icon && <Icon size={18} className={`shrink-0 ${iconClassName}`} />}
+                <span>{title}{count !== undefined ? ` (${count})` : ''}</span>
+                {badge && (
+                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
+                        {badge}
+                    </span>
+                )}
+                {subtitle && (
+                    <span className="text-[10px] font-black uppercase tracking-wider text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                        {subtitle}
+                    </span>
+                )}
+            </h3>
+            <ChevronDown
+                size={18}
+                className={`text-gray-400 shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+            />
+        </button>
+        <AnimatePresence initial={false}>
+            {open && (
+                <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                >
+                    <div className="px-6 pb-6 border-t border-white/5 pt-4">
+                        {children}
+                    </div>
+                </motion.div>
+            )}
+        </AnimatePresence>
+    </div>
+);
 
 const OrganisationManager = ({ permissions }) => {
     const [loading, setLoading] = useState(true);
@@ -65,7 +120,18 @@ const OrganisationManager = ({ permissions }) => {
     // Live participant counts per event (keyed by event id)
     const [participantCounts, setParticipantCounts] = useState({});
 
+    const [sectionOpen, setSectionOpen] = useState({
+        pendingOrgs: true,
+        pendingEvents: true,
+        pendingAmendments: true,
+        approvedEvents: false,
+        approvedHosts: false,
+        auditLog: false,
+    });
 
+    const toggleSection = (key) => {
+        setSectionOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    };
 
     const getTierBadgeClass = (status) => {
         const tier = status || 'Silver';
@@ -905,7 +971,7 @@ const OrganisationManager = ({ permissions }) => {
                 <div>
                     <h2 className="text-3xl font-extrabold text-white flex items-center gap-2">
                         <Building className="text-padel-green" />
-                        {isSuperAdmin ? 'Federation Oversight Portal' : currentOrg?.name}
+                        {isSuperAdmin ? 'Organisation Portal' : currentOrg?.name}
                     </h2>
                     <p className="text-gray-400 text-sm mt-1">
                         {isSuperAdmin
@@ -941,7 +1007,7 @@ const OrganisationManager = ({ permissions }) => {
                             <div className="w-8 h-8 rounded-lg bg-slate-400/10 text-slate-300 flex items-center justify-center mb-3 border border-slate-400/20">
                                 <Building size={16} />
                             </div>
-                            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Total Hosts</span>
+                            <span className="text-[10px] uppercase font-black text-slate-400 tracking-wider block">Total Organisations</span>
                             <div className="text-2xl font-black text-white mt-1">{stats.totalOrgs}</div>
                             <span className="text-[9px] text-slate-500 font-bold block mt-1">SAPA Clubs</span>
                         </div>
@@ -950,7 +1016,7 @@ const OrganisationManager = ({ permissions }) => {
                             <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center mb-3 border border-amber-500/20">
                                 <AlertCircle size={16} />
                             </div>
-                            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider block">Pending Hosts</span>
+                            <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider block">Pending Organisations</span>
                             <div className="text-2xl font-black text-amber-500 mt-1">{stats.pendingOrgs}</div>
                             <span className="text-[9px] text-amber-400/60 font-bold block mt-1">Need Review</span>
                         </div>
@@ -959,16 +1025,16 @@ const OrganisationManager = ({ permissions }) => {
                             <div className="w-8 h-8 rounded-lg bg-padel-green/10 text-padel-green flex items-center justify-center mb-3 border border-padel-green/20">
                                 <ShieldCheck size={16} />
                             </div>
-                            <span className="text-[10px] uppercase font-black text-padel-green tracking-wider block">Approved Hosts</span>
+                            <span className="text-[10px] uppercase font-black text-padel-green tracking-wider block">Approved Organisations</span>
                             <div className="text-2xl font-black text-padel-green mt-1">{stats.approvedOrgs}</div>
-                            <span className="text-[9px] text-padel-green/60 font-bold block mt-1">Active Sanctions</span>
+                            <span className="text-[9px] text-padel-green/60 font-bold block mt-1">Active Approvals</span>
                         </div>
                         <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md p-5 rounded-2xl hover:border-white/20 transition-all shadow-xl relative overflow-hidden group text-left">
                             <div className="absolute top-0 right-0 w-20 h-20 bg-purple-500/5 blur-xl rounded-full pointer-events-none group-hover:bg-purple-500/10 transition-colors" />
                             <div className="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center mb-3 border border-purple-500/20">
                                 <Trophy size={16} />
                             </div>
-                            <span className="text-[10px] uppercase font-black text-purple-400 tracking-wider block">Sanctioned Events</span>
+                            <span className="text-[10px] uppercase font-black text-purple-400 tracking-wider block">Approved Events</span>
                             <div className="text-2xl font-black text-purple-400 mt-1">{stats.totalEvents}</div>
                             <span className="text-[9px] text-purple-400/60 font-bold block mt-1">Live Tournaments</span>
                         </div>
@@ -984,12 +1050,14 @@ const OrganisationManager = ({ permissions }) => {
                     </div>
 
                     {/* Pending Organisation Applications */}
-                    <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            <Building size={18} className="text-amber-500" />
-                            Pending Host Applications ({allOrgs.filter(o => o.status === 'pending').length})
-                        </h3>
-
+                    <CollapsibleSection
+                        open={sectionOpen.pendingOrgs}
+                        onToggle={() => toggleSection('pendingOrgs')}
+                        title="Pending Organisation Applications"
+                        icon={Building}
+                        iconClassName="text-amber-500"
+                        count={allOrgs.filter(o => o.status === 'pending').length}
+                    >
                         {allOrgs.filter(o => o.status === 'pending').length === 0 ? (
                             <div className="text-center py-8 text-gray-500 text-sm">
                                 No organisation applications pending review.
@@ -1050,15 +1118,17 @@ const OrganisationManager = ({ permissions }) => {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </CollapsibleSection>
 
                     {/* Pending Tournament Sanctioning Requests */}
-                    <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-                        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            <Trophy size={18} className="text-purple-400" />
-                            Pending Tournament Sanction Requests ({pendingEvents.length})
-                        </h3>
-
+                    <CollapsibleSection
+                        open={sectionOpen.pendingEvents}
+                        onToggle={() => toggleSection('pendingEvents')}
+                        title="Pending Tournament Requests"
+                        icon={Trophy}
+                        iconClassName="text-purple-400"
+                        count={pendingEvents.length}
+                    >
                         {pendingEvents.length === 0 ? (
                             <div className="text-center py-8 text-gray-500 text-sm">
                                 No tournament sanction requests pending review.
@@ -1127,18 +1197,20 @@ const OrganisationManager = ({ permissions }) => {
                                 </table>
                             </div>
                         )}
-                    </div>
+                    </CollapsibleSection>
 
                     {/* Pending Amendment Requests on approved events */}
                     {pendingAmendments.length > 0 && (
-                        <div className="bg-white/[0.02] border border-amber-500/20 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-                            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                                <Edit3 size={18} className="text-amber-400" />
-                                Amendment Requests ({pendingAmendments.length})
-                                <span className="text-[10px] font-black uppercase tracking-wider text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full ml-1">
-                                    Live events — changes held until approved
-                                </span>
-                            </h3>
+                        <CollapsibleSection
+                            open={sectionOpen.pendingAmendments}
+                            onToggle={() => toggleSection('pendingAmendments')}
+                            title="Amendment Requests"
+                            icon={Edit3}
+                            iconClassName="text-amber-400"
+                            count={pendingAmendments.length}
+                            subtitle="Live events — changes held until approved"
+                            borderClassName="border-amber-500/20"
+                        >
                             <div className="space-y-3">
                                 {pendingAmendments.map((ev) => (
                                     <div key={ev.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 bg-black/30 border border-white/5 p-4 rounded-xl">
@@ -1172,17 +1244,19 @@ const OrganisationManager = ({ permissions }) => {
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </CollapsibleSection>
                     )}
 
-                    {/* Sanctioned & Live Tournaments */}
-                    <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
-                            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Trophy size={18} className="text-padel-green" />
-                                Sanctioned & Live Tournaments ({filteredApprovedEvents.length})
-                            </h3>
-                            <div className="relative max-w-xs w-full">
+                    {/* Approved Live Tournaments */}
+                    <CollapsibleSection
+                        open={sectionOpen.approvedEvents}
+                        onToggle={() => toggleSection('approvedEvents')}
+                        title="Approved Live Tournaments"
+                        icon={Trophy}
+                        count={filteredApprovedEvents.length}
+                    >
+                        <div className="flex flex-col md:flex-row md:items-center justify-end gap-4 mb-5">
+                            <div className="relative max-w-xs w-full md:ml-auto">
                                 <input
                                     type="text"
                                     placeholder="Search by name, city, venue, host..."
@@ -1192,7 +1266,6 @@ const OrganisationManager = ({ permissions }) => {
                                 />
                             </div>
                         </div>
-
                         {filteredApprovedEvents.length === 0 ? (
                             <div className="text-center py-8 text-gray-500 text-sm">
                                 {approvedEvents.length === 0 ? 'No approved live tournaments on the platform.' : 'No tournaments match your search filter.'}
@@ -1268,12 +1341,16 @@ const OrganisationManager = ({ permissions }) => {
                                 </table>
                             </div>
                         )}
-                    </div>
+                    </CollapsibleSection>
 
                     {/* Complete Registered Host List */}
-                    <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md rounded-2xl p-6 shadow-xl">
-                        <h3 className="text-lg font-bold text-white mb-4">All 4M Padel Sanctioned Host Clubs ({allOrgs.filter(o => o.status === 'approved').length})</h3>
-
+                    <CollapsibleSection
+                        open={sectionOpen.approvedHosts}
+                        onToggle={() => toggleSection('approvedHosts')}
+                        title="All 4M Padel Sanctioned Host Clubs"
+                        icon={Building}
+                        count={allOrgs.filter(o => o.status === 'approved').length}
+                    >
                         {allOrgs.filter(o => o.status === 'approved').length === 0 ? (
                             <div className="text-center py-8 text-gray-500 text-sm">No approved clubs register.</div>
                         ) : (
@@ -1300,10 +1377,19 @@ const OrganisationManager = ({ permissions }) => {
                                 ))}
                             </div>
                         )}
-                    </div>
+                    </CollapsibleSection>
 
                     {/* Immutable activity trail (DB-trigger driven) */}
-                    <OrgAuditLog />
+                    <CollapsibleSection
+                        open={sectionOpen.auditLog}
+                        onToggle={() => toggleSection('auditLog')}
+                        title="Activity Log"
+                        icon={ScrollText}
+                        iconClassName="text-gray-400"
+                        badge="Immutable"
+                    >
+                        <OrgAuditLog embedded />
+                    </CollapsibleSection>
                 </div>
             )}
 

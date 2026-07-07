@@ -32,7 +32,7 @@ const OrgMembersManager = ({ org, onClose }) => {
         try {
             const { data, error } = await supabase
                 .from('organization_members')
-                .select('*, players(id, name, image_url, email)')
+                .select('*, players!player_id(id, name, image_url, email)')
                 .eq('organization_id', org.id)
                 .order('created_at', { ascending: true });
             if (error) throw error;
