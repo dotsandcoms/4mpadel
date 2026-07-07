@@ -4001,7 +4001,7 @@ const EventDetails = () => {
 
                             {/* ══ PLAYERS TAB ══ */}
                             {activeTab === 'players' && (
-                                <div className="space-y-6">
+                                <div className="space-y-4">
                                     {fetchingParticipants && playerDivisions.length === 0 ? (
                                         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-16 flex flex-col items-center">
                                             <Loader className="w-8 h-8 animate-spin text-[#0F172A] mb-4" />
@@ -4036,7 +4036,7 @@ const EventDetails = () => {
                                                                 className="overflow-hidden"
                                                             >
                                                                 {clsParticipants.length > 0 ? (
-                                                                    <div className="divide-y divide-gray-50">
+                                                                    <div className="divide-y divide-gray-100">
                                                                         {(() => {
                                                                             const dname = (cls.Name || '').toLowerCase();
                                                                             const genderLabel = (dname.includes('women') || dname.includes('ladies') || dname.includes('girls')) ? 'women' : 'men';
@@ -4097,41 +4097,34 @@ const EventDetails = () => {
                                                                                     return playerObj.Image;
                                                                                 };
 
-                                                                                const seedPills = (
-                                                                                    <>
-                                                                                        {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
-                                                                                        {seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {seed}</span>}
-                                                                                        {manualSeedInfo?.seed && <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">Seed {manualSeedInfo.seed}</span>}
-                                                                                    </>
-                                                                                );
+                                                                                const displayNumber = manualSeedInfo?.seed ?? (seed ? Number(seed) : null) ?? (rank ? Number(rank) : null) ?? (pIdx + 1);
 
                                                                                 return (
-                                                                                    <div key={pIdx} className="bg-white px-6 py-5 border-b border-gray-50 last:border-0 hover:bg-gray-50/50 transition-colors">
-                                                                                        <div className="flex items-center justify-between mb-3">
-                                                                                            <span className="w-5 text-[10px] font-semibold text-slate-400 flex-shrink-0">{pIdx + 1}</span>
-                                                                                            <div className="flex flex-wrap gap-2 justify-end">
-                                                                                                {seedPills}
+                                                                                    <div key={pIdx} className="bg-white px-4 py-2.5 sm:px-5 sm:py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50/50 transition-colors">
+                                                                                        <div className="flex items-center gap-3 sm:gap-4">
+                                                                                            <div className="flex-shrink-0 w-8 sm:w-9 text-center self-center">
+                                                                                                <span className="text-lg sm:text-xl font-black text-[#0F172A] tabular-nums leading-none">
+                                                                                                    {displayNumber}
+                                                                                                </span>
                                                                                             </div>
-                                                                                        </div>
-                                                                                        
-                                                                                        <div className="flex items-center justify-between">
-                                                                                            <div className="flex items-start gap-6">
+
+                                                                                            <div className="flex items-center gap-3 sm:gap-5 flex-1 min-w-0">
                                                                                                 {players.map((player, idx) => {
                                                                                                     const pts = idx === 0 ? item._p1Points : item._p2Points;
                                                                                                     const hasPts = pts > 0;
                                                                                                     const pName = (player.Name || '').split(' ')[0];
                                                                                                     return (
-                                                                                                        <div key={idx} className="flex flex-col items-center">
-                                                                                                            <div className="w-12 h-12 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm">
+                                                                                                        <div key={idx} className="flex flex-col items-center min-w-[80px]">
+                                                                                                            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border border-gray-200 flex items-center justify-center shadow-sm">
                                                                                                                 {getProfileImage(player) ? (
                                                                                                                     <img src={getProfileImage(player)} alt={player.Name} className="w-full h-full object-cover" />
                                                                                                                 ) : (
-                                                                                                                    <User className="w-6 h-6 text-gray-400" />
+                                                                                                                    <User className="w-7 h-7 text-gray-400" />
                                                                                                                 )}
                                                                                                             </div>
-                                                                                                            <span className="text-xs font-bold text-slate-800 mt-2 text-center max-w-[80px] truncate">{pName}</span>
+                                                                                                            <span className="text-sm font-bold text-slate-800 mt-1.5 text-center max-w-[96px] truncate">{pName}</span>
                                                                                                             {hasPts && (
-                                                                                                                <span className="mt-1 bg-[#CCFF00] text-[#0F172A] text-[9px] font-bold px-2 py-0.5 rounded-md shadow-sm">
+                                                                                                                <span className="mt-1 bg-[#CCFF00] text-[#0F172A] text-[10px] font-bold px-2 py-0.5 rounded-md shadow-sm">
                                                                                                                     {pts.toLocaleString()}
                                                                                                                 </span>
                                                                                                             )}
@@ -4139,14 +4132,26 @@ const EventDetails = () => {
                                                                                                     );
                                                                                                 })}
                                                                                             </div>
-                                                                                            
-                                                                                            {item._teamPoints > 0 && (
-                                                                                                <div className="flex items-center flex-shrink-0 ml-4 border-l border-gray-100 pl-4 h-10">
+
+                                                                                            {(item._teamPoints > 0 || rank || seed || manualSeedInfo?.seed) && (
+                                                                                                <div className="flex items-center flex-shrink-0 border-l border-gray-200 pl-3 sm:pl-4 h-14 sm:h-16">
                                                                                                     <div className="text-right">
-                                                                                                        <span className="block text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Team Points</span>
-                                                                                                        <span className="block text-base font-medium text-slate-800 leading-none">
-                                                                                                            {item._teamPoints.toLocaleString()}
-                                                                                                        </span>
+                                                                                                        <div className="flex flex-wrap justify-end gap-1 mb-1">
+                                                                                                            {rank && <span className="text-[8px] font-semibold uppercase tracking-wide bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Rank {rank}</span>}
+                                                                                                            {(seed || manualSeedInfo?.seed) && (
+                                                                                                                <span className="text-[8px] font-semibold uppercase tracking-wide bg-[#CCFF00] text-[#0F172A] px-2 py-0.5 rounded-full">
+                                                                                                                    Seed {manualSeedInfo?.seed || seed}
+                                                                                                                </span>
+                                                                                                            )}
+                                                                                                        </div>
+                                                                                                        {item._teamPoints > 0 && (
+                                                                                                            <>
+                                                                                                                <span className="block text-[9px] font-semibold text-slate-400 uppercase tracking-widest mb-0.5">Team Points</span>
+                                                                                                                <span className="block text-base sm:text-lg font-semibold text-slate-800 leading-none">
+                                                                                                                    {item._teamPoints.toLocaleString()}
+                                                                                                                </span>
+                                                                                                            </>
+                                                                                                        )}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             )}
