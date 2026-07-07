@@ -1741,11 +1741,11 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                         </h3>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid via 4M</p>
+                                <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entries Paid to 4m</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paid4M}</span>
                             </div>
                             <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
-                                <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Regs paid to club</p>
+                                <p className="text-[10px] font-bold tracking-widest text-gray-400 mb-2">Entry Payments (Manual)</p>
                                 <span className="text-xl font-black text-white">{financialSummary.paidClub}</span>
                             </div>
                             <div className="bg-[#1E293B]/50 border border-white/10 rounded-xl p-4">
