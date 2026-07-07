@@ -718,6 +718,42 @@ const Hero = () => {
         );
     };
 
+    const renderMatchScoreColumn = (match, isWinner) => {
+        const sets = match.Score?.Score;
+        const hasResult = sets && sets.length > 0;
+
+        if (!hasResult) {
+            if (isWinner === undefined) return null;
+            return (
+                <span className={`shrink-0 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${isWinner ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                    {isWinner ? 'Win' : 'Loss'}
+                </span>
+            );
+        }
+
+        return (
+            <div className="shrink-0 flex flex-col items-end gap-1">
+                <div className="flex items-center gap-1">
+                    {sets.map((set, sIdx) => (
+                        <div
+                            key={sIdx}
+                            className="bg-white/[0.04] px-1.5 py-1 rounded-lg text-[9px] font-black text-white border border-white/5 flex flex-col items-center min-w-[20px] leading-tight"
+                        >
+                            <span className={set.Score1 > set.Score2 ? 'text-padel-green' : 'text-white/60'}>{set.Score1}</span>
+                            <div className="w-full h-px bg-white/10 my-0.5" />
+                            <span className={set.Score2 > set.Score1 ? 'text-padel-green' : 'text-white/60'}>{set.Score2}</span>
+                        </div>
+                    ))}
+                </div>
+                {isWinner !== undefined && (
+                    <span className={`px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest ${isWinner ? 'bg-padel-green text-black' : 'bg-red-500/10 text-red-500 border border-red-500/20'}`}>
+                        {isWinner ? 'Victory' : 'Defeat'}
+                    </span>
+                )}
+            </div>
+        );
+    };
+
     const renderCompactMatchRow = (match, idx, total) => {
         const info = match.Info || {};
         const matchDate = parseMatchDate(info.Date);
@@ -725,6 +761,8 @@ const Hero = () => {
         const month = Number.isNaN(matchDate.getTime()) ? '' : matchDate.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
         const weekday = Number.isNaN(matchDate.getTime()) ? '' : matchDate.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase();
         const isWinner = info.IsWinner !== undefined ? info.IsWinner : info.Challenger?.IsWinner;
+        const hasResult = match.Score?.Score && match.Score.Score.length > 0;
+        const showPastResult = scheduleTimeFilter === 'past' && (hasResult || isWinner !== undefined);
 
         return (
             <button
@@ -743,17 +781,11 @@ const Hero = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-bold uppercase truncate">{info.EventName || 'Match'}</p>
-                    <div className="flex items-center gap-2 mt-1 min-w-0">
-                        <p className="text-[11px] text-white/50 truncate flex-1 min-w-0">
-                            {(info.Challenger?.Name || 'TBD')} vs {(info.Challenged?.Name || 'TBD')}
-                        </p>
-                        {scheduleTimeFilter === 'past' && isWinner !== undefined && (
-                            <span className={`shrink-0 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${isWinner ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                                {isWinner ? 'Win' : 'Loss'}
-                            </span>
-                        )}
-                    </div>
+                    <p className="text-[11px] text-white/50 mt-1 truncate">
+                        {(info.Challenger?.Name || 'TBD')} vs {(info.Challenged?.Name || 'TBD')}
+                    </p>
                 </div>
+                {showPastResult && renderMatchScoreColumn(match, isWinner)}
                 <ChevronRight size={18} className="text-orange-400 shrink-0 transition-transform group-hover:translate-x-0.5" />
             </button>
         );
