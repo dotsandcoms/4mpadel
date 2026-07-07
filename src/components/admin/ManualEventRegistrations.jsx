@@ -1469,12 +1469,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
 
     const handleClose = onBack || onClose;
 
-    const statusBadge = (r) => {
-        if (r.status === 'withdrawn') return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-500/10 text-gray-400">Withdrawn</span>;
-        if (r.payment_status === 'paid') return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-400">Paid</span>;
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-500/10 text-amber-400">Pending</span>;
-    };
-
     const panelContent = (
         <>
                     {/* Header */}
@@ -2022,10 +2016,12 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                         </td>
                                                         <td className="py-3 px-4">{licenseBadge(r)}</td>
                                                         <td className="py-3 px-4">
-                                                            <div className="space-y-1.5">
-                                                                {paymentBadge(r)}
-                                                                {statusBadge(r)}
-                                                                {renderPaymentDetails(r)}
+                                                            <div className="flex flex-col gap-1.5">
+                                                                {r.status === 'withdrawn' ? (
+                                                                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-gray-500/10 text-gray-400">Withdrawn</span>
+                                                                ) : (
+                                                                    renderPaymentCell(r)
+                                                                )}
                                                             {(() => {
                                                                 const rf = refundSummaryFor(r.id);
                                                                 if (!rf) return null;
@@ -2051,16 +2047,6 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                     >
                                                                         <UserPlus size={12} />
                                                                         Add Partner
-                                                                    </button>
-                                                                )}
-                                                                {r.status !== 'withdrawn' && r.payment_status !== 'paid' && (
-                                                                    <button
-                                                                        onClick={() => openMarkPaidModal(r)}
-                                                                        disabled={markingId === r.id}
-                                                                        className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-emerald-500 hover:text-white inline-flex items-center gap-1.5 disabled:opacity-50"
-                                                                    >
-                                                                        {markingId === r.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                                                                        Mark Paid
                                                                     </button>
                                                                 )}
                                                                 {r.status !== 'withdrawn' && (
