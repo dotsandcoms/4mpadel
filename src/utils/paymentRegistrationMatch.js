@@ -203,15 +203,16 @@ export function paymentPayerEmailFor(payment) {
     ) || null;
 }
 
-/** True when a payment's covers[] / registration_rows explicitly include this email. */
+/**
+ * True when a payment's covers[] explicitly include this email.
+ * NOTE: registration_rows is deliberately NOT consulted — it is a snapshot of
+ * the team booking (both players), not of what this payment actually paid for.
+ */
 export function paymentExplicitlyCoversEmail(payment, email) {
     const meta = payment?.metadata || {};
-    const { top, inner } = getPaymentMetadataLayers(meta);
     const target = norm(email);
     if (!target) return false;
-    if (paymentEntryCoversFor(meta).some((c) => norm(c?.email) === target)) return true;
-    return [...(top.registration_rows || []), ...(inner.registration_rows || [])]
-        .some((row) => norm(row?.email) === target);
+    return paymentEntryCoversFor(meta).some((c) => norm(c?.email) === target);
 }
 
 /**
