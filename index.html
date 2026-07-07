@@ -17,11 +17,20 @@
   
   <script>
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
-          .then((reg) => console.log('Service Worker registered:', reg.scope))
-          .catch((err) => console.error('Service Worker registration failed:', err));
-      });
+      const isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
+
+      if (isLocalDev) {
+        // Service workers break Vite HMR and pre-bundled deps in development.
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((reg) => reg.unregister());
+        });
+      } else {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then((reg) => console.log('Service Worker registered:', reg.scope))
+            .catch((err) => console.error('Service Worker registration failed:', err));
+        });
+      }
     }
   </script>
 

@@ -265,7 +265,7 @@ const formatEventDates = (start, end) => {
     return `${s.getDate()} ${s.toLocaleString('default', { month: 'short' })} - ${e.getDate()} ${e.toLocaleString('default', { month: 'short' })} ${e.getFullYear()}`;
 };
 
-const resizeImage = (file, maxWidth = 1200, quality = 0.8) =>
+const resizeImage = (file, maxWidth = 1200, quality = 0.8, preserveAlpha = false) =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -281,10 +281,22 @@ const resizeImage = (file, maxWidth = 1200, quality = 0.8) =>
                 const canvas = document.createElement('canvas');
                 canvas.width = width;
                 canvas.height = height;
-                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                const ctx = canvas.getContext('2d');
+                if (preserveAlpha) {
+                    ctx.clearRect(0, 0, width, height);
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                const mime = preserveAlpha ? 'image/png' : 'image/jpeg';
                 canvas.toBlob(
-                    (blob) => resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() })),
-                    'image/jpeg',
+                    (blob) => {
+                        const baseName = (file.name || 'image').replace(/\.[^.]+$/, '');
+                        resolve(new File(
+                            [blob],
+                            `${baseName}.${preserveAlpha ? 'png' : 'jpg'}`,
+                            { type: mime, lastModified: Date.now() }
+                        ));
+                    },
+                    mime,
                     quality
                 );
             };
@@ -294,8 +306,10 @@ const resizeImage = (file, maxWidth = 1200, quality = 0.8) =>
     });
 
 const uploadToGallery = async (file, prefix) => {
-    const resized = await resizeImage(file);
-    const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.jpg`;
+    const preserveAlpha = prefix === 'sponsors' || prefix === 'org-logos';
+    const resized = await resizeImage(file, 1200, 0.8, preserveAlpha);
+    const ext = preserveAlpha ? 'png' : 'jpg';
+    const fileName = `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}.${ext}`;
     const filePath = `${prefix}/${fileName}`;
     const { error } = await supabase.storage.from('gallery').upload(filePath, resized);
     if (error) throw error;
@@ -358,6 +372,27 @@ const blankForm = {
     event_co_admins: '',
 };
 
+// Default SAPA content pre-populated into new events (editable per event).
+const SAPA_DEFAULTS = {
+    description: `<p>This SAPA-sanctioned tournament forms part of the official SAPA tournament calendar and offers players the opportunity to compete for SAPA ranking points in a structured, competitive event.</p><p>The tournament will include multiple divisions to cater for different playing levels, subject to the final number of entries received. Spaces in each division may be limited, and players are encouraged to register early.</p><p>All event information, registration, payment, SAPA Player License checks and event updates will be managed through the 4M Padel platform.</p><h3>Registration</h3><p>Registration must be completed through the 4M Padel website before the official closing date and time listed on the event card. Late entries may not be accepted once registration has closed.</p><p>Entry is only confirmed once the player has completed registration, paid the applicable entry fee, and holds a valid SAPA Player License.</p><h3>SAPA Player License</h3><p>For the 2026 season, a valid SAPA Player License is mandatory for all players entering SAPA Gold, Super Gold and Major events. SAPA Bronze and Silver events do not require a SAPA Player License, unless specifically stated on the event card.</p><p>Where a SAPA Player License is required, players may use either:</p><ul><li>Annual SAPA Player License — R450</li><li>Temporary SAPA Player License — R120, valid for one event only</li></ul><p>SAPA Player Licenses can be purchased through the 4M Padel website during the registration process.</p><p>Players entering a Gold, Super Gold or Major event without a valid SAPA Player License will not be eligible to compete, and may be removed from the entry list or draw.</p><h3>Divisions</h3><p>The tournament may include one or more divisions such as:</p><ul><li>Men’s Open</li><li>Men’s Advanced</li><li>Men’s Intermediate</li><li>Ladies Open</li><li>Ladies Advanced</li><li>Ladies Intermediate</li><li>Mixed or additional divisions, where applicable</li></ul><p>Suggested playing levels may be provided for each division to help players enter the most appropriate category.</p><p>Players may be permitted to enter more than one division, but SAPA ranking points will only be awarded in accordance with SAPA rules, usually in the highest eligible division entered.</p><p>The Tournament Director and SAPA Tournament Committee reserve the right to move or remove players from a division where their level is considered inappropriate for that division or unfair to the rest of the draw.</p><h3>Format</h3><p>The Men’s Open and Ladies Open divisions will be played as knockout draws with a back draw. All Men’s Open and Ladies Open matches will be played as best of three full sets, with Star Point used in all rounds and all matches.</p><p>Other divisions may follow the same knockout format, or may be played as group stages leading into knockout rounds, plate draws or another format determined by the final number of entries. The final format for each division will be confirmed once entries have closed and will be published on the event card and/or final tournament fact sheet.</p><p>Star Point is the default sudden-death scoring format for SAPA events. Silver Point may be used in divisions other than Men’s Open and Ladies Open, where approved by the Tournament Director and/or SAPA Tournament Committee.</p><h3>Seeding</h3><p>From 1 July 2026, seeding for SAPA-sanctioned events will be determined according to SAPA ranking points. Seedings will be calculated in accordance with the applicable SAPA tournament rules and the official SAPA rankings at the time of the draw.</p><p>The SAPA Tournament Committee may review seedings where required to ensure they are correctly applied in line with SAPA rules. The SAPA Tournament Committee’s decision on seeding is final.</p><h3>Draws, Fixtures and Results</h3><p>Draws and fixtures will be published after registration closes and once seedings, withdrawals and substitutions have been finalised. Players are responsible for checking their scheduled match times and ensuring that they are available from their first scheduled match.</p><p>Results may be published on the official tournament platform and/or the 4M Padel website.</p><h3>Player Availability</h3><p>Players must be available to play at their scheduled match times. Depending on the size of the draw, matches may begin on the evening before the main tournament dates, particularly where divisions are full or additional playing windows are required.</p><p>Players are responsible for checking their own fixtures and ensuring that they know the correct date, time, venue and court for each match. Any player or team arriving late for a scheduled match may be disqualified, and a walkover may be awarded to the opposing team.</p><p>Players should remain available for the full duration of the tournament, or until they have been eliminated from all applicable draws.</p><h3>Player Conduct</h3><p>All players are expected to conduct themselves in a respectful and sportsmanlike manner at all times. Bad conduct, abusive behaviour, unsportsmanlike behaviour or disrespect towards opponents, officials, organisers, venues or spectators will not be tolerated.</p><p>All SAPA regulations, the SAPA Code of Conduct and any applicable disciplinary framework will apply.</p><h3>Entry Fee</h3><p>The entry fee for the event will be listed on the event card. The entry fee generally includes participation in the tournament, court fees and official match balls, unless otherwise stated.</p><p>Additional inclusions, such as refreshments, player gifts, parking or venue access, may vary from event to event.</p><h3>Venues</h3><p>Matches may be played at one or more host venues. Players should carefully check the venue information and match location for each fixture.</p><p>Where multiple venues are used, players are responsible for ensuring that they arrive at the correct venue on time.</p><h3>Important Notes</h3><p>Tournament dates, playing windows, formats, divisions, venues and schedules may be adjusted depending on entries, weather, court availability or operational requirements. The Tournament Director and SAPA Tournament Committee reserve the right to make changes where necessary to ensure the fair and efficient running of the event.</p><h3>Assistance</h3><p>For registration, payment or SAPA Player License assistance, players may contact 4M Padel via WhatsApp on 0837909091. For venue-specific queries, players should contact the relevant host venue or tournament organiser.</p><p>Players are encouraged to read all event information carefully before registering.</p>`,
+    points_breakdown: `<p>SAPA ranking points will be awarded according to the official SAPA points structure for the relevant event tier. Points breakdowns are available on the 4M Padel website.</p><p>The number of points available may depend on the tournament category, the size of the draw, the strength of the draw, the division entered and the player’s final finishing position. SAPA reserves the right to grade or re-grade a tournament based on the strength and size of the draw.</p><p>Final ranking points calculations are completed after the conclusion of the draw and once all results have been accurately submitted. Where final positions are played for, points will be allocated according to the position achieved by the player or team.</p><p>If a player or team is required to play in a back draw, plate draw, position play-off or any other match used to determine final position, they must play that match in order to be eligible for ranking points. A player or team that does not play in the back draw, plate draw or required position play-off will not earn SAPA ranking points for that event.</p><p>Where a player enters more than one division, ranking points will generally only be awarded in one division, being the highest eligible division entered.</p><p>It is the tournament organiser’s responsibility to enter all results accurately and completely into the approved tournament management system. If results are not entered properly, SAPA reserves the right to withhold ranking points, amend the points allocation, or withdraw the sanctioning of the event.</p>`,
+    sanctioning_details: `<p>This event is officially sanctioned by SAPA and forms part of the SAPA tournament calendar. The event will be run in accordance with the applicable SAPA tournament rules, regulations, code of conduct and disciplinary framework.</p><p>SAPA ranking points will be awarded to eligible players in accordance with the tournament tier and the official SAPA points structure. All players must hold a valid SAPA Player License in order to participate, unless otherwise stated for the specific event.</p><p>Seedings, draw approval, player eligibility and any exceptional tournament decisions may be reviewed by the SAPA Tournament Committee. The Tournament Director, Tournament Referee and SAPA Tournament Committee reserve the right to make any decisions necessary to ensure the event is run fairly, consistently and in line with SAPA standards.</p>`,
+    rules_regs: `<p>All players must comply with the rules and regulations published for this event, together with the applicable SAPA tournament rules, code of conduct and disciplinary framework.</p><p>Event-specific rules, including match format, scoring, player eligibility, withdrawals, substitutions, late arrivals, seeding, ranking points and scheduling requirements, will be confirmed on the event card and/or final tournament fact sheet.</p><p>By entering the event, players acknowledge that they have read and accepted these rules and agree to follow all instructions from the Tournament Director, Tournament Referee and SAPA Tournament Committee.</p>`,
+    withdrawal_substitution: `<p>Players may withdraw from an event before the official registration closing date and time.</p><p>Once registration has closed, all pairs are considered confirmed and the draw process may begin. After this point, substitutions will only be considered in exceptional circumstances, such as a genuine injury, medical issue or other valid reason accepted by the Tournament Director and/or SAPA Tournament Committee.</p><p>Any substitution must be approved in writing before the player may compete. The replacement player must hold a valid SAPA Player License and must not materially increase the strength of the pair or compromise the fairness of the draw.</p><p>No substitutions will be allowed once the draw has been published, unless specifically approved by the SAPA Tournament Committee in exceptional circumstances.</p><p>If a player withdraws after registration closes and no approved substitution is granted, the pair may be removed from the draw and may forfeit their entry fee.</p><p>SAPA, the Tournament Director and the Tournament Referee reserve the right to make the final decision on all withdrawals, substitutions and related draw changes.</p>`,
+    cut_off_times: `<p>Registration closes strictly on the Monday of event week at 17:00.</p><p>A team’s entry is only confirmed once both partners have completed registration and paid the full event registration fee. Players who have not completed payment by the registration deadline may be removed from the entry list or excluded from the draw.</p><p>Registration for divisions other than Men’s Open and Ladies Open may be extended slightly at the discretion of the Tournament Director and/or SAPA Tournament Committee, depending on entries, court availability and event requirements.</p><p>No late entries will be accepted after the final registration deadline unless specifically approved by the Tournament Director and/or SAPA Tournament Committee.</p>`,
+};
+
+// Monday of the week the event starts in, at 17:00 local time — the default
+// registration deadline (e.g. event starts Fri 31 July → closes Mon 27 July 17:00).
+const mondayCloseFor = (startDateStr) => {
+    if (!startDateStr) return '';
+    const d = new Date(`${startDateStr}T00:00:00`);
+    if (isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T17:00`;
+};
+
 const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
     // Org editing an already-sanctioned event → changes become a draft
     // amendment that a 4M admin must approve (event stays live meanwhile).
@@ -378,6 +413,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
+    // True once the user has manually set/cleared the registration deadline —
+    // stops the start-date auto-fill from overwriting their choice.
+    const regCloseTouchedRef = useRef(false);
 
     const filteredClubs = clubs.filter(
         (c) => !form.venue || c.name.toLowerCase().includes(form.venue.toLowerCase())
@@ -423,6 +461,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         setRemovedDivisionIds([]);
         setStandardPrice('');
         if (editingEvent) {
+            regCloseTouchedRef.current = true; // never auto-change a saved event's deadline
             // If the org has a pending amendment draft, resume editing THAT
             // draft rather than the live event data.
             const draft = (organization && editingEvent.sanction_status === 'approved'
@@ -431,15 +470,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 ? editingEvent.pending_changes : null;
             loadExisting(draft ? { ...editingEvent, ...draft.payload } : editingEvent, draft?.divisions || null);
         } else {
+            regCloseTouchedRef.current = false;
+            // New events start with the standard SAPA content pre-filled (editable per event).
+            const base = { ...blankForm, ...SAPA_DEFAULTS };
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organization ? {
-                ...blankForm,
-                organizer_name: organization.name || blankForm.organizer_name,
+                ...base,
+                organizer_name: organization.name || base.organizer_name,
                 organizer_logo_url: organization.logo_url || '',
                 organizer_email: organization.contact_email || '',
                 organizer_phone: organization.contact_phone || '',
                 organizer_website: organization.website_url || '',
-            } : blankForm);
+            } : base);
             setDivisions([emptyDivision()]);
             setShowPrizeBreakdown(false);
         }
@@ -530,6 +572,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const handleInput = (e) => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
+        if (name === 'registration_closes_at') regCloseTouchedRef.current = true;
         setForm((prev) => {
             const next = { ...prev, [name]: val };
             if (name === 'event_name' && !editingEvent) next.slug = slugify(value);
@@ -537,6 +580,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             // opens on the right month (only if empty or before the new start date).
             if (name === 'start_date' && val && (!prev.end_date || prev.end_date < val)) {
                 next.end_date = val;
+            }
+            // Auto-set the registration deadline to the Monday of event week at 17:00
+            // for new events, until the user sets/clears it themselves.
+            if (name === 'start_date' && val && !editingEvent && !regCloseTouchedRef.current) {
+                next.registration_closes_at = mondayCloseFor(val);
             }
             return next;
         });
@@ -1284,13 +1332,18 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                             <label className={labelClass} style={{ marginBottom: 0 }}>Registration Closes At</label>
                                             <button
                                                 type="button"
-                                                onClick={() => setField('registration_closes_at',
-                                                    form.registration_closes_at ? '' : (() => {
-                                                        const now = new Date();
-                                                        const offsetMs = now.getTimezoneOffset() * 60000;
-                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
-                                                    })()
-                                                )}
+                                                onClick={() => {
+                                                    regCloseTouchedRef.current = true;
+                                                    setField('registration_closes_at',
+                                                        form.registration_closes_at ? '' : (
+                                                            mondayCloseFor(form.start_date) || (() => {
+                                                                const now = new Date();
+                                                                const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                            })()
+                                                        )
+                                                    );
+                                                }}
                                                 className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
                                                     form.registration_closes_at ? 'bg-padel-green' : 'bg-white/20'
                                                 }`}

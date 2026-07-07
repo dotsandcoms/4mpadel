@@ -6,9 +6,9 @@ import { supabase } from '../supabaseClient';
 import { safeUrl } from '../utils/sanitizeHtml';
 import {
     Building, ShieldCheck, BadgeCheck, Globe, Mail, Phone, MessageCircle,
-    CalendarDays, Trophy, ChevronLeft, ChevronRight, Star, Clock,
+    CalendarDays, Trophy, ChevronLeft, ChevronRight, Clock,
     Instagram, Facebook, Youtube, ExternalLink, Heart, MapPin, Users,
-    Image as ImageIcon, BarChart3, Medal
+    Image as ImageIcon, Medal
 } from 'lucide-react';
 
 // Dummy content is only rendered in dev builds so Brad can judge the design;
@@ -170,7 +170,6 @@ const OrganisationPage = () => {
         { icon: Trophy, value: events.length, label: 'Events Hosted' },
         { icon: Building, value: clubsList.length, label: 'Host Clubs' },
         { icon: Users, value: registeredPlayers > 999 ? `${(registeredPlayers / 1000).toFixed(1)}k` : registeredPlayers, label: 'Registered Players' },
-        { icon: Star, value: SHOW_DUMMY ? '4.8' : '—', label: 'Rating' },
         {
             icon: Clock,
             value: lastUpdated ? new Date(lastUpdated).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : '—',
@@ -202,7 +201,7 @@ const OrganisationPage = () => {
                     </Link>
                 </div>
 
-                <div className="container mx-auto px-4 md:px-6">
+                <div className="w-full max-w-[1440px] mx-auto px-4 xl:px-8">
                     <div className="relative -mt-14 md:-mt-20 z-10">
                         <div className="flex items-end gap-4">
                             {org.logo_url ? (
@@ -237,30 +236,13 @@ const OrganisationPage = () => {
                             </span>
                         </div>
 
-                        {/* Primary CTAs */}
-                        <div className="grid grid-cols-2 gap-2.5 mt-5 max-w-xl">
-                            <a
-                                href="#org-events"
-                                style={{ background: accent, color: '#000000' }}
-                                className="inline-flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-widest px-4 py-3.5 rounded-2xl hover:opacity-90 transition-all"
-                            >
-                                <CalendarDays size={14} /> Upcoming Events
-                            </a>
-                            <a
-                                href="#org-rankings"
-                                style={{ borderColor: accentBorder, color: accent }}
-                                className="inline-flex items-center justify-center gap-2 border bg-transparent text-[11px] font-black uppercase tracking-widest px-4 py-3.5 rounded-2xl hover:bg-white/5 transition-all"
-                            >
-                                <BarChart3 size={14} /> {org.name.split(' ')[0]} Rankings
-                            </a>
-                        </div>
                     </div>
                 </div>
             </div>
 
-            <div className="container mx-auto px-4 md:px-6 mt-7 space-y-6 max-w-6xl">
+            <div className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 mt-7 space-y-6">
                 {/* ===== STAT STRIP ===== */}
-                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-4 md:p-5 grid grid-cols-5 divide-x divide-white/5">
+                <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} className="bg-[#0F172A]/50 border border-white/5 rounded-3xl p-4 md:p-5 grid grid-cols-4 divide-x divide-white/5">
                     {stats.map((s, i) => (
                         <div key={i} className="flex flex-col items-center text-center px-1">
                             <s.icon size={15} className="mb-1.5" style={{ color: accent }} />

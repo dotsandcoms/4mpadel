@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import ExcelJS from 'exceljs';
 import logo4m from '../../assets/logo_4m_lowercase.png';
 import { buildPlayersByEmailMap, fetchPlayersByEmails } from '../../utils/playerLookup';
+import { fetchAllRows } from '../../utils/fetchAllRows';
 import {
     findPaymentForRegistration,
     isLicensePaymentRow,
@@ -288,15 +289,16 @@ const EventFinance = ({ allowedEvents = [], isEventManagementModule = false }) =
                     .select('id, event_name, start_date, rankedin_id, rankedin_url, entry_fee, category_fees, finance_managed, is_manual, allow_payments, slug')
                     .order('start_date', { ascending: false });
 
-                const { data: pData } = await supabase
+                const pData = await fetchAllRows(() => supabase
                     .from('players')
-                    .select('id, name, email, contact_number, license_type, paid_registration');
+                    .select('id, name, email, contact_number, license_type, paid_registration')
+                    .order('id', { ascending: true }));
                 setSystemProfiles(pData || []);
 
-                const { data: tempLicData } = await supabase
+                const tempLicenses = await fetchAllRows(() => supabase
                     .from('temporary_licenses')
-                    .select('event_id, player_id');
-                const tempLicenses = tempLicData || [];
+                    .select('event_id, player_id')
+                    .order('id', { ascending: true }));
 
                 const playerLicenses = {};
                 const emailToPlayerId = {};

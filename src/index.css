@@ -121,6 +121,29 @@ h6 {
 
 /* Smooth Scrolling */
 /* Custom Animations */
+
+/* Slow Ken Burns drift used on the event details hero image */
+@keyframes hero-zoom {
+  0% {
+    transform: scale(1.02);
+    opacity: 0;
+  }
+
+  8% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.12);
+    opacity: 1;
+  }
+}
+
+.animate-hero-zoom {
+  animation: hero-zoom 22s ease-out forwards;
+  will-change: transform;
+}
+
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);

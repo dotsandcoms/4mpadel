@@ -7,6 +7,7 @@ import kitkatLogo from '../assets/kitkat_logo.png';
 import sapaLogo from '../assets/sapa-logo.svg';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
+import { fetchAllRows } from '../utils/fetchAllRows';
 import PlayerModal from '../components/PlayerModal';
 
 const kitkatRed = '#D41B2C';
@@ -79,10 +80,11 @@ const KitKatLeague = () => {
             }
 
             // 1b. Fetch players from Supabase to get profile images & full info for modals
-            const { data: dbPlayers } = await supabase
+            const dbPlayers = await fetchAllRows(() => supabase
                 .from('players')
                 .select('*')
-                .eq('approved', true);
+                .eq('approved', true)
+                .order('id', { ascending: true })).catch(() => null);
 
             if (dbPlayers) {
                 setSupabasePlayers(dbPlayers);

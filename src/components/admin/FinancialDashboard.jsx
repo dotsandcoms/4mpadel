@@ -9,6 +9,26 @@ import {
     ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, AreaChart, Area 
 } from 'recharts';
 import { supabase } from '../../supabaseClient';
+import { isLicensePaymentRow } from '../../utils/paymentRegistrationMatch';
+
+// Fetch ALL successful payments — supabase caps un-ranged selects at 1000 rows,
+// which silently truncates revenue once payment volume grows.
+const fetchAllSuccessPayments = async () => {
+    const PAGE = 1000;
+    const all = [];
+    for (let from = 0; ; from += PAGE) {
+        const { data, error } = await supabase
+            .from('payments')
+            .select('*, calendar(event_name)')
+            .eq('status', 'success')
+            .order('id', { ascending: true })
+            .range(from, from + PAGE - 1);
+        if (error) throw error;
+        all.push(...(data || []));
+        if (!data || data.length < PAGE) break;
+    }
+    return all;
+};
 
 const KPICard = ({ title, value, icon: Icon, trend, trendValue, color }) => (
     <motion.div 
@@ -54,51 +74,78 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
         const fetchDashboardData = async () => {
             setLoading(true);
             try {
-                // 1. Fetch relevant payments and events in parallel
-                const [{ data: payments, error: pError }, { data: events, error: eError }] = await Promise.all([
+                // 1. Fetch relevant payments (paginated), refunds and events in parallel
+                const [payments, { data: refundRows, error: rfError }, { error: eError }] = await Promise.all([
+                    fetchAllSuccessPayments(),
                     supabase
-                        .from('payments')
-                        .select('*, calendar(event_name)')
-                        .eq('status', 'success'),
+                        .from('payment_refunds')
+                        .select('payment_id, amount, status, created_at, processed_at')
+                        .neq('status', 'failed'),
                     supabase
                         .from('calendar')
                         .select('id, event_name, start_date')
                 ]);
 
-                if (pError) throw pError;
+                if (rfError) throw rfError;
                 if (eError) throw eError;
 
                 if (payments) {
-                    let filteredPayments = payments || [];
+                    // Test-mode payments never count as revenue.
+                    let filteredPayments = (payments || []).filter(p => !p.is_test);
                     if (isRestricted) {
                         const allowedIds = allowedEvents.map(Number);
-                        filteredPayments = payments.filter(p => p.event_id && allowedIds.includes(Number(p.event_id)));
+                        filteredPayments = filteredPayments.filter(p => p.event_id && allowedIds.includes(Number(p.event_id)));
                     }
 
-                    const totalRevenue = filteredPayments.reduce((acc, curr) => acc + Number(curr.amount), 0);
-                    
+                    // Refunds netted against their original payment (matches EventFinance).
+                    const paymentById = new Map(filteredPayments.map(p => [p.id, p]));
+                    const refunds = (refundRows || []).filter(r => paymentById.has(r.payment_id));
+                    const totalRefunded = refunds.reduce((acc, r) => acc + Number(r.amount || 0), 0);
+                    const refundDate = (r) => new Date(r.processed_at || r.created_at);
+
+                    // Entry rows = typed as entry fee AND not actually a license row
+                    // (LIC- refs / all-license covers sneak in under the entry type).
+                    const isEntryRow = (p) => p.payment_type === 'event_entry_fee' && !isLicensePaymentRow(p);
+
+                    const totalRevenue = filteredPayments.reduce((acc, curr) => acc + Number(curr.amount), 0) - totalRefunded;
+
                     // Yearly Breakdown (Focus on 2026)
                     const rev2026 = filteredPayments.filter(p => new Date(p.created_at).getFullYear() === 2026)
-                        .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                        .reduce((acc, curr) => acc + Number(curr.amount), 0)
+                        - refunds.filter(r => refundDate(r).getFullYear() === 2026)
+                            .reduce((acc, r) => acc + Number(r.amount || 0), 0);
 
-                    // License Breakdown
-                    const fullLicRev = filteredPayments.filter(p => 
-                        ['full_license', 'membership'].includes(p.payment_type) || 
-                        (p.payment_type !== 'event_entry_fee' && Number(p.amount) >= 400)
+                    // License Breakdown — everything that isn't a true entry row,
+                    // split full vs temp by explicit type, falling back to amount.
+                    const licenseRows = filteredPayments.filter(p => !isEntryRow(p));
+                    const fullLicRev = licenseRows.filter(p =>
+                        ['full_license', 'membership'].includes(p.payment_type) ||
+                        (!['temporary_license', 'temp_license'].includes(p.payment_type) && Number(p.amount) >= 400)
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-                    const tempLicRev = filteredPayments.filter(p => 
-                        ['temporary_license', 'temp_license'].includes(p.payment_type) || 
-                        (p.payment_type !== 'event_entry_fee' && Number(p.amount) < 400 && Number(p.amount) > 0)
+                    const tempLicRev = licenseRows.filter(p =>
+                        ['temporary_license', 'temp_license'].includes(p.payment_type) ||
+                        (!['full_license', 'membership'].includes(p.payment_type) && Number(p.amount) < 400 && Number(p.amount) > 0)
                     ).reduce((acc, curr) => acc + Number(curr.amount), 0);
 
-                    // Event Entry Breakdown
-                    const eventEntryRev = filteredPayments.filter(p => p.payment_type === 'event_entry_fee')
-                        .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                    // Refunds grouped by the event of the refunded (entry) payment.
+                    const refundByEvent = {};
+                    let entryRefundTotal = 0;
+                    refunds.forEach(r => {
+                        const pay = paymentById.get(r.payment_id);
+                        if (!pay || !isEntryRow(pay)) return;
+                        const eventId = pay.event_id || 'manual';
+                        refundByEvent[eventId] = (refundByEvent[eventId] || 0) + Number(r.amount || 0);
+                        entryRefundTotal += Number(r.amount || 0);
+                    });
 
-                    // Revenue by Event
+                    // Event Entry Breakdown (net of refunds)
+                    const eventEntryRev = filteredPayments.filter(isEntryRow)
+                        .reduce((acc, curr) => acc + Number(curr.amount), 0) - entryRefundTotal;
+
+                    // Revenue by Event (net of refunds)
                     const eventMap = {};
-                    filteredPayments.filter(p => p.payment_type === 'event_entry_fee').forEach(p => {
+                    filteredPayments.filter(isEntryRow).forEach(p => {
                         const eventName = p.calendar?.event_name || p.metadata?.event_name || 'Unknown Event';
                         const eventId = p.event_id || 'manual';
                         if (!eventMap[eventId]) {
@@ -106,7 +153,12 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                         }
                         eventMap[eventId].revenue += Number(p.amount);
                     });
-                    const eventRevenueList = Object.values(eventMap).sort((a, b) => b.revenue - a.revenue).slice(0, 10);
+                    Object.entries(refundByEvent).forEach(([eventId, amount]) => {
+                        if (eventMap[eventId]) eventMap[eventId].revenue -= amount;
+                    });
+                    const eventRevenueList = Object.values(eventMap)
+                        .filter((e) => e.revenue > 0)
+                        .sort((a, b) => b.revenue - a.revenue).slice(0, 10);
 
                     setStats({
                         totalRevenue,
@@ -131,22 +183,26 @@ const FinancialDashboard = ({ allowedEvents = [] }) => {
                     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
                     const currentYear = new Date().getFullYear();
                     const monthlyData = months.map((m, i) => {
-                        const monthRev = filteredPayments.filter(p => {
-                            const d = new Date(p.created_at);
+                        const inMonth = (dateStr) => {
+                            const d = new Date(dateStr);
                             return d.getMonth() === i && d.getFullYear() === currentYear;
-                        }).reduce((acc, curr) => acc + Number(curr.amount), 0);
+                        };
+                        const monthPayments = filteredPayments.filter(p => inMonth(p.created_at));
+                        // Refunds count as negative revenue in the month they were processed.
+                        const monthRefunds = refunds.filter(r => inMonth(r.processed_at || r.created_at))
+                            .reduce((acc, r) => acc + Number(r.amount || 0), 0);
 
-                        const licenseRev = filteredPayments.filter(p => {
-                            const d = new Date(p.created_at);
-                            return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type !== 'event_entry_fee';
-                        }).reduce((acc, curr) => acc + Number(curr.amount), 0);
+                        const licenseRev = monthPayments.filter(p => !isEntryRow(p))
+                            .reduce((acc, curr) => acc + Number(curr.amount), 0);
+                        const entryRev = monthPayments.filter(isEntryRow)
+                            .reduce((acc, curr) => acc + Number(curr.amount), 0) - monthRefunds;
 
-                        const entryRev = filteredPayments.filter(p => {
-                            const d = new Date(p.created_at);
-                            return d.getMonth() === i && d.getFullYear() === currentYear && p.payment_type === 'event_entry_fee';
-                        }).reduce((acc, curr) => acc + Number(curr.amount), 0);
-
-                        return { name: m, revenue: monthRev, licenses: licenseRev, entries: entryRev };
+                        return {
+                            name: m,
+                            revenue: Math.max(0, licenseRev + entryRev),
+                            licenses: licenseRev,
+                            entries: Math.max(0, entryRev),
+                        };
                     });
                     setChartData(monthlyData);
                 }

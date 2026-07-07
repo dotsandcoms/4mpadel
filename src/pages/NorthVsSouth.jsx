@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
+import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
 import { MapPin, Calendar, Trophy, Users, ChevronRight, ChevronDown, ExternalLink, Shield, ArrowRight, Quote, X, Instagram, User, Music, Camera, Star, Activity, CheckCircle2, Clock, LayoutGrid, List, Edit3, Save } from 'lucide-react';
 import { useAdminPermissions } from '../hooks/useAdminPermissions';
@@ -1133,9 +1134,9 @@ const NorthVsSouth = () => {
   };
 
   useEffect(() => {
-    supabase.from('players').select('name, image_url').then(({ data }) => {
-      if (data) setDbPlayers(data);
-    });
+    fetchAllRows(() => supabase.from('players').select('name, image_url').order('id', { ascending: true }))
+      .then((data) => { if (data) setDbPlayers(data); })
+      .catch(() => {});
   }, []);
 
   const findDbPlayer = (name) => dbPlayers.find(p => p.name?.toLowerCase() === name.toLowerCase());

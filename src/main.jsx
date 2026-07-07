@@ -18,13 +18,13 @@ if (import.meta.env.DEV) {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <ErrorBoundary>
-      <HelmetProvider>
-        <SEOProvider supabase={supabase}>
+      <SEOProvider supabase={supabase}>
+        <HelmetProvider>
           <BrowserRouter>
             <App />
           </BrowserRouter>
-        </SEOProvider>
-      </HelmetProvider>
+        </HelmetProvider>
+      </SEOProvider>
     </ErrorBoundary>
   </StrictMode>,
 )

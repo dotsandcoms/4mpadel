@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard, Briefcase } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useRankedin } from '../../hooks/useRankedin';
 import EventBuilder from './EventBuilder';
@@ -396,6 +396,27 @@ const CalendarManager = () => {
         } catch (error) {
             console.error('Error toggling visibility:', error);
             toast.error('Failed to update visibility');
+        }
+    };
+
+    const toggleFinanceManaged = async (event) => {
+        try {
+            const newValue = !event.finance_managed;
+            const { error } = await supabase
+                .from('calendar')
+                .update({ finance_managed: newValue })
+                .eq('id', event.id);
+
+            if (error) throw error;
+
+            // Optimistic update
+            setEvents(prev => prev.map(e => e.id === event.id ? { ...e, finance_managed: newValue } : e));
+            toast.success(newValue
+                ? `${event.event_name} added to Finance Management`
+                : `${event.event_name} removed from Finance Management`);
+        } catch (error) {
+            console.error('Error toggling finance management:', error);
+            toast.error('Failed to update finance management');
         }
     };
 
@@ -1095,7 +1116,7 @@ const CalendarManager = () => {
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="League">L</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Homepage Featured">★</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Spotlight Event">🌟</th>
-                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Live Event Featured">📺</th>
+                                <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Finance Management">💼</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Price Set">💳</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Recent Results Featured">🏆</th>
                                 <th className="py-3 px-4 font-semibold text-xs uppercase text-center text-gray-500 sticky top-0 bg-[#111827]" title="Visible on Website">👁️</th>
@@ -1165,11 +1186,13 @@ const CalendarManager = () => {
                                             )}
                                         </td>
                                         <td className="py-3 px-4 align-middle text-center">
-                                            {event.featured_live ? (
-                                                <PlayCircle className="w-4 h-4 text-purple-400 fill-purple-400/20 mx-auto" title="Live Featured" />
-                                            ) : (
-                                                <PlayCircle className="w-4 h-4 text-gray-600 mx-auto" />
-                                            )}
+                                            <button
+                                                onClick={() => toggleFinanceManaged(event)}
+                                                className={`p-1 rounded-md transition-colors ${event.finance_managed ? 'text-padel-green bg-padel-green/10' : 'text-gray-600 hover:text-gray-400'}`}
+                                                title={event.finance_managed ? 'Finance managed — click to remove from Finance Management' : 'Click to add to Finance Management'}
+                                            >
+                                                <Briefcase className="w-4 h-4 mx-auto" />
+                                            </button>
                                         </td>
                                         <td className="py-3 px-4 align-middle text-center">
                                             {(event.entry_fee != null && event.entry_fee !== '') || (event.category_fees && Object.keys(event.category_fees).length > 0) ? (

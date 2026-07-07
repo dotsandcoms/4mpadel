@@ -40,8 +40,22 @@ self.addEventListener('fetch', (event) => {
   // Only cache GET requests
   if (event.request.method !== 'GET') return;
 
-  // Skip supabase/analytics/api queries to avoid caching dynamic live database requests
   const url = new URL(event.request.url);
+
+  // Never intercept local dev or Vite tooling requests
+  if (
+    url.hostname === 'localhost' ||
+    url.hostname === '127.0.0.1' ||
+    url.pathname.startsWith('/@vite/') ||
+    url.pathname.startsWith('/@fs/') ||
+    url.pathname.startsWith('/@id/') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.includes('/node_modules/.vite/')
+  ) {
+    return;
+  }
+
+  // Skip supabase/analytics/api queries to avoid caching dynamic live database requests
   if (
     url.hostname.includes('supabase') || 
     url.hostname.includes('google-analytics') || 
@@ -91,9 +105,7 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => {
-          // Silent catch for offline fetch failures
-        });
+        .catch(() => cachedResponse);
 
       return cachedResponse || fetchPromise;
     })

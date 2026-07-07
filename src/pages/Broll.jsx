@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { MapPin, Loader, AlertCircle, Calendar as CalendarIcon, ArrowRight, Users, ExternalLink, Award, Building2, TrendingUp, Trophy, Target, BarChart3, Medal, PlayCircle, Video, Search, ChevronLeft, ChevronRight, X, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { fetchAllRows } from '../utils/fetchAllRows';
 import { Link } from 'react-router-dom';
 import { useRankedin } from '../hooks/useRankedin';
 import { getEventImage } from '../utils/imageUtils';
@@ -70,10 +71,11 @@ const Broll = () => {
     // Fetch local player profiles once rankings load (reusing logic from Rankings.jsx)
     useEffect(() => {
         const fetchLocalProfiles = async () => {
-            const { data } = await supabase
+            const data = await fetchAllRows(() => supabase
                 .from('players')
                 .select('*')
-                .eq('approved', true);
+                .eq('approved', true)
+                .order('id', { ascending: true })).catch(() => null);
 
             if (data) {
                 const map = {};

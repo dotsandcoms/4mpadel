@@ -30,13 +30,23 @@ const Players = () => {
         setUserEmail(session.user.email);
       }
 
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('approved', true)
-        .eq('paid_registration', true)
-        .eq('license_type', 'full')
-        .order('points', { ascending: false });
+      // All registered (approved) players — paginated, since supabase caps
+      // un-ranged selects at 1000 rows.
+      const PAGE = 1000;
+      const data = [];
+      let error = null;
+      for (let from = 0; ; from += PAGE) {
+        const { data: page, error: pageError } = await supabase
+          .from('players')
+          .select('*')
+          .eq('approved', true)
+          .order('points', { ascending: false })
+          .order('id', { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (pageError) { error = pageError; break; }
+        data.push(...(page || []));
+        if (!page || page.length < PAGE) break;
+      }
 
 
       if (!error && data) {
@@ -160,7 +170,7 @@ const Players = () => {
           </div>
 
           <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-            <strong className="text-white font-medium">Meet the elite talent driving the sport forward.</strong> <span className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mt-1 mb-2 md:mb-8 font-medium tracking-wide block sm:inline">-*Only players holding a valid Player's License are listed</span>
+            <strong className="text-white font-medium">Meet the talent driving the sport forward.</strong> <span className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mt-1 mb-2 md:mb-8 font-medium tracking-wide block sm:inline">- All registered 4M Padel players are listed</span>
           </p>
         </section>
 

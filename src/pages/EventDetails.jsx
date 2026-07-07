@@ -3,8 +3,9 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { supabase } from '../supabaseClient';
+import { fetchAllRows } from '../utils/fetchAllRows';
 import { useRankedin } from '../hooks/useRankedin';
-import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Loader, Phone, Mail, Globe, Share2, ArrowLeft, ArrowRight, X, CheckCircle, CreditCard, Cloud, CloudRain, CloudLightning, CloudSnow, GitBranch, PlayCircle, Play, ImageIcon, ChevronDown, ChevronUp, FileText, User, Users, UserPlus, Trophy, AlertCircle, Heart, ChevronRight, Gift, Award, Layout, Circle, Check, Clock, Crown, Coins, Grid2x2 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import PaystackPop from '@paystack/inline-js';
 import { toPaystackAmount, FEES } from '../constants/fees';
@@ -35,6 +36,25 @@ const divisionsMatch = (a, b) => {
     if (!na || !nb) return false;
     return na === nb || na.includes(nb) || nb.includes(na);
 };
+
+/** Tier-aware gradient + shine for the hero "Registered" status chip */
+const getRegisteredStatusStyle = (theme) => {
+    const isLightText = theme.primaryText.includes('text-white');
+    const fill = theme.fill;
+    return {
+        background: `linear-gradient(145deg, color-mix(in srgb, ${fill} 68%, white 32%) 0%, ${fill} 50%, color-mix(in srgb, ${fill} 82%, black 18%) 100%)`,
+        borderColor: fill,
+        color: isLightText ? '#ffffff' : '#0F172A',
+        boxShadow: `inset 0 1px 0 rgba(255,255,255,${isLightText ? 0.28 : 0.45}), 0 2px 12px color-mix(in srgb, ${fill} 40%, transparent)`,
+    };
+};
+
+const registeredStatusShineClass = (theme) =>
+    theme.primaryText.includes('text-white')
+        ? 'pointer-events-none absolute inset-0 bg-gradient-to-b from-white/22 via-white/6 to-transparent rounded-xl'
+        : 'pointer-events-none absolute inset-0 bg-gradient-to-b from-white/38 via-white/12 to-transparent rounded-xl';
+
+const REGISTERED_STATUS_CLASS = 'relative overflow-hidden flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border';
 
 const getManualEntryPaymentLabel = (reg, userEmail) => {
     if (reg.payment_status !== 'paid') return 'Payment pending';
@@ -93,6 +113,97 @@ const CountUp = ({ end, duration = 1.5 }) => {
     }, [end, duration]);
 
     return <span>{count.toLocaleString()}</span>;
+};
+
+const EventSponsorStrip = ({ logos }) => {
+    if (!logos?.length) return null;
+    return (
+        <div className="flex flex-wrap items-center justify-start gap-5 sm:gap-8 mb-2">
+            {logos.map((logo, i) => (
+                <img
+                    key={`${logo}-${i}`}
+                    src={logo}
+                    alt=""
+                    className="h-9 sm:h-11 w-auto max-w-[150px] object-contain"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+            ))}
+        </div>
+    );
+};
+
+// mode: 'closes' (counts down to registration close) or 'opens' (counts down to registration opening)
+const RegistrationCountdown = ({ closesAt, accentColor = '#CCFF00', mode = 'closes' }) => {
+    const [now, setNow] = useState(() => Date.now());
+
+    useEffect(() => {
+        if (!closesAt) return undefined;
+        const id = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(id);
+    }, [closesAt]);
+
+    if (!closesAt) return null;
+
+    const closeDate = new Date(closesAt);
+    if (Number.isNaN(closeDate.getTime())) return null;
+
+    const diff = closeDate.getTime() - now;
+    const isClosed = diff <= 0;
+    const label = mode === 'opens'
+        ? `Registration ${isClosed ? 'open' : 'opens'}`
+        : `Registration ${isClosed ? 'closed' : 'closes'}`;
+    const parts = isClosed
+        ? { days: 0, hours: 0, mins: 0, secs: 0 }
+        : {
+            days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+            hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+            mins: Math.floor((diff / (1000 * 60)) % 60),
+            secs: Math.floor((diff / 1000) % 60),
+        };
+
+    const formattedDate = closeDate.toLocaleDateString('en-ZA', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+
+    const pad = (n) => String(n).padStart(2, '0');
+
+    return (
+        <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-4 flex items-center gap-4">
+            <div
+                className="w-11 h-11 rounded-full flex items-center justify-center shrink-0 border"
+                style={{ backgroundColor: `${accentColor}20`, borderColor: `${accentColor}40` }}
+            >
+                <Clock className="w-5 h-5" style={{ color: accentColor }} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-white/60 mb-0.5">
+                    {label}
+                </p>
+                <p className="text-sm font-bold leading-tight truncate" style={{ color: accentColor }}>
+                    {formattedDate}
+                </p>
+            </div>
+            {!isClosed && (
+                <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    {[
+                        { value: pad(parts.days), label: 'DAYS' },
+                        { value: pad(parts.hours), label: 'HRS' },
+                        { value: pad(parts.mins), label: 'MINS' },
+                        { value: pad(parts.secs), label: 'SECS' },
+                    ].map(({ value, label }) => (
+                        <div key={label} className="text-center min-w-[2rem]">
+                            <p className="text-base sm:text-lg font-bold text-white leading-none tabular-nums">{value}</p>
+                            <p className="text-[8px] sm:text-[9px] font-bold text-white/50 tracking-wider mt-0.5">{label}</p>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
 };
 
 const extractRankedinId = (url) => {
@@ -532,6 +643,21 @@ const EventDetails = () => {
         });
     }, [event]);
 
+    const eventSponsorLogos = useMemo(() => {
+        const logos = event?.sponsor_logos;
+        if (!Array.isArray(logos)) return [];
+        return logos.filter((url) => typeof url === 'string' && url.trim());
+    }, [event?.sponsor_logos]);
+
+    const computedEventStatus = useMemo(() => {
+        if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
+        if (isEventPassed) return 'Completed';
+        if (isLive) return 'Live Today';
+        if (registrationNotYetOpen) return `Reg. Opens ${registrationOpensLabel}`;
+        if (registrationClosed) return 'Registration Closed';
+        return 'Registration Open';
+    }, [event?.status, isEventPassed, isLive, registrationNotYetOpen, registrationOpensLabel, registrationClosed]);
+
     const stripHtml = (html) => {
         if (!html) return '';
         const tmp = document.createElement('DIV');
@@ -543,7 +669,6 @@ const EventDetails = () => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCalendarMenuOpen, setIsCalendarMenuOpen] = useState(false);
     const calendarMenuRef = useRef(null);
-    const [posterPreviewOpen, setPosterPreviewOpen] = useState(false);
     const [regStep, setRegStep] = useState(1); // 1: Form, 2: Success/Payment
     const [loggedInPlayer, setLoggedInPlayer] = useState(null);
     const [isRegistered, setIsRegistered] = useState(false);
@@ -708,6 +833,7 @@ const EventDetails = () => {
 
     const theme = getTierTheme();
     const registerNowStyle = { color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' };
+    const registeredStatusStyle = getRegisteredStatusStyle(theme);
     const { promptMembersOnly } = useMembersOnly();
 
     // Resolve the effective logged-in (or impersonated) user email for manual-event registration.
@@ -1736,12 +1862,13 @@ const EventDetails = () => {
     useEffect(() => {
         const fetchFourMPlayers = async () => {
             try {
-                const { data, error } = await supabase
+                const data = await fetchAllRows(() => supabase
                     .from('players')
                     .select('name, rankedin_id, image_url')
-                    .not('image_url', 'is', null);
+                    .not('image_url', 'is', null)
+                    .order('id', { ascending: true }));
 
-                if (data && !error) {
+                if (data) {
                     const lookup = {};
                     data.forEach(p => {
                         if (p.rankedin_id) lookup[p.rankedin_id] = p.image_url;
@@ -2691,7 +2818,6 @@ const EventDetails = () => {
     };
 
     const heroBackgroundUrl = getDefaultEventBackground(event);
-    const eventPosterUrl = event.custom_image_url || event.image_url || '';
 
     const renderCalendarButton = (wrapperClass = '', iconOnly = false) => (
         <div ref={calendarMenuRef} className={`relative ${wrapperClass}`}>
@@ -3034,10 +3160,22 @@ const EventDetails = () => {
                         <img
                             src={heroBackgroundUrl}
                             alt={event.event_name}
-                            className="w-full h-full object-cover object-center animate-fade-in"
+                            className="w-full h-full object-cover object-center animate-hero-zoom saturate-[1.35] contrast-[1.12] brightness-[1.06]"
                         />
+                        {/* Tier-coloured ambience lifting the artwork */}
+                        <div
+                            className="absolute inset-0 mix-blend-overlay pointer-events-none"
+                            style={{ background: `radial-gradient(ellipse at 50% -10%, ${theme.fill}66, transparent 62%)` }}
+                        />
+                        {/* Soft vignette pulling focus to the centre */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
                         {/* Gradient overlay for blending and text readability (fading to blue) */}
-                        <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-[#0F172A]/60 to-[#0F172A]" />
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#0F172A]/40 to-[#0F172A]" />
+                        {/* Tier accent glow rising from the fade line */}
+                        <div
+                            className="absolute bottom-0 left-0 right-0 h-28 pointer-events-none"
+                            style={{ background: `linear-gradient(to top, ${theme.fill}2e, transparent)` }}
+                        />
                     </div>
 
                     {/* Live badge */}
@@ -3050,321 +3188,199 @@ const EventDetails = () => {
                     )}
 
                     {/* Hero text overlay & Action Buttons */}
-                    <div className={`relative z-50 pb-10 ${eventPosterUrl ? 'pt-[36vw] sm:pt-[215px]' : 'pt-[38vw] sm:pt-[250px]'}`}>
+                    <div className="relative z-50 pb-10 pt-[38vw] sm:pt-[250px]">
                         <div className="max-w-5xl mx-auto px-5 w-full relative">
-                            {eventPosterUrl ? (
-                                <>
-                                    <div className="flex gap-3 sm:gap-4 items-end w-full mt-2 relative z-20">
-                                        <div className="flex-1 min-w-0 flex flex-col">
-                                            <EventHeroBranding event={event} theme={theme} />
-                                            <h1 className="text-xl sm:text-2xl md:text-4xl font-bold text-white leading-tight mb-2 drop-shadow-lg md:max-w-md lg:max-w-lg">
-                                                {event.event_name}
-                                            </h1>
-                                            <div className="flex items-center gap-2 text-white/90 text-sm font-normal mb-4">
-                                                <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
-                                                <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
-                                            </div>
-                                            <div className="flex gap-2 w-full">
-                                                {(() => {
-                                                    const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                                    if (event.is_manual) {
-                                                        if (!isEventPassed) {
-                                                            if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
-                                                                return (
-                                                                    <div
-                                                                        className="flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
-                                                                        style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                                        aria-label="Registered for this event"
-                                                                    >
-                                                                        <CheckCircle className="w-4 h-4 shrink-0" />
-                                                                        <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                                    </div>
-                                                                );
-                                                            }
-                                                            if (manualRegStatus.hasPendingPayment) {
-                                                                return (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={openManualPayFlow}
-                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                                    >
-                                                                        <CreditCard className="w-4 h-4" />
-                                                                        Pay Entry
-                                                                    </button>
-                                                                );
-                                                            }
-                                                            return (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={openManualRegistration}
-                                                                    className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                                    style={registerNowStyle}
-                                                                >
-                                                                    Register Now <ArrowRight className="w-4 h-4" />
-                                                                </button>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    }
-                                                    if (!isEventPassed) {
-                                                        if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
-                                                            return (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                                    className={`flex-1 flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
-                                                                    style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                                >
-                                                                    <CheckCircle className="w-4 h-4 shrink-0" />
-                                                                    <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                                </button>
-                                                            );
-                                                        }
-                                                        return (
-                                                            <>
-                                                                {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={handleRankedinRedirect}
-                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                                        style={registerNowStyle}
-                                                                    >
-                                                                        Register Now <ArrowRight className="w-4 h-4" />
-                                                                    </button>
-                                                                )}
-                                                                {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={openRegistrationModal}
-                                                                        className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                                    >
-                                                                        <CreditCard className="w-4 h-4" />
-                                                                        Pay Fee
-                                                                    </button>
-                                                                )}
-                                                            </>
-                                                        );
-                                                    }
-                                                    if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                                        return (
-                                                            <Link
-                                                                to={`/draws/${event.slug || rId}`}
-                                                                className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                            >
-                                                                <GitBranch className="w-4 h-4" />
-                                                                Draws & Results
-                                                            </Link>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })()}
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPosterPreviewOpen(true)}
-                                            className="shrink-0 w-[5.5rem] sm:w-24 md:w-32 lg:w-36 aspect-[3/4] rounded-xl overflow-hidden border-2 border-white/40 shadow-2xl hover:scale-105 transition-transform bg-[#0F172A] mb-0.5"
-                                            aria-label="View event poster"
-                                        >
-                                            <img
-                                                src={eventPosterUrl}
-                                                alt="Event poster preview"
-                                                className="w-full h-full object-cover"
-                                            />
-                                        </button>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="w-full flex flex-col md:items-center md:text-center mt-2">
-                                    <EventHeroBranding event={event} theme={theme} centered />
-                                    <h1 className="text-3xl md:text-5xl font-bold text-white leading-tight mb-3 drop-shadow-lg w-full md:text-center text-left md:max-w-3xl md:mx-auto">
-                                        {event.event_name}
-                                    </h1>
+                            <div className="w-full flex flex-col mt-2">
+                                {/* Sponsor logos hidden for now — re-enable with:
+                                    <EventSponsorStrip logos={eventSponsorLogos} /> */}
 
-                                    <div className="flex items-center gap-3 text-white/90 text-sm font-normal mb-8 md:justify-center w-full">
-                                        <CalendarIcon className="w-5 h-5 text-white/70 shrink-0" />
-                                        <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
-                                    </div>
+                                <div className="w-full flex flex-col gap-1">
+                                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
+                                    {event.event_name}
+                                </h1>
 
-                                    {/* Action Buttons Row */}
-                                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3 w-full sm:w-auto relative">
-                                        {(() => {
-                                            const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
-                                            if (event.is_manual) {
-                                                if (!isEventPassed) {
-                                                    if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
-                                                        return (
-                                                            <div
-                                                                className="w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border cursor-default select-none"
-                                                                style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
-                                                                aria-label="Registered for this event"
-                                                            >
+                                {event.organizer_badge_text?.trim() && (
+                                    <p
+                                        className="text-2xl sm:text-3xl md:text-4xl font-bold uppercase tracking-wide drop-shadow-md leading-tight"
+                                        style={{ color: theme.fill }}
+                                    >
+                                        {event.organizer_badge_text.trim()}
+                                    </p>
+                                )}
+
+                                <div className="flex items-center gap-2 text-white/90 text-sm font-normal pt-0.5">
+                                    <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
+                                    <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-2 w-full mt-3 mb-0">
+                                    {(() => {
+                                        const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                        if (event.is_manual) {
+                                            if (!isEventPassed) {
+                                                if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
+                                                    return (
+                                                        <div
+                                                            className={`${REGISTERED_STATUS_CLASS} flex-1 min-w-[calc(50%-0.5rem)] cursor-default select-none`}
+                                                            style={registeredStatusStyle}
+                                                            aria-label="Registered for this event"
+                                                        >
+                                                            <span className={registeredStatusShineClass(theme)} aria-hidden />
+                                                            <span className="relative z-10 flex items-center justify-center gap-2 w-full">
                                                                 <CheckCircle className="w-4 h-4 shrink-0" />
                                                                 <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                            </div>
-                                                        );
-                                                    }
-                                                    if (manualRegStatus.hasPendingPayment) {
-                                                        return (
-                                                            <button
-                                                                type="button"
-                                                                onClick={openManualPayFlow}
-                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                            >
-                                                                <CreditCard className="w-4 h-4" />
-                                                                Pay Entry
-                                                            </button>
-                                                        );
-                                                    }
+                                                            </span>
+                                                        </div>
+                                                    );
+                                                }
+                                                if (manualRegStatus.hasPendingPayment) {
                                                     return (
                                                         <button
                                                             type="button"
-                                                            onClick={openManualRegistration}
-                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
-                                                            style={registerNowStyle}
+                                                            onClick={openManualPayFlow}
+                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
                                                         >
-                                                            Register Now <ArrowRight className="w-4 h-4" />
+                                                            <CreditCard className="w-4 h-4" />
+                                                            Pay Entry
                                                         </button>
                                                     );
                                                 }
-                                                return null;
-                                            }
-                                            if (!isEventPassed) {
-                                                if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                if (registrationNotYetOpen) {
                                                     return (
                                                         <button
-                                                            onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                            className={`w-1/2 flex-1 sm:flex-none flex items-center justify-center gap-2 px-2 py-3.5 rounded-xl border ${!isLive ? 'hover:opacity-80 transition-opacity cursor-pointer' : 'opacity-80 cursor-default'}`}
-                                                            style={{ backgroundColor: theme.fill, borderColor: theme.fill, color: '#0F172A' }}
+                                                            type="button"
+                                                            disabled
+                                                            className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold bg-white/10 border border-white/15 text-white/60 cursor-not-allowed"
                                                         >
-                                                            <CheckCircle className="w-4 h-4 shrink-0" />
-                                                            <span className="text-xs font-semibold tracking-normal truncate">{isLive ? 'Registered' : 'Registered'}</span>
+                                                            <Clock className="w-4 h-4" />
+                                                            Registration Opening Soon
                                                         </button>
                                                     );
                                                 }
                                                 return (
-                                                    <>
-                                                        {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={openManualRegistration}
+                                                        className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                        style={registerNowStyle}
+                                                    >
+                                                        Register Now <ArrowRight className="w-4 h-4" />
+                                                    </button>
+                                                );
+                                            }
+                                            return null;
+                                        }
+                                        if (!isEventPassed) {
+                                            if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                return (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
+                                                        className={`${REGISTERED_STATUS_CLASS} flex-1 min-w-[calc(50%-0.5rem)] ${!isLive ? 'hover:opacity-90 transition-opacity cursor-pointer' : 'opacity-90 cursor-default'}`}
+                                                        style={registeredStatusStyle}
+                                                    >
+                                                        <span className={registeredStatusShineClass(theme)} aria-hidden />
+                                                        <span className="relative z-10 flex items-center justify-center gap-2 w-full">
+                                                            <CheckCircle className="w-4 h-4 shrink-0" />
+                                                            <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
+                                                        </span>
+                                                    </button>
+                                                );
+                                            }
+                                            return (
+                                                <>
+                                                    {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                        registrationNotYetOpen ? (
+                                                            <button
+                                                                type="button"
+                                                                disabled
+                                                                className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold bg-white/10 border border-white/15 text-white/60 cursor-not-allowed"
+                                                            >
+                                                                <Clock className="w-4 h-4" />
+                                                                Registration Opening Soon
+                                                            </button>
+                                                        ) : (
                                                             <button
                                                                 type="button"
                                                                 onClick={handleRankedinRedirect}
-                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
+                                                                className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold ${theme.primary} ${theme.glow}`}
                                                                 style={registerNowStyle}
                                                             >
                                                                 Register Now <ArrowRight className="w-4 h-4" />
                                                             </button>
-                                                        )}
-                                                        {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
-                                                            <button
-                                                                onClick={openRegistrationModal}
-                                                                className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                            >
-                                                                <CreditCard className="w-4 h-4" />
-                                                                Pay Fee
-                                                            </button>
-                                                        )}
-                                                    </>
-                                                );
-                                            } else if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                                return (
-                                                    <Link
-                                                        to={`/draws/${event.slug || rId}`}
-                                                        className={`flex-1 min-w-[calc(50%-0.5rem)] sm:min-w-0 sm:flex-none flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 sm:px-6 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
-                                                        style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                                                    >
-                                                        <GitBranch className="w-4 h-4" />
-                                                        Draws & Results
-                                                    </Link>
-                                                );
-                                            }
-                                            return null;
-                                        })()}
-                                    </div>
+                                                        )
+                                                    )}
+                                                    {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={openRegistrationModal}
+                                                            className={`flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                            style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                        >
+                                                            <CreditCard className="w-4 h-4" />
+                                                            Pay Fee
+                                                        </button>
+                                                    )}
+                                                </>
+                                            );
+                                        }
+                                        if ((hasResults || hasDraw) && (rId || event.slug)) {
+                                            return (
+                                                <Link
+                                                    to={`/draws/${event.slug || rId}`}
+                                                    className={`w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all ${theme.primary} ${theme.glow}`}
+                                                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                                                >
+                                                    <GitBranch className="w-4 h-4" />
+                                                    Draws & Results
+                                                </Link>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
-                            )}
+
+                                {/* Quick Stats */}
+                                <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden flex divide-x divide-white/10">
+                                    <div className="flex-1 py-4 px-1 flex flex-col items-center justify-center text-center min-w-0">
+                                        <CheckCircle className="w-4 h-4 mb-1" style={{ color: theme.fill }} />
+                                        <p className="text-[9px] font-bold uppercase tracking-wider text-white/50 mb-1">Status</p>
+                                        <p className="text-[11px] sm:text-xs font-semibold leading-tight px-1" style={{ color: theme.fill }}>
+                                            {computedEventStatus}
+                                        </p>
+                                    </div>
+                                    {[
+                                        { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
+                                        { label: 'Points', value: event.points || '1000', icon: Trophy },
+                                        { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Grid2x2 },
+                                        { label: 'Entry Fee', value: entryFeeStatLabel, sublabel: entryFeeStatLabel !== '-' ? 'PER PLAYER' : null, icon: Coins },
+                                    ].map(({ label, value, sublabel, icon: Icon }, idx) => (
+                                        <div key={idx} className="flex-1 py-4 px-1 flex flex-col items-center justify-center text-center min-w-0">
+                                            <Icon className="w-4 h-4 mb-1" style={{ color: theme.fill }} />
+                                            <p className="text-sm sm:text-base font-bold text-white leading-tight tabular-nums">{value}</p>
+                                            {sublabel && (
+                                                <p className="text-[8px] font-bold uppercase tracking-wider text-white/40 mt-0.5">{sublabel}</p>
+                                            )}
+                                            <p className="text-[9px] font-bold uppercase tracking-wider text-white/50 mt-0.5">{label}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <RegistrationCountdown
+                                    closesAt={registrationNotYetOpen ? event.registration_opens_at : event.registration_closes_at}
+                                    mode={registrationNotYetOpen ? 'opens' : 'closes'}
+                                    accentColor={theme.fill}
+                                />
+                            </div>
                         </div>
                     </div>
-
-                    <AnimatePresence>
-                        {posterPreviewOpen && eventPosterUrl && (
-                            <motion.div
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                className="fixed inset-0 z-[200] bg-black/90 flex items-center justify-center p-4"
-                                onClick={() => setPosterPreviewOpen(false)}
-                            >
-                                <button
-                                    type="button"
-                                    onClick={() => setPosterPreviewOpen(false)}
-                                    className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-                                    aria-label="Close poster preview"
-                                >
-                                    <X className="w-5 h-5" />
-                                </button>
-                                <motion.img
-                                    initial={{ scale: 0.95, opacity: 0 }}
-                                    animate={{ scale: 1, opacity: 1 }}
-                                    exit={{ scale: 0.95, opacity: 0 }}
-                                    src={eventPosterUrl}
-                                    alt={`${event.event_name} poster`}
-                                    className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
-                                    onClick={(e) => e.stopPropagation()}
-                                />
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
                 </div>
 
                 {/* ── WHITE BACKGROUND AREA ── */}
                 <div className="bg-white -mt-6 relative z-30 pt-6 px-4 pb-6">
                     <div className="max-w-5xl mx-auto flex flex-col gap-6">
-
-                        {/* Quick Stats Card */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex divide-x divide-gray-100">
-                            {/* Status block (Custom Style) */}
-                            {(() => {
-                                const computedStatus = (() => {
-                                    if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
-                                    if (isEventPassed) return 'Completed';
-                                    if (isLive) return 'Live Today';
-                                    if (registrationNotYetOpen) return `Reg. Opens ${registrationOpensLabel}`;
-                                    if (registrationClosed) return 'Registration Closed';
-                                    return 'Registration Open';
-                                })();
-                                return (
-                                    <div className={`flex-1 py-4 flex flex-col items-center justify-center text-center ${theme.accentBg.split(' ')[0]}`}>
-                                        <div className={`flex items-center justify-center gap-1.5 ${theme.accentText} font-medium text-[10px] tracking-wide uppercase mb-1`}>
-                                            <AlertCircle className="w-3.5 h-3.5" />
-                                            STATUS
-                                        </div>
-                                        <div className="text-[13px] font-medium text-[#0F172A] leading-tight px-2">
-                                            {computedStatus}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                            {[
-                                { label: 'Entries', value: event.is_manual ? manualEntriesCount : totalPlayersCount, icon: Users },
-                                { label: 'Entry Fee', value: entryFeeStatLabel, icon: CreditCard },
-                                { label: 'Divisions', value: event.is_manual ? playerDivisions.length : (playerDivisions.length > 0 ? playerDivisions.length : (tournamentClasses.length || event.allowed_divisions?.length || 0)), icon: Layout },
-                                { label: 'Points', value: event.points || '1000', icon: Trophy }
-                            ].map(({ label, value, icon: Icon }, idx) => (
-                                <div key={idx} className="flex-1 py-4 flex flex-col items-center justify-center text-center">
-                                    <div className="w-6 h-6 rounded-full flex items-center justify-center mb-1">
-                                        <Icon className={`w-4 h-4 ${theme.accentText}`} />
-                                    </div>
-                                    <p className="text-base font-semibold text-slate-900 leading-tight">{value}</p>
-                                    <p className="text-[10px] text-slate-500 font-normal">{label}</p>
-                                </div>
-                            ))}
-                        </div>
-
                         {/* Registration Status (If any) */}
                         {(activeRegistrationBlock || readyToCompeteBlock) && (
                             <div className="relative z-[60]">
@@ -3441,14 +3457,7 @@ const EventDetails = () => {
                                             <InfoSection title="Event Information" icon={FileText} accent={theme.fill} defaultOpen={false}>
                                                 <div className="divide-y divide-gray-50 -mx-6 -my-5 border-t border-gray-50">
                                                     {(() => {
-                                                        const computedStatus = (() => {
-                                                            if (event?.status && event.status.toLowerCase() !== 'published' && event.status !== 'Date available' && event.status !== 'Date available offered to R&B') return event.status;
-                                                            if (isEventPassed) return 'Completed';
-                                                            if (isLive) return 'Live Today';
-                                                            if (registrationNotYetOpen) return `Reg. Opens ${registrationOpensLabel}`;
-                                                            if (registrationClosed) return 'Registration Closed';
-                                                            return 'Registration Open';
-                                                        })();
+                                                        const computedStatus = computedEventStatus;
 
                                                         return [
                                                             { label: 'Venue', value: event.venue || 'Virgin Active Padel Club', icon: MapPin },

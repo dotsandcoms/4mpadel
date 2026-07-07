@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { sendEmail } from '../../utils/emails';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -72,6 +73,7 @@ const CollapsibleSection = ({
 );
 
 const OrganisationManager = ({ permissions }) => {
+    const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('overview'); // overview, create-event, my-events
     const [orgEvents, setOrgEvents] = useState([]);
@@ -2227,6 +2229,19 @@ const OrganisationManager = ({ permissions }) => {
 
                             {/* Actions */}
                             <div className="pt-2 space-y-2">
+                                {selectedOrgDetails.status === 'approved' && selectedOrgDetails.slug && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const slug = selectedOrgDetails.slug;
+                                            setSelectedOrgDetails(null);
+                                            navigate(`/organisations/${slug}`);
+                                        }}
+                                        className="w-full py-3.5 bg-padel-green hover:bg-white text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                    >
+                                        <Eye size={14} /> View Organisation
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => setMembersOrg(selectedOrgDetails)}
                                     className="w-full py-3.5 bg-padel-green/10 hover:bg-padel-green hover:text-black border border-padel-green/20 text-padel-green font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
