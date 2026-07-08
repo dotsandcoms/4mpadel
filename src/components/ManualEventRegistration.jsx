@@ -300,7 +300,7 @@ const ProgressBar = ({ step, theme }) => (
     </div>
 );
 
-const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef }) => {
+const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null, fourMPlayers = {}, onStatusChange, onParticipantsChange, registrationActionsRef, highlightClassName = '' }) => {
     const navigate = useNavigate();
     const { promptMembersOnly } = useMembersOnly();
     const [divisions, setDivisions] = useState([]);
@@ -3739,7 +3739,7 @@ const ManualEventRegistration = ({ event, userEmail, theme, initialPlayer = null
     return (
         <>
             {/* Overview card on event page */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${highlightClassName}`}>
                 <div
                     onClick={() => setDivisionsBlockOpen((open) => !open)}
                     className="flex items-center justify-between px-6 py-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50/50 select-none transition-colors"

@@ -611,7 +611,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
 
     // Text content for the left/top side of the hero section
     const textContent = isGridSection ? (
-        <div className="relative z-10 flex items-center justify-between mb-6 md:mb-8">
+        <div className="relative z-10 flex items-center justify-between mb-3 md:mb-4">
             <h2 className={`text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate ${isFeatured ? 'text-black' : 'text-white/80'}`}>
                 {data.title}
             </h2>
@@ -938,7 +938,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     );
 
     return (
-        <section className={`relative py-6 lg:py-8 border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
+        <section className={`relative ${isGridSection ? 'py-3 lg:py-4' : 'py-6 lg:py-8'} border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
             <div className={`w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10`}>
                 {isGridSection ? (
                     <>
@@ -977,19 +977,11 @@ const FeaturedTournamentHero = ({ event }) => {
     const linkPath = `/calendar/${event.slug || event.id}`;
 
     return (
-        <section className="relative pt-0 pb-6 lg:pt-0 lg:pb-8 border-t border-white/5 bg-[#05070A]">
+        <section className="relative pt-4 pb-3 lg:pt-5 lg:pb-4 border-t border-white/5 bg-[#05070A]">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
-                        Event Spotlight
-                    </h2>
-                    <button
-                        onClick={() => navigate(linkPath)}
-                        className="flex items-center gap-1 text-[10px] md:text-xs font-medium uppercase tracking-widest text-[#CCFF00] hover:text-white transition-colors shrink-0"
-                    >
-                        View event <ArrowRight className="w-3 h-3" />
-                    </button>
-                </div>
+                <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80 mb-3">
+                    Event Spotlight
+                </h2>
 
                 <div
                     onClick={() => navigate(linkPath)}

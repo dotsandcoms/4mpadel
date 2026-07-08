@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import heroBg from '../assets/herobg.jpeg';
 import AuthModal from './AuthModal';
 import { supabase } from '../supabaseClient';
-import { PlayCircle, Calendar, ChevronLeft, ChevronRight, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, Bell } from 'lucide-react';
+import { PlayCircle, Calendar, ChevronLeft, ChevronRight, ChevronDown, CheckCircle2, ExternalLink, Trophy, MapPin, Swords, Star, BarChart2, Bell } from 'lucide-react';
 import VideoModal from './VideoModal';
 import { useRankedin } from '../hooks/useRankedin';
 import { usePendingPayments } from '../hooks/usePendingPayments';
@@ -68,6 +68,7 @@ const Hero = () => {
     const [scheduleTimeFilter, setScheduleTimeFilter] = useState('upcoming'); // 'upcoming' | 'past'
     const [pastEventSlide, setPastEventSlide] = useState(0);
     const [pastMatchSlide, setPastMatchSlide] = useState(0);
+    const [scheduleOpen, setScheduleOpen] = useState(true);
     const [player, setPlayer] = useState(null);
     const { getPlayerEventsAsync, getPlayerMatches, getPlayerProfile } = useRankedin();
 
@@ -858,9 +859,8 @@ const Hero = () => {
     return (
         <div className="relative w-full bg-black">
             <div
-                // Logged in: keep the tall hero — greeting, stats and My Schedule fill it.
-                // Logged out: hug the content so there's no dead space below the tagline.
-                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-center ${session ? 'min-h-[90vh] lg:min-h-[80vh]' : 'pb-8 lg:pb-12'}`}
+                // Hug content height — especially when My Schedule is collapsed.
+                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-start ${session ? 'pb-4 lg:pb-6' : 'pb-8 lg:pb-12'}`}
                 onMouseMove={handleMouseMove}
             >
                 {/* Solid base background — text sits on this, never on the photo */}
@@ -933,13 +933,13 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 flex flex-col flex-none justify-start pt-24 pb-2 lg:pt-28 lg:pb-4 px-4 lg:px-8 container mx-auto"
+                    className="relative z-20 flex flex-col flex-none justify-start pt-20 pb-2 lg:pt-24 lg:pb-4 px-4 lg:px-8 container mx-auto"
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.5, duration: 0.8 }}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit"
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-5 max-w-fit"
                     >
                         <Trophy className="w-3 h-3" />
                         <span>The Home of 4M Padel</span>
@@ -960,7 +960,7 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-[15rem] sm:max-w-sm md:max-w-md mb-8 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal"
+                        className={`text-gray-200 text-sm md:text-lg lg:text-xl max-w-[15rem] sm:max-w-sm md:max-w-md leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal ${session ? 'mb-4' : 'mb-8'}`}
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
@@ -1058,7 +1058,7 @@ const Hero = () => {
                     </motion.div>
                 </motion.div>
 
-                <div className="relative z-30 px-4 pb-0 lg:pb-0 mt-0 lg:mt-2 w-full lg:px-8 flex flex-col gap-2 container mx-auto">
+                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${scheduleOpen ? 'gap-2 pb-0' : 'pb-2'}`}>
 
                     <AnimatePresence>
                         {session && (hasScheduleContent || primaryScheduleNotification) && (
@@ -1081,7 +1081,27 @@ const Hero = () => {
                                 )}
                                 {hasScheduleContent && (
                                 <>
-                                <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em] px-1 mb-3">My Schedule</h2>
+                                <button
+                                    type="button"
+                                    onClick={() => setScheduleOpen((open) => !open)}
+                                    aria-expanded={scheduleOpen}
+                                    className={`flex w-full items-center justify-between px-1 text-left group ${scheduleOpen ? 'mb-3' : 'mb-0'}`}
+                                >
+                                    <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em]">My Schedule</h2>
+                                    <ChevronDown
+                                        size={16}
+                                        className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${scheduleOpen ? '' : '-rotate-90'}`}
+                                    />
+                                </button>
+                                <AnimatePresence initial={false}>
+                                {scheduleOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
                                 {/* Glass panel */}
                                 <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-4 md:p-5 shadow-2xl relative overflow-hidden border border-white/10">
                                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-0 relative z-10">
@@ -1226,6 +1246,9 @@ const Hero = () => {
 
                                     </div>
                                 </div>
+                                </motion.div>
+                                )}
+                                </AnimatePresence>
                                 </>
                                 )}
                             </motion.div>

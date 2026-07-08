@@ -3053,6 +3053,16 @@ const EventDetails = () => {
     const needsPayment = event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && (!isPaid || (isRegistered && !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))));
     const showReadyToCompete = false; // temporarily hidden: isRegistrationAllowed || needsPayment;
 
+    const shouldHighlightRegistration = Boolean(
+        activeRegistrationBlock
+        || (event.is_manual && (manualRegStatus.hasRegistrations || manualRegStatus.hasPendingPayment))
+    );
+    const registrationHighlightClass = shouldHighlightRegistration
+        ? (manualRegStatus?.hasPendingPayment || needsPayment)
+            ? '!shadow-[0_0_15px_rgba(245,158,11,0.4)] !border-amber-400'
+            : '!shadow-[0_0_15px_rgba(34,197,94,0.3)] !border-green-400'
+        : '';
+
     const readyToCompeteBlock = showReadyToCompete && (
         <div className="bg-[#0F172A] rounded-2xl p-5 shadow-lg border border-white/5 animate-fade-in">
             <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: theme.fill }}>Ready to compete?</p>
@@ -3378,37 +3388,6 @@ const EventDetails = () => {
                     </div>
                 </div>
 
-                {/* ── WHITE BACKGROUND AREA ── */}
-                <div className="bg-white -mt-6 relative z-30 pt-6 px-4 pb-6">
-                    <div className="max-w-5xl mx-auto flex flex-col gap-6">
-                        {/* Registration Status (If any) */}
-                        {(activeRegistrationBlock || readyToCompeteBlock) && (
-                            <div className="relative z-[60]">
-                                {(() => {
-                                    let accordionGlowClass = "";
-                                    if (activeRegistrationBlock || readyToCompeteBlock) {
-                                        const hasPendingAction = manualRegStatus?.hasPendingPayment || needsPayment;
-                                        if (hasPendingAction) {
-                                            accordionGlowClass = "!shadow-[0_0_15px_rgba(245,158,11,0.4)] !border-amber-400";
-                                        } else {
-                                            accordionGlowClass = "!shadow-[0_0_15px_rgba(34,197,94,0.3)] !border-green-400";
-                                        }
-                                    }
-
-                                    return (
-                                        <InfoSection title="Registration" icon={CheckCircle} accent={theme.fill} defaultOpen={false} className={accordionGlowClass}>
-                                            <div className="-mx-1 -my-1">
-                                                {activeRegistrationBlock ? activeRegistrationBlock : readyToCompeteBlock}
-                                            </div>
-                                        </InfoSection>
-                                    );
-                                })()}
-                            </div>
-                        )}
-
-                    </div>
-                </div>
-
                 {/* ── TAB BAR ── */}
                 <div className="bg-white border-b border-gray-100 sticky top-0 z-40 shadow-sm px-4">
                     <div className="max-w-5xl mx-auto flex justify-between w-full overflow-x-auto no-scrollbar">
@@ -3450,6 +3429,71 @@ const EventDetails = () => {
                             {/* ══ OVERVIEW TAB ══ */}
                             {activeTab === 'overview' && (
                                 <div className="flex flex-col gap-6">
+                                    {event.is_manual && registrationNotYetOpen && (
+                                        <div id="manual-registration" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                                            <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
+                                                <Clock className="w-6 h-6 text-gray-400" />
+                                            </div>
+                                            <h3 className="text-lg font-bold text-[#0F172A]">Registration Not Open Yet</h3>
+                                            <p className="text-sm text-gray-500 mt-1.5">
+                                                Entries for this event open on <span className="font-bold text-[#0F172A]">{registrationOpensLabel}</span>. Check back then!
+                                            </p>
+                                        </div>
+                                    )}
+                                    {event.is_manual && !registrationNotYetOpen && (
+                                        <div id="manual-registration">
+                                            <ManualEventRegistration
+                                                event={event}
+                                                userEmail={manualUserEmail}
+                                                theme={theme}
+                                                initialPlayer={loggedInPlayer}
+                                                fourMPlayers={fourMPlayers}
+                                                onStatusChange={setManualRegStatus}
+                                                onParticipantsChange={refreshParticipants}
+                                                registrationActionsRef={manualRegActionsRef}
+                                                highlightClassName={registrationHighlightClass}
+                                            />
+                                        </div>
+                                    )}
+                                    {!event.is_manual && (
+                                        <div className={`bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden ${registrationHighlightClass}`}>
+                                            {(activeRegistrationBlock || readyToCompeteBlock) && (
+                                                <div className="p-4 sm:p-5 border-b border-gray-50">
+                                                    {activeRegistrationBlock || readyToCompeteBlock}
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
+                                                <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
+                                                <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
+                                                    View All Divisions <ChevronRight className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                            <div className="divide-y divide-gray-50">
+                                                {playerDivisions.length > 0 ? playerDivisions.map((cls, idx) => {
+                                                    const clsParticipants = participants[cls.Id] || [];
+                                                    return (
+                                                        <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
+                                                            <div className="flex items-center gap-4">
+                                                                <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
+                                                                <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
+                                                                <ChevronRight className="w-4 h-4 text-gray-300" />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }) : (
+                                                    <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
+                                                        <Users className="w-10 h-10 text-gray-200 mb-3" />
+                                                        <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
+                                                        <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="flex flex-col md:flex-row gap-6">
 
                                         {/* Left Column: Event Information */}
@@ -3689,67 +3733,6 @@ const EventDetails = () => {
                                         )}
                                     </div>
                                     <div className="w-full space-y-6">
-                                        {/* Manual event registration & checkout */}
-                                        {event.is_manual && registrationNotYetOpen && (
-                                            <div id="manual-registration" className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
-                                                <div className="w-12 h-12 mx-auto rounded-2xl bg-gray-100 flex items-center justify-center mb-3">
-                                                    <Clock className="w-6 h-6 text-gray-400" />
-                                                </div>
-                                                <h3 className="text-lg font-bold text-[#0F172A]">Registration Not Open Yet</h3>
-                                                <p className="text-sm text-gray-500 mt-1.5">
-                                                    Entries for this event open on <span className="font-bold text-[#0F172A]">{registrationOpensLabel}</span>. Check back then!
-                                                </p>
-                                            </div>
-                                        )}
-                                        {event.is_manual && !registrationNotYetOpen && (
-                                            <div id="manual-registration">
-                                                <ManualEventRegistration
-                                                    event={event}
-                                                    userEmail={manualUserEmail}
-                                                    theme={theme}
-                                                    initialPlayer={loggedInPlayer}
-                                                    fourMPlayers={fourMPlayers}
-                                                    onStatusChange={setManualRegStatus}
-                                                    onParticipantsChange={refreshParticipants}
-                                                    registrationActionsRef={manualRegActionsRef}
-                                                />
-                                            </div>
-                                        )}
-                                        {/* Divisions — hidden for manual events (shown in Register block above) */}
-                                        {!event.is_manual && (
-                                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                                                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-50">
-                                                    <h2 className="text-base font-semibold text-slate-900">Divisions</h2>
-                                                    <button onClick={() => setActiveTab('players')} className="text-[13px] font-bold text-[#0F172A] hover:text-gray-600 flex items-center gap-1">
-                                                        View All Divisions <ChevronRight className="w-4 h-4" />
-                                                    </button>
-                                                </div>
-                                                <div className="divide-y divide-gray-50">
-                                                    {playerDivisions.length > 0 ? playerDivisions.map((cls, idx) => {
-                                                        const clsParticipants = participants[cls.Id] || [];
-                                                        return (
-                                                            <div key={idx} onClick={() => { setActiveTab('players'); toggleDivision(cls.Id); }} className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors">
-                                                                <div className="flex items-center gap-4">
-                                                                    <Users className="w-5 h-5 text-gray-400" strokeWidth={1.5} />
-                                                                    <span className="font-medium text-[#0F172A] text-[15px]">{cls.Name}</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-3">
-                                                                    <span className="text-[13px] text-gray-500 font-medium">{clsParticipants.length} Teams</span>
-                                                                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    }) : (
-                                                        <div className="px-6 py-8 flex flex-col items-center justify-center text-center">
-                                                            <Users className="w-10 h-10 text-gray-200 mb-3" />
-                                                            <h3 className="text-sm font-bold text-[#0F172A] mb-1">No divisions setup yet</h3>
-                                                            <p className="text-xs text-gray-400">Divisions will appear here once they are created.</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-
                                         {/* Event Info */}
                                         <div className="space-y-5">
 
