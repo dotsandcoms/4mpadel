@@ -1056,7 +1056,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             }}
                             className="bg-padel-green text-black font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl hover:bg-white transition-all flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-padel-green/10"
                         >
-                            Sanction Event <Plus size={14} />
+                            Create Event <Plus size={14} />
                         </button>
                     )}
                 </div>
@@ -1520,7 +1520,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center mb-3 border border-amber-500/20">
                                         <AlertCircle size={16} />
                                     </div>
-                                    <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider block">Pending Sanction</span>
+                                    <span className="text-[10px] uppercase font-black text-amber-400 tracking-wider block">Pending Events</span>
                                     <div className="text-2xl font-black text-amber-500 mt-1">{hostStats.pendingCount}</div>
                                     <span className="text-[9px] text-amber-400/60 font-bold block mt-1">Awaiting Review</span>
                                 </div>
@@ -1597,7 +1597,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                     onClick={() => { setBuilderEvent(null); setBuilderOpen(true); }}
                                                     className="mt-4 text-xs font-bold text-padel-green hover:underline cursor-pointer"
                                                 >
-                                                    Sanction your first event &rarr;
+                                                    Create your first event &rarr;
                                                 </button>
                                             </div>
                                         ) : (
@@ -1665,7 +1665,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                             {orgEvents.length === 0 ? (
                                 <div className="text-center py-12 text-gray-500 text-sm">
-                                    No tournaments hosted yet. Click "Sanction Event" at the top to build your first event.
+                                    No tournaments hosted yet. Click "Create Event" at the top to build your first event.
                                 </div>
                             ) : (
                                 <div className="grid grid-cols-1 gap-4">
