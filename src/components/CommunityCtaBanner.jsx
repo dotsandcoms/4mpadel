@@ -34,7 +34,7 @@ const CommunityCtaBanner = ({ className = '', fullWidth = false }) => {
                         onClick={() => setIsAuthModalOpen(true)}
                         className="group/btn flex items-center justify-center bg-padel-green !text-black font-black px-4 sm:px-6 py-2 sm:py-2.5 rounded-full text-[10px] sm:text-xs uppercase tracking-tight shadow-lg shadow-padel-green/25 hover:bg-white hover:shadow-padel-green/40 hover:scale-105 active:scale-95 transition-all duration-300"
                     >
-                        Register Now <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-1 sm:ml-1.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" />
+                        Login / Register Now <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5 ml-1 sm:ml-1.5 transition-transform duration-300 group-hover/btn:translate-x-0.5" />
                     </button>
                 </div>
             </motion.div>
