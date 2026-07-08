@@ -134,19 +134,29 @@ const RegisterOrganisationForm = ({
                 throw error;
             }
 
-            toast.success('Application submitted successfully!');
-
-            sendEmail(formData.contact_email.trim(), 'org_applied', {
+            const emailVars = {
                 orgName: formData.name.trim(),
-                contactEmail: formData.contact_email.trim(),
-            });
-
-            sendEmail('admin@4mpadel.co.za', 'admin_org_applied', {
-                orgName: formData.name.trim(),
-                creatorName: playerProfile?.name || formData.name.trim(),
                 contactEmail: formData.contact_email.trim(),
                 contactPhone: formData.contact_phone.trim(),
-            });
+                creatorName: playerProfile?.name || formData.name.trim(),
+            };
+
+            const [applicantMail, adminMail] = await Promise.all([
+                sendEmail(formData.contact_email.trim(), 'org_applied', emailVars),
+                sendEmail('markstillerman@gmail.com', 'admin_org_applied', emailVars),
+            ]);
+
+            if (applicantMail?.success) {
+                toast.success('Application submitted — check your email for confirmation.');
+            } else {
+                console.error('org_applied email failed:', applicantMail?.error);
+                toast.success('Application submitted successfully!');
+                toast.message('We could not send the confirmation email just now. Our team still received your application.');
+            }
+
+            if (!adminMail?.success) {
+                console.error('admin_org_applied email failed:', adminMail?.error);
+            }
 
             onSuccess?.();
             onClose?.();

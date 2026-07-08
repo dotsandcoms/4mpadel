@@ -858,12 +858,19 @@ const SUPER_ADMINS = ['bradein@dotsandcoms.co.za', 'brad@dotsandcoms.co.za', 'ad
 
 const ADMIN_ONLY_TEMPLATES = new Set([
   'broadcast',
-  'admin_org_applied',
   'org_approved',
   'org_rejected',
   'event_sanctioned',
   'event_rejected',
   'event_pending_sanction',
+]);
+
+// These fire from the public organisation (and similar) application forms —
+// guests and logged-in applicants both need to send them. Do not put
+// caller-controlled broadcast content here.
+const PUBLIC_APPLICATION_TEMPLATES = new Set([
+  'org_applied',
+  'admin_org_applied',
 ]);
 
 function isTrustedServiceCaller(authHeader: string | null): boolean {
@@ -923,21 +930,26 @@ serve(async (req: Request) => {
 
     // --- Authorization -------------------------------------------------
     // Trusted server-to-server callers (service-role key) skip straight
-    // through. Everyone else must be a real logged-in user, and admin-only
-    // templates additionally require an admin. This blocks a caller who
-    // only has the public anon key (i.e. no account at all) from sending
-    // email through this function.
+    // through. Public application templates (org apply confirmation + admin
+    // notify) may be sent by guests with the anon key. Everything else
+    // requires a logged-in user; admin-only templates additionally need
+    // an admin caller.
     const authHeader = req.headers.get('Authorization');
     if (!isTrustedServiceCaller(authHeader)) {
       const user = authHeader ? await getAuthenticatedUser(authHeader) : null;
-      if (!user) {
+      const isPublicApplication = PUBLIC_APPLICATION_TEMPLATES.has(template);
+
+      if (!user && !isPublicApplication) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
       }
-      if (ADMIN_ONLY_TEMPLATES.has(template)) {
+      if (user && ADMIN_ONLY_TEMPLATES.has(template)) {
         const admin = await isAdminCaller(supabaseAdmin, user.email);
         if (!admin) {
           return new Response(JSON.stringify({ error: 'Forbidden: admin-only template' }), { status: 403, headers: corsHeaders });
         }
+      }
+      if (!user && ADMIN_ONLY_TEMPLATES.has(template)) {
+        return new Response(JSON.stringify({ error: 'Forbidden: admin-only template' }), { status: 403, headers: corsHeaders });
       }
     }
     // ---------------------------------------------------------------------

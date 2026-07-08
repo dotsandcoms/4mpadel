@@ -858,13 +858,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                 eventName: eventName || 'New event',
                 orgName: currentOrg.name
             });
-            sendEmail('admin@4mpadel.co.za', 'event_pending_sanction', {
+            sendEmail('markstillerman@gmail.com', 'event_pending_sanction', {
                 eventName: eventName || 'New event',
                 orgName: currentOrg.name
             });
         } else if (isAmendment) {
             // Notify 4M admin an amendment needs review
-            sendEmail('admin@4mpadel.co.za', 'event_pending_sanction', {
+            sendEmail('markstillerman@gmail.com', 'event_pending_sanction', {
                 eventName: `Amendment — ${eventName || 'event'}`,
                 orgName: currentOrg.name
             });
