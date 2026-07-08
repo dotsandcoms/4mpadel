@@ -7,6 +7,7 @@ import { Calendar, ChevronLeft, ChevronRight, Play, PlayCircle, Trophy, GitBranc
 import VideoModal, { getYoutubeEmbedUrl } from './VideoModal';
 import { getEventImage } from '../utils/imageUtils';
 import featuredBg from '../assets/featuredbg.jpeg';
+import CommunityCtaBanner from './CommunityCtaBanner';
 
 const getStatusColors = (status) => {
     const s = status?.toLowerCase() || '';
@@ -1026,7 +1027,7 @@ const FeaturedTournamentHero = ({ event }) => {
     );
 };
 
-const FeaturedSections = () => {
+const FeaturedSections = ({ session = null }) => {
     const { getRecentTournaments } = useRankedin();
     const [liveTournaments, setLiveTournaments] = useState([]);
     const [featuredTournaments, setFeaturedTournaments] = useState([]);
@@ -1224,11 +1225,20 @@ const FeaturedSections = () => {
         fetchLiveFeatured();
     }, [getRecentTournaments]);
 
+    const loggedOutCta = !session ? (
+        <section className="relative border-t border-white/5 bg-[#05070A] pt-3 pb-4 lg:pt-4 lg:pb-4">
+            <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8">
+                <CommunityCtaBanner />
+            </div>
+        </section>
+    ) : null;
+
     if (liveFeaturedTournaments.length === 0) {
         // Hide the live section if no live events are found
         return (
             <>
                 <div className="flex flex-col w-full">
+                    {loggedOutCta}
                     <FeaturedTournamentHero event={featuredTournaments[0]} />
                     {featuredData
                         .filter(section => section.id !== 'featured-live')
@@ -1257,6 +1267,7 @@ const FeaturedSections = () => {
 
     return (
         <div className="flex flex-col w-full">
+            {loggedOutCta}
             <FeaturedTournamentHero event={featuredTournaments[0]} />
             {featuredData
                 .filter(section => !(section.id === 'upcoming-events' && featuredTournaments.length <= 1))

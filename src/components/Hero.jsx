@@ -860,7 +860,7 @@ const Hero = () => {
         <div className="relative w-full bg-black">
             <div
                 // Hug content height — especially when My Schedule is collapsed.
-                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-start ${session ? 'pb-4 lg:pb-6' : 'pb-8 lg:pb-12'}`}
+                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-start ${session ? 'pb-4 lg:pb-6' : 'pb-0'}`}
                 onMouseMove={handleMouseMove}
             >
                 {/* Solid base background — text sits on this, never on the photo */}
@@ -933,7 +933,7 @@ const Hero = () => {
                 {/* Hero Content */}
                 <motion.div
                     style={{ opacity: opacityText }}
-                    className="relative z-20 flex flex-col flex-none justify-start pt-20 pb-2 lg:pt-24 lg:pb-4 px-4 lg:px-8 container mx-auto"
+                    className={`relative z-20 flex flex-col flex-none justify-start pt-20 px-4 lg:pt-24 lg:px-8 container mx-auto ${session ? 'pb-2 lg:pb-4' : 'pb-0'}`}
                 >
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
@@ -960,7 +960,7 @@ const Hero = () => {
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.8, duration: 0.8 }}
-                        className={`text-gray-200 text-sm md:text-lg lg:text-xl max-w-[15rem] sm:max-w-sm md:max-w-md leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal ${session ? 'mb-4' : 'mb-8'}`}
+                        className={`text-gray-200 text-sm md:text-lg lg:text-xl max-w-[15rem] sm:max-w-sm md:max-w-md leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal ${session ? 'mb-4' : 'mb-0'}`}
                     >
                         <strong className="text-white font-medium">Events, rankings, clubs, players and organisers — all in one place</strong>.
                     </motion.p>
@@ -1011,16 +1011,13 @@ const Hero = () => {
                         </motion.div>
                     )}
 
+                    {liveEvent && (
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 1, duration: 0.8 }}
-                        className="flex flex-col sm:flex-row items-center gap-4 max-w-[15rem] sm:max-w-none"
+                        className="flex flex-col sm:flex-row items-center gap-4 max-w-[15rem] sm:max-w-none mt-4"
                     >
-
-
-
-                        {liveEvent && (
                             <motion.button
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -1054,11 +1051,11 @@ const Hero = () => {
                                     </>
                                 )}
                             </motion.button>
-                        )}
                     </motion.div>
+                    )}
                 </motion.div>
 
-                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${scheduleOpen ? 'gap-2 pb-0' : 'pb-2'}`}>
+                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? (scheduleOpen ? 'gap-2 pb-0' : 'pb-2') : 'pb-0'}`}>
 
                     <AnimatePresence>
                         {session && (hasScheduleContent || primaryScheduleNotification) && (

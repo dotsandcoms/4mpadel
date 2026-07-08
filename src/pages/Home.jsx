@@ -34,7 +34,7 @@ const Home = () => {
                 {/* Upcoming Events Widget — visible only when logged in */}
                 <UpcomingEventsWidget session={session} />
 
-                <FeaturedSections />
+                <FeaturedSections session={session} />
 
                 {/* Intro / Dynamics Section */}
                 <section className="relative py-24 px-6 md:px-20 container mx-auto hidden md:block">
