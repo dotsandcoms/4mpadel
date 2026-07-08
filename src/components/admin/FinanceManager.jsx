@@ -259,6 +259,26 @@ const FinanceManager = () => {
             let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
             let licensePortion = 0;
 
+            // ── Authoritative covers from the manual-event (REGEV) checkout metadata ──
+            // The checkout writes exactly what this transaction paid for (entries and/or
+            // licenses, per email). When present, use it instead of amount heuristics —
+            // heuristics fail for manual events (no tournament_participants rows), which
+            // previously left licenses unassigned and partner rows unpaid.
+            const coversMeta = Array.isArray(trx.metadata?.covers) ? trx.metadata.covers
+                : (Array.isArray(localMetadata?.covers) ? localMetadata.covers : []);
+            const licenseCovers = coversMeta.filter((c) => c?.type === 'license' && c.email);
+            const entryCovers = coversMeta.filter((c) => c?.type === 'entry' && c.email);
+
+            if (licenseCovers.length > 0) {
+                licensePortion = licenseCovers.reduce((s, c) => s + (c.license === 'full' ? 450 : 120), 0);
+                const ownLicense = licenseCovers.find((c) => String(c.email).toLowerCase() === email);
+                if (ownLicense) licenseType = ownLicense.license === 'full' ? 'full' : 'temporary';
+                // License-only transaction: label the ledger row correctly instead of event_entry_fee
+                if (isEventReg && entryCovers.length === 0 && Math.abs(amount - licensePortion) <= 5) {
+                    paymentType = licenseCovers[0].license === 'full' ? 'full_license' : 'temp_license';
+                }
+            }
+
             const { data: player, error: fetchError } = await supabase
                 .from('players')
                 .select('id, name, paid_registration, license_type')
@@ -411,22 +431,25 @@ const FinanceManager = () => {
                         totalExpectedEntryFees += fee;
                     });
 
-                    // Intelligent License Detection: 
+                    // Intelligent License Detection (heuristic — only when the checkout
+                    // metadata didn't tell us explicitly via covers):
                     // We check if the amount is a "Bundle" (Fee + License) or a standalone License.
                     // Common amounts: 770 (650+120), 1100 (650+450), 120, 450.
                     const entryFee = eventData?.entry_fee || 650; // Fallback to 650 if unknown
                     const needsLicense = !player.paid_registration;
-                    
-                    if (amount === 770 || amount === 120 || (amount > 120 && (amount - 120) % entryFee === 0)) {
-                        licensePortion = 120;
-                        licenseType = 'temporary';
-                    } else if (amount === 1100 || amount === 450 || (amount > 450 && (amount - 450) % entryFee === 0)) {
-                        licensePortion = 450;
-                        licenseType = 'full';
-                    } else if (needsLicense && amount >= 120 && amount < totalExpectedEntryFees) {
-                        // Fallback for non-standard fees: if they need a license and paid less than entries
-                        licensePortion = 120;
-                        licenseType = 'temporary';
+
+                    if (coversMeta.length === 0) {
+                        if (amount === 770 || amount === 120 || (amount > 120 && (amount - 120) % entryFee === 0)) {
+                            licensePortion = 120;
+                            licenseType = 'temporary';
+                        } else if (amount === 1100 || amount === 450 || (amount > 450 && (amount - 450) % entryFee === 0)) {
+                            licensePortion = 450;
+                            licenseType = 'full';
+                        } else if (needsLicense && amount >= 120 && amount < totalExpectedEntryFees) {
+                            // Fallback for non-standard fees: if they need a license and paid less than entries
+                            licensePortion = 120;
+                            licenseType = 'temporary';
+                        }
                     }
 
                     // Amount to be attributed as entry fees
@@ -594,14 +617,80 @@ const FinanceManager = () => {
             if (licenseType && (!player.paid_registration || player.license_type !== licenseType)) {
                 const { error: updateError } = await supabase
                     .from('players')
-                    .update({ 
-                        paid_registration: true, 
+                    .update({
+                        paid_registration: true,
                         license_type: licenseType,
-                        approved: true 
+                        approved: true
                     })
                     .eq('id', player.id);
 
                 if (updateError) throw updateError;
+            }
+
+            // 5b. Covers-driven side effects — mirrors what the live checkout flow
+            // (confirm-manual-payment / webhook) would have done, so a sync fully
+            // repairs a missed transaction instead of only writing a ledger row.
+            for (const c of licenseCovers) {
+                const covEmail = String(c.email).toLowerCase();
+                const isFull = c.license === 'full';
+                const { data: covPlayer } = await supabase
+                    .from('players')
+                    .select('id, license_type, paid_registration')
+                    .ilike('email', covEmail)
+                    .maybeSingle();
+                if (!covPlayer) {
+                    console.warn(`[Sync] License cover for unknown player ${covEmail} — skipped`);
+                    continue;
+                }
+                if (covPlayer.license_type !== (isFull ? 'full' : 'temporary') || !covPlayer.paid_registration) {
+                    await supabase
+                        .from('players')
+                        .update({ license_type: isFull ? 'full' : 'temporary', paid_registration: true, approved: true })
+                        .eq('id', covPlayer.id);
+                }
+                if (!isFull && enrichedEventId) {
+                    const { data: existingCovLic } = await supabase
+                        .from('temporary_licenses')
+                        .select('id')
+                        .eq('player_id', covPlayer.id)
+                        .eq('event_id', enrichedEventId)
+                        .maybeSingle();
+                    if (!existingCovLic) {
+                        await supabase.from('temporary_licenses').insert({
+                            player_id: covPlayer.id,
+                            event_id: enrichedEventId,
+                            event_name: enrichedEventName || 'Calendar Event',
+                            event_date: enrichedEventDate || new Date().toISOString(),
+                        });
+                    }
+                }
+            }
+
+            if (enrichedEventId) {
+                for (const c of entryCovers) {
+                    const covEmail = String(c.email).toLowerCase();
+                    // The covered player's own registration row...
+                    let ownRow = supabase
+                        .from('event_registrations')
+                        .update({ payment_status: 'paid', payment_method: 'paystack' })
+                        .eq('event_id', enrichedEventId)
+                        .ilike('email', covEmail)
+                        .neq('payment_status', 'paid');
+                    // ...and the partner-side flag on the row that lists them as partner —
+                    // the email-only update below can't reach this one.
+                    let partnerSide = supabase
+                        .from('event_registrations')
+                        .update({ partner_payment_status: 'paid' })
+                        .eq('event_id', enrichedEventId)
+                        .ilike('partner_email', covEmail)
+                        .neq('partner_payment_status', 'paid');
+                    if (c.division) {
+                        ownRow = ownRow.eq('division', c.division);
+                        partnerSide = partnerSide.eq('division', c.division);
+                    }
+                    await ownRow;
+                    await partnerSide;
+                }
             }
 
             // 6. Record in Payments Table (Clean up old records first to allow clean splits)
