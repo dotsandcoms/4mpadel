@@ -68,6 +68,19 @@ const RegisterOrganisationForm = ({
         toast.info('Logo removed.');
     };
 
+    const normalizeWebsiteUrl = (raw) => {
+        const trimmed = (raw || '').trim();
+        if (!trimmed) return '';
+        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+        return `https://${trimmed.replace(/^\/+/, '')}`;
+    };
+
+    const handleWebsiteChange = (value) => {
+        // Keep typing light — strip accidental protocol so the fixed "https://" prefix stays clean
+        const withoutProtocol = value.replace(/^https?:\/\//i, '');
+        setFormData((prev) => ({ ...prev, website_url: withoutProtocol }));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -82,12 +95,25 @@ const RegisterOrganisationForm = ({
 
         setSubmitting(true);
         try {
+            // Optional link to an existing player profile — never required to apply.
+            let createdBy = null;
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user?.email) {
+                const { data: ownPlayer } = await supabase
+                    .from('players')
+                    .select('id')
+                    .ilike('email', session.user.email)
+                    .maybeSingle();
+                createdBy = ownPlayer?.id ?? null;
+            }
+
             const slug = formData.name
                 .toLowerCase()
                 .trim()
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
 
+            // No .select() — pending rows are not publicly readable under RLS.
             const { error } = await supabase
                 .from('organisations')
                 .insert({
@@ -96,12 +122,10 @@ const RegisterOrganisationForm = ({
                     contact_email: formData.contact_email.trim(),
                     contact_phone: formData.contact_phone.trim() || null,
                     logo_url: formData.logo_url.trim() || null,
-                    website_url: formData.website_url.trim() || null,
-                    created_by: playerProfile?.id || null,
+                    website_url: normalizeWebsiteUrl(formData.website_url) || null,
+                    created_by: createdBy,
                     status: 'pending',
-                })
-                .select()
-                .single();
+                });
 
             if (error) {
                 if (error.code === '23505') {
@@ -119,7 +143,7 @@ const RegisterOrganisationForm = ({
 
             sendEmail('admin@4mpadel.co.za', 'admin_org_applied', {
                 orgName: formData.name.trim(),
-                creatorName: playerProfile?.name || 'New Applicant',
+                creatorName: playerProfile?.name || formData.name.trim(),
                 contactEmail: formData.contact_email.trim(),
                 contactPhone: formData.contact_phone.trim(),
             });
@@ -153,7 +177,7 @@ const RegisterOrganisationForm = ({
             <div className={`bg-black/20 border border-white/5 rounded-xl flex items-start gap-2.5 ${compact ? 'p-3' : 'p-4 rounded-2xl gap-3'}`}>
                 <ShieldAlert className={`text-padel-green shrink-0 mt-0.5 ${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
                 <p className={`text-gray-400 leading-relaxed ${compact ? 'text-[11px]' : 'text-xs'}`}>
-                    Approved organisations are granted a dedicated Organisation Portal to create sanctioned tournaments, configure draws, schedule court slots, and manage live brackets. Applications are reviewed within 24–48 hours.
+                    No player profile required — just submit your organisation details. Approved organisations get a dedicated Organisation Portal to create sanctioned tournaments, configure draws, schedule court slots, and manage live brackets. Applications are reviewed within 24–48 hours.
                 </p>
             </div>
 
@@ -253,14 +277,26 @@ const RegisterOrganisationForm = ({
                 <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>
                     Club Website URL <span className="text-[9px] text-gray-500 font-normal">(Optional)</span>
                 </label>
-                <div className="relative">
-                    <Globe size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                <div className="relative flex items-center">
+                    <Globe size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none z-10" />
+                    <span className="absolute left-11 top-1/2 -translate-y-1/2 text-gray-500 text-sm select-none pointer-events-none">
+                        https://
+                    </span>
                     <input
-                        type="url"
-                        value={formData.website_url}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, website_url: e.target.value }))}
-                        className={`${fieldClass} placeholder:text-gray-600`}
-                        placeholder="https://myclub.co.za"
+                        type="text"
+                        inputMode="url"
+                        autoComplete="url"
+                        value={formData.website_url.replace(/^https?:\/\//i, '')}
+                        onChange={(e) => handleWebsiteChange(e.target.value)}
+                        onBlur={() => {
+                            // Persist a clean domain value; protocol is prepended on submit
+                            setFormData((prev) => ({
+                                ...prev,
+                                website_url: prev.website_url.replace(/^https?:\/\//i, '').replace(/^\/+/, ''),
+                            }));
+                        }}
+                        className={`${fieldClass} placeholder:text-gray-600 !pl-[5.75rem]`}
+                        placeholder="myclub.co.za"
                     />
                 </div>
             </div>

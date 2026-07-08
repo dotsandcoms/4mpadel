@@ -151,6 +151,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
 
     const handleSelectRegisterType = (type) => {
         if (type === 'club') return;
+        // Organisation (and coach) applications do not require a player profile.
         setRegisterType(type);
         setStep(1);
     };
@@ -558,6 +559,7 @@ const AuthModal = ({ isOpen, onClose, initialTab = 'login' }) => {
                             <RegisterOrganisationForm
                                 onBack={() => setRegisterType(null)}
                                 onClose={onClose}
+                                contactEmail={email}
                             />
                         ) : activeTab === 'register' && registerType === 'coach' ? (
                             <RegisterCoachForm
