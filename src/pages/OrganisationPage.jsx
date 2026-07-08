@@ -89,7 +89,7 @@ const OrganisationPage = () => {
             setLoading(true);
             try {
                 const { data, error } = await supabase
-                    .from('organizations')
+                    .from('organisations')
                     .select('*')
                     .eq('slug', slug)
                     .eq('status', 'approved')
@@ -101,7 +101,7 @@ const OrganisationPage = () => {
                     const { data: evs } = await supabase
                         .from('calendar')
                         .select('id, slug, event_name, venue, city, start_date, end_date, sapa_status, image_url, registered_players, created_at')
-                        .eq('organization_id', data.id)
+                        .eq('organisation_id', data.id)
                         .or('sanction_status.eq.approved,sanction_status.is.null')
                         .neq('is_visible', false)
                         .order('start_date', { ascending: true });

@@ -728,7 +728,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (organization) {
             // Org-created events: tie to the org and stay hidden until a 4M
             // admin sanctions them (DB trigger also forces sanction_status).
-            payload.organization_id = organization.id;
+            payload.organisation_id = organization.id;
             if (!editingEvent) {
                 payload.is_visible = false;
                 payload.featured_event = false;

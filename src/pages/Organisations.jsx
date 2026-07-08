@@ -18,7 +18,7 @@ const Organisations = () => {
         const fetchOrgs = async () => {
             try {
                 const { data, error } = await supabase
-                    .from('organizations')
+                    .from('organisations')
                     .select('id, name, slug, logo_url, cover_image_url, org_type, coverage, verified, sapa_sanctioned, about')
                     .eq('status', 'approved')
                     .order('name', { ascending: true });
@@ -29,13 +29,13 @@ const Organisations = () => {
                 if (data?.length) {
                     const { data: events } = await supabase
                         .from('calendar')
-                        .select('organization_id')
-                        .in('organization_id', data.map(o => o.id))
+                        .select('organisation_id')
+                        .in('organisation_id', data.map(o => o.id))
                         .or('sanction_status.eq.approved,sanction_status.is.null')
                         .gte('start_date', new Date().toISOString());
                     const counts = {};
                     (events || []).forEach(e => {
-                        counts[e.organization_id] = (counts[e.organization_id] || 0) + 1;
+                        counts[e.organisation_id] = (counts[e.organisation_id] || 0) + 1;
                     });
                     setEventCounts(counts);
                 }

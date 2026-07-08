@@ -65,7 +65,12 @@ const OrgAuditLog = ({ embedded = false }) => {
                 .select('*')
                 .order('created_at', { ascending: false })
                 .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE); // +1 row to detect more
-            if (entityFilter !== 'all') query = query.eq('entity_type', entityFilter);
+            if (entityFilter !== 'all') {
+                // Accept both spellings so historical audit rows still filter correctly
+                query = entityFilter === 'organisation'
+                    ? query.in('entity_type', ['organisation', 'organization'])
+                    : query.eq('entity_type', entityFilter);
+            }
             const { data, error } = await query;
             if (error) throw error;
             setHasMore((data || []).length > PAGE_SIZE);
@@ -93,13 +98,13 @@ const OrgAuditLog = ({ embedded = false }) => {
                     </h3>
                 )}
                 <div className={`flex items-center gap-2 ${embedded ? 'w-full justify-between mb-4' : ''}`}>
-                    {['all', 'organization', 'member', 'event'].map(f => (
+                    {['all', 'organisation', 'member', 'event'].map(f => (
                         <button
                             key={f}
                             onClick={() => { setFilter(f); setPage(0); }}
                             className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${filter === f ? 'bg-padel-green text-black' : 'bg-white/5 text-gray-400 hover:text-white'}`}
                         >
-                            {f === 'all' ? 'All' : f + 's'}
+                            {f === 'all' ? 'All' : f === 'organisation' ? 'Orgs' : f + 's'}
                         </button>
                     ))}
                     <button onClick={() => fetchRows(page, filter)} className="p-2 bg-white/5 border border-white/10 rounded-lg text-gray-400 hover:text-white transition-colors cursor-pointer" title="Refresh">

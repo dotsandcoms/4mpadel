@@ -41,11 +41,11 @@ const Navbar = ({ isDark = false, accentColor }) => {
       if (!targetEmail) { setIsOrgMember(false); return; }
       try {
         const { data: memberships } = await supabase
-          .from('organization_members')
-          .select('organization_id, organizations(status)')
+          .from('organisation_members')
+          .select('organisation_id, organisations(status)')
           .ilike('user_email', targetEmail)
           .limit(5);
-        let member = (memberships || []).some(m => m.organizations?.status === 'approved');
+        let member = (memberships || []).some(m => m.organisations?.status === 'approved');
 
         if (!member) {
           // Legacy fallback: org created by this user's player record
@@ -53,7 +53,7 @@ const Navbar = ({ isDark = false, accentColor }) => {
             .from('players').select('id').ilike('email', targetEmail).maybeSingle();
           if (playerRow) {
             const { data: orgRow } = await supabase
-              .from('organizations')
+              .from('organisations')
               .select('id')
               .eq('created_by', playerRow.id)
               .eq('status', 'approved')
@@ -403,9 +403,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-3.5 h-3.5" />Admin Panel
                       </a>
                     )}
-                    {isOrgMember && !isSuperAdmin && (
-                      <a href="/admin" target="_blank" style={{ color: '#000000' }} className="flex items-center gap-2 mx-3 my-1 px-4 py-2 text-[10px] font-black bg-padel-green hover:bg-white rounded-lg transition-colors uppercase tracking-widest">
-                        <Building className="w-3.5 h-3.5" />Organisation Dashboard
+                    {isOrgMember && (
+                      <a href="/admin?tab=organisations&view=host" target="_blank" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
+                        <Building className="w-3.5 h-3.5" />Org Dashboard
                       </a>
                     )}
                     <a href="/profile" className="flex items-center gap-2 px-4 py-2 text-[10px] font-black text-gray-300 hover:text-padel-green hover:bg-white/5 transition-colors uppercase tracking-widest">
@@ -655,9 +655,9 @@ const Navbar = ({ isDark = false, accentColor }) => {
                         <ShieldAlert className="w-4 h-4" />Admin Panel
                       </a>
                     )}
-                    {isOrgMember && !isSuperAdmin && (
-                      <a href="/admin" onClick={() => setIsMobileMenuOpen(false)} style={{ color: '#000000' }} className="w-full py-2.5 bg-padel-green hover:bg-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-padel-green/10 active:scale-95 transition-all">
-                        <Building className="w-4 h-4" />Organisation Dashboard
+                    {isOrgMember && (
+                      <a href="/admin?tab=organisations&view=host" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">
+                        <Building className="w-4 h-4 text-padel-green" />Org Dashboard
                       </a>
                     )}
                     <a href="/profile" onClick={() => setIsMobileMenuOpen(false)} className="w-full py-2.5 bg-white/5 border border-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-white/10 active:scale-95 transition-all">

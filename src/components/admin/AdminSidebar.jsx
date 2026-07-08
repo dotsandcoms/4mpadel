@@ -6,7 +6,7 @@ import logo from '../../assets/logo_4m_lowercase.png';
 const AdminSidebar = ({ activeTab, setActiveTab, onLogout, isOpen, onClose, isDesktopCollapsed, setIsDesktopCollapsed, permissions, player, session, badgeCounts = {} }) => {
     const allMenuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'organizations', label: 'Organisations', icon: Building },
+        { id: 'organisations', label: 'Organisations', icon: Building },
         { id: 'players', label: 'Players', icon: Users },
         { id: 'coaches', label: 'Coaches', icon: UserPlus },
         { id: 'calendar', label: 'Calendar', icon: Calendar },

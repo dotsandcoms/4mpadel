@@ -66,7 +66,7 @@ const OrgProfileEditor = ({ org, onSaved }) => {
         setUploading(kind);
         try {
             const ext = file.name.split('.').pop();
-            const path = `organizations/${kind === 'logo' ? 'logos' : 'covers'}/${org.id}_${Date.now()}.${ext}`;
+            const path = `organisations/${kind === 'logo' ? 'logos' : 'covers'}/${org.id}_${Date.now()}.${ext}`;
             const { error } = await supabase.storage.from('profile-pics').upload(path, file, { cacheControl: '3600', upsert: true });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('profile-pics').getPublicUrl(path);
@@ -108,7 +108,7 @@ const OrgProfileEditor = ({ org, onSaved }) => {
             };
 
             const { data, error } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .update(payload)
                 .eq('id', org.id)
                 .select();

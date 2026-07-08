@@ -9,7 +9,7 @@ import ApplyOrganisationModal from './ApplyOrganisationModal';
 /**
  * Self-contained organisation host banner for the player profile.
  * Shows: Apply CTA (no org) → Pending → Approved (dashboard link) → Rejected (re-apply).
- * Resolves the user's org via organization_members first, then legacy created_by.
+ * Resolves the user's org via organisation_members first, then legacy created_by.
  */
 const OrgHostBanner = ({ player, variant = 'inline' }) => {
     const navigate = useNavigate();
@@ -26,12 +26,12 @@ const OrgHostBanner = ({ player, variant = 'inline' }) => {
         try {
             // 1. Membership model
             const { data: memberships } = await supabase
-                .from('organization_members')
-                .select('role, organizations(*)')
+                .from('organisation_members')
+                .select('role, organisations(*)')
                 .ilike('user_email', player.email)
                 .limit(5);
 
-            const memberOrg = (memberships || []).find(m => m.organizations)?.organizations;
+            const memberOrg = (memberships || []).find(m => m.organisations)?.organisations;
             if (memberOrg) {
                 setUserOrg(memberOrg);
                 return;
@@ -40,7 +40,7 @@ const OrgHostBanner = ({ player, variant = 'inline' }) => {
             // 2. Legacy fallback: application created by this player (any status,
             //    so pending/rejected applications still surface correctly)
             const { data: orgData } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .select('*')
                 .eq('created_by', player.id)
                 .order('created_at', { ascending: false })
@@ -158,7 +158,7 @@ const OrgHostBanner = ({ player, variant = 'inline' }) => {
                         <button
                             type="button"
                             onClick={() => setIsOrgModalOpen(true)}
-                            className="text-[10px] md:text-[11px] font-bold md:font-black uppercase tracking-wide md:tracking-widest px-3 py-1.5 md:px-5 md:py-3 border border-white/10 md:border-0 bg-transparent md:bg-padel-green text-gray-300 md:text-black hover:border-padel-green/40 md:hover:bg-white hover:text-padel-green md:hover:text-black rounded-lg md:rounded-xl transition-all cursor-pointer md:shadow-lg md:hover:scale-[1.02] active:scale-95 whitespace-nowrap"
+                            className="text-[10px] md:text-[11px] font-bold md:font-black uppercase tracking-wide md:tracking-widest px-3 py-1.5 md:px-5 md:py-3 border border-white/10 md:border-0 bg-transparent md:bg-padel-green text-gray-300 md:!text-black hover:border-padel-green/40 md:hover:bg-white hover:text-padel-green md:hover:!text-black rounded-lg md:rounded-xl transition-all cursor-pointer md:shadow-lg md:hover:scale-[1.02] active:scale-95 whitespace-nowrap"
                         >
                             Apply
                         </button>
@@ -171,12 +171,12 @@ const OrgHostBanner = ({ player, variant = 'inline' }) => {
                     {status === 'approved' && (
                         <button
                             type="button"
-                            onClick={() => navigate('/admin')}
-                            className="text-[10px] md:text-[11px] font-bold md:font-black uppercase tracking-wide md:tracking-widest px-3 py-1.5 md:px-5 md:py-3 border border-padel-green/25 md:border-0 bg-padel-green/10 md:bg-padel-green text-padel-green md:text-black hover:bg-padel-green/20 md:hover:bg-white rounded-lg md:rounded-xl transition-all cursor-pointer md:shadow-lg md:hover:scale-[1.02] active:scale-95 flex items-center gap-1 whitespace-nowrap"
+                            onClick={() => navigate('/admin?tab=organisations&view=host')}
+                            className="text-[10px] md:text-[11px] font-bold md:font-black uppercase tracking-wide md:tracking-widest px-3 py-1.5 md:px-5 md:py-3 border border-padel-green/25 md:border-0 bg-padel-green/10 md:bg-padel-green !text-padel-green md:!text-black hover:bg-padel-green/20 md:hover:bg-white rounded-lg md:rounded-xl transition-all cursor-pointer md:shadow-lg md:hover:scale-[1.02] active:scale-95 flex items-center gap-1.5 whitespace-nowrap"
                         >
-                            <span className="md:hidden">Open</span>
-                            <span className="hidden md:inline">Organisation Dashboard</span>
-                            <ExternalLink size={11} className="md:w-3 md:h-3" />
+                            <span className="md:hidden !text-padel-green">Open</span>
+                            <span className="hidden md:inline !text-black">Organisation Dashboard</span>
+                            <ExternalLink size={11} className="md:w-3 md:h-3 shrink-0 !text-inherit" />
                         </button>
                     )}
                     {status === 'rejected' && (

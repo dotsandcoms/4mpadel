@@ -16,7 +16,7 @@ const roleBadgeClass = (role) => {
 
 /**
  * Super-admin modal to assign existing users (players) as members/admins
- * of an organisation. Backed by public.organization_members.
+ * of an organisation. Backed by public.organisation_members.
  */
 const OrgMembersManager = ({ org, onClose }) => {
     const [members, setMembers] = useState([]);
@@ -31,9 +31,9 @@ const OrgMembersManager = ({ org, onClose }) => {
         setLoading(true);
         try {
             const { data, error } = await supabase
-                .from('organization_members')
+                .from('organisation_members')
                 .select('*, players!player_id(id, name, image_url, email)')
-                .eq('organization_id', org.id)
+                .eq('organisation_id', org.id)
                 .order('created_at', { ascending: true });
             if (error) throw error;
             setMembers(data || []);
@@ -82,9 +82,9 @@ const OrgMembersManager = ({ org, onClose }) => {
         setIsAdding(true);
         try {
             const { error } = await supabase
-                .from('organization_members')
+                .from('organisation_members')
                 .insert({
-                    organization_id: org.id,
+                    organisation_id: org.id,
                     player_id: player.id,
                     user_email: player.email,
                     role: newRole
@@ -107,7 +107,7 @@ const OrgMembersManager = ({ org, onClose }) => {
     const handleChangeRole = async (member, role) => {
         try {
             const { error } = await supabase
-                .from('organization_members')
+                .from('organisation_members')
                 .update({ role })
                 .eq('id', member.id);
             if (error) throw error;
@@ -123,7 +123,7 @@ const OrgMembersManager = ({ org, onClose }) => {
         if (!window.confirm(`Remove ${label} from ${org.name}?`)) return;
         try {
             const { error } = await supabase
-                .from('organization_members')
+                .from('organisation_members')
                 .delete()
                 .eq('id', member.id);
             if (error) throw error;

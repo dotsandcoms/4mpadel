@@ -22,18 +22,18 @@ export async function canAccessHiddenEvents(email) {
 /**
  * Resolve organisation membership for a user email.
  * Returns { org, orgs, orgRole } or null if not an org member.
- * Primary source: organization_members. Legacy fallback: organizations.created_by.
+ * Primary source: organisation_members. Legacy fallback: organisations.created_by.
  */
 async function resolveOrgMembership(userEmail) {
-    // 1. New model: organization_members
+    // 1. New model: organisation_members
     const { data: memberships } = await supabase
-        .from('organization_members')
-        .select('role, organization_id, organizations(*)')
+        .from('organisation_members')
+        .select('role, organisation_id, organisations(*)')
         .ilike('user_email', userEmail);
 
     const activeOrgs = (memberships || [])
-        .filter(m => m.organizations && m.organizations.status === 'approved')
-        .map(m => ({ ...m.organizations, member_role: m.role }));
+        .filter(m => m.organisations && m.organisations.status === 'approved')
+        .map(m => ({ ...m.organisations, member_role: m.role }));
 
     if (activeOrgs.length > 0) {
         return { org: activeOrgs[0], orgs: activeOrgs, orgRole: activeOrgs[0].member_role };
@@ -48,7 +48,7 @@ async function resolveOrgMembership(userEmail) {
 
     if (playerData) {
         const { data: orgData } = await supabase
-            .from('organizations')
+            .from('organisations')
             .select('*')
             .eq('created_by', playerData.id)
             .eq('status', 'approved')
@@ -76,9 +76,20 @@ export const useAdminPermissions = (userEmail) => {
             }
 
             try {
-                // Hardcoded fallback for Super Admins to ensure they don't get locked out
-                if (SUPER_ADMINS.includes(userEmail)) {
-                    setPermissions({ role: 'super_admin', allowed_tabs: [], module_permissions: {} });
+                // Super admins get full platform access — also attach any linked org
+                // so they can manage events for organisations they belong to.
+                if (SUPER_ADMINS.includes(userEmail.toLowerCase())) {
+                    const orgMembership = await resolveOrgMembership(userEmail);
+                    setPermissions({
+                        role: 'super_admin',
+                        allowed_tabs: [],
+                        module_permissions: {},
+                        ...(orgMembership ? {
+                            org: orgMembership.org,
+                            orgs: orgMembership.orgs,
+                            orgRole: orgMembership.orgRole,
+                        } : {}),
+                    });
                     setLoading(false);
                     return;
                 }
@@ -99,7 +110,7 @@ export const useAdminPermissions = (userEmail) => {
                                 org: orgMembership.org,
                                 orgs: orgMembership.orgs,
                                 orgRole: orgMembership.orgRole,
-                                allowed_tabs: ['organizations'],
+                                allowed_tabs: ['organisations'],
                                 module_permissions: {}
                             });
                         } else {
@@ -112,9 +123,16 @@ export const useAdminPermissions = (userEmail) => {
                         setPermissions({ role: 'custom', allowed_tabs: [], module_permissions: {} });
                     }
                 } else {
+                    // Custom/admin roles can also be org members — attach linked org when present
+                    const orgMembership = await resolveOrgMembership(userEmail);
                     setPermissions({
                         ...data,
-                        module_permissions: data.module_permissions || {}
+                        module_permissions: data.module_permissions || {},
+                        ...(orgMembership ? {
+                            org: orgMembership.org,
+                            orgs: orgMembership.orgs,
+                            orgRole: orgMembership.orgRole,
+                        } : {}),
                     });
                 }
             } catch (err) {

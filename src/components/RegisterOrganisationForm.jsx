@@ -40,7 +40,7 @@ const RegisterOrganisationForm = ({
 
             const fileExt = file.name.split('.').pop();
             const fileName = `logo_${Date.now()}.${fileExt}`;
-            const filePath = `organizations/logos/${fileName}`;
+            const filePath = `organisations/logos/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
                 .from('profile-pics')
@@ -89,7 +89,7 @@ const RegisterOrganisationForm = ({
                 .replace(/^-+|-+$/g, '');
 
             const { error } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .insert({
                     name: formData.name.trim(),
                     slug,

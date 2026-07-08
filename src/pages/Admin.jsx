@@ -22,7 +22,22 @@ import { Menu, ShieldAlert, ExternalLink, Home, Bell, MapPin, DollarSign, UserPl
 const Admin = () => {
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('tab') || 'dashboard';
+        } catch {
+            return 'dashboard';
+        }
+    });
+    const [orgPortalView, setOrgPortalView] = useState(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('view') === 'host' ? 'host' : 'platform';
+        } catch {
+            return 'platform';
+        }
+    });
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loginLoading, setLoginLoading] = useState(false);
@@ -40,13 +55,13 @@ const Admin = () => {
 
     useEffect(() => {
         const canSeeOrgOversight = permissions?.role === 'super_admin'
-            || (permissions?.role === 'custom' && (permissions?.allowed_tabs || []).includes('organizations'));
+            || (permissions?.role === 'custom' && (permissions?.allowed_tabs || []).includes('organisations'));
         if (!canSeeOrgOversight) return;
 
         const fetchOrgBadgeCount = async () => {
             try {
                 const [{ count: pendingOrgs }, { count: pendingEvents }, { count: pendingAmendments }] = await Promise.all([
-                    supabase.from('organizations').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+                    supabase.from('organisations').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
                     supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('sanction_status', 'pending'),
                     supabase.from('calendar').select('*', { count: 'exact', head: true }).eq('pending_changes_status', 'pending')
                 ]);
@@ -127,7 +142,7 @@ const Admin = () => {
 
     useEffect(() => {
         if (!permissionsLoading && permissions && !hasPermission(activeTab)) {
-            const allTabs = ['dashboard', 'organizations', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
+            const allTabs = ['dashboard', 'organisations', 'players', 'coaches', 'calendar', 'event-mgmt', 'gallery', 'email-broadcast', 'finance', 'blog', 'settings', 'admin-mgmt'];
             const firstAllowed = allTabs.find(tab => hasPermission(tab));
             if (firstAllowed) {
                 setActiveTab(firstAllowed);
@@ -308,7 +323,7 @@ const Admin = () => {
                 permissions={permissions}
                 player={player}
                 session={session}
-                badgeCounts={{ organizations: orgBadgeCount }}
+                badgeCounts={{ organisations: orgBadgeCount }}
             />
 
             <main className={`flex-1 transition-all duration-300 ${isDesktopCollapsed ? 'lg:ml-20' : 'lg:ml-64'} p-4 md:p-8 lg:p-12 overflow-y-auto min-h-screen lg:h-screen bg-gradient-to-br from-black to-[#0F172A]`}>
@@ -408,7 +423,13 @@ const Admin = () => {
                             ) : (
                                 <>
                                     {activeTab === 'dashboard' && <DashboardHome onTabChange={setActiveTab} />}
-                                    {activeTab === 'organizations' && <OrganisationManager permissions={permissions} />}
+                                    {activeTab === 'organisations' && (
+                                        <OrganisationManager
+                                            permissions={permissions}
+                                            initialView={orgPortalView}
+                                            onViewChange={setOrgPortalView}
+                                        />
+                                    )}
                                     {activeTab === 'players' && <PlayerManager />}
                                     {activeTab === 'blog' && <BlogManager />}
                                     {activeTab === 'calendar' && <CalendarManager />}

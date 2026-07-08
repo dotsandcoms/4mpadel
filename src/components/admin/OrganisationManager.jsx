@@ -72,7 +72,7 @@ const CollapsibleSection = ({
     </div>
 );
 
-const OrganisationManager = ({ permissions }) => {
+const OrganisationManager = ({ permissions, initialView = 'platform', onViewChange }) => {
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [activeSection, setActiveSection] = useState('overview'); // overview, create-event, my-events
@@ -165,9 +165,44 @@ const OrganisationManager = ({ permissions }) => {
 
     // Derived flags
     // Oversight view: super admins OR custom 4M admins granted the Organisations tab
-    const isSuperAdmin = permissions?.role === 'super_admin'
-        || (permissions?.role !== 'org_owner' && (permissions?.allowed_tabs || []).includes('organizations'));
-    const currentOrg = permissions?.org; // Available if role === 'org_owner'
+    const canAccessPlatformOversight = permissions?.role === 'super_admin'
+        || (permissions?.role !== 'org_owner' && (permissions?.allowed_tabs || []).includes('organisations'));
+    const currentOrg = permissions?.org; // Linked org (host membership), including for super admins
+    const hasLinkedOrg = Boolean(currentOrg?.id);
+    const [portalMode, setPortalMode] = useState(() => {
+        if (initialView === 'host' && hasLinkedOrg) return 'host';
+        if (!canAccessPlatformOversight && hasLinkedOrg) return 'host';
+        return 'platform';
+    });
+
+    // Keep portal mode in sync when permissions / deep-link view arrive
+    useEffect(() => {
+        if (initialView === 'host' && hasLinkedOrg) {
+            setPortalMode('host');
+        } else if (!canAccessPlatformOversight && hasLinkedOrg) {
+            setPortalMode('host');
+        } else if (canAccessPlatformOversight && !hasLinkedOrg) {
+            setPortalMode('platform');
+        }
+    }, [initialView, hasLinkedOrg, canAccessPlatformOversight]);
+
+    const handlePortalModeChange = (mode) => {
+        setPortalMode(mode);
+        onViewChange?.(mode);
+        try {
+            const params = new URLSearchParams(window.location.search);
+            params.set('tab', 'organisations');
+            if (mode === 'host') params.set('view', 'host');
+            else params.delete('view');
+            const next = `${window.location.pathname}?${params.toString()}`;
+            window.history.replaceState({}, '', next);
+        } catch (_) { /* ignore */ }
+    };
+
+    // True when currently rendering the platform oversight panels
+    const isSuperAdmin = canAccessPlatformOversight && portalMode === 'platform';
+    // True when currently rendering the host org dashboard
+    const isHostView = portalMode === 'host' && hasLinkedOrg;
 
     const [localOrgState, setLocalOrgState] = useState(null);
     const [isSavingOrgSettings, setIsSavingOrgSettings] = useState(false);
@@ -210,7 +245,7 @@ const OrganisationManager = ({ permissions }) => {
         try {
             const fileExt = file.name.split('.').pop();
             const fileName = `logo_${Date.now()}.${fileExt}`;
-            const filePath = `organizations/logos/${fileName}`;
+            const filePath = `organisations/logos/${fileName}`;
 
             let { error: uploadError } = await supabase.storage
                 .from('profile-pics')
@@ -242,7 +277,7 @@ const OrganisationManager = ({ permissions }) => {
         setIsSavingOrgSettings(true);
         try {
             const { data, error } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .update({
                     name: orgSettingsForm.name.trim(),
                     contact_email: orgSettingsForm.contact_email.trim(),
@@ -334,7 +369,7 @@ const OrganisationManager = ({ permissions }) => {
             const { data: events, error } = await supabase
                 .from('calendar')
                 .select('*')
-                .eq('organization_id', currentOrg.id)
+                .eq('organisation_id', currentOrg.id)
                 .order('start_date', { ascending: false });
 
             if (error) throw error;
@@ -362,9 +397,9 @@ const OrganisationManager = ({ permissions }) => {
     const fetchSuperAdminData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch all organizations
+            // 1. Fetch all organisations
             const { data: orgs, error: orgsError } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .select('*, players!created_by(name)')
                 .order('created_at', { ascending: false });
 
@@ -374,7 +409,7 @@ const OrganisationManager = ({ permissions }) => {
             // 2. Fetch all events pending sanctioning
             const { data: events, error: eventsError } = await supabase
                 .from('calendar')
-                .select('*, organizations(name, contact_email)')
+                .select('*, organisations(name, contact_email)')
                 .eq('sanction_status', 'pending')
                 .order('id', { ascending: false });
 
@@ -384,7 +419,7 @@ const OrganisationManager = ({ permissions }) => {
             // 2.5 Fetch all approved events
             const { data: approvedEvs, error: approvedEvsError } = await supabase
                 .from('calendar')
-                .select('*, organizations(name, contact_email)')
+                .select('*, organisations(name, contact_email)')
                 .eq('sanction_status', 'approved')
                 .order('id', { ascending: false });
 
@@ -394,7 +429,7 @@ const OrganisationManager = ({ permissions }) => {
             // 2.6 Pending amendment requests on approved org events
             const { data: amendments, error: amendmentsError } = await supabase
                 .from('calendar')
-                .select('*, organizations(name, contact_email)')
+                .select('*, organisations(name, contact_email)')
                 .eq('pending_changes_status', 'pending')
                 .order('pending_changes_submitted_at', { ascending: true });
 
@@ -435,10 +470,14 @@ const OrganisationManager = ({ permissions }) => {
     useEffect(() => {
         if (isSuperAdmin) {
             fetchSuperAdminData();
+        } else if (isHostView) {
+            fetchHostData();
+        } else if (canAccessPlatformOversight) {
+            fetchSuperAdminData();
         } else {
             fetchHostData();
         }
-    }, [permissions]);
+    }, [permissions, portalMode]);
 
     // Fetch Tournament Entries Telemetry when selectedEventEntries becomes active
     useEffect(() => {
@@ -635,7 +674,7 @@ const OrganisationManager = ({ permissions }) => {
     const handleApproveOrg = async (orgId, applicantEmail, orgName) => {
         try {
             const { error } = await supabase
-                .from('organizations')
+                .from('organisations')
                 .update({
                     status: 'approved',
                     approved_at: new Date().toISOString(),
@@ -647,17 +686,17 @@ const OrganisationManager = ({ permissions }) => {
 
             if (error) throw error;
 
-            // Auto-assign the applicant as the organisation OWNER in organization_members
+            // Auto-assign the applicant as the organisation OWNER in organisation_members
             try {
                 const approvedOrg = allOrgs.find(o => o.id === orgId);
                 const { error: memberError } = await supabase
-                    .from('organization_members')
+                    .from('organisation_members')
                     .upsert({
-                        organization_id: orgId,
+                        organisation_id: orgId,
                         player_id: approvedOrg?.created_by || null,
                         user_email: applicantEmail,
                         role: 'owner'
-                    }, { onConflict: 'organization_id,user_email' });
+                    }, { onConflict: 'organisation_id,user_email' });
                 if (memberError) console.warn('Owner membership assignment warning:', memberError);
             } catch (memberErr) {
                 console.warn('Owner membership assignment failed (non-fatal):', memberErr);
@@ -691,8 +730,8 @@ const OrganisationManager = ({ permissions }) => {
             fetchSuperAdminData();
 
             // Dispatch alert to host club email
-            if (event.organizations?.contact_email) {
-                sendEmail(event.organizations.contact_email, 'event_sanctioned', {
+            if (event.organisations?.contact_email) {
+                sendEmail(event.organisations.contact_email, 'event_sanctioned', {
                     eventName: event.event_name
                 });
             }
@@ -763,8 +802,8 @@ const OrganisationManager = ({ permissions }) => {
             setAmendmentDiff(null);
             fetchSuperAdminData();
 
-            if (ev.organizations?.contact_email) {
-                sendEmail(ev.organizations.contact_email, 'event_sanctioned', {
+            if (ev.organisations?.contact_email) {
+                sendEmail(ev.organisations.contact_email, 'event_sanctioned', {
                     eventName: `Amendment approved — ${draft.payload.event_name || ev.event_name}`
                 });
             }
@@ -858,7 +897,7 @@ const OrganisationManager = ({ permissions }) => {
         try {
             if (type === 'org') {
                 const { error } = await supabase
-                    .from('organizations')
+                    .from('organisations')
                     .update({
                         status: 'rejected',
                         rejection_notes: notes.trim()
@@ -951,7 +990,7 @@ const OrganisationManager = ({ permissions }) => {
             ev.event_name?.toLowerCase().includes(searchLower) ||
             ev.venue?.toLowerCase().includes(searchLower) ||
             ev.city?.toLowerCase().includes(searchLower) ||
-            ev.organizations?.name?.toLowerCase().includes(searchLower) ||
+            ev.organisations?.name?.toLowerCase().includes(searchLower) ||
             ev.organizer_name?.toLowerCase().includes(searchLower) ||
             ev.sapa_status?.toLowerCase().includes(searchLower)
         );
@@ -973,17 +1012,43 @@ const OrganisationManager = ({ permissions }) => {
                 <div>
                     <h2 className="text-3xl font-extrabold text-white flex items-center gap-2">
                         <Building className="text-padel-green" />
-                        {isSuperAdmin ? 'Organisation Portal' : currentOrg?.name}
+                        {isHostView ? (currentOrg?.name || 'Organisation Dashboard') : 'Organisation Portal'}
                     </h2>
                     <p className="text-gray-400 text-sm mt-1">
-                        {isSuperAdmin
-                            ? 'Sanction host clubs, approve events, and review platform telemetry'
-                            : 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries'}
+                        {isHostView
+                            ? 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries'
+                            : 'Sanction host clubs, approve events, and review platform telemetry'}
                     </p>
                 </div>
 
-                {!isSuperAdmin && (
-                    <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    {canAccessPlatformOversight && hasLinkedOrg && (
+                        <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => handlePortalModeChange('platform')}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    portalMode === 'platform'
+                                        ? 'bg-amber-500 text-black'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                Platform Overview
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handlePortalModeChange('host')}
+                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    portalMode === 'host'
+                                        ? 'bg-padel-green text-black'
+                                        : 'text-gray-400 hover:text-white'
+                                }`}
+                            >
+                                My Organisation
+                            </button>
+                        </div>
+                    )}
+                    {isHostView && (
                         <button
                             onClick={() => {
                                 setBuilderEvent(null);
@@ -993,8 +1058,8 @@ const OrganisationManager = ({ permissions }) => {
                         >
                             Sanction Event <Plus size={14} />
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* ========================================================
@@ -1160,8 +1225,8 @@ const OrganisationManager = ({ permissions }) => {
                                                     <span className="text-xs text-gray-500 block mt-0.5">{ev.city}</span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <span className="font-medium text-white block">{ev.organizations?.name || 'Unknown Club'}</span>
-                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organizations?.contact_email}</span>
+                                                    <span className="font-medium text-white block">{ev.organisations?.name || 'Unknown Club'}</span>
+                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organisations?.contact_email}</span>
                                                 </td>
                                                 <td className="py-4 px-4 align-middle">
                                                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getTierBadgeClass(ev.sapa_status)}`}>
@@ -1186,7 +1251,7 @@ const OrganisationManager = ({ permissions }) => {
                                                             <Check size={12} /> Sanction
                                                         </button>
                                                         <button
-                                                            onClick={() => openRejectionModal('event', ev.id, ev.organizations?.contact_email || '', ev.event_name)}
+                                                            onClick={() => openRejectionModal('event', ev.id, ev.organisations?.contact_email || '', ev.event_name)}
                                                             className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-wider text-[10px] px-3 py-2 rounded-lg transition-all cursor-pointer"
                                                         >
                                                             Decline
@@ -1219,7 +1284,7 @@ const OrganisationManager = ({ permissions }) => {
                                         <div className="min-w-0">
                                             <span className="font-bold text-white block truncate">{ev.event_name}</span>
                                             <span className="text-xs text-gray-500 block mt-0.5">
-                                                {ev.organizations?.name || 'Unknown host'} · submitted {ev.pending_changes_submitted_at ? new Date(ev.pending_changes_submitted_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : '—'}
+                                                {ev.organisations?.name || 'Unknown host'} · submitted {ev.pending_changes_submitted_at ? new Date(ev.pending_changes_submitted_at).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' }) : '—'}
                                                 · {getAmendmentChanges(ev).length} change(s)
                                             </span>
                                         </div>
@@ -1237,7 +1302,7 @@ const OrganisationManager = ({ permissions }) => {
                                                 <Check size={12} /> Approve & Apply
                                             </button>
                                             <button
-                                                onClick={() => openRejectionModal('amendment', ev.id, ev.organizations?.contact_email || '', ev.event_name)}
+                                                onClick={() => openRejectionModal('amendment', ev.id, ev.organisations?.contact_email || '', ev.event_name)}
                                                 className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-wider text-[10px] px-3 py-2 rounded-lg transition-all cursor-pointer"
                                             >
                                                 Decline
@@ -1297,8 +1362,8 @@ const OrganisationManager = ({ permissions }) => {
                                                     <span className="text-xs text-gray-500 block mt-0.5">{ev.city}</span>
                                                 </td>
                                                 <td className="py-4 px-4">
-                                                    <span className="font-medium text-white block">{ev.organizations?.name || ev.organizer_name || 'Unknown Club'}</span>
-                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organizations?.contact_email || ev.organizer_email}</span>
+                                                    <span className="font-medium text-white block">{ev.organisations?.name || ev.organizer_name || 'Unknown Club'}</span>
+                                                    <span className="text-xs text-gray-500 block mt-0.5">{ev.organisations?.contact_email || ev.organizer_email}</span>
                                                 </td>
                                                 <td className="py-4 px-4 align-middle">
                                                     <span className={`px-2.5 py-0.5 rounded text-[10px] font-bold uppercase border ${getTierBadgeClass(ev.sapa_status)}`}>
@@ -1328,7 +1393,7 @@ const OrganisationManager = ({ permissions }) => {
                                                         </button>
                                                         <button
                                                             onClick={() => {
-                                                                openRejectionModal('event', ev.id, ev.organizations?.contact_email || ev.organizer_email || '', ev.event_name);
+                                                                openRejectionModal('event', ev.id, ev.organisations?.contact_email || ev.organizer_email || '', ev.event_name);
                                                                 setSelectedEventDetails(null);
                                                             }}
                                                             className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1"
@@ -1398,7 +1463,7 @@ const OrganisationManager = ({ permissions }) => {
             {/* ========================================================
                 ORGANISATION HOST VIEW
                ======================================================== */}
-            {!isSuperAdmin && (
+            {isHostView && (
                 <div className="space-y-8">
                     {/* View Switcher Tabs */}
                     {activeSection !== 'create-event' && (
@@ -1760,22 +1825,22 @@ const OrganisationManager = ({ permissions }) => {
                                     </div>
                                     <p className="text-gray-500 text-xs mt-1">
                                         Requested by{' '}
-                                        {selectedEventDetails.organization_id ? (
+                                        {selectedEventDetails.organisation_id ? (
                                             <button
                                                 onClick={() => {
-                                                    const org = allOrgs.find(o => o.id === selectedEventDetails.organization_id);
+                                                    const org = allOrgs.find(o => o.id === selectedEventDetails.organisation_id);
                                                     if (org) setSelectedOrgDetails(org);
                                                 }}
                                                 className="text-padel-green hover:underline font-extrabold cursor-pointer transition-colors"
                                             >
-                                                {selectedEventDetails.organizations?.name || 'View Host Club'}
+                                                {selectedEventDetails.organisations?.name || 'View Host Club'}
                                             </button>
                                         ) : (
                                             <span className="text-gray-300 font-bold">
                                                 {selectedEventDetails.organizer_name || 'Unknown Club'}
                                             </span>
                                         )}{' '}
-                                        ({selectedEventDetails.organizations?.contact_email || selectedEventDetails.organizer_email})
+                                        ({selectedEventDetails.organisations?.contact_email || selectedEventDetails.organizer_email})
                                     </p>
                                 </div>
                             </div>
@@ -2090,7 +2155,7 @@ const OrganisationManager = ({ permissions }) => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        openRejectionModal('event', selectedEventDetails.id, selectedEventDetails.organizations?.contact_email || selectedEventDetails.organizer_email || '', selectedEventDetails.event_name);
+                                        openRejectionModal('event', selectedEventDetails.id, selectedEventDetails.organisations?.contact_email || selectedEventDetails.organizer_email || '', selectedEventDetails.event_name);
                                         setSelectedEventDetails(null);
                                     }}
                                     className="px-6 py-3.5 bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-bold uppercase tracking-wider text-xs rounded-xl transition-all cursor-pointer"
@@ -2295,7 +2360,7 @@ const OrganisationManager = ({ permissions }) => {
                                 <span className="text-[10px] text-amber-400 font-black uppercase tracking-widest">Amendment Review</span>
                                 <h3 className="text-xl font-black text-white mt-1 leading-tight">{amendmentDiff.event_name}</h3>
                                 <p className="text-xs text-gray-500 mt-1">
-                                    Requested by {amendmentDiff.organizations?.name || 'Unknown host'} — the live event keeps its current details until you approve.
+                                    Requested by {amendmentDiff.organisations?.name || 'Unknown host'} — the live event keeps its current details until you approve.
                                 </p>
                             </div>
 
@@ -2323,7 +2388,7 @@ const OrganisationManager = ({ permissions }) => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        openRejectionModal('amendment', amendmentDiff.id, amendmentDiff.organizations?.contact_email || '', amendmentDiff.event_name);
+                                        openRejectionModal('amendment', amendmentDiff.id, amendmentDiff.organisations?.contact_email || '', amendmentDiff.event_name);
                                         setAmendmentDiff(null);
                                     }}
                                     className="bg-red-500/10 hover:bg-red-500 hover:text-black border border-red-500/20 text-red-400 font-black uppercase tracking-widest text-xs px-6 py-3.5 rounded-xl transition-all cursor-pointer"
@@ -2345,7 +2410,7 @@ const OrganisationManager = ({ permissions }) => {
                 onClose={() => { setBuilderOpen(false); setBuilderEvent(null); }}
                 onSaved={handleBuilderSaved}
                 editingEvent={builderEvent}
-                organization={!isSuperAdmin ? currentOrg : null}
+                organization={isHostView ? currentOrg : null}
             />
 
             {/* ========================================================
