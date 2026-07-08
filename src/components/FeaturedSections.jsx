@@ -1228,7 +1228,7 @@ const FeaturedSections = ({ session = null }) => {
     const loggedOutCta = !session ? (
         <section className="relative border-t border-white/5 bg-[#05070A] pt-3 pb-4 lg:pt-4 lg:pb-4">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8">
-                <CommunityCtaBanner />
+                <CommunityCtaBanner fullWidth />
             </div>
         </section>
     ) : null;

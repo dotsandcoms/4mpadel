@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Users } from 'lucide-react';
 import AuthModal from './AuthModal';
 
-const CommunityCtaBanner = ({ className = '' }) => {
+const CommunityCtaBanner = ({ className = '', fullWidth = false }) => {
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
     return (
@@ -12,7 +12,9 @@ const CommunityCtaBanner = ({ className = '' }) => {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                className={`bg-[#111827] rounded-2xl p-4 sm:p-5 border border-white/5 flex flex-row items-center justify-between gap-4 relative overflow-hidden max-w-3xl shadow-2xl ${className}`}
+                className={`bg-[#111827] p-4 sm:p-5 border border-white/5 flex flex-row items-center justify-between gap-4 relative overflow-hidden shadow-2xl rounded-2xl ${
+                    fullWidth ? 'w-full max-w-none' : 'max-w-3xl'
+                } ${className}`}
             >
                 <div className="absolute top-0 right-0 w-48 h-48 bg-padel-green/20 blur-[50px] pointer-events-none rounded-full translate-x-1/4 -translate-y-1/4" />
 
