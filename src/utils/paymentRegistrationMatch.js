@@ -84,8 +84,23 @@ export function paymentStrictlyCoversRegistration(payment, reg) {
     const email = norm(reg.email);
     const division = reg.division || reg.class_name;
 
-    if (!email || !division) return false;
+    if (!email) return false;
     if (meta.registration_id === reg.id) return true;
+
+    // Paystack-synced gateway rows (incl. legacy MANUAL-* refs from finance import)
+    if (isPaystackPaymentMethod(payment.payment_method)) {
+        const { top, inner } = getPaymentMetadataLayers(meta);
+        const payEventId = payment.event_id ?? top.event_id ?? inner.event_id ?? meta.original_trx?.metadata?.event_id;
+        const regEventId = reg.event_id;
+        if (payEventId != null && regEventId != null && Number(payEventId) === Number(regEventId)) {
+            if (paymentEmailsFor(meta).has(email)) {
+                const payDiv = top.division ?? inner.division;
+                if (!payDiv || !division || payDiv === division) return true;
+            }
+        }
+    }
+
+    if (!division) return false;
 
     return paymentEntryCoversFor(meta).some(
         (cover) => cover.type === 'entry'

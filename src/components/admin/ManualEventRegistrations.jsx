@@ -21,6 +21,7 @@ import {
     resolveRegistrationPayer,
 } from '../../utils/paymentRegistrationMatch';
 import { sendEmail } from '../../utils/emails';
+import AdminPlayerProfileModal from './AdminPlayerProfileModal';
 
 const fmtR = (n) => `R ${Number(n || 0).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`;
 
@@ -157,6 +158,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [sortBy, setSortBy] = useState('division'); // 'division' | 'name' | 'recent'
     const [profileResults, setProfileResults] = useState([]); // profiles not yet entered (for invite)
     const [matchingProfileReg, setMatchingProfileReg] = useState(null);
+    const [profileViewTarget, setProfileViewTarget] = useState(null);
     const [profileLinkSearch, setProfileLinkSearch] = useState('');
     const [profileLinkResults, setProfileLinkResults] = useState([]);
     const [profileLinkBusy, setProfileLinkBusy] = useState(false);
@@ -1142,19 +1144,29 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         return Number(getPlayerProfile(reg)?.points || 0);
     }, [getPlayerProfile]);
 
+    const openProfileLinkModal = useCallback((reg) => {
+        const profile = getPlayerProfile(reg);
+        setMatchingProfileReg(reg);
+        setProfileLinkSearch(profile?.name || reg.full_name || reg.email || '');
+    }, [getPlayerProfile]);
+
     const renderProfileLink = useCallback((reg) => {
         const profile = getPlayerProfile(reg);
         if (profile) {
             return (
                 <div className="flex items-center gap-2 text-padel-green font-bold text-sm min-w-0">
                     <CheckCircle size={14} className="shrink-0" />
-                    <span className="truncate">{profile.name || reg.full_name}</span>
                     <button
                         type="button"
-                        onClick={() => {
-                            setMatchingProfileReg(reg);
-                            setProfileLinkSearch(profile.name || reg.full_name || '');
-                        }}
+                        onClick={() => setProfileViewTarget(reg)}
+                        className="truncate text-left hover:underline hover:text-padel-green/90 transition-colors"
+                        title="View profile"
+                    >
+                        {profile.name || reg.full_name}
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => openProfileLinkModal(reg)}
                         className="text-gray-500 hover:text-white transition-colors shrink-0"
                         title="Change linked profile"
                     >
@@ -1164,19 +1176,38 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             );
         }
         return (
-            <button
-                type="button"
-                onClick={() => {
-                    setMatchingProfileReg(reg);
-                    setProfileLinkSearch(reg.full_name || reg.email || '');
-                }}
-                className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors italic text-sm"
-            >
-                <UserPlus size={14} className="shrink-0" />
-                Link Profile
-            </button>
+            <div className="flex items-center gap-2 min-w-0">
+                <button
+                    type="button"
+                    onClick={() => setProfileViewTarget(reg)}
+                    className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors italic text-sm truncate"
+                    title="View registration details"
+                >
+                    <UserPlus size={14} className="shrink-0" />
+                    <span className="truncate">{reg.full_name || 'Link Profile'}</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => openProfileLinkModal(reg)}
+                    className="text-gray-500 hover:text-sky-400 transition-colors shrink-0 text-[10px] font-bold uppercase"
+                    title="Link 4M profile"
+                >
+                    Link
+                </button>
+            </div>
         );
-    }, [getPlayerProfile]);
+    }, [getPlayerProfile, openProfileLinkModal]);
+
+    const renderPlayerNameButton = useCallback((reg, className = '') => (
+        <button
+            type="button"
+            onClick={() => setProfileViewTarget(reg)}
+            className={`text-left hover:text-padel-green hover:underline transition-colors ${className}`}
+            title="View profile"
+        >
+            {reg.full_name}
+        </button>
+    ), []);
 
     const searchProfilesForLink = useCallback(async (query) => {
         const q = (query || '').trim();
@@ -1884,7 +1915,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                                         </td>
                                                                         <td className="py-4 px-4 align-middle">
                                                                             <TeamPlayerRows players={team.players}>
-                                                                                {(p) => <div className="text-sm text-gray-300">{p.full_name}</div>}
+                                                                                {(p) => renderPlayerNameButton(p, 'text-sm text-gray-300 font-medium')}
                                                                             </TeamPlayerRows>
                                                                         </td>
                                                                         <td className="py-4 px-4 align-middle">
@@ -2070,7 +2101,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                                 {filtered.map((r) => (
                                                     <tr key={r.id} className="border-b border-white/5 hover:bg-white/5">
                                                         <td className="py-3 px-6">
-                                                            <div className="font-bold text-white">{r.full_name}</div>
+                                                            {renderPlayerNameButton(r, 'font-bold text-white')}
                                                             <div className="text-[11px] text-gray-500">{r.email}</div>
                                                         </td>
                                                         <td className="py-3 px-4">{renderProfileLink(r)}</td>
@@ -2279,6 +2310,21 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 </button>
                             </div>
                         </div>
+                    )}
+
+                    {profileViewTarget && (
+                        <AdminPlayerProfileModal
+                            registration={profileViewTarget}
+                            initialProfile={getPlayerProfile(profileViewTarget)}
+                            eventId={event?.id}
+                            eventRegistrations={registrations}
+                            payments={payments}
+                            onClose={() => setProfileViewTarget(null)}
+                            onLinkProfile={(reg) => {
+                                setProfileViewTarget(null);
+                                openProfileLinkModal(reg);
+                            }}
+                        />
                     )}
 
                     {unmarkTarget && (
