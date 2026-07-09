@@ -5,10 +5,10 @@ import { sendEmail } from '../../utils/emails';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    Building, Users, Trophy, DollarSign, Calendar, Plus, Check, X,
+    Building, Users, Trophy, Calendar, Plus, Check, X,
     AlertCircle, RefreshCw, Mail, Phone, Edit3, Trash2, ArrowLeft,
     ShieldCheck, CheckCircle2, ChevronRight, MessageSquare, Globe, PlusCircle, HelpCircle,
-    ChevronDown, Eye, Edit, ExternalLink, ScrollText
+    ChevronDown, Eye, Edit, ExternalLink, ScrollText, LayoutDashboard
 } from 'lucide-react';
 import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
@@ -170,27 +170,34 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // Oversight view: super admins OR custom 4M admins granted the Organisations tab
     const canAccessPlatformOversight = permissions?.role === 'super_admin'
         || (permissions?.role !== 'org_owner' && (permissions?.allowed_tabs || []).includes('organisations'));
-    const currentOrg = permissions?.org; // Linked org (host membership), including for super admins
+    // Linked membership org (host membership), including for super admins
+    const membershipOrg = permissions?.org;
+    // Platform admins can temporarily open any approved org's host dashboard
+    const [impersonatedOrg, setImpersonatedOrg] = useState(null);
+    const currentOrg = impersonatedOrg || membershipOrg;
     const hasLinkedOrg = Boolean(currentOrg?.id);
+    const isImpersonatingOrg = Boolean(impersonatedOrg?.id)
+        && impersonatedOrg.id !== membershipOrg?.id;
     const [portalMode, setPortalMode] = useState(() => {
-        if (initialView === 'host' && hasLinkedOrg) return 'host';
-        if (!canAccessPlatformOversight && hasLinkedOrg) return 'host';
+        if (initialView === 'host' && (membershipOrg?.id || impersonatedOrg?.id)) return 'host';
+        if (!canAccessPlatformOversight && membershipOrg?.id) return 'host';
         return 'platform';
     });
 
     // Keep portal mode in sync when permissions / deep-link view arrive
     useEffect(() => {
-        if (initialView === 'host' && hasLinkedOrg) {
+        if (initialView === 'host' && (membershipOrg?.id || impersonatedOrg?.id)) {
             setPortalMode('host');
-        } else if (!canAccessPlatformOversight && hasLinkedOrg) {
+        } else if (!canAccessPlatformOversight && membershipOrg?.id) {
             setPortalMode('host');
-        } else if (canAccessPlatformOversight && !hasLinkedOrg) {
+        } else if (canAccessPlatformOversight && !membershipOrg?.id && !impersonatedOrg?.id) {
             setPortalMode('platform');
         }
-    }, [initialView, hasLinkedOrg, canAccessPlatformOversight]);
+    }, [initialView, membershipOrg?.id, impersonatedOrg?.id, canAccessPlatformOversight]);
 
     const handlePortalModeChange = (mode) => {
         setPortalMode(mode);
+        if (mode === 'platform') setImpersonatedOrg(null);
         onViewChange?.(mode);
         try {
             const params = new URLSearchParams(window.location.search);
@@ -200,6 +207,30 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             const next = `${window.location.pathname}?${params.toString()}`;
             window.history.replaceState({}, '', next);
         } catch (_) { /* ignore */ }
+    };
+
+    /** Open an organisation's host dashboard (create events, manage entries, settings). */
+    const openOrgDashboard = (org) => {
+        if (!org?.id) return;
+        if (org.status && org.status !== 'approved') {
+            toast.error('Only approved organisations have a host dashboard.');
+            return;
+        }
+        setImpersonatedOrg(org);
+        setPortalMode('host');
+        setActiveSection('overview');
+        setSelectedOrgDetails(null);
+        setOrgDetailsMode('view');
+        onViewChange?.('host');
+        try {
+            const params = new URLSearchParams(window.location.search);
+            params.set('tab', 'organisations');
+            params.set('view', 'host');
+            params.set('org', org.slug || org.id);
+            const next = `${window.location.pathname}?${params.toString()}`;
+            window.history.replaceState({}, '', next);
+        } catch (_) { /* ignore */ }
+        toast.success(`Opened ${org.name} dashboard`);
     };
 
     // True when currently rendering the platform oversight panels
@@ -480,7 +511,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         } else {
             fetchHostData();
         }
-    }, [permissions, portalMode]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [permissions, portalMode, currentOrg?.id]);
 
     // Fetch Tournament Entries Telemetry when selectedEventEntries becomes active
     useEffect(() => {
@@ -1020,13 +1052,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                     </h2>
                     <p className="text-gray-400 text-sm mt-1">
                         {isHostView
-                            ? 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries'
+                            ? (isImpersonatingOrg
+                                ? `Managing ${currentOrg?.name} — create events, review entries, and update host settings`
+                                : 'Host Dashboard - Create tournaments, configure entry seeds, and inspect entries')
                             : 'Sanction host clubs, approve events, and review platform telemetry'}
                     </p>
                 </div>
 
                 <div className="flex items-center gap-3 flex-wrap">
-                    {canAccessPlatformOversight && hasLinkedOrg && (
+                    {canAccessPlatformOversight && (membershipOrg || impersonatedOrg) && (
                         <div className="flex items-center gap-1 p-1 rounded-xl bg-white/5 border border-white/10">
                             <button
                                 type="button"
@@ -1039,18 +1073,36 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             >
                                 Platform Overview
                             </button>
-                            <button
-                                type="button"
-                                onClick={() => handlePortalModeChange('host')}
-                                className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
-                                    portalMode === 'host'
-                                        ? 'bg-padel-green text-black'
-                                        : 'text-gray-400 hover:text-white'
-                                }`}
-                            >
-                                My Organisation
-                            </button>
+                            {(membershipOrg || impersonatedOrg) && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (impersonatedOrg) {
+                                            handlePortalModeChange('host');
+                                        } else if (membershipOrg) {
+                                            setImpersonatedOrg(null);
+                                            handlePortalModeChange('host');
+                                        }
+                                    }}
+                                    className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        portalMode === 'host'
+                                            ? 'bg-padel-green text-black'
+                                            : 'text-gray-400 hover:text-white'
+                                    }`}
+                                >
+                                    {isImpersonatingOrg ? currentOrg?.name : 'My Organisation'}
+                                </button>
+                            )}
                         </div>
+                    )}
+                    {isImpersonatingOrg && isHostView && (
+                        <button
+                            type="button"
+                            onClick={() => handlePortalModeChange('platform')}
+                            className="px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-all"
+                        >
+                            Exit Dashboard
+                        </button>
                     )}
                     {permissions?.role === 'super_admin' && isSuperAdmin && (
                         <button
@@ -1121,7 +1173,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md p-5 rounded-2xl hover:border-white/20 transition-all shadow-xl relative overflow-hidden group text-left">
                             <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 blur-xl rounded-full pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
                             <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-3 border border-emerald-500/20">
-                                <DollarSign size={16} />
+                                <span className="text-sm font-black leading-none">R</span>
                             </div>
                             <span className="text-[10px] uppercase font-black text-emerald-400 tracking-wider block">Gross Entry Revenue</span>
                             <div className="text-2xl font-black text-emerald-400 mt-1">R {stats.totalRevenue.toLocaleString()}</div>
@@ -1562,7 +1614,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md p-5 rounded-2xl hover:border-white/20 transition-all shadow-xl relative overflow-hidden group text-left">
                                     <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 blur-xl rounded-full pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
                                     <div className="w-8 h-8 rounded-lg bg-emerald-400/10 text-emerald-400 flex items-center justify-center mb-3 border border-emerald-500/20">
-                                        <DollarSign size={16} />
+                                        <span className="text-sm font-black leading-none">R</span>
                                     </div>
                                     <span className="text-[10px] uppercase font-black text-emerald-400 tracking-wider block">Entry Revenue</span>
                                     <div className="text-2xl font-black text-emerald-400 mt-1">R {hostStats.totalEarned.toLocaleString()}</div>
@@ -1711,7 +1763,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                                 : 'bg-red-500/10 text-red-400 border-red-500/20'
                                                         }`}
                                                     >
-                                                        {ev.sanction_status === 'approved' ? 'Sanctioned' : ev.sanction_status}
+                                                        {ev.sanction_status === 'approved' ? 'Approved' : ev.sanction_status}
                                                     </span>
                                                 </div>
 
@@ -1766,7 +1818,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                             rel="noopener noreferrer"
                                                             className="text-[10px] font-black text-gray-400 hover:text-white uppercase tracking-widest flex items-center gap-1"
                                                         >
-                                                            View Bracket &rarr;
+                                                            View Event &rarr;
                                                         </a>
                                                     )}
                                                     {ev.sanction_status !== 'approved' ? (
@@ -2349,6 +2401,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                             {/* Actions */}
                             <div className="pt-2 space-y-2">
+                                {selectedOrgDetails.status === 'approved' && (
+                                    <button
+                                        type="button"
+                                        onClick={() => openOrgDashboard(selectedOrgDetails)}
+                                        className="w-full py-3.5 bg-padel-green hover:bg-white text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                    >
+                                        <LayoutDashboard size={14} /> Open Organisation Dashboard
+                                    </button>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => setOrgDetailsMode('edit')}
@@ -2364,9 +2425,9 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             setSelectedOrgDetails(null);
                                             navigate(`/organisations/${slug}`);
                                         }}
-                                        className="w-full py-3.5 bg-padel-green hover:bg-white text-black font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                        className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
                                     >
-                                        <Eye size={14} /> View Organisation
+                                        <Eye size={14} /> View Public Page
                                     </button>
                                 )}
                                 <button
@@ -2623,7 +2684,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                                 <div className="bg-white/[0.02] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-inner relative overflow-hidden">
                                     <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                                        <DollarSign size={20} />
+                                        <span className="text-lg font-black leading-none">R</span>
                                     </div>
                                     <div>
                                         <span className="text-gray-500 text-[10px] font-black uppercase tracking-wider block">Est. Revenue (Paid)</span>
