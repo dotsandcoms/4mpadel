@@ -13,6 +13,15 @@ const labelClass = "block text-[10px] font-black text-gray-400 mb-1.5 uppercase 
 const COLOR_PRESETS = ['#9AE900', '#F97316', '#3B82F6', '#EF4444', '#A855F7', '#14B8A6', '#EAB308', '#EC4899'];
 
 const emptyContact = () => ({ role: '', name: '', email: '', phone: '', whatsapp: '' });
+const emptySponsor = () => ({ name: '', tier: 'Official Partner', logo_url: '' });
+
+const SPONSOR_TIER_OPTIONS = [
+    'Title Sponsor',
+    'Gold Partner',
+    'Silver Partner',
+    'Official Partner',
+    'Supporting Partner',
+];
 
 const CONTACT_ROLE_OPTIONS = [
     'Tournament Director',
@@ -41,7 +50,7 @@ const roleOptionsForContact = (currentRole) => {
 const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const [form, setForm] = useState(null);
     const [saving, setSaving] = useState(false);
-    const [uploading, setUploading] = useState(null); // 'logo' | 'cover'
+    const [uploading, setUploading] = useState(null); // 'logo' | 'cover' | `sponsor-${idx}`
 
     useEffect(() => {
         if (!org) return;
@@ -67,6 +76,13 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
             contacts: Array.isArray(org.contacts) && org.contacts.length > 0
                 ? org.contacts.map(c => ({ ...emptyContact(), ...c }))
                 : [],
+            sponsors: Array.isArray(org.sponsors)
+                ? org.sponsors.map((s) => ({
+                    name: s.name || '',
+                    tier: s.tier || 'Official Partner',
+                    logo_url: s.logo_url || '',
+                }))
+                : [],
             ...(adminMode ? {
                 status: org.status || 'pending',
                 verified: Boolean(org.verified),
@@ -81,25 +97,38 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const setSocial = (name, value) => setForm(prev => ({ ...prev, socials: { ...prev.socials, [name]: value } }));
     const setContact = (idx, key, value) =>
         setForm(prev => ({ ...prev, contacts: prev.contacts.map((c, i) => i === idx ? { ...c, [key]: value } : c) }));
+    const setSponsor = (idx, key, value) =>
+        setForm(prev => ({ ...prev, sponsors: prev.sponsors.map((s, i) => i === idx ? { ...s, [key]: value } : s) }));
 
-    const handleUpload = async (e, kind) => {
+    const handleUpload = async (e, kind, sponsorIdx = null) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        const maxMb = kind === 'logo' ? 2 : 5;
-        if (file.size > maxMb * 1024 * 1024) return toast.error(`${kind === 'logo' ? 'Logo' : 'Cover'} must be under ${maxMb}MB.`);
-        setUploading(kind);
+        const isSponsor = kind === 'sponsor';
+        const maxMb = kind === 'logo' || isSponsor ? 2 : 5;
+        if (file.size > maxMb * 1024 * 1024) {
+            return toast.error(`${isSponsor ? 'Sponsor logo' : kind === 'logo' ? 'Logo' : 'Cover'} must be under ${maxMb}MB.`);
+        }
+        const uploadKey = isSponsor ? `sponsor-${sponsorIdx}` : kind;
+        setUploading(uploadKey);
         try {
             const ext = file.name.split('.').pop();
-            const path = `organisations/${kind === 'logo' ? 'logos' : 'covers'}/${org.id}_${Date.now()}.${ext}`;
+            const folder = isSponsor ? 'sponsors' : (kind === 'logo' ? 'logos' : 'covers');
+            const path = `organisations/${folder}/${org.id}_${Date.now()}.${ext}`;
             const { error } = await supabase.storage.from('profile-pics').upload(path, file, { cacheControl: '3600', upsert: true });
             if (error) throw error;
             const { data: { publicUrl } } = supabase.storage.from('profile-pics').getPublicUrl(path);
-            setField(kind === 'logo' ? 'logo_url' : 'cover_image_url', publicUrl);
-            toast.success(`${kind === 'logo' ? 'Logo' : 'Cover image'} uploaded 🎨`);
+            if (isSponsor && sponsorIdx != null) {
+                setSponsor(sponsorIdx, 'logo_url', publicUrl);
+                toast.success('Sponsor logo uploaded');
+            } else {
+                setField(kind === 'logo' ? 'logo_url' : 'cover_image_url', publicUrl);
+                toast.success(`${kind === 'logo' ? 'Logo' : 'Cover image'} uploaded`);
+            }
         } catch (err) {
             toast.error(`Upload failed: ${err.message}`);
         } finally {
             setUploading(null);
+            e.target.value = '';
         }
     };
 
@@ -129,6 +158,13 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                         role: c.role.trim(), name: c.name.trim(), email: c.email.trim(),
                         phone: c.phone.trim(), whatsapp: c.whatsapp.trim(),
                     })),
+                sponsors: (form.sponsors || [])
+                    .filter((s) => (s.name || '').trim() || s.logo_url)
+                    .map((s) => ({
+                        name: (s.name || '').trim(),
+                        tier: (s.tier || 'Official Partner').trim(),
+                        logo_url: s.logo_url || '',
+                    })),
             };
 
             if (adminMode) {
@@ -148,7 +184,7 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
             if (error) throw error;
             if (!data || data.length === 0) throw new Error('Update was not permitted. Ensure you are an owner/admin of this organisation.');
 
-            toast.success(adminMode ? 'Organisation updated successfully.' : 'Profile updated — your public page is live with the changes 🎾');
+            toast.success(adminMode ? 'Organisation updated successfully.' : 'Profile updated — your public page is live with the changes');
             onSaved?.(data[0]);
         } catch (err) {
             console.error('Org profile save failed:', err);
@@ -381,6 +417,83 @@ const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
                         </div>
                     ))}
                 </div>
+            </div>
+
+            {/* Sponsors & Partners */}
+            <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.25em] text-padel-green">Sponsors & Partners</span>
+                    <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, sponsors: [...prev.sponsors, emptySponsor()] }))}
+                        className="inline-flex items-center gap-1.5 bg-white/5 border border-white/10 hover:bg-white/10 text-gray-200 text-[10px] font-black uppercase tracking-wider px-3 py-2 rounded-lg transition-all cursor-pointer"
+                    >
+                        <Plus size={12} /> Add Sponsor
+                    </button>
+                </div>
+                {form.sponsors.length === 0 ? (
+                    <p className="text-xs text-gray-500">Add sponsor logos and tiers — they appear on your public organisation page.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {form.sponsors.map((s, i) => (
+                            <div key={i} className="bg-black/30 border border-white/5 rounded-2xl p-4 relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setForm(prev => ({ ...prev, sponsors: prev.sponsors.filter((_, idx) => idx !== i) }))}
+                                    className="absolute top-3 right-3 p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
+                                >
+                                    <Trash2 size={13} />
+                                </button>
+                                <div className="flex flex-col sm:flex-row gap-4 pr-8">
+                                    <div className="shrink-0">
+                                        <div className="w-20 h-20 rounded-xl bg-black/40 border border-white/10 overflow-hidden flex items-center justify-center">
+                                            {s.logo_url ? (
+                                                <img src={s.logo_url} alt={s.name || 'Sponsor'} className="w-full h-full object-contain p-2" />
+                                            ) : (
+                                                <ImageIcon size={22} className="text-gray-600" />
+                                            )}
+                                        </div>
+                                        <label className="mt-2 inline-flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-padel-green cursor-pointer hover:text-white transition-colors">
+                                            <Upload size={11} />
+                                            {uploading === `sponsor-${i}` ? 'Uploading…' : (s.logo_url ? 'Replace' : 'Upload')}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => handleUpload(e, 'sponsor', i)}
+                                                disabled={uploading === `sponsor-${i}`}
+                                            />
+                                        </label>
+                                    </div>
+                                    <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+                                        <div>
+                                            <label className={labelClass}>Tier</label>
+                                            <select
+                                                value={s.tier}
+                                                onChange={(e) => setSponsor(i, 'tier', e.target.value)}
+                                                className={`${inputClass} cursor-pointer`}
+                                            >
+                                                {SPONSOR_TIER_OPTIONS.map((tier) => (
+                                                    <option key={tier} value={tier}>{tier}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className={labelClass}>Name</label>
+                                            <input
+                                                type="text"
+                                                value={s.name}
+                                                onChange={(e) => setSponsor(i, 'name', e.target.value)}
+                                                placeholder="Sponsor name"
+                                                className={inputClass}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
             </div>
 
             {/* Contacts directory */}

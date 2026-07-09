@@ -754,9 +754,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
         'cut_off_times', 'draw_released', 'contact_details', 'organizer_phone',
         'organizer_email', 'organizer_website', 'custom_image_url', 'sponsor_logos',
-        'registration_closes_at', 'event_dates', 'golden_point', 'is_league',
+        'registration_closes_at', 'registration_opens_at', 'event_dates', 'golden_point', 'is_league',
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
-        'allow_payments'
+        'allow_payments', 'allow_temporary_license', 'license_required_default', 'entry_fee_notes',
+        'indoor_outdoor', 'courts_count'
     ];
 
     // Super Admin - Approve a draft amendment: apply payload + divisions
@@ -785,7 +786,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             if (removedIds.length) {
                 await supabase.from('tournament_divisions').delete().in('id', removedIds);
             }
-            const DIVISION_ALLOWED_KEYS = ['name', 'entry_fee', 'format', 'entries_close_at', 'license_required', 'age_category', 'gender', 'details', 'sort_order', 'is_active'];
+            const DIVISION_ALLOWED_KEYS = ['name', 'entry_fee', 'format', 'entries_close_at', 'license_required', 'age_category', 'gender', 'suggested_level', 'entry_limit', 'details', 'sort_order', 'is_active'];
             const rows = draft.divisions || [];
             for (const d of rows) {
                 const record = {
@@ -1128,6 +1129,55 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                         </div>
                     </div>
 
+                    {/* All organisations — listed first for quick access */}
+                    <CollapsibleSection
+                        open={sectionOpen.approvedHosts}
+                        onToggle={() => toggleSection('approvedHosts')}
+                        title="All Organisations"
+                        icon={Building}
+                        count={allOrgs.length}
+                    >
+                        {allOrgs.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500 text-sm">No organisations registered yet.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {allOrgs.map((org) => (
+                                    <button
+                                        key={org.id}
+                                        type="button"
+                                        onClick={() => {
+                                            setOrgDetailsMode('view');
+                                            setSelectedOrgDetails(org);
+                                        }}
+                                        className="bg-black/30 hover:bg-black/50 border border-white/5 hover:border-padel-green/30 p-4 rounded-xl flex items-center gap-3 w-full text-left transition-all duration-200 cursor-pointer"
+                                    >
+                                        {org.logo_url ? (
+                                            <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
+                                        ) : (
+                                            <div className="w-10 h-10 bg-padel-green/10 text-padel-green rounded-lg flex items-center justify-center shrink-0">
+                                                <Building size={16} />
+                                            </div>
+                                        )}
+                                        <div className="truncate flex-1 min-w-0">
+                                            <span className="font-bold text-sm text-white block truncate">{org.name}</span>
+                                            <span className="text-[10px] text-gray-500 block truncate">{org.contact_email}</span>
+                                            <span className={`inline-block mt-1 text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded border ${
+                                                org.status === 'approved'
+                                                    ? 'bg-padel-green/10 text-padel-green border-padel-green/20'
+                                                    : org.status === 'pending'
+                                                        ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                                                        : 'bg-red-500/10 text-red-400 border-red-500/20'
+                                            }`}>
+                                                {org.status || 'pending'}
+                                            </span>
+                                        </div>
+                                        <ChevronRight size={14} className="text-gray-600 shrink-0" />
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </CollapsibleSection>
+
                     {/* Pending Organisation Applications */}
                     <CollapsibleSection
                         open={sectionOpen.pendingOrgs}
@@ -1418,45 +1468,6 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                         ))}
                                     </tbody>
                                 </table>
-                            </div>
-                        )}
-                    </CollapsibleSection>
-
-                    {/* Complete Registered Host List */}
-                    <CollapsibleSection
-                        open={sectionOpen.approvedHosts}
-                        onToggle={() => toggleSection('approvedHosts')}
-                        title="All 4M Padel Sanctioned Host Clubs"
-                        icon={Building}
-                        count={allOrgs.filter(o => o.status === 'approved').length}
-                    >
-                        {allOrgs.filter(o => o.status === 'approved').length === 0 ? (
-                            <div className="text-center py-8 text-gray-500 text-sm">No approved clubs register.</div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {allOrgs.filter(o => o.status === 'approved').map(org => (
-                                    <button
-                                        key={org.id}
-                                        onClick={() => {
-                                            setOrgDetailsMode('view');
-                                            setSelectedOrgDetails(org);
-                                        }}
-                                        className="bg-black/30 hover:bg-black/50 border border-white/5 hover:border-padel-green/30 p-4 rounded-xl flex items-center gap-3 w-full text-left transition-all duration-200 cursor-pointer"
-                                    >
-                                        {org.logo_url ? (
-                                            <img src={org.logo_url} alt={org.name} className="w-10 h-10 rounded-lg object-cover border border-white/10 shrink-0" />
-                                        ) : (
-                                            <div className="w-10 h-10 bg-padel-green/10 text-padel-green rounded-lg flex items-center justify-center shrink-0">
-                                                <Building size={16} />
-                                            </div>
-                                        )}
-                                        <div className="truncate flex-1">
-                                            <span className="font-bold text-sm text-white block truncate">{org.name}</span>
-                                            <span className="text-[10px] text-gray-500 block truncate">{org.contact_email}</span>
-                                        </div>
-                                        <ChevronRight size={14} className="text-gray-600 shrink-0" />
-                                    </button>
-                                ))}
                             </div>
                         )}
                     </CollapsibleSection>

@@ -82,6 +82,7 @@ const OrganisationPage = () => {
     const { slug } = useParams();
     const [org, setOrg] = useState(null);
     const [events, setEvents] = useState([]);
+    const [galleryImages, setGalleryImages] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -105,7 +106,35 @@ const OrganisationPage = () => {
                         .or('sanction_status.eq.approved,sanction_status.is.null')
                         .neq('is_visible', false)
                         .order('start_date', { ascending: true });
-                    setEvents(evs || []);
+                    const eventList = evs || [];
+                    setEvents(eventList);
+
+                    // Pull gallery photos from albums linked to this org's events
+                    const eventIds = eventList.map((e) => e.id).filter(Boolean);
+                    if (eventIds.length > 0) {
+                        const { data: albumsData } = await supabase
+                            .from('albums')
+                            .select('id, event_id, slug')
+                            .in('event_id', eventIds)
+                            .is('parent_album_id', null)
+                            .eq('is_active', true);
+
+                        const albumIds = (albumsData || []).map((a) => a.id).filter(Boolean);
+                        if (albumIds.length > 0) {
+                            const { data: images } = await supabase
+                                .from('gallery_images')
+                                .select('id, image_url, thumbnail_url, album_id, sort_order, created_at')
+                                .in('album_id', albumIds)
+                                .order('sort_order', { ascending: true })
+                                .limit(24);
+
+                            setGalleryImages(images || []);
+                        } else {
+                            setGalleryImages([]);
+                        }
+                    } else {
+                        setGalleryImages([]);
+                    }
                 }
             } catch (err) {
                 console.error('Failed to load organisation:', err);
@@ -134,10 +163,14 @@ const OrganisationPage = () => {
         () => events.reduce((sum, e) => sum + (parseInt(e.registered_players) || 0), 0),
         [events]
     );
-    const mediaImages = useMemo(
-        () => events.map(e => e.image_url).filter(Boolean).slice(0, 8),
-        [events]
-    );
+    // Prefer event gallery album photos; fall back to event poster images
+    const mediaImages = useMemo(() => {
+        const fromGallery = galleryImages
+            .map((img) => img.thumbnail_url || img.image_url)
+            .filter(Boolean);
+        if (fromGallery.length > 0) return fromGallery.slice(0, 8);
+        return events.map((e) => e.image_url).filter(Boolean).slice(0, 8);
+    }, [galleryImages, events]);
     const lastUpdated = useMemo(() => {
         const dates = events.map(e => e.created_at).filter(Boolean).sort();
         return dates.length ? dates[dates.length - 1] : org?.approved_at || org?.created_at;
@@ -162,10 +195,15 @@ const OrganisationPage = () => {
 
     const socials = org.socials || {};
     const contacts = Array.isArray(org.contacts) ? org.contacts : [];
-    const showClubs = hostVenues.length > 0 || SHOW_DUMMY;
+    const sponsors = Array.isArray(org.sponsors)
+        ? org.sponsors.filter((s) => (s.name || '').trim() || s.logo_url)
+        : [];
+    const showClubs = false; // Hidden until clubs are wired up
     const showMedia = mediaImages.length > 0 || SHOW_DUMMY;
+    const showSponsors = sponsors.length > 0 || SHOW_DUMMY;
     const clubsList = hostVenues.length > 0 ? hostVenues : (SHOW_DUMMY ? DUMMY_CLUBS : []);
-
+    const sponsorsList = sponsors.length > 0 ? sponsors : (SHOW_DUMMY ? DUMMY_SPONSORS : []);
+    const galleryLink = galleryImages.length > 0 ? '/gallery' : null;
     const stats = [
         { icon: Trophy, value: events.length, label: 'Events Hosted' },
         { icon: Building, value: clubsList.length, label: 'Host Clubs' },
@@ -385,7 +423,7 @@ const OrganisationPage = () => {
 
                 {/* ===== MEDIA ===== */}
                 {showMedia && (
-                    <Section title="Media" accent={accent} action={mediaImages.length > 4 ? <ViewAll to="/gallery" accent={accent} /> : null}>
+                    <Section title="Media" accent={accent} action={mediaImages.length > 4 ? <ViewAll to={galleryLink || '/gallery'} accent={accent} /> : null}>
                         {mediaImages.length > 0 ? (
                             <div className="grid grid-cols-4 gap-2">
                                 {mediaImages.slice(0, 4).map((src, i) => (
@@ -410,17 +448,29 @@ const OrganisationPage = () => {
                 )}
 
                 {/* ===== SPONSORS ===== */}
-                {SHOW_DUMMY && (
+                {showSponsors && (
                     <Section title="Sponsors & Partners" accent={accent}>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                            {DUMMY_SPONSORS.map((s, i) => (
-                                <div key={i} className="bg-black/30 border border-white/5 rounded-2xl p-4 text-center">
-                                    <p className="text-[8px] font-black uppercase tracking-widest mb-2" style={{ color: accent }}>{s.tier}</p>
-                                    <p className="text-lg font-black text-white tracking-tight">{s.name}</p>
+                            {sponsorsList.map((s, i) => (
+                                <div key={i} className="bg-black/30 border border-white/5 rounded-2xl p-4 text-center flex flex-col items-center justify-center min-h-[100px]">
+                                    <p className="text-[8px] font-black uppercase tracking-widest mb-2" style={{ color: accent }}>{s.tier || 'Partner'}</p>
+                                    {s.logo_url ? (
+                                        <img
+                                            src={s.logo_url}
+                                            alt={s.name || 'Sponsor'}
+                                            className="max-h-12 max-w-full object-contain mb-1"
+                                            loading="lazy"
+                                        />
+                                    ) : null}
+                                    {s.name ? (
+                                        <p className={`font-black text-white tracking-tight ${s.logo_url ? 'text-xs mt-1' : 'text-lg'}`}>{s.name}</p>
+                                    ) : null}
                                 </div>
                             ))}
                         </div>
-                        <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview data — sponsor management comes with the org profile editor</p>
+                        {sponsors.length === 0 && SHOW_DUMMY && (
+                            <p className="text-[9px] text-gray-600 uppercase tracking-widest font-black mt-3">Preview data — add sponsors in the org profile editor</p>
+                        )}
                     </Section>
                 )}
 

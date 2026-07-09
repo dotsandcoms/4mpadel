@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Building, Mail, Phone, Globe, Send, Loader2, ChevronLeft,
     ShieldAlert, Upload, Trash2, Lock, Eye, EyeOff,
@@ -17,7 +17,7 @@ const RegisterOrganisationForm = ({
     compact = false,
 }) => {
     const [formData, setFormData] = useState({
-        name: '',
+        name: playerProfile?.name || '',
         contact_email: playerProfile?.email || contactEmail,
         contact_phone: playerProfile?.contact_number || contactPhone,
         logo_url: '',
@@ -26,35 +26,142 @@ const RegisterOrganisationForm = ({
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    const [emailStatus, setEmailStatus] = useState('idle'); // idle | checking | existing | new
+    /** idle | checking | existing | new */
+    const [profileStatus, setProfileStatus] = useState(playerProfile?.email ? 'existing' : 'idle');
+    const [matchedProfile, setMatchedProfile] = useState(playerProfile || null);
+    const [nameSuggestions, setNameSuggestions] = useState([]);
+    const [searchingNames, setSearchingNames] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
+    const nameFieldRef = useRef(null);
+    const selectedFromListRef = useRef(!!playerProfile);
 
+    // Prefill when opened from a logged-in player profile
     useEffect(() => {
-        const email = formData.contact_email.trim();
-        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            setEmailStatus('idle');
+        if (!playerProfile) return;
+        setFormData((prev) => ({
+            ...prev,
+            name: playerProfile.name || prev.name,
+            contact_email: playerProfile.email || prev.contact_email,
+            contact_phone: playerProfile.contact_number || prev.contact_phone,
+        }));
+        setMatchedProfile(playerProfile);
+        setProfileStatus('existing');
+        selectedFromListRef.current = true;
+    }, [playerProfile]);
+
+    // Debounced name → profile lookup (organisation accounts first, then other players)
+    useEffect(() => {
+        const q = formData.name.trim();
+        if (selectedFromListRef.current) {
+            setNameSuggestions([]);
+            setSearchingNames(false);
+            return undefined;
+        }
+        if (q.length < 2) {
+            setNameSuggestions([]);
+            setSearchingNames(false);
+            setProfileStatus(q ? 'idle' : 'idle');
+            setMatchedProfile(null);
+            if (!q) {
+                setFormData((prev) => ({ ...prev, contact_email: contactEmail || '' }));
+            }
             return undefined;
         }
 
         const timer = setTimeout(async () => {
-            setEmailStatus('checking');
+            setSearchingNames(true);
+            setProfileStatus('checking');
             try {
+                const safe = q.replace(/[%_,]/g, ' ').trim();
                 const { data, error } = await supabase
                     .from('players')
-                    .select('id')
-                    .ilike('email', email)
-                    .maybeSingle();
+                    .select('id, name, email, contact_number, account_type')
+                    .ilike('name', `%${safe}%`)
+                    .order('name')
+                    .limit(12);
 
                 if (error) throw error;
-                setEmailStatus(data ? 'existing' : 'new');
+
+                const rows = data || [];
+                // Prefer organisation accounts, then everyone else
+                const sorted = [...rows].sort((a, b) => {
+                    const ao = a.account_type === 'organisation' ? 0 : 1;
+                    const bo = b.account_type === 'organisation' ? 0 : 1;
+                    if (ao !== bo) return ao - bo;
+                    return String(a.name || '').localeCompare(String(b.name || ''));
+                });
+
+                setNameSuggestions(sorted);
+                setShowSuggestions(true);
+
+                const exact = sorted.find(
+                    (p) => String(p.name || '').toLowerCase() === q.toLowerCase(),
+                );
+                if (exact?.email) {
+                    setMatchedProfile(exact);
+                    setProfileStatus('existing');
+                    setFormData((prev) => ({
+                        ...prev,
+                        contact_email: exact.email,
+                        contact_phone: exact.contact_number || prev.contact_phone,
+                    }));
+                } else {
+                    setMatchedProfile(null);
+                    setProfileStatus('new');
+                }
             } catch {
-                setEmailStatus('idle');
+                setNameSuggestions([]);
+                setProfileStatus('new');
+                setMatchedProfile(null);
+            } finally {
+                setSearchingNames(false);
             }
-        }, 400);
+        }, 350);
 
         return () => clearTimeout(timer);
-    }, [formData.contact_email]);
+    }, [formData.name, contactEmail]);
+
+    // Close suggestions on outside click
+    useEffect(() => {
+        const onDown = (e) => {
+            if (nameFieldRef.current && !nameFieldRef.current.contains(e.target)) {
+                setShowSuggestions(false);
+            }
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, []);
+
+    const selectProfile = (player) => {
+        selectedFromListRef.current = true;
+        setMatchedProfile(player);
+        setProfileStatus('existing');
+        setNameSuggestions([]);
+        setShowSuggestions(false);
+        setPassword('');
+        setConfirmPassword('');
+        setFormData((prev) => ({
+            ...prev,
+            name: player.name || prev.name,
+            contact_email: player.email || '',
+            contact_phone: player.contact_number || prev.contact_phone,
+        }));
+    };
+
+    const handleNameChange = (value) => {
+        selectedFromListRef.current = false;
+        setMatchedProfile(null);
+        setFormData((prev) => ({
+            ...prev,
+            name: value,
+            // Clear autofilled email when user edits away from a match
+            contact_email: profileStatus === 'existing' ? '' : prev.contact_email,
+        }));
+        setProfileStatus(value.trim().length >= 2 ? 'checking' : 'idle');
+        setShowSuggestions(true);
+    };
 
     const handleLogoUpload = async (event) => {
         try {
@@ -174,33 +281,46 @@ const RegisterOrganisationForm = ({
         return newPlayer?.id ?? null;
     };
 
+    const needsNewAccount = profileStatus === 'new' || (!matchedProfile && profileStatus !== 'existing');
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
         if (!formData.name.trim()) {
-            toast.error('Please specify the Organisation Name.');
+            toast.error('Please enter a name.');
             return;
         }
         if (!formData.contact_email.trim()) {
-            toast.error('Please specify a contact email.');
+            toast.error('Please enter an email address.');
             return;
         }
-        if (emailStatus === 'new' && !password.trim()) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contact_email.trim())) {
+            toast.error('Please enter a valid email address.');
+            return;
+        }
+        if (needsNewAccount && !password.trim()) {
             toast.error('Please create a password for your organisation login.');
             return;
         }
 
         setSubmitting(true);
         try {
-            const contactEmail = formData.contact_email.trim();
-            let createdBy = null;
+            const contactEmailValue = formData.contact_email.trim();
+            let createdBy = matchedProfile?.id || null;
 
-            if (emailStatus === 'new') {
-                createdBy = await createOrgAccount(contactEmail, formData.contact_phone, formData.name);
+            if (needsNewAccount) {
+                createdBy = await createOrgAccount(contactEmailValue, formData.contact_phone, formData.name);
             } else {
                 const { data: { session } } = await supabase.auth.getSession();
-                if (session?.user?.email?.toLowerCase() === contactEmail.toLowerCase()) {
-                    createdBy = await resolveCreatedBy(session.user.email);
+                if (session?.user?.email?.toLowerCase() === contactEmailValue.toLowerCase()) {
+                    createdBy = await resolveCreatedBy(session.user.email) || createdBy;
+                } else if (!createdBy) {
+                    const { data: byEmail } = await supabase
+                        .from('players')
+                        .select('id')
+                        .ilike('email', contactEmailValue)
+                        .maybeSingle();
+                    createdBy = byEmail?.id ?? null;
                 }
             }
 
@@ -215,7 +335,7 @@ const RegisterOrganisationForm = ({
                 .insert({
                     name: formData.name.trim(),
                     slug,
-                    contact_email: contactEmail,
+                    contact_email: contactEmailValue,
                     contact_phone: formData.contact_phone.trim() || null,
                     logo_url: formData.logo_url.trim() || null,
                     website_url: normalizeWebsiteUrl(formData.website_url) || null,
@@ -232,14 +352,14 @@ const RegisterOrganisationForm = ({
 
             const emailVars = {
                 orgName: formData.name.trim(),
-                contactEmail,
+                contactEmail: contactEmailValue,
                 contactPhone: formData.contact_phone.trim(),
-                creatorName: playerProfile?.name || formData.name.trim(),
-                createdLogin: emailStatus === 'new',
+                creatorName: matchedProfile?.name || formData.name.trim(),
+                createdLogin: needsNewAccount,
             };
 
             const [applicantMail, adminMail] = await Promise.all([
-                sendEmail(contactEmail, 'org_applied', emailVars),
+                sendEmail(contactEmailValue, 'org_applied', emailVars),
                 sendEmail('markstillerman@gmail.com', 'admin_org_applied', emailVars),
             ]);
 
@@ -273,6 +393,9 @@ const RegisterOrganisationForm = ({
         ? 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:border-padel-green transition-colors'
         : 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-11 py-3.5 text-sm focus:outline-none focus:border-padel-green transition-colors';
 
+    const showEmailPassword = needsNewAccount && formData.name.trim().length >= 2 && profileStatus !== 'checking';
+    const showMatchedEmail = profileStatus === 'existing' && !!formData.contact_email;
+
     return (
         <form onSubmit={handleSubmit} className={`text-left ${compact ? 'space-y-3' : 'space-y-4'}`}>
             {onBack && (
@@ -288,50 +411,107 @@ const RegisterOrganisationForm = ({
             <div className={`bg-black/20 border border-white/5 rounded-xl flex items-start gap-2.5 ${compact ? 'p-3' : 'p-4 rounded-2xl gap-3'}`}>
                 <ShieldAlert className={`text-padel-green shrink-0 mt-0.5 ${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
                 <p className={`text-gray-400 leading-relaxed ${compact ? 'text-[11px]' : 'text-xs'}`}>
-                    Apply to host tournaments on 4M Padel. If your email is not already on the platform, you will create a login for your organisation account. Applications are reviewed within 24–48 hours.
+                    Start with your organisation name. If a profile already exists we will fill in the email. If not, enter your full name, email and password to create a login. Applications are reviewed within 24–48 hours.
                 </p>
             </div>
 
-            <div>
-                <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Organisation / Club Name</label>
+            <div ref={nameFieldRef} className="relative">
+                <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>
+                    Name
+                </label>
                 <div className="relative">
                     <Building size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
                     <input
                         type="text"
                         required
                         value={formData.name}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        onFocus={() => nameSuggestions.length > 0 && setShowSuggestions(true)}
                         className={`${fieldClass} placeholder:text-gray-600`}
-                        placeholder="Cape Town Padel Club"
+                        placeholder="Start typing organisation or profile name"
+                        autoComplete="off"
                     />
+                    {searchingNames && (
+                        <Loader2 size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 animate-spin" />
+                    )}
                 </div>
+
+                {showSuggestions && nameSuggestions.length > 0 && (
+                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-xl max-h-52 overflow-y-auto shadow-xl">
+                        {nameSuggestions.map((p) => (
+                            <button
+                                key={p.id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => selectProfile(p)}
+                                className="w-full text-left px-4 py-2.5 hover:bg-padel-green hover:text-black transition-colors border-b border-white/5 last:border-0"
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-sm font-semibold truncate">{p.name}</span>
+                                    {p.account_type === 'organisation' && (
+                                        <span className="text-[9px] font-black uppercase tracking-wide px-1.5 py-0.5 rounded bg-padel-green/15 text-padel-green shrink-0">
+                                            Org
+                                        </span>
+                                    )}
+                                </div>
+                                <span className="text-[11px] opacity-70 truncate block">{p.email}</span>
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {profileStatus === 'checking' && (
+                    <p className="text-[10px] text-gray-500 mt-1.5">Looking up profiles...</p>
+                )}
+                {profileStatus === 'existing' && matchedProfile && (
+                    <p className="text-[10px] text-padel-green mt-1.5">
+                        Profile found — email filled in. Sign in with this account if prompted.
+                    </p>
+                )}
+                {profileStatus === 'new' && formData.name.trim().length >= 2 && (
+                    <p className="text-[10px] text-amber-400 mt-1.5">
+                        No matching profile — enter email and create a password below.
+                    </p>
+                )}
             </div>
 
-            <div>
-                <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Business Email</label>
-                <div className="relative">
-                    <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
-                    <input
-                        type="email"
-                        required
-                        value={formData.contact_email}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
-                        className={fieldClass}
-                    />
+            {showMatchedEmail && (
+                <div>
+                    <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>
+                        Email
+                    </label>
+                    <div className="relative">
+                        <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                        <input
+                            type="email"
+                            readOnly
+                            value={formData.contact_email}
+                            className={`${fieldClass} opacity-80 cursor-default`}
+                        />
+                    </div>
                 </div>
-                {emailStatus === 'checking' && (
-                    <p className="text-[10px] text-gray-500 mt-1.5">Checking email...</p>
-                )}
-                {emailStatus === 'existing' && (
-                    <p className="text-[10px] text-padel-green mt-1.5">Profile found — sign in with this email if prompted.</p>
-                )}
-                {emailStatus === 'new' && (
-                    <p className="text-[10px] text-amber-400 mt-1.5">New email — create a password below for your organisation login.</p>
-                )}
-            </div>
+            )}
 
-            {emailStatus === 'new' && (
+            {showEmailPassword && (
                 <>
+                    <div>
+                        <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>
+                            Email
+                        </label>
+                        <div className="relative">
+                            <Mail size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <input
+                                type="email"
+                                required
+                                value={formData.contact_email}
+                                onChange={(e) => setFormData((prev) => ({ ...prev, contact_email: e.target.value }))}
+                                className={`${fieldClass} placeholder:text-gray-600`}
+                                placeholder="org@club.co.za"
+                                autoComplete="email"
+                            />
+                        </div>
+                    </div>
+
                     <div>
                         <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Password</label>
                         <div className="relative">
@@ -466,7 +646,7 @@ const RegisterOrganisationForm = ({
 
             <button
                 type="submit"
-                disabled={submitting || emailStatus === 'checking'}
+                disabled={submitting || profileStatus === 'checking' || !formData.name.trim()}
                 className={`w-full bg-padel-green text-black font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_20px_rgba(154,233,0,0.3)] hover:scale-[1.01] transition-all disabled:opacity-50 cursor-pointer ${compact ? 'py-3.5' : 'py-4'}`}
             >
                 {submitting ? (
