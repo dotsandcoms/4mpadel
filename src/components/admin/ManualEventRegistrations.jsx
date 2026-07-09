@@ -11,6 +11,7 @@ import {
     resolveRegistrationLicenseCategory,
 } from '../../utils/registrationLicense';
 import {
+    findAdminMarkedPayment,
     findPaymentForRegistration,
     findStrictPaystackEntryPayment,
     isExplicitAdminMarkedPayment,
@@ -139,6 +140,8 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
     const [markPaidNote, setMarkPaidNote] = useState('');
     const [markPaidMethod, setMarkPaidMethod] = useState('manual');
     const [markPaidBusy, setMarkPaidBusy] = useState(false);
+    const [unmarkTarget, setUnmarkTarget] = useState(null);
+    const [unmarkBusy, setUnmarkBusy] = useState(false);
     const [removeTarget, setRemoveTarget] = useState(null);
     const [removePair, setRemovePair] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
@@ -336,6 +339,50 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
             toast.error('Failed to update WhatsApp status');
         } finally {
             setUpdatingWhatsApp(null);
+        }
+    };
+
+    const confirmUnmarkManualPaid = async () => {
+        if (!unmarkTarget) return;
+        const reg = unmarkTarget;
+        setUnmarkBusy(true);
+        setMarkingId(reg.id);
+        try {
+            const { error } = await supabase
+                .from('event_registrations')
+                .update({
+                    payment_status: 'pending',
+                    payment_method: null,
+                })
+                .eq('id', reg.id);
+            if (error) throw error;
+
+            const reference = `MANUAL-ADMIN-${reg.id}`;
+            const payment = findAdminMarkedPayment(payments, reg)
+                || payments.find((p) => p.reference === reference);
+            if (payment) {
+                const { error: payErr } = await supabase
+                    .from('payments')
+                    .update({
+                        status: 'cancelled',
+                        metadata: {
+                            ...(payment.metadata || {}),
+                            unmarked_by_admin: true,
+                            unmarked_at: new Date().toISOString(),
+                        },
+                    })
+                    .eq('id', payment.id);
+                if (payErr) throw payErr;
+            }
+
+            toast.success(`Unmarked ${reg.full_name} as paid — back to pending`);
+            setUnmarkTarget(null);
+            load();
+        } catch (err) {
+            toast.error(`Failed: ${err.message}`);
+        } finally {
+            setUnmarkBusy(false);
+            setMarkingId(null);
         }
     };
 
@@ -1222,6 +1269,13 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
         && !registrationCountsAsPaid(reg, refundByReg)
     ), [refundByReg]);
 
+    const canUnmarkAdminPaid = useCallback((reg) => {
+        if (String(reg?.status || '').toLowerCase() === 'withdrawn') return false;
+        if (!registrationCountsAsPaid(reg, refundByReg)) return false;
+        const details = getPaymentDetails(reg);
+        return !!details?.isExplicitAdminMark && !details.isPartnerPaid;
+    }, [refundByReg, getPaymentDetails]);
+
     const renderPaymentCell = useCallback((reg) => {
         const details = getPaymentDetails(reg);
         const channelLabel = details ? (
@@ -1266,11 +1320,22 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 onOpen={setOpenPaymentNoteId}
                             />
                         )}
+                        {canUnmarkAdminPaid(reg) && (
+                            <button
+                                type="button"
+                                onClick={() => setUnmarkTarget(reg)}
+                                disabled={markingId === reg.id}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border bg-red-500/10 text-red-400 border-red-500/25 hover:bg-red-500/20 hover:text-red-300 disabled:opacity-50 transition-colors"
+                            >
+                                {markingId === reg.id ? <Loader2 size={10} className="animate-spin" /> : <RotateCcw size={10} />}
+                                Unmark paid
+                            </button>
+                        )}
                     </>
                 )}
             </div>
         );
-    }, [paymentBadge, canMarkRegistrationPaid, markingId, getPaymentDetails, openPaymentNoteId]);
+    }, [paymentBadge, canMarkRegistrationPaid, canUnmarkAdminPaid, markingId, getPaymentDetails, openPaymentNoteId]);
 
     const renderWhatsAppToggle = useCallback((reg) => (
         <button
@@ -2212,6 +2277,44 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                     className="mt-4 w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50">
                                     Cancel
                                 </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {unmarkTarget && (
+                        <div className="fixed inset-0 z-[1200] flex items-center justify-center p-4 bg-black/60" onClick={() => !unmarkBusy && setUnmarkTarget(null)}>
+                            <div className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-md p-5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-start gap-3 mb-4">
+                                    <div className="w-9 h-9 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
+                                        <RotateCcw size={16} className="text-red-400" />
+                                    </div>
+                                    <div className="min-w-0">
+                                        <h3 className="text-white font-bold truncate">Unmark {unmarkTarget.full_name} as paid?</h3>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {unmarkTarget.division} · {fmtR(divFee(unmarkTarget.division))}
+                                        </p>
+                                    </div>
+                                </div>
+                                <p className="text-sm text-gray-400 mb-4">
+                                    This reverts the entry to <span className="text-amber-400 font-semibold">pending payment</span> and cancels the admin manual payment record. Real Paystack payments cannot be unmarked here.
+                                </p>
+                                <div className="flex flex-col gap-2">
+                                    <button
+                                        onClick={confirmUnmarkManualPaid}
+                                        disabled={unmarkBusy}
+                                        className="w-full py-2.5 rounded-lg text-sm font-bold bg-red-500 text-white hover:opacity-90 disabled:opacity-40 inline-flex items-center justify-center gap-2"
+                                    >
+                                        {unmarkBusy ? <Loader2 size={14} className="animate-spin" /> : <RotateCcw size={14} />}
+                                        Unmark as paid
+                                    </button>
+                                    <button
+                                        onClick={() => setUnmarkTarget(null)}
+                                        disabled={unmarkBusy}
+                                        className="w-full py-2 rounded-lg text-xs font-semibold text-gray-400 hover:text-white disabled:opacity-50"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
