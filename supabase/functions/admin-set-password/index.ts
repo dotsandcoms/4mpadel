@@ -65,14 +65,17 @@ serve(async (req) => {
             throw new Error('Forbidden: Insufficient privileges')
         }
 
-        const { email, newPassword } = await req.json()
+        const { email, newPassword, createIfMissing = false } = await req.json()
 
         if (!email || !newPassword) {
             throw new Error('email and newPassword are required')
         }
 
+        const emailLower = email.toLowerCase().trim();
+
         // Fetch user by email since we need their Auth UUID, not their players table ID.
         let targetUserId = null;
+        let accountCreated = false;
         let page = 1;
         while(true) {
             const { data: usersData, error: usersError } = await supabaseAdmin.auth.admin.listUsers({
@@ -85,7 +88,7 @@ serve(async (req) => {
             const users = usersData?.users || [];
             if (users.length === 0) break;
 
-            const foundUser = users.find(u => u.email?.toLowerCase() === email.toLowerCase());
+            const foundUser = users.find(u => u.email?.toLowerCase() === emailLower);
             if (foundUser) {
                 targetUserId = foundUser.id;
                 break;
@@ -95,22 +98,40 @@ serve(async (req) => {
         }
 
         if (!targetUserId) {
-            throw new Error(`User not found in the Auth system. The player "${email}" must log in or sign up at least once to create their account before you can reset their password.`);
-        }
+            if (createIfMissing) {
+                const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+                    email: emailLower,
+                    password: newPassword,
+                    email_confirm: true,
+                });
+                if (createError) {
+                    throw new Error(`Failed to create auth account: ${createError.message}`);
+                }
+                targetUserId = created.user?.id ?? null;
+                if (!targetUserId) {
+                    throw new Error('Auth account was created but no user id was returned.');
+                }
+                accountCreated = true;
+            } else {
+                throw new Error(`User not found in the Auth system. The player "${email}" must log in or sign up at least once to create their account before you can reset their password.`);
+            }
+        } else {
+            // Update the user's password using the admin API
+            const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+                targetUserId,
+                { password: newPassword }
+            )
 
-        // Update the user's password using the admin API
-        const { data, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-            targetUserId,
-            { password: newPassword }
-        )
-
-        if (updateError) {
-            throw new Error(`Failed to update password: ${updateError.message}`)
+            if (updateError) {
+                throw new Error(`Failed to update password: ${updateError.message}`)
+            }
         }
 
         return new Response(
             JSON.stringify({
-                message: "Password updated successfully."
+                message: accountCreated ? 'Account created successfully.' : 'Password updated successfully.',
+                userId: targetUserId,
+                created: accountCreated,
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
         )

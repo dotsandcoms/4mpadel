@@ -14,6 +14,7 @@ import RichTextEditor from './RichTextEditor';
 import OrgMembersManager from './OrgMembersManager';
 import EventBuilder from './EventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
+import CreateOrganisationModal from './CreateOrganisationModal';
 import OrgAuditLog from './OrgAuditLog';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
@@ -109,6 +110,8 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
     // Details preview and edit modes states
     const [selectedEventDetails, setSelectedEventDetails] = useState(null);
     const [selectedOrgDetails, setSelectedOrgDetails] = useState(null);
+    const [orgDetailsMode, setOrgDetailsMode] = useState('view'); // 'view' | 'edit'
+    const [createOrgOpen, setCreateOrgOpen] = useState(false);
     const [editingEventId, setEditingEventId] = useState(null);
     const [approvedEvents, setApprovedEvents] = useState([]);
     const [approvedEventsSearch, setApprovedEventsSearch] = useState('');
@@ -400,7 +403,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             // 1. Fetch all organisations
             const { data: orgs, error: orgsError } = await supabase
                 .from('organisations')
-                .select('*, players!created_by(name)')
+                .select('*, players!created_by(name, account_type)')
                 .order('created_at', { ascending: false });
 
             if (orgsError) throw orgsError;
@@ -1048,6 +1051,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             </button>
                         </div>
                     )}
+                    {permissions?.role === 'super_admin' && isSuperAdmin && (
+                        <button
+                            type="button"
+                            onClick={() => setCreateOrgOpen(true)}
+                            className="bg-padel-green text-black font-black uppercase tracking-widest text-xs px-5 py-3 rounded-xl hover:bg-white transition-all flex items-center gap-2 cursor-pointer shadow-lg hover:shadow-padel-green/10"
+                        >
+                            Create Organisation <Plus size={14} />
+                        </button>
+                    )}
                     {isHostView && (
                         <button
                             onClick={() => {
@@ -1425,7 +1437,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 {allOrgs.filter(o => o.status === 'approved').map(org => (
                                     <button
                                         key={org.id}
-                                        onClick={() => setSelectedOrgDetails(org)}
+                                        onClick={() => {
+                                            setOrgDetailsMode('view');
+                                            setSelectedOrgDetails(org);
+                                        }}
                                         className="bg-black/30 hover:bg-black/50 border border-white/5 hover:border-padel-green/30 p-4 rounded-xl flex items-center gap-3 w-full text-left transition-all duration-200 cursor-pointer"
                                     >
                                         {org.logo_url ? (
@@ -1829,7 +1844,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             <button
                                                 onClick={() => {
                                                     const org = allOrgs.find(o => o.id === selectedEventDetails.organisation_id);
-                                                    if (org) setSelectedOrgDetails(org);
+                                                    if (org) {
+                                                        setOrgDetailsMode('view');
+                                                        setSelectedOrgDetails(org);
+                                                    }
                                                 }}
                                                 className="text-padel-green hover:underline font-extrabold cursor-pointer transition-colors"
                                             >
@@ -2187,15 +2205,34 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             initial={{ opacity: 0, scale: 0.95, y: 15 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-                            className="max-w-md w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left"
+                            className={`w-full bg-[#0F172A] border border-white/10 rounded-3xl p-6 relative shadow-2xl space-y-6 text-left ${
+                                orgDetailsMode === 'edit' ? 'max-w-4xl max-h-[90vh] overflow-y-auto custom-scrollbar' : 'max-w-md'
+                            }`}
                         >
                             <button
-                                onClick={() => setSelectedOrgDetails(null)}
-                                className="absolute top-5 right-5 p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer"
+                                onClick={() => {
+                                    setSelectedOrgDetails(null);
+                                    setOrgDetailsMode('view');
+                                }}
+                                className="absolute top-5 right-5 p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors cursor-pointer z-10"
                             >
                                 <X size={16} />
                             </button>
 
+                            {orgDetailsMode === 'edit' ? (
+                                <div className="pt-1">
+                                    <OrgProfileEditor
+                                        org={selectedOrgDetails}
+                                        adminMode
+                                        onSaved={(updated) => {
+                                            setSelectedOrgDetails(updated);
+                                            setOrgDetailsMode('view');
+                                            fetchSuperAdminData();
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <>
                             {/* Logo & Header */}
                             <div className="flex items-center gap-4">
                                 {selectedOrgDetails.logo_url ? (
@@ -2228,7 +2265,14 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 <div className="bg-black/30 border border-white/5 p-4 rounded-2xl space-y-3.5">
                                     <div className="flex justify-between items-center text-xs">
                                         <span className="text-gray-500">Applicant / Owner:</span>
-                                        <span className="text-white font-bold">{selectedOrgDetails.players?.name || 'Unknown User'}</span>
+                                        <span className="text-white font-bold">
+                                            {selectedOrgDetails.players?.name || 'Unknown User'}
+                                            {selectedOrgDetails.players?.account_type === 'organisation' && (
+                                                <span className="ml-2 text-[9px] font-black uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded">
+                                                    Org account
+                                                </span>
+                                            )}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between items-center text-xs border-t border-white/5 pt-3">
                                         <span className="text-gray-500">Contact Email:</span>
@@ -2294,6 +2338,13 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
                             {/* Actions */}
                             <div className="pt-2 space-y-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setOrgDetailsMode('edit')}
+                                    className="w-full py-3.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center flex items-center justify-center gap-2"
+                                >
+                                    <Edit size={14} /> Edit Organisation
+                                </button>
                                 {selectedOrgDetails.status === 'approved' && selectedOrgDetails.slug && (
                                     <button
                                         type="button"
@@ -2314,16 +2365,27 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     <Users size={14} /> Manage Members & Admins
                                 </button>
                                 <button
-                                    onClick={() => setSelectedOrgDetails(null)}
+                                    onClick={() => {
+                                        setSelectedOrgDetails(null);
+                                        setOrgDetailsMode('view');
+                                    }}
                                     className="w-full py-3.5 bg-white/5 hover:bg-white/10 text-white font-extrabold text-xs rounded-xl transition-all cursor-pointer text-center"
                                 >
                                     Close Details
                                 </button>
                             </div>
+                                </>
+                            )}
                         </motion.div>
                     </div>
                 )}
             </AnimatePresence>
+
+            <CreateOrganisationModal
+                isOpen={createOrgOpen}
+                onClose={() => setCreateOrgOpen(false)}
+                onCreated={() => fetchSuperAdminData()}
+            />
 
             {/* ========================================================
                 ORG MEMBERS MANAGEMENT MODAL

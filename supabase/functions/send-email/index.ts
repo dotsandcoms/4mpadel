@@ -348,11 +348,16 @@ async function generateEmailBody(
         <div style="background: linear-gradient(135deg, #1F2937, #111827); border: 1px solid rgba(154, 233, 0, 0.15); border-radius: 16px; padding: 24px; margin-bottom: 24px; text-align: left;">
           <div style="font-size: 10px; font-weight: 900; text-transform: uppercase; color: #F59E0B; letter-spacing: 1.5px; margin-bottom: 8px;">Status: Pending Review</div>
           <p style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0; margin: 0;">
-            Our administration panel (SAPA Federation) is currently reviewing your venue capacity and credentials. This review typically takes 24–48 hours.
+            Our administration panel is reviewing your application. This typically takes 24–48 hours.
           </p>
         </div>
+        ${vars.createdLogin ? `
+        <p style="font-size: 13.5px; line-height: 1.6; color: #E2E8F0; margin-bottom: 16px;">
+          Your organisation login has been created for <strong style="color: #FFFFFF;">${vars.contactEmail}</strong>. Once approved, sign in with the email and password you set during registration to access your Organisation Dashboard.
+        </p>
+        ` : ''}
         <p style="font-size: 13.5px; line-height: 1.6; color: #64748B; margin-bottom: 0;">
-          You will receive an email notification as soon as your host account has been approved.
+          You will receive another email as soon as your host account has been approved.
         </p>
       `;
       break;
@@ -398,11 +403,11 @@ async function generateEmailBody(
           We are thrilled to inform you that your application for <strong style="color: #FFFFFF;">${vars.orgName}</strong> has been <strong style="color: #9AE900;">APPROVED</strong> by the SAPA Federation!
         </p>
         <p style="font-size: 14.5px; line-height: 1.7; color: #E2E8F0; margin-bottom: 24px;">
-          Your **Organisation Dashboard** is now unlocked. You can access it directly by logging into your player profile. You can now immediately create sanctioned tournaments, schedule match timelines, and manage live scorecards!
+          Your <strong style="color: #FFFFFF;">Organisation Dashboard</strong> is now unlocked. Sign in with your organisation contact email to create sanctioned tournaments, schedule match timelines, and manage live scorecards.
         </p>
       `;
-      actionUrl = 'https://4mpadel.co.za/admin';
-      actionLabel = 'Open Host Dashboard';
+      actionUrl = 'https://4mpadel.co.za/admin?tab=organisations&view=host';
+      actionLabel = 'Open Organisation Dashboard';
       break;
 
     case 'org_rejected':
@@ -419,10 +424,10 @@ async function generateEmailBody(
           </p>
         </div>
         <p style="font-size: 14.5px; line-height: 1.7; color: #94A3B8; margin-bottom: 0;">
-          If you have resolved the items listed above, you can re-apply directly from your profile dashboard.
+          If you have resolved the items listed above, you can re-apply from the homepage via <strong style="color: #FFFFFF;">Register → Organisation</strong>.
         </p>
       `;
-      actionUrl = 'https://4mpadel.co.za/profile';
+      actionUrl = 'https://4mpadel.co.za/';
       actionLabel = 'Re-apply Now';
       break;
 

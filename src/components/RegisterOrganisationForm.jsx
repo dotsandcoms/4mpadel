@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     Building, Mail, Phone, Globe, Send, Loader2, ChevronLeft,
-    ShieldAlert, Upload, Trash2,
+    ShieldAlert, Upload, Trash2, Lock, Eye, EyeOff,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { sendEmail } from '../utils/emails';
@@ -23,8 +23,38 @@ const RegisterOrganisationForm = ({
         logo_url: '',
         website_url: '',
     });
+    const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [emailStatus, setEmailStatus] = useState('idle'); // idle | checking | existing | new
     const [submitting, setSubmitting] = useState(false);
     const [uploadingLogo, setUploadingLogo] = useState(false);
+
+    useEffect(() => {
+        const email = formData.contact_email.trim();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            setEmailStatus('idle');
+            return undefined;
+        }
+
+        const timer = setTimeout(async () => {
+            setEmailStatus('checking');
+            try {
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('id')
+                    .ilike('email', email)
+                    .maybeSingle();
+
+                if (error) throw error;
+                setEmailStatus(data ? 'existing' : 'new');
+            } catch {
+                setEmailStatus('idle');
+            }
+        }, 400);
+
+        return () => clearTimeout(timer);
+    }, [formData.contact_email]);
 
     const handleLogoUpload = async (event) => {
         try {
@@ -76,9 +106,72 @@ const RegisterOrganisationForm = ({
     };
 
     const handleWebsiteChange = (value) => {
-        // Keep typing light — strip accidental protocol so the fixed "https://" prefix stays clean
         const withoutProtocol = value.replace(/^https?:\/\//i, '');
         setFormData((prev) => ({ ...prev, website_url: withoutProtocol }));
+    };
+
+    const resolveCreatedBy = async (sessionEmail) => {
+        if (!sessionEmail) return null;
+        const { data: ownPlayer } = await supabase
+            .from('players')
+            .select('id')
+            .ilike('email', sessionEmail)
+            .maybeSingle();
+        return ownPlayer?.id ?? null;
+    };
+
+    const createOrgAccount = async (email, phone, orgName) => {
+        if (password.length < 6) {
+            throw new Error('Password must be at least 6 characters.');
+        }
+        if (password !== confirmPassword) {
+            throw new Error('Passwords do not match.');
+        }
+
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+        });
+
+        if (authError) {
+            if (authError.message?.toLowerCase().includes('already registered')) {
+                throw new Error('An account with this email already exists. Please sign in and apply again.');
+            }
+            throw authError;
+        }
+
+        const { error: profileError } = await supabase.rpc('create_player_profile', {
+            p_email: email.trim(),
+            p_name: orgName.trim(),
+            p_contact: phone.trim() || '',
+            p_category: 'Organisation',
+            p_gender: null,
+            p_nationality: null,
+            p_id_number: null,
+            p_bio: null,
+            p_home_club: null,
+            p_sponsors: null,
+            p_region: null,
+            p_paid_registration: false,
+            p_license_type: 'none',
+            p_image_url: null,
+            p_racket_brand: null,
+            p_account_type: 'organisation',
+        });
+
+        if (profileError) throw profileError;
+
+        const { data: newPlayer, error: lookupError } = await supabase
+            .from('players')
+            .select('id')
+            .ilike('email', email.trim())
+            .maybeSingle();
+
+        if (lookupError) throw lookupError;
+        if (!newPlayer?.id && authData?.user) {
+            return await resolveCreatedBy(authData.user.email);
+        }
+        return newPlayer?.id ?? null;
     };
 
     const handleSubmit = async (e) => {
@@ -92,19 +185,23 @@ const RegisterOrganisationForm = ({
             toast.error('Please specify a contact email.');
             return;
         }
+        if (emailStatus === 'new' && !password.trim()) {
+            toast.error('Please create a password for your organisation login.');
+            return;
+        }
 
         setSubmitting(true);
         try {
-            // Optional link to an existing player profile — never required to apply.
+            const contactEmail = formData.contact_email.trim();
             let createdBy = null;
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user?.email) {
-                const { data: ownPlayer } = await supabase
-                    .from('players')
-                    .select('id')
-                    .ilike('email', session.user.email)
-                    .maybeSingle();
-                createdBy = ownPlayer?.id ?? null;
+
+            if (emailStatus === 'new') {
+                createdBy = await createOrgAccount(contactEmail, formData.contact_phone, formData.name);
+            } else {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user?.email?.toLowerCase() === contactEmail.toLowerCase()) {
+                    createdBy = await resolveCreatedBy(session.user.email);
+                }
             }
 
             const slug = formData.name
@@ -113,13 +210,12 @@ const RegisterOrganisationForm = ({
                 .replace(/[^a-z0-9]+/g, '-')
                 .replace(/^-+|-+$/g, '');
 
-            // No .select() — pending rows are not publicly readable under RLS.
             const { error } = await supabase
                 .from('organisations')
                 .insert({
                     name: formData.name.trim(),
                     slug,
-                    contact_email: formData.contact_email.trim(),
+                    contact_email: contactEmail,
                     contact_phone: formData.contact_phone.trim() || null,
                     logo_url: formData.logo_url.trim() || null,
                     website_url: normalizeWebsiteUrl(formData.website_url) || null,
@@ -136,13 +232,14 @@ const RegisterOrganisationForm = ({
 
             const emailVars = {
                 orgName: formData.name.trim(),
-                contactEmail: formData.contact_email.trim(),
+                contactEmail,
                 contactPhone: formData.contact_phone.trim(),
                 creatorName: playerProfile?.name || formData.name.trim(),
+                createdLogin: emailStatus === 'new',
             };
 
             const [applicantMail, adminMail] = await Promise.all([
-                sendEmail(formData.contact_email.trim(), 'org_applied', emailVars),
+                sendEmail(contactEmail, 'org_applied', emailVars),
                 sendEmail('markstillerman@gmail.com', 'admin_org_applied', emailVars),
             ]);
 
@@ -172,6 +269,10 @@ const RegisterOrganisationForm = ({
         ? 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-padel-green transition-colors'
         : 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-4 py-3.5 text-sm focus:outline-none focus:border-padel-green transition-colors';
 
+    const passwordFieldClass = compact
+        ? 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-11 py-3 text-sm focus:outline-none focus:border-padel-green transition-colors'
+        : 'w-full bg-black/40 border border-white/10 text-white rounded-xl pl-11 pr-11 py-3.5 text-sm focus:outline-none focus:border-padel-green transition-colors';
+
     return (
         <form onSubmit={handleSubmit} className={`text-left ${compact ? 'space-y-3' : 'space-y-4'}`}>
             {onBack && (
@@ -187,7 +288,7 @@ const RegisterOrganisationForm = ({
             <div className={`bg-black/20 border border-white/5 rounded-xl flex items-start gap-2.5 ${compact ? 'p-3' : 'p-4 rounded-2xl gap-3'}`}>
                 <ShieldAlert className={`text-padel-green shrink-0 mt-0.5 ${compact ? 'w-4 h-4' : 'w-5 h-5'}`} />
                 <p className={`text-gray-400 leading-relaxed ${compact ? 'text-[11px]' : 'text-xs'}`}>
-                    No player profile required — just submit your organisation details. Approved organisations get a dedicated Organisation Portal to create sanctioned tournaments, configure draws, schedule court slots, and manage live brackets. Applications are reviewed within 24–48 hours.
+                    Apply to host tournaments on 4M Padel. If your email is not already on the platform, you will create a login for your organisation account. Applications are reviewed within 24–48 hours.
                 </p>
             </div>
 
@@ -218,7 +319,60 @@ const RegisterOrganisationForm = ({
                         className={fieldClass}
                     />
                 </div>
+                {emailStatus === 'checking' && (
+                    <p className="text-[10px] text-gray-500 mt-1.5">Checking email...</p>
+                )}
+                {emailStatus === 'existing' && (
+                    <p className="text-[10px] text-padel-green mt-1.5">Profile found — sign in with this email if prompted.</p>
+                )}
+                {emailStatus === 'new' && (
+                    <p className="text-[10px] text-amber-400 mt-1.5">New email — create a password below for your organisation login.</p>
+                )}
             </div>
+
+            {emailStatus === 'new' && (
+                <>
+                    <div>
+                        <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Password</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                required
+                                minLength={6}
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className={passwordFieldClass}
+                                placeholder="Min. 6 characters"
+                                autoComplete="new-password"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setShowPassword((v) => !v)}
+                                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white cursor-pointer"
+                            >
+                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Confirm Password</label>
+                        <div className="relative">
+                            <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                            <input
+                                type={showPassword ? 'text' : 'password'}
+                                required
+                                minLength={6}
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                className={passwordFieldClass}
+                                placeholder="Repeat password"
+                                autoComplete="new-password"
+                            />
+                        </div>
+                    </div>
+                </>
+            )}
 
             <div>
                 <label className={`block text-gray-400 font-bold uppercase tracking-wider mb-1.5 ${compact ? 'text-[10px]' : 'text-xs'}`}>Contact Phone</label>
@@ -299,7 +453,6 @@ const RegisterOrganisationForm = ({
                         value={formData.website_url.replace(/^https?:\/\//i, '')}
                         onChange={(e) => handleWebsiteChange(e.target.value)}
                         onBlur={() => {
-                            // Persist a clean domain value; protocol is prepended on submit
                             setFormData((prev) => ({
                                 ...prev,
                                 website_url: prev.website_url.replace(/^https?:\/\//i, '').replace(/^\/+/, ''),
@@ -313,7 +466,7 @@ const RegisterOrganisationForm = ({
 
             <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || emailStatus === 'checking'}
                 className={`w-full bg-padel-green text-black font-black uppercase tracking-widest text-xs rounded-xl flex items-center justify-center gap-2 hover:shadow-[0_0_20px_rgba(154,233,0,0.3)] hover:scale-[1.01] transition-all disabled:opacity-50 cursor-pointer ${compact ? 'py-3.5' : 'py-4'}`}
             >
                 {submitting ? (

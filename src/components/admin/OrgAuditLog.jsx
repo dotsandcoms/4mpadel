@@ -118,7 +118,13 @@ const OrgAuditLog = ({ embedded = false }) => {
             ) : rows.length === 0 ? (
                 <p className="text-xs text-gray-500 py-6 text-center">No activity recorded yet.</p>
             ) : (
-                <div className="space-y-1.5">
+                <div
+                    className={`space-y-1.5 ${
+                        embedded
+                            ? 'max-h-[min(420px,50vh)] overflow-y-auto overscroll-contain custom-scrollbar pr-1 -mr-1'
+                            : 'max-h-[520px] overflow-y-auto overscroll-contain custom-scrollbar pr-1'
+                    }`}
+                >
                     {rows.map((row) => {
                         const meta = ACTION_META[row.action] || { label: row.action, cls: 'text-gray-400 bg-white/5 border-white/10', Icon: ScrollText };
                         return (

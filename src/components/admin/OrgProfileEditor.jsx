@@ -14,12 +14,31 @@ const COLOR_PRESETS = ['#9AE900', '#F97316', '#3B82F6', '#EF4444', '#A855F7', '#
 
 const emptyContact = () => ({ role: '', name: '', email: '', phone: '', whatsapp: '' });
 
+const CONTACT_ROLE_OPTIONS = [
+    'Tournament Director',
+    'Tournament Referee',
+    'Registrations & Admin',
+    'Media Contact',
+    'Sponsorship Contact',
+    'Club Manager',
+    'General Enquiries',
+];
+
+/** Preserve legacy/custom roles already saved on the org profile. */
+const roleOptionsForContact = (currentRole) => {
+    const role = (currentRole || '').trim();
+    if (role && !CONTACT_ROLE_OPTIONS.includes(role)) {
+        return [role, ...CONTACT_ROLE_OPTIONS];
+    }
+    return CONTACT_ROLE_OPTIONS;
+};
+
 /**
  * Org portal profile editor — everything the public /organisations/:slug
  * page renders. Privileged fields (status, verified, sapa badges, slug)
  * are DB-protected; orgs edit content only.
  */
-const OrgProfileEditor = ({ org, onSaved }) => {
+const OrgProfileEditor = ({ org, onSaved, adminMode = false }) => {
     const [form, setForm] = useState(null);
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(null); // 'logo' | 'cover'
@@ -48,8 +67,13 @@ const OrgProfileEditor = ({ org, onSaved }) => {
             contacts: Array.isArray(org.contacts) && org.contacts.length > 0
                 ? org.contacts.map(c => ({ ...emptyContact(), ...c }))
                 : [],
+            ...(adminMode ? {
+                status: org.status || 'pending',
+                verified: Boolean(org.verified),
+                sapa_sanctioned: Boolean(org.sapa_sanctioned),
+            } : {}),
         });
-    }, [org]);
+    }, [org, adminMode]);
 
     if (!org || !form) return null;
 
@@ -107,6 +131,15 @@ const OrgProfileEditor = ({ org, onSaved }) => {
                     })),
             };
 
+            if (adminMode) {
+                payload.status = form.status;
+                payload.verified = form.verified;
+                payload.sapa_sanctioned = form.sapa_sanctioned;
+                if (form.status === 'approved' && org.status !== 'approved') {
+                    payload.approved_at = new Date().toISOString();
+                }
+            }
+
             const { data, error } = await supabase
                 .from('organisations')
                 .update(payload)
@@ -115,7 +148,7 @@ const OrgProfileEditor = ({ org, onSaved }) => {
             if (error) throw error;
             if (!data || data.length === 0) throw new Error('Update was not permitted. Ensure you are an owner/admin of this organisation.');
 
-            toast.success('Profile updated — your public page is live with the changes 🎾');
+            toast.success(adminMode ? 'Organisation updated successfully.' : 'Profile updated — your public page is live with the changes 🎾');
             onSaved?.(data[0]);
         } catch (err) {
             console.error('Org profile save failed:', err);
@@ -128,11 +161,16 @@ const OrgProfileEditor = ({ org, onSaved }) => {
     return (
         <form onSubmit={handleSave} className="space-y-8 text-left">
             {/* Header + preview link */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className={`flex flex-col gap-3 ${adminMode ? 'items-start pr-12' : 'sm:flex-row sm:items-center justify-between'}`}>
                 <div>
-                    <h3 className="text-lg font-bold text-white">Organisation Profile</h3>
-                    <p className="text-gray-500 text-xs mt-0.5">Everything here appears on your public 4M Padel page</p>
+                    <h3 className="text-lg font-bold text-white">{adminMode ? 'Edit Organisation' : 'Organisation Profile'}</h3>
+                    <p className="text-gray-500 text-xs mt-0.5">
+                        {adminMode
+                            ? 'Platform admin — includes status and verification badges'
+                            : 'Everything here appears on your public 4M Padel page'}
+                    </p>
                 </div>
+                {org.slug && (
                 <a
                     href={`/organisations/${org.slug}`}
                     target="_blank"
@@ -142,7 +180,47 @@ const OrgProfileEditor = ({ org, onSaved }) => {
                 >
                     <Eye size={13} /> View Public Page
                 </a>
+                )}
             </div>
+
+            {adminMode && (
+                <div className="space-y-4">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.25em] text-amber-400">Platform Admin</span>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-amber-500/5 border border-amber-500/20 rounded-2xl p-4">
+                        <div>
+                            <label className={labelClass}>Status</label>
+                            <select
+                                value={form.status}
+                                onChange={(e) => setField('status', e.target.value)}
+                                className={inputClass}
+                            >
+                                <option value="pending">Pending</option>
+                                <option value="approved">Approved</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </div>
+                        <label className="flex items-center gap-3 cursor-pointer pt-6">
+                            <input
+                                type="checkbox"
+                                checked={form.verified}
+                                onChange={(e) => setField('verified', e.target.checked)}
+                                className="w-4 h-4 accent-padel-green"
+                            />
+                            <span className="text-sm text-white font-bold">Verified badge</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer pt-6">
+                            <input
+                                type="checkbox"
+                                checked={form.sapa_sanctioned}
+                                onChange={(e) => setField('sapa_sanctioned', e.target.checked)}
+                                className="w-4 h-4 accent-padel-green"
+                            />
+                            <span className="text-sm text-white font-bold">SAPA sanctioned</span>
+                        </label>
+                    </div>
+                </div>
+            )}
 
             {/* Branding: logo, cover, colour */}
             <div className="space-y-4">
@@ -318,7 +396,7 @@ const OrgProfileEditor = ({ org, onSaved }) => {
                     </button>
                 </div>
                 {form.contacts.length === 0 ? (
-                    <p className="text-xs text-gray-500">Add roles like Tournament Director, Registrations &amp; Admin, Media Contact — each gets WhatsApp / email buttons on your page.</p>
+                    <p className="text-xs text-gray-500">Choose a role from the list for each contact — they appear on your public page with WhatsApp and email buttons.</p>
                 ) : (
                     <div className="space-y-3">
                         {form.contacts.map((c, i) => (
@@ -331,7 +409,16 @@ const OrgProfileEditor = ({ org, onSaved }) => {
                                     <Trash2 size={13} />
                                 </button>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-8">
-                                    <input type="text" value={c.role} onChange={(e) => setContact(i, 'role', e.target.value)} placeholder="Role — e.g. Tournament Director" className={inputClass} />
+                                    <select
+                                        value={c.role}
+                                        onChange={(e) => setContact(i, 'role', e.target.value)}
+                                        className={`${inputClass} cursor-pointer`}
+                                    >
+                                        <option value="">Select role...</option>
+                                        {roleOptionsForContact(c.role).map((role) => (
+                                            <option key={role} value={role}>{role}</option>
+                                        ))}
+                                    </select>
                                     <input type="text" value={c.name} onChange={(e) => setContact(i, 'name', e.target.value)} placeholder="Full name" className={inputClass} />
                                     <input type="email" value={c.email} onChange={(e) => setContact(i, 'email', e.target.value)} placeholder="Email" className={inputClass} />
                                     <div className="grid grid-cols-2 gap-3">
@@ -352,7 +439,7 @@ const OrgProfileEditor = ({ org, onSaved }) => {
                     disabled={saving || uploading}
                     className="inline-flex items-center gap-2 bg-padel-green text-black font-black uppercase tracking-widest text-xs px-8 py-4 rounded-xl hover:bg-white transition-all cursor-pointer disabled:opacity-50 shadow-lg shadow-padel-green/10"
                 >
-                    <Save size={14} /> {saving ? 'Saving...' : 'Save Profile'}
+                    <Save size={14} /> {saving ? 'Saving...' : (adminMode ? 'Save Organisation' : 'Save Profile')}
                 </button>
             </div>
         </form>
