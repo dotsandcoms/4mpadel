@@ -320,6 +320,7 @@ const uploadToGallery = async (file, prefix) => {
 const blankForm = {
     event_name: '',
     slug: '',
+    organisation_id: null,
     organizer_name: 'SAPA',
     organizer_logo_url: '',
     organizer_badge_text: '',
@@ -410,6 +411,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     const { clubs } = useClubs();
     const [venueOpen, setVenueOpen] = useState(false);
+    const [orgSuggestions, setOrgSuggestions] = useState([]);
+    const [orgSearchOpen, setOrgSearchOpen] = useState(false);
+    const [searchingOrgs, setSearchingOrgs] = useState(false);
+    const orgSearchRef = useRef(null);
+    const orgSelectedRef = useRef(false);
 
     const addressInputRef = useRef(null);
     const autocompleteRef = useRef(null);
@@ -420,6 +426,85 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const filteredClubs = clubs.filter(
         (c) => !form.venue || c.name.toLowerCase().includes(form.venue.toLowerCase())
     );
+
+    // Admin calendar: type-ahead search for organisations to link the event
+    useEffect(() => {
+        if (!isOpen || organization) return undefined;
+        const q = (form.organizer_name || '').trim();
+        if (orgSelectedRef.current) {
+            orgSelectedRef.current = false;
+            return undefined;
+        }
+        if (q.length < 2) {
+            setOrgSuggestions([]);
+            setSearchingOrgs(false);
+            return undefined;
+        }
+        const timer = setTimeout(async () => {
+            setSearchingOrgs(true);
+            try {
+                const safe = q.replace(/[%_,]/g, ' ').trim();
+                const { data, error } = await supabase
+                    .from('organisations')
+                    .select('id, name, slug, logo_url, contact_email, contact_phone, website_url, status')
+                    .ilike('name', `%${safe}%`)
+                    .eq('status', 'approved')
+                    .order('name')
+                    .limit(10);
+                if (error) throw error;
+                setOrgSuggestions(data || []);
+                setOrgSearchOpen(true);
+            } catch (err) {
+                console.warn('Organisation search failed:', err);
+                setOrgSuggestions([]);
+            } finally {
+                setSearchingOrgs(false);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [form.organizer_name, isOpen, organization]);
+
+    useEffect(() => {
+        const onDown = (e) => {
+            if (orgSearchRef.current && !orgSearchRef.current.contains(e.target)) {
+                setOrgSearchOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, []);
+
+    const selectOrganisation = (org) => {
+        orgSelectedRef.current = true;
+        setOrgSuggestions([]);
+        setOrgSearchOpen(false);
+        setForm((prev) => ({
+            ...prev,
+            organisation_id: org.id,
+            organizer_name: org.name || prev.organizer_name,
+            organizer_logo_url: org.logo_url || prev.organizer_logo_url,
+            organizer_email: org.contact_email || prev.organizer_email,
+            organizer_phone: org.contact_phone || prev.organizer_phone,
+            organizer_website: org.website_url || prev.organizer_website,
+        }));
+    };
+
+    const handleOrganiserNameChange = (value) => {
+        orgSelectedRef.current = false;
+        setForm((prev) => ({
+            ...prev,
+            organizer_name: value,
+            organisation_id: null,
+        }));
+    };
+
+    const clearOrganisationLink = () => {
+        orgSelectedRef.current = false;
+        setForm((prev) => ({
+            ...prev,
+            organisation_id: null,
+        }));
+    };
 
     // Google Places autocomplete on the address field (step 1 only).
     useEffect(() => {
@@ -476,6 +561,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             // Org portal mode: prefill organiser identity from the organisation
             setForm(organization ? {
                 ...base,
+                organisation_id: organization.id,
                 organizer_name: organization.name || base.organizer_name,
                 organizer_logo_url: organization.logo_url || '',
                 organizer_email: organization.contact_email || '',
@@ -521,6 +607,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             partner_requirement: ev.partner_requirement || 'Required',
             back_draw_options: ev.back_draw_options || 'Plate Included',
             event_co_admins: Array.isArray(ev.event_co_admins) ? ev.event_co_admins.join(', ') : (ev.event_co_admins || ''),
+            organisation_id: ev.organisation_id || null,
         });
         if (draftDivisions && draftDivisions.length > 0) {
             // Resume divisions from a pending amendment draft
@@ -734,6 +821,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 payload.featured_event = false;
                 payload.show_in_recent_results = false;
             }
+        } else {
+            // Admin calendar: link to selected organisation (or clear)
+            payload.organisation_id = form.organisation_id || null;
         }
         return payload;
     };
@@ -907,9 +997,75 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                     <label className={labelClass}>Slug (auto)</label>
                                     <input name="slug" value={form.slug} onChange={handleInput} className={inputClass} />
                                 </div>
-                                <div>
+                                <div className="relative" ref={orgSearchRef}>
                                     <label className={labelClass}>Organiser</label>
-                                    <input name="organizer_name" value={form.organizer_name} onChange={handleInput} className={inputClass} />
+                                    <input
+                                        name="organizer_name"
+                                        value={form.organizer_name}
+                                        onChange={(e) => {
+                                            if (organization) {
+                                                setForm((prev) => ({ ...prev, organizer_name: e.target.value }));
+                                            } else {
+                                                handleOrganiserNameChange(e.target.value);
+                                            }
+                                        }}
+                                        onFocus={() => {
+                                            if (!organization && orgSuggestions.length > 0) setOrgSearchOpen(true);
+                                        }}
+                                        placeholder={organization ? undefined : 'Type to search organisations…'}
+                                        autoComplete="off"
+                                        className={inputClass}
+                                        readOnly={!!organization}
+                                    />
+                                    {!organization && form.organisation_id && (
+                                        <div className="mt-1.5 flex items-center justify-between gap-2">
+                                            <p className="text-[11px] text-padel-green font-bold">
+                                                Linked to organisation page
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={clearOrganisationLink}
+                                                className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
+                                            >
+                                                Unlink
+                                            </button>
+                                        </div>
+                                    )}
+                                    {!organization && !form.organisation_id && (
+                                        <p className="text-[11px] text-gray-500 mt-1">
+                                            Select an organisation to show this event on their public page.
+                                        </p>
+                                    )}
+                                    {!organization && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                        <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                            {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
+                                            ) : (
+                                                orgSuggestions.map((org) => (
+                                                    <button
+                                                        key={org.id}
+                                                        type="button"
+                                                        onClick={() => selectOrganisation(org)}
+                                                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
+                                                    >
+                                                        {org.logo_url ? (
+                                                            <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
+                                                        ) : (
+                                                            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0">
+                                                                <Shield size={14} />
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-bold text-white truncate">{org.name}</p>
+                                                            {org.slug && (
+                                                                <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>
+                                                            )}
+                                                        </div>
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="md:col-span-2">
                                     <label className={labelClass}>Organisation Logo</label>
