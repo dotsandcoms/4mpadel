@@ -84,6 +84,112 @@ async function paystackRefund(
     }
 }
 
+/**
+ * Before refunding, confirm the ledger reference is actually successful on
+ * Paystack. Abandoned / duplicate checkout rows can be marked success locally
+ * (e.g. after a bad sync) while a later REGEV-* reference is the real charge.
+ * When that happens, demote the bad row and switch to a sibling payment that
+ * covers the same entry and verifies as success.
+ */
+async function resolvePaystackRefundTarget(
+    supabaseAdmin: SupabaseClient,
+    item: { payment_id: string; reference: string; refund_amount_rands: number; cover_type: string },
+    reg: RegistrationRow,
+    ctx: {
+        payments: PaymentRow[];
+        paymentById: Map<string, PaymentRow>;
+    },
+): Promise<{
+    ok: boolean;
+    payment_id: string;
+    reference: string;
+    message?: string;
+    remapped?: boolean;
+}> {
+    const payment = ctx.paymentById.get(item.payment_id)
+        || ctx.payments.find((p) => p.id === item.payment_id);
+    if (!payment) {
+        return { ok: false, payment_id: item.payment_id, reference: item.reference, message: 'Payment row missing' };
+    }
+
+    const { secrets, configError } = resolvePaystackVerifySecrets(payment as unknown as Record<string, unknown>);
+    if (secrets.length === 0) {
+        return { ok: false, payment_id: item.payment_id, reference: item.reference, message: configError || 'Paystack not configured' };
+    }
+
+    const primary = await verifyPaystackReference(item.reference, secrets);
+    if (primary.ok) {
+        return { ok: true, payment_id: item.payment_id, reference: item.reference };
+    }
+
+    const paystackStatus = String(primary.status || '').toLowerCase();
+    // Demote local success that Paystack never settled — stops future refunds
+    // from picking the abandoned checkout again.
+    if (['abandoned', 'failed', 'reversed', 'ongoing', 'pending', 'processing', 'queued', 'unknown'].includes(paystackStatus)
+        || primary.message) {
+        await supabaseAdmin
+            .from('payments')
+            .update({
+                status: paystackStatus === 'abandoned' || paystackStatus === 'failed' ? paystackStatus : 'abandoned',
+                metadata: {
+                    ...parseMeta(payment.metadata),
+                    refund_verify_demoted: true,
+                    refund_verify_status: paystackStatus,
+                    refund_verify_message: primary.message,
+                    refund_verify_at: new Date().toISOString(),
+                },
+            })
+            .eq('id', payment.id)
+            .eq('status', 'success');
+        ctx.paymentById.delete(payment.id);
+    }
+
+    const regEmail = normEmail(reg.email);
+    const regDivision = String(reg.division || '');
+    const candidates = ctx.payments
+        .filter((p) => p.id !== payment.id && p.status === 'success')
+        .filter((p) => {
+            const covers = parseMeta(p.metadata).covers;
+            if (!Array.isArray(covers)) return false;
+            if (item.cover_type === 'license') {
+                return covers.some((c: Record<string, unknown>) =>
+                    c.type === 'license'
+                    && normEmail(c.email) === regEmail
+                    && c.license !== 'full');
+            }
+            return covers.some((c: Record<string, unknown>) =>
+                c.type === 'entry'
+                && normEmail(c.email) === regEmail
+                && String(c.division || '') === regDivision);
+        })
+        .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+
+    for (const candidate of candidates) {
+        const { secrets: candSecrets } = resolvePaystackVerifySecrets(candidate as unknown as Record<string, unknown>);
+        if (candSecrets.length === 0) continue;
+        const verified = await verifyPaystackReference(candidate.reference, candSecrets);
+        if (!verified.ok) continue;
+        ctx.paymentById.set(candidate.id, candidate);
+        console.warn(
+            `Refund remapped from unverified ${item.reference} → verified ${candidate.reference} for ${reg.email} / ${reg.division}`,
+        );
+        return {
+            ok: true,
+            payment_id: candidate.id,
+            reference: candidate.reference,
+            remapped: true,
+            message: `Remapped from ${item.reference} (Paystack: ${paystackStatus})`,
+        };
+    }
+
+    return {
+        ok: false,
+        payment_id: item.payment_id,
+        reference: item.reference,
+        message: `Paystack has no successful charge for ${item.reference} (${paystackStatus}: ${primary.message}). No verified sibling payment found.`,
+    };
+}
+
 type RefundSummaryItem = {
     registration_id: string;
     division: string;
@@ -126,22 +232,69 @@ async function processRegistration(
     let aggregateStatus = items.length === 0 ? 'no_refund' : 'processing';
 
     for (const item of items) {
-        const payment = ctx.paymentById.get(item.payment_id);
+        let payment = ctx.paymentById.get(item.payment_id);
         const method = String((payment as unknown as Record<string, unknown>)?.payment_method || 'paystack');
         const isCash = method === 'cash' || method === 'manual';
         const useCash = ctx.skipPaystack || isCash;
 
+        let refundPaymentId = item.payment_id;
+        let refundReference = item.reference;
+        let verifyMeta: Record<string, unknown> = {};
+
+        if (!useCash) {
+            const target = await resolvePaystackRefundTarget(supabaseAdmin, item, reg, {
+                payments: ctx.payments,
+                paymentById: ctx.paymentById,
+            });
+            if (!target.ok) {
+                const { data: failedRow } = await supabaseAdmin
+                    .from('payment_refunds')
+                    .insert([{
+                        payment_id: item.payment_id,
+                        event_registration_id: reg.id,
+                        paystack_reference: item.reference,
+                        amount: item.refund_amount_rands,
+                        currency: 'ZAR',
+                        status: 'failed',
+                        reason: ctx.reason,
+                        initiated_by: ctx.initiatedBy,
+                        metadata: {
+                            cover_type: item.cover_type,
+                            is_test: item.is_test,
+                            method,
+                            paystack_error: target.message,
+                            verify_failed: true,
+                        },
+                    }])
+                    .select('id')
+                    .maybeSingle();
+                console.error('Refund blocked — Paystack verify failed:', item.reference, target.message, failedRow?.id);
+                aggregateStatus = 'needs_attention';
+                continue;
+            }
+            refundPaymentId = target.payment_id;
+            refundReference = target.reference;
+            payment = ctx.paymentById.get(refundPaymentId) || payment;
+            if (target.remapped) {
+                verifyMeta = {
+                    remapped_from: item.reference,
+                    remapped_to: target.reference,
+                    remap_reason: target.message,
+                };
+            }
+        }
+
         // 1. Insert the refund row up-front (auditable even if the API call dies).
         const insertRow: Record<string, unknown> = {
-            payment_id: item.payment_id,
+            payment_id: refundPaymentId,
             event_registration_id: reg.id,
-            paystack_reference: item.reference,
+            paystack_reference: refundReference,
             amount: item.refund_amount_rands,
             currency: 'ZAR',
             status: useCash ? 'processed' : 'pending',
             reason: useCash && ctx.reason === 'admin_removal' ? 'admin_cash_refund' : ctx.reason,
             initiated_by: ctx.initiatedBy,
-            metadata: { cover_type: item.cover_type, is_test: item.is_test, method },
+            metadata: { cover_type: item.cover_type, is_test: item.is_test, method, ...verifyMeta },
             processed_at: useCash ? new Date().toISOString() : null,
         };
         const { data: refundRow, error: insErr } = await supabaseAdmin
@@ -163,13 +316,20 @@ async function processRegistration(
             continue;
         }
 
-        // 2. Call Paystack.
+        // 2. Call Paystack against the verified reference.
         const secret = getPaystackSecretForPayment((payment ?? {}) as Record<string, unknown>);
-        const result = await paystackRefund(secret, item.reference, toPaystackCents(item.refund_amount_rands));
+        const result = await paystackRefund(secret, refundReference, toPaystackCents(item.refund_amount_rands));
 
         const update: Record<string, unknown> = {
             paystack_refund_id: result.refundId,
             status: result.ok ? 'processing' : 'failed',
+            metadata: {
+                cover_type: item.cover_type,
+                is_test: item.is_test,
+                method,
+                ...verifyMeta,
+                ...(result.ok ? {} : { paystack_error: result.message }),
+            },
         };
         await supabaseAdmin.from('payment_refunds').update(update).eq('id', refundRow?.id);
 
@@ -180,7 +340,7 @@ async function processRegistration(
                 await cancelEventTempLicense(supabaseAdmin, reg.email, ctx.eventId);
             }
         } else {
-            console.error('Paystack refund failed:', item.reference, result.message);
+            console.error('Paystack refund failed:', refundReference, result.message);
             aggregateStatus = 'needs_attention';
         }
     }

@@ -172,10 +172,21 @@ export function resolveRefundableItems(
         roundRands(Number(p.amount || 0) - (drawnByPayment.get(p.id) || 0));
 
     // Prefer the transaction with the most room (so a fee fits in one payment),
+    // then prefer rows that look like a real settled checkout (covers + paystack),
     // tie-broken by most recent — the player's "active" paid entry.
     const byRoomThenRecent = (a: PaymentRow, b: PaymentRow) => {
         const diff = remainingOf(b) - remainingOf(a);
         if (Math.abs(diff) > 0.005) return diff;
+        const score = (p: PaymentRow) => {
+            const meta = parseMeta(p.metadata);
+            let s = 0;
+            if (Array.isArray(meta.covers) && (meta.covers as Cover[]).length > 0) s += 10;
+            if (meta.source === 'manual_event' || meta.source === 'paystack_sync') s += 5;
+            if (meta.inherited_covers_from || meta.inherited_covers_from_sibling) s += 2;
+            return s;
+        };
+        const scoreDiff = score(b) - score(a);
+        if (scoreDiff !== 0) return scoreDiff;
         return String(b.created_at || '').localeCompare(String(a.created_at || ''));
     };
 

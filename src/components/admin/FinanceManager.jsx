@@ -259,13 +259,45 @@ const FinanceManager = () => {
             let paymentType = isEventReg ? 'event_entry_fee' : (licenseType === 'full' ? 'membership' : 'temp_license');
             let licensePortion = 0;
 
+            const { data: player, error: fetchError } = await supabase
+                .from('players')
+                .select('id, name, paid_registration, license_type')
+                .ilike('email', email)
+                .maybeSingle();
+
+            if (fetchError) throw fetchError;
+            if (!player) throw new Error(`Player with email ${email} not found.`);
+
+            // Abandoned / duplicate REGEV checkouts often hold the real covers[] while
+            // the successful Paystack charge (a later REGEV-* for the same player+event)
+            // arrives with stripped metadata. Steal covers from a sibling row so refunds
+            // can attribute the charge correctly.
+            let siblingMeta = null;
+            if (isEventReg && enrichedEventId && !(trx.metadata?.covers || localMetadata?.covers)) {
+                const { data: siblings } = await supabase
+                    .from('payments')
+                    .select('reference, metadata, status, created_at')
+                    .eq('event_id', enrichedEventId)
+                    .eq('player_id', player.id)
+                    .neq('reference', reference)
+                    .order('created_at', { ascending: false })
+                    .limit(10);
+                siblingMeta = (siblings || []).find((s) => Array.isArray(s.metadata?.covers) && s.metadata.covers.length > 0)?.metadata || null;
+                if (siblingMeta) {
+                    enrichedEventName = enrichedEventName || siblingMeta.event_name || null;
+                    enrichedDivision = enrichedDivision || siblingMeta.division || null;
+                    console.info(`[Sync] Inherited covers from sibling payment for ${reference}`);
+                }
+            }
+
             // ── Authoritative covers from the manual-event (REGEV) checkout metadata ──
             // The checkout writes exactly what this transaction paid for (entries and/or
             // licenses, per email). When present, use it instead of amount heuristics —
             // heuristics fail for manual events (no tournament_participants rows), which
             // previously left licenses unassigned and partner rows unpaid.
             const coversMeta = Array.isArray(trx.metadata?.covers) ? trx.metadata.covers
-                : (Array.isArray(localMetadata?.covers) ? localMetadata.covers : []);
+                : (Array.isArray(localMetadata?.covers) ? localMetadata.covers
+                    : (Array.isArray(siblingMeta?.covers) ? siblingMeta.covers : []));
             const licenseCovers = coversMeta.filter((c) => c?.type === 'license' && c.email);
             const entryCovers = coversMeta.filter((c) => c?.type === 'entry' && c.email);
 
@@ -278,15 +310,6 @@ const FinanceManager = () => {
                     paymentType = licenseCovers[0].license === 'full' ? 'full_license' : 'temp_license';
                 }
             }
-
-            const { data: player, error: fetchError } = await supabase
-                .from('players')
-                .select('id, name, paid_registration, license_type')
-                .ilike('email', email)
-                .maybeSingle();
-
-            if (fetchError) throw fetchError;
-            if (!player) throw new Error(`Player with email ${email} not found.`);
 
             
             // 3. Handle Event-Specific Logic (Syncing Tournament Participants & Splitting Payments)
@@ -694,7 +717,41 @@ const FinanceManager = () => {
             }
 
             // 6. Record in Payments Table (Clean up old records first to allow clean splits)
-            if (paymentsToInsert.length > 0) {
+            // Prefer a covers-aware ledger row for manual-event REGEV refs so refunds
+            // can match email+division. Without covers, refunds latch onto abandoned
+            // sibling checkouts that still carry the original metadata.
+            const coversAwareMeta = {
+                source: coversMeta.length > 0 ? 'manual_event' : 'paystack_sync',
+                original_trx: trx,
+                event_id: enrichedEventId,
+                event_name: enrichedEventName,
+                registrant_email: email,
+                ...(coversMeta.length > 0 ? {
+                    covers: coversMeta,
+                    division_entry_fees: siblingMeta?.division_entry_fees
+                        || localMetadata?.division_entry_fees
+                        || trx.metadata?.division_entry_fees
+                        || {},
+                    line_items: siblingMeta?.line_items || localMetadata?.line_items || trx.metadata?.line_items || [],
+                    registration_rows: siblingMeta?.registration_rows || localMetadata?.registration_rows || trx.metadata?.registration_rows || [],
+                    inherited_covers_from_sibling: !!siblingMeta,
+                } : {}),
+            };
+
+            if (isEventReg && coversMeta.length > 0) {
+                await supabase.from('payments').upsert({
+                    player_id: player.id,
+                    event_id: enrichedEventId,
+                    amount: amount,
+                    currency: 'ZAR',
+                    status: 'success',
+                    payment_type: paymentType,
+                    payment_method: 'paystack',
+                    reference: trx.id,
+                    created_at: trx.rawDate,
+                    metadata: coversAwareMeta,
+                }, { onConflict: 'reference' });
+            } else if (paymentsToInsert.length > 0) {
                 // Delete existing records for this reference (including possible old splits or registration-page records)
                 // We search by the main reference OR by the paystack_ref in metadata
                 await supabase.from('payments')
@@ -720,13 +777,10 @@ const FinanceManager = () => {
                     amount: amount,
                     status: 'success',
                     payment_type: paymentType,
+                    payment_method: 'paystack',
                     reference: trx.id,
                     created_at: trx.rawDate,
-                    metadata: { 
-                        source: 'paystack_sync', 
-                        original_trx: trx,
-                        event_name: enrichedEventName
-                    }
+                    metadata: coversAwareMeta,
                 }, { onConflict: 'reference' });
             }
 
