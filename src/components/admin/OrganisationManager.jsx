@@ -16,6 +16,7 @@ import EventBuilder from './EventBuilder';
 import OrgProfileEditor from './OrgProfileEditor';
 import CreateOrganisationModal from './CreateOrganisationModal';
 import OrgAuditLog from './OrgAuditLog';
+import ManualEventRegistrations from './ManualEventRegistrations';
 import { sanitizeHtml } from '../../utils/sanitizeHtml';
 
 const CollapsibleSection = ({
@@ -118,12 +119,21 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
     // Telemetry State Hooks for Tournament Entries & Breakdown Modal
     const [selectedEventEntries, setSelectedEventEntries] = useState(null);
+    const [managingEvent, setManagingEvent] = useState(null); // full Event Manager for org hosts
     const [eventEntriesList, setEventEntriesList] = useState([]);
     const [isLoadingEntries, setIsLoadingEntries] = useState(false);
     const [entriesSearchQuery, setEntriesSearchQuery] = useState('');
     const [entriesDivisionFilter, setEntriesDivisionFilter] = useState('all');
     // Live participant counts per event (keyed by event id)
     const [participantCounts, setParticipantCounts] = useState({});
+
+    /** Open the full event manager for an org-hosted event (no separate Event Manager module access needed). */
+    const openEventManager = (ev) => {
+        if (!ev?.id) return;
+        setSelectedEventDetails(null);
+        setSelectedEventEntries(null);
+        setManagingEvent(ev);
+    };
 
     const [sectionOpen, setSectionOpen] = useState({
         pendingOrgs: true,
@@ -197,13 +207,17 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
 
     const handlePortalModeChange = (mode) => {
         setPortalMode(mode);
+        setManagingEvent(null);
         if (mode === 'platform') setImpersonatedOrg(null);
         onViewChange?.(mode);
         try {
             const params = new URLSearchParams(window.location.search);
             params.set('tab', 'organisations');
             if (mode === 'host') params.set('view', 'host');
-            else params.delete('view');
+            else {
+                params.delete('view');
+                params.delete('org');
+            }
             const next = `${window.location.pathname}?${params.toString()}`;
             window.history.replaceState({}, '', next);
         } catch (_) { /* ignore */ }
@@ -216,6 +230,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             toast.error('Only approved organisations have a host dashboard.');
             return;
         }
+        setManagingEvent(null);
         setImpersonatedOrg(org);
         setPortalMode('host');
         setActiveSection('overview');
@@ -1113,7 +1128,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                             Create Organisation <Plus size={14} />
                         </button>
                     )}
-                    {isHostView && (
+                    {isHostView && !managingEvent && (
                         <button
                             onClick={() => {
                                 setBuilderEvent(null);
@@ -1130,7 +1145,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             {/* ========================================================
                 SUPER ADMIN OVERSIGHT VIEW
                ======================================================== */}
-            {isSuperAdmin && (
+            {isSuperAdmin && !managingEvent && (
                 <div className="space-y-8">
                     {/* Platform Summary Stats */}
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -1491,13 +1506,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                     <div className="flex justify-end gap-2">
                                                         <button
                                                             type="button"
-                                                            onClick={() => {
-                                                                setSelectedEventDetails(null);
-                                                                setSelectedEventEntries(ev);
-                                                            }}
-                                                            className="bg-purple-500/10 border border-purple-500/20 hover:bg-purple-500 hover:text-white text-purple-400 font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                                            onClick={() => openEventManager(ev)}
+                                                            className="bg-padel-green/10 border border-padel-green/20 hover:bg-padel-green hover:text-black text-padel-green font-black uppercase tracking-wider text-[10px] px-3.5 py-2 rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
                                                         >
-                                                            <Users size={12} /> Entries ({participantCounts[ev.id] ?? ev.registered_players ?? 0})
+                                                            <LayoutDashboard size={12} /> Manage Event
                                                         </button>
                                                         <button
                                                             onClick={() => setSelectedEventDetails(ev)}
@@ -1539,9 +1551,24 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
             )}
 
             {/* ========================================================
+                FULL EVENT MANAGER — org hosts (and platform admins opening
+                an org event) get the same manager without needing the
+                separate Event Manager module permission.
+               ======================================================== */}
+            {managingEvent && (
+                <ManualEventRegistrations
+                    variant="inline"
+                    isOpen
+                    event={managingEvent}
+                    onBack={() => setManagingEvent(null)}
+                    backLabel="← Back to Organisation Dashboard"
+                />
+            )}
+
+            {/* ========================================================
                 ORGANISATION HOST VIEW
                ======================================================== */}
-            {isHostView && (
+            {isHostView && !managingEvent && (
                 <div className="space-y-8">
                     {/* View Switcher Tabs */}
                     {activeSection !== 'create-event' && (
@@ -1561,7 +1588,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                 className={`pb-4 text-sm font-extrabold uppercase tracking-wider relative transition-colors cursor-pointer ${activeSection === 'my-events' ? 'text-padel-green' : 'text-gray-400 hover:text-white'
                                     }`}
                             >
-                                Tournaments Scoped ({orgEvents.length})
+                                Approved Tournaments ({orgEvents.length})
                                 {activeSection === 'my-events' && (
                                     <motion.div layoutId="hostTabUnderline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-padel-green" />
                                 )}
@@ -1609,7 +1636,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                     </div>
                                     <span className="text-[10px] uppercase font-black text-purple-400 tracking-wider block">Total Registrants</span>
                                     <div className="text-2xl font-black text-purple-400 mt-1">{hostStats.totalRegistrations}</div>
-                                    <span className="text-[9px] text-purple-400/60 font-bold block mt-1">Sanctioned events only</span>
+                                    <span className="text-[9px] text-purple-400/60 font-bold block mt-1">Approved events only</span>
                                 </div>
                                 <div className="bg-white/[0.02] border border-white/10 backdrop-blur-md p-5 rounded-2xl hover:border-white/20 transition-all shadow-xl relative overflow-hidden group text-left">
                                     <div className="absolute top-0 right-0 w-20 h-20 bg-emerald-500/5 blur-xl rounded-full pointer-events-none group-hover:bg-emerald-500/10 transition-colors" />
@@ -1681,12 +1708,14 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                         ) : (
                                             <div className="space-y-3.5">
                                                 {orgEvents.slice(0, 4).map(ev => (
-                                                    <div
+                                                    <button
                                                         key={ev.id}
-                                                        className="bg-white/[0.015] border border-white/10 p-4 rounded-xl flex items-center justify-between gap-4"
+                                                        type="button"
+                                                        onClick={() => setActiveSection('my-events')}
+                                                        className="w-full bg-white/[0.015] hover:bg-white/[0.04] border border-white/10 hover:border-padel-green/30 p-4 rounded-xl flex items-center justify-between gap-4 text-left transition-all cursor-pointer"
                                                     >
-                                                        <div>
-                                                            <span className="font-bold text-sm text-white block">{ev.event_name}</span>
+                                                        <div className="min-w-0">
+                                                            <span className="font-bold text-sm text-white block truncate">{ev.event_name}</span>
                                                             <span className="text-[10px] text-gray-500 block mt-1">{ev.event_dates} ({ev.city})</span>
                                                         </div>
 
@@ -1699,11 +1728,11 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                                         : 'bg-red-500/10 text-red-400 border-red-500/20'
                                                                 }`}
                                                             >
-                                                                {ev.sanction_status}
+                                                                {ev.sanction_status === 'approved' ? 'Approved' : ev.sanction_status}
                                                             </span>
                                                             <ChevronRight size={14} className="text-gray-600" />
                                                         </div>
-                                                    </div>
+                                                    </button>
                                                 ))}
                                             </div>
                                         )}
@@ -1796,13 +1825,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                 {ev.sanction_status === 'approved' ? (
                                                     <button 
                                                         type="button"
-                                                        onClick={() => {
-                                                            setSelectedEventDetails(null);
-                                                            setSelectedEventEntries(ev);
-                                                        }}
-                                                        className="text-[10px] text-purple-400 font-black hover:text-white flex items-center gap-1.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
+                                                        onClick={() => openEventManager(ev)}
+                                                        className="text-[10px] text-padel-green font-black hover:text-white flex items-center gap-1.5 bg-padel-green/10 hover:bg-padel-green/20 border border-padel-green/20 px-2.5 py-1 rounded-md transition-all cursor-pointer"
                                                     >
-                                                        <Users size={12} /> {participantCounts[ev.id] ?? ev.registered_players ?? 0} Entries & Breakdown
+                                                        <LayoutDashboard size={12} /> Manage Event
                                                     </button>
                                                 ) : (
                                                     <span className="text-[10px] text-gray-500 font-bold">
@@ -2079,13 +2105,10 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                             </div>
                                             <button
                                                 type="button"
-                                                onClick={() => {
-                                                    setSelectedEventDetails(null);
-                                                    setSelectedEventEntries(selectedEventDetails);
-                                                }}
-                                                className="mt-1 px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-black uppercase tracking-wider text-[10px] rounded-xl hover:shadow-[0_0_15px_rgba(168,85,247,0.3)] transition-all shrink-0 cursor-pointer"
+                                                onClick={() => openEventManager(selectedEventDetails)}
+                                                className="mt-1 px-4 py-2 bg-padel-green hover:bg-white text-black font-black uppercase tracking-wider text-[10px] rounded-xl transition-all shrink-0 cursor-pointer"
                                             >
-                                                👁️ View Entries
+                                                Manage Event
                                             </button>
                                         </div>
                                     </div>

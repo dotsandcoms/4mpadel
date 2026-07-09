@@ -123,7 +123,7 @@ const TeamPlayerRows = ({ players, children }) => (
     </div>
 );
 
-const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'modal' }) => {
+const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'modal', backLabel = '← Back to Events List' }) => {
     const isInline = variant === 'inline';
     const isActive = isInline || isOpen;
     const [registrations, setRegistrations] = useState([]);
@@ -1574,7 +1574,7 @@ const ManualEventRegistrations = ({ isOpen, onClose, onBack, event, variant = 'm
                                 onClick={onBack}
                                 className="text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white flex items-center gap-2 transition-colors mb-4"
                             >
-                                ← Back to Events List
+                                {backLabel}
                             </button>
                         )}
                         {isInline ? (
