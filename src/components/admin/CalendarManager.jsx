@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import { Plus, Edit2, Trash2, X, Save, Search, Image as ImageIcon, Star, CalendarDays, Flag, MapPin, Users, RefreshCw, Trophy, PlayCircle, ChevronLeft, ChevronRight, UploadCloud, Loader2, Trash, CreditCard, Briefcase } from 'lucide-react';
@@ -93,6 +93,11 @@ const CalendarManager = () => {
     const [isSyncing, setIsSyncing] = useState(false);
     const [isBuilderOpen, setIsBuilderOpen] = useState(false);
     const [builderEvent, setBuilderEvent] = useState(null);
+    const [orgSuggestions, setOrgSuggestions] = useState([]);
+    const [orgSearchOpen, setOrgSearchOpen] = useState(false);
+    const [searchingOrgs, setSearchingOrgs] = useState(false);
+    const orgSearchRef = useRef(null);
+    const orgSelectedRef = useRef(false);
 
     const openBuilder = (event = null) => {
         setBuilderEvent(event);
@@ -113,6 +118,7 @@ const CalendarManager = () => {
         end_date: '',
         start_time: '',
         end_time: '',
+        organisation_id: null,
         organizer_name: 'SAPA',
         organizer_phone: '',
         organizer_email: '',
@@ -144,6 +150,66 @@ const CalendarManager = () => {
     useEffect(() => {
         fetchEvents();
     }, []);
+
+    // Type-ahead organisation search for the legacy edit modal
+    useEffect(() => {
+        if (!isModalOpen) return undefined;
+        const q = (formData.organizer_name || '').trim();
+        if (orgSelectedRef.current) {
+            orgSelectedRef.current = false;
+            return undefined;
+        }
+        if (q.length < 2) {
+            setOrgSuggestions([]);
+            setSearchingOrgs(false);
+            return undefined;
+        }
+        const timer = setTimeout(async () => {
+            setSearchingOrgs(true);
+            try {
+                const safe = q.replace(/[%_,]/g, ' ').trim();
+                const { data, error } = await supabase
+                    .from('organisations')
+                    .select('id, name, slug, logo_url, contact_email, contact_phone, website_url')
+                    .ilike('name', `%${safe}%`)
+                    .eq('status', 'approved')
+                    .order('name')
+                    .limit(10);
+                if (error) throw error;
+                setOrgSuggestions(data || []);
+                setOrgSearchOpen(true);
+            } catch {
+                setOrgSuggestions([]);
+            } finally {
+                setSearchingOrgs(false);
+            }
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [formData.organizer_name, isModalOpen]);
+
+    useEffect(() => {
+        const onDown = (e) => {
+            if (orgSearchRef.current && !orgSearchRef.current.contains(e.target)) {
+                setOrgSearchOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, []);
+
+    const selectOrganisation = (org) => {
+        orgSelectedRef.current = true;
+        setOrgSuggestions([]);
+        setOrgSearchOpen(false);
+        setFormData((prev) => ({
+            ...prev,
+            organisation_id: org.id,
+            organizer_name: org.name || prev.organizer_name,
+            organizer_email: org.contact_email || prev.organizer_email,
+            organizer_phone: org.contact_phone || prev.organizer_phone,
+            organizer_website: org.website_url || prev.organizer_website,
+        }));
+    };
 
     const [isUploadingPoster, setIsUploadingPoster] = useState(false);
 
@@ -346,6 +412,7 @@ const CalendarManager = () => {
             if (payload.entry_fee === '') payload.entry_fee = null;
             if (payload.registered_players === '') payload.registered_players = 0;
             if (payload.rankedin_id === '') payload.rankedin_id = null;
+            payload.organisation_id = payload.organisation_id || null;
             
             // Ensure category_fees is a valid object
             if (!payload.category_fees) payload.category_fees = {};
@@ -438,6 +505,7 @@ const CalendarManager = () => {
             organizer_phone: '',
             organizer_email: '',
             organizer_website: '',
+            organisation_id: null,
             image_url: '',
             custom_image_url: '',
             featured_event: false,
@@ -543,6 +611,7 @@ const CalendarManager = () => {
             organizer_phone: event.organizer_phone || '',
             organizer_email: event.organizer_email || '',
             organizer_website: event.organizer_website || '',
+            organisation_id: event.organisation_id || null,
             image_url: event.image_url || '',
             custom_image_url: event.custom_image_url || '',
             featured_event: event.featured_event || false,
@@ -1807,15 +1876,70 @@ const CalendarManager = () => {
                                     <div className="border-t border-white/10 pt-4">
                                         <h4 className="text-sm font-bold text-gray-300 mb-3 uppercase">Organizer Details</h4>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Organizer Name</label>
+                                            <div className="relative" ref={orgSearchRef}>
+                                                <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Organiser</label>
                                                 <input
                                                     type="text"
                                                     name="organizer_name"
                                                     value={formData.organizer_name}
-                                                    onChange={handleInputChange}
+                                                    onChange={(e) => {
+                                                        orgSelectedRef.current = false;
+                                                        setFormData((prev) => ({
+                                                            ...prev,
+                                                            organizer_name: e.target.value,
+                                                            organisation_id: null,
+                                                        }));
+                                                    }}
+                                                    onFocus={() => {
+                                                        if (orgSuggestions.length > 0) setOrgSearchOpen(true);
+                                                    }}
+                                                    placeholder="Type to search organisations…"
+                                                    autoComplete="off"
                                                     className="w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none"
                                                 />
+                                                {formData.organisation_id && (
+                                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                        <p className="text-[11px] text-padel-green font-bold">Linked to organisation page</p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFormData((prev) => ({ ...prev, organisation_id: null }))}
+                                                            className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400"
+                                                        >
+                                                            Unlink
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {!formData.organisation_id && (
+                                                    <p className="text-[11px] text-gray-500 mt-1">Select an organisation to show this event on their public page.</p>
+                                                )}
+                                                {orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                                        {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                            <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
+                                                        ) : (
+                                                            orgSuggestions.map((org) => (
+                                                                <button
+                                                                    key={org.id}
+                                                                    type="button"
+                                                                    onClick={() => selectOrganisation(org)}
+                                                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
+                                                                >
+                                                                    {org.logo_url ? (
+                                                                        <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0 text-xs font-black">
+                                                                            {(org.name || '?')[0]}
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-sm font-bold text-white truncate">{org.name}</p>
+                                                                        {org.slug && <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>}
+                                                                    </div>
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-gray-400 mb-1 uppercase">Phone</label>
