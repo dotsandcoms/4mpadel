@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
-    X, Save, ChevronRight, ChevronLeft, ChevronDown, Plus, Trash2, UploadCloud, Loader2,
-    Info, Layers, FileText, ImageIcon, Settings, Check,
+    X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
+    Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
     Bold, Italic, Underline, List, ListOrdered, Heading
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
@@ -19,6 +19,13 @@ const STANDARD_DIVISIONS = [
 
 const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
+const SAPA_WINNER_POINTS = { None: '', Bronze: '300', Silver: '500', Gold: '1000', 'Super Gold': '1500', Major: '2600' };
+const sapaBadgeText = (status) => {
+    const points = SAPA_WINNER_POINTS[status];
+    if (!status || status === 'None' || !points) return '';
+    return `SAPA ${status.toUpperCase()} ${points}`;
+};
+const ENTRY_FEE_WARN_THRESHOLD = 50;
 
 const safeISOString = (val) => {
     if (!val) return null;
@@ -59,8 +66,9 @@ const sapaBadgeClass = (status) => {
         default: return 'bg-white/10 text-gray-400 border border-white/10';
     }
 };
-const GENDERS = ['', 'Men', 'Ladies', 'Mixed'];
-const TOURNAMENT_TAGS = ['None', 'Broll', '360 Padel', 'SA Grand'];
+const GENDERS = ['', 'Men', 'Ladies', 'Mixed', 'Junior'];
+const AGE_CATEGORIES = ['', 'Open', '35+', '40+', 'Junior'];
+const TOURNAMENT_TAGS = ['None', 'Broll', 'SAPA', 'Club', 'Social', 'Internal', '360 Padel', 'SA Grand'];
 
 const GOOGLE_MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '';
 let googleMapsPromise = null;
@@ -92,10 +100,11 @@ const loadGoogleMaps = () => {
 
 const STEPS = [
     { id: 1, label: 'Basics', icon: Info },
-    { id: 2, label: 'Divisions', icon: Layers },
-    { id: 3, label: 'Tournament Info', icon: FileText },
-    { id: 4, label: 'Media & Sponsors', icon: ImageIcon },
-    { id: 5, label: 'Settings & Review', icon: Settings },
+    { id: 2, label: 'Registration', icon: ClipboardList },
+    { id: 3, label: 'Divisions', icon: Layers },
+    { id: 4, label: 'Tournament Info', icon: FileText },
+    { id: 5, label: 'Sponsors & Media', icon: ImageIcon },
+    { id: 6, label: 'Review & Publish', icon: Eye },
 ];
 
 const inputClass = "w-full bg-black/40 border border-white/10 rounded-lg px-4 py-3 text-white focus:border-padel-green focus:outline-none";
@@ -230,16 +239,18 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Type here...', minHeig
     );
 };
 
-const emptyDivision = () => ({
+const emptyDivision = (licenseRequired = false) => ({
     _key: Math.random().toString(36).slice(2),
     id: null,
     name: '',
     entry_fee: '',
     format: 'Knockout',
     entries_close_at: '',
-    license_required: false,
+    license_required: !!licenseRequired,
     age_category: '',
     gender: '',
+    suggested_level: '',
+    entry_limit: '',
     details: '',
     is_active: true,
 });
@@ -341,7 +352,9 @@ const blankForm = {
     prize_money_total: '',
     prize_money_breakdown: [],
     balls: '',
-    courts: '',
+    courts: 'Outdoor',
+    indoor_outdoor: 'Outdoor',
+    courts_count: '',
     tournament_director: '',
     referees: '',
     sanctioning_details: '',
@@ -364,6 +377,9 @@ const blankForm = {
     finance_managed: true,
     allow_payments: true,
     show_in_recent_results: false,
+    allow_temporary_license: true,
+    license_required_default: false,
+    entry_fee_notes: '',
     // format & capacity
     golden_point: true,
     is_league: false,
@@ -373,7 +389,6 @@ const blankForm = {
     event_co_admins: '',
 };
 
-// Default SAPA content pre-populated into new events (editable per event).
 const SAPA_DEFAULTS = {
     description: `<p>This SAPA-sanctioned tournament forms part of the official SAPA tournament calendar and offers players the opportunity to compete for SAPA ranking points in a structured, competitive event.</p><p>The tournament will include multiple divisions to cater for different playing levels, subject to the final number of entries received. Spaces in each division may be limited, and players are encouraged to register early.</p><p>All event information, registration, payment, SAPA Player License checks and event updates will be managed through the 4M Padel platform.</p><h3>Registration</h3><p>Registration must be completed through the 4M Padel website before the official closing date and time listed on the event card. Late entries may not be accepted once registration has closed.</p><p>Entry is only confirmed once the player has completed registration, paid the applicable entry fee, and holds a valid SAPA Player License.</p><h3>SAPA Player License</h3><p>For the 2026 season, a valid SAPA Player License is mandatory for all players entering SAPA Gold, Super Gold and Major events. SAPA Bronze and Silver events do not require a SAPA Player License, unless specifically stated on the event card.</p><p>Where a SAPA Player License is required, players may use either:</p><ul><li>Annual SAPA Player License — R450</li><li>Temporary SAPA Player License — R120, valid for one event only</li></ul><p>SAPA Player Licenses can be purchased through the 4M Padel website during the registration process.</p><p>Players entering a Gold, Super Gold or Major event without a valid SAPA Player License will not be eligible to compete, and may be removed from the entry list or draw.</p><h3>Divisions</h3><p>The tournament may include one or more divisions such as:</p><ul><li>Men’s Open</li><li>Men’s Advanced</li><li>Men’s Intermediate</li><li>Ladies Open</li><li>Ladies Advanced</li><li>Ladies Intermediate</li><li>Mixed or additional divisions, where applicable</li></ul><p>Suggested playing levels may be provided for each division to help players enter the most appropriate category.</p><p>Players may be permitted to enter more than one division, but SAPA ranking points will only be awarded in accordance with SAPA rules, usually in the highest eligible division entered.</p><p>The Tournament Director and SAPA Tournament Committee reserve the right to move or remove players from a division where their level is considered inappropriate for that division or unfair to the rest of the draw.</p><h3>Format</h3><p>The Men’s Open and Ladies Open divisions will be played as knockout draws with a back draw. All Men’s Open and Ladies Open matches will be played as best of three full sets, with Star Point used in all rounds and all matches.</p><p>Other divisions may follow the same knockout format, or may be played as group stages leading into knockout rounds, plate draws or another format determined by the final number of entries. The final format for each division will be confirmed once entries have closed and will be published on the event card and/or final tournament fact sheet.</p><p>Star Point is the default sudden-death scoring format for SAPA events. Silver Point may be used in divisions other than Men’s Open and Ladies Open, where approved by the Tournament Director and/or SAPA Tournament Committee.</p><h3>Seeding</h3><p>From 1 July 2026, seeding for SAPA-sanctioned events will be determined according to SAPA ranking points. Seedings will be calculated in accordance with the applicable SAPA tournament rules and the official SAPA rankings at the time of the draw.</p><p>The SAPA Tournament Committee may review seedings where required to ensure they are correctly applied in line with SAPA rules. The SAPA Tournament Committee’s decision on seeding is final.</p><h3>Draws, Fixtures and Results</h3><p>Draws and fixtures will be published after registration closes and once seedings, withdrawals and substitutions have been finalised. Players are responsible for checking their scheduled match times and ensuring that they are available from their first scheduled match.</p><p>Results may be published on the official tournament platform and/or the 4M Padel website.</p><h3>Player Availability</h3><p>Players must be available to play at their scheduled match times. Depending on the size of the draw, matches may begin on the evening before the main tournament dates, particularly where divisions are full or additional playing windows are required.</p><p>Players are responsible for checking their own fixtures and ensuring that they know the correct date, time, venue and court for each match. Any player or team arriving late for a scheduled match may be disqualified, and a walkover may be awarded to the opposing team.</p><p>Players should remain available for the full duration of the tournament, or until they have been eliminated from all applicable draws.</p><h3>Player Conduct</h3><p>All players are expected to conduct themselves in a respectful and sportsmanlike manner at all times. Bad conduct, abusive behaviour, unsportsmanlike behaviour or disrespect towards opponents, officials, organisers, venues or spectators will not be tolerated.</p><p>All SAPA regulations, the SAPA Code of Conduct and any applicable disciplinary framework will apply.</p><h3>Entry Fee</h3><p>The entry fee for the event will be listed on the event card. The entry fee generally includes participation in the tournament, court fees and official match balls, unless otherwise stated.</p><p>Additional inclusions, such as refreshments, player gifts, parking or venue access, may vary from event to event.</p><h3>Venues</h3><p>Matches may be played at one or more host venues. Players should carefully check the venue information and match location for each fixture.</p><p>Where multiple venues are used, players are responsible for ensuring that they arrive at the correct venue on time.</p><h3>Important Notes</h3><p>Tournament dates, playing windows, formats, divisions, venues and schedules may be adjusted depending on entries, weather, court availability or operational requirements. The Tournament Director and SAPA Tournament Committee reserve the right to make changes where necessary to ensure the fair and efficient running of the event.</p><h3>Assistance</h3><p>For registration, payment or SAPA Player License assistance, players may contact 4M Padel via WhatsApp on 0837909091. For venue-specific queries, players should contact the relevant host venue or tournament organiser.</p><p>Players are encouraged to read all event information carefully before registering.</p>`,
     points_breakdown: `<p>SAPA ranking points will be awarded according to the official SAPA points structure for the relevant event tier. Points breakdowns are available on the 4M Padel website.</p><p>The number of points available may depend on the tournament category, the size of the draw, the strength of the draw, the division entered and the player’s final finishing position. SAPA reserves the right to grade or re-grade a tournament based on the strength and size of the draw.</p><p>Final ranking points calculations are completed after the conclusion of the draw and once all results have been accurately submitted. Where final positions are played for, points will be allocated according to the position achieved by the player or team.</p><p>If a player or team is required to play in a back draw, plate draw, position play-off or any other match used to determine final position, they must play that match in order to be eligible for ranking points. A player or team that does not play in the back draw, plate draw or required position play-off will not earn SAPA ranking points for that event.</p><p>Where a player enters more than one division, ranking points will generally only be awarded in one division, being the highest eligible division entered.</p><p>It is the tournament organiser’s responsibility to enter all results accurately and completely into the approved tournament management system. If results are not entered properly, SAPA reserves the right to withhold ranking points, amend the points allocation, or withdraw the sanctioning of the event.</p>`,
@@ -389,9 +404,37 @@ const mondayCloseFor = (startDateStr) => {
     if (!startDateStr) return '';
     const d = new Date(`${startDateStr}T00:00:00`);
     if (isNaN(d.getTime())) return '';
-    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // back to Monday of that week
     const pad = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T17:00`;
+};
+
+// Exactly 1 month before the event start date, at 09:00 local — default registration opens.
+const opensOneMonthBefore = (startDateStr) => {
+    if (!startDateStr) return '';
+    const d = new Date(`${startDateStr}T00:00:00`);
+    if (isNaN(d.getTime())) return '';
+    d.setMonth(d.getMonth() - 1);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T09:00`;
+};
+
+const genderFromDivisionName = (name) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('ladies') || n.includes('women')) return 'Ladies';
+    if (n.includes('mixed')) return 'Mixed';
+    if (n.includes('junior')) return 'Junior';
+    if (n.includes("men")) return 'Men';
+    return '';
+};
+
+const ageFromDivisionName = (name) => {
+    const n = (name || '').toLowerCase();
+    if (n.includes('junior') || n.includes('u1') || n.includes('u2')) return 'Junior';
+    if (n.includes('35+')) return '35+';
+    if (n.includes('40+') || n.includes('45+') || n.includes('50+')) return '40+';
+    if (n.includes('open')) return 'Open';
+    return '';
 };
 
 const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organization = null }) => {
@@ -403,11 +446,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const [divisions, setDivisions] = useState([emptyDivision()]);
     const [removedDivisionIds, setRemovedDivisionIds] = useState([]);
     const [standardPrice, setStandardPrice] = useState('');
+    const [bulkCloseDate, setBulkCloseDate] = useState('');
     const [showPrizeBreakdown, setShowPrizeBreakdown] = useState(false);
     const [saving, setSaving] = useState(false);
     const [uploadingPoster, setUploadingPoster] = useState(false);
     const [uploadingOrgLogo, setUploadingOrgLogo] = useState(false);
     const [uploadingSponsor, setUploadingSponsor] = useState(false);
+    const [expandedDivisionKey, setExpandedDivisionKey] = useState(null);
+    const [openPanels, setOpenPanels] = useState({
+        identity: true, venue: false, display: false,
+        regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
+        divTools: false, divisions: true,
+        operations: true, points: false, rules: false, contact: false,
+        sponsors: true, websiteDisplay: false,
+    });
+    const [showPreview, setShowPreview] = useState(false);
 
     const { clubs } = useClubs();
     const [venueOpen, setVenueOpen] = useState(false);
@@ -422,6 +475,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     // True once the user has manually set/cleared the registration deadline —
     // stops the start-date auto-fill from overwriting their choice.
     const regCloseTouchedRef = useRef(false);
+    const regOpenTouchedRef = useRef(false);
+    const pointsTouchedRef = useRef(false);
 
     const filteredClubs = clubs.filter(
         (c) => !form.venue || c.name.toLowerCase().includes(form.venue.toLowerCase())
@@ -482,7 +537,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             ...prev,
             organisation_id: org.id,
             organizer_name: org.name || prev.organizer_name,
-            organizer_logo_url: org.logo_url || prev.organizer_logo_url,
+            organizer_logo_url: org.logo_url || '',
             organizer_email: org.contact_email || prev.organizer_email,
             organizer_phone: org.contact_phone || prev.organizer_phone,
             organizer_website: org.website_url || prev.organizer_website,
@@ -506,47 +561,69 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         }));
     };
 
-    // Google Places autocomplete on the address field (step 1 only).
+    const togglePanel = (key) =>
+        setOpenPanels((prev) => ({ ...prev, [key]: !prev[key] }));
+
+    // Google Places autocomplete on the address field (step 1, when Date & Venue is open).
     useEffect(() => {
-        if (!isOpen || step !== 1) return;
+        if (!isOpen || step !== 1 || !openPanels.venue) return;
         let cancelled = false;
-        loadGoogleMaps()
-            .then((google) => {
-                if (cancelled || !addressInputRef.current || autocompleteRef.current) return;
-                if (!google?.maps?.places?.Autocomplete) {
-                    console.warn('Google Places library not available. Check that the Places API is enabled for this key.');
-                    return;
-                }
-                const ac = new google.maps.places.Autocomplete(addressInputRef.current, {
-                    fields: ['formatted_address', 'address_components', 'name'],
-                    types: ['establishment', 'geocode'],
-                    componentRestrictions: { country: 'za' },
-                });
-                autocompleteRef.current = ac;
-                ac.addListener('place_changed', () => {
-                    const place = ac.getPlace();
-                    const comps = place.address_components || [];
-                    const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || '';
-                    const city = get('locality') || get('administrative_area_level_2') || get('administrative_area_level_1');
-                    setForm((prev) => ({
-                        ...prev,
-                        address: place.formatted_address || prev.address,
-                        city: city || prev.city,
-                        venue: prev.venue || place.name || prev.venue,
-                    }));
-                });
-            })
-            .catch((err) => { console.warn('Google Maps failed to load:', err); });
-        return () => { cancelled = true; autocompleteRef.current = null; };
-    }, [isOpen, step]);
+        // Allow the collapsible panel to mount the input before attaching.
+        const timer = setTimeout(() => {
+            loadGoogleMaps()
+                .then((google) => {
+                    if (cancelled || !addressInputRef.current || autocompleteRef.current) return;
+                    if (!google?.maps?.places?.Autocomplete) {
+                        console.warn('Google Places library not available. Check that the Places API is enabled for this key.');
+                        return;
+                    }
+                    const ac = new google.maps.places.Autocomplete(addressInputRef.current, {
+                        fields: ['formatted_address', 'address_components', 'name'],
+                        types: ['establishment', 'geocode'],
+                        componentRestrictions: { country: 'za' },
+                    });
+                    autocompleteRef.current = ac;
+                    ac.addListener('place_changed', () => {
+                        const place = ac.getPlace();
+                        const comps = place.address_components || [];
+                        const get = (type) => comps.find((c) => c.types.includes(type))?.long_name || '';
+                        const city = get('locality') || get('administrative_area_level_2') || get('administrative_area_level_1');
+                        setForm((prev) => ({
+                            ...prev,
+                            address: place.formatted_address || prev.address,
+                            city: city || prev.city,
+                            venue: prev.venue || place.name || prev.venue,
+                        }));
+                    });
+                })
+                .catch((err) => { console.warn('Google Maps failed to load:', err); });
+        }, 0);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            autocompleteRef.current = null;
+        };
+    }, [isOpen, step, openPanels.venue]);
 
     useEffect(() => {
         if (!isOpen) return;
         setStep(1);
         setRemovedDivisionIds([]);
         setStandardPrice('');
+        setBulkCloseDate('');
+        setExpandedDivisionKey(null);
+        setOpenPanels({
+            identity: true, venue: false, display: false,
+            regWindow: true, entryPayment: false, partnerCapacity: false, licenseDefaults: false,
+            divTools: false, divisions: true,
+            operations: true, points: false, rules: false, contact: false,
+            sponsors: true, websiteDisplay: false,
+        });
+        setShowPreview(false);
         if (editingEvent) {
-            regCloseTouchedRef.current = true; // never auto-change a saved event's deadline
+            regCloseTouchedRef.current = true;
+            regOpenTouchedRef.current = true;
+            pointsTouchedRef.current = true;
             // If the org has a pending amendment draft, resume editing THAT
             // draft rather than the live event data.
             const draft = (organization && editingEvent.sanction_status === 'approved'
@@ -556,6 +633,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             loadExisting(draft ? { ...editingEvent, ...draft.payload } : editingEvent, draft?.divisions || null);
         } else {
             regCloseTouchedRef.current = false;
+            regOpenTouchedRef.current = false;
+            pointsTouchedRef.current = false;
             // New events start with the standard SAPA content pre-filled (editable per event).
             const base = { ...blankForm, ...SAPA_DEFAULTS };
             // Org portal mode: prefill organiser identity from the organisation
@@ -568,7 +647,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                 organizer_phone: organization.contact_phone || '',
                 organizer_website: organization.website_url || '',
             } : base);
-            setDivisions([emptyDivision()]);
+            setDivisions([emptyDivision(base.license_required_default)]);
             setShowPrizeBreakdown(false);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -585,9 +664,38 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         return [];
     };
 
+    const mapDivisionRow = (d, key) => ({
+        _key: key || d.id || Math.random().toString(36).slice(2),
+        id: d.id || null,
+        name: d.name || '',
+        entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
+        format: d.format || 'Knockout',
+        entries_close_at: toLocalInput(d.entries_close_at),
+        license_required: !!d.license_required,
+        age_category: d.age_category || '',
+        gender: d.gender || '',
+        suggested_level: d.suggested_level || '',
+        entry_limit: d.entry_limit != null && d.entry_limit !== '' ? String(d.entry_limit) : '',
+        details: d.details || '',
+        is_active: d.is_active !== false,
+    });
+
     const loadExisting = async (ev, draftDivisions = null) => {
         const prizeBreakdown = parsePrizeBreakdownField(ev.prize_money_breakdown);
         setShowPrizeBreakdown(prizeBreakdown.length > 0);
+        const rawCourt = ev.indoor_outdoor
+            || (['Indoor', 'Outdoor', 'Mixed', 'Covered', 'Indoor & Outdoor'].includes(ev.courts) ? ev.courts : '')
+            || 'Outdoor';
+        const courtType = rawCourt === 'Indoor & Outdoor' ? 'Mixed'
+            : rawCourt === 'Covered' ? 'Outdoor'
+            : rawCourt;
+        const drawReleased = (() => {
+            const v = ev.draw_released || '';
+            if (!v) return '';
+            if (v.includes('T')) return toLocalInput(v) || v.substring(0, 16);
+            // Date-only legacy values → noon local for the datetime picker
+            return `${String(v).substring(0, 10)}T12:00`;
+        })();
         setForm({
             ...blankForm,
             ...Object.fromEntries(Object.keys(blankForm).map((k) => [k, ev[k] ?? blankForm[k]])),
@@ -595,6 +703,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             end_date: ev.end_date ? ev.end_date.substring(0, 10) : '',
             registration_opens_at: toLocalInput(ev.registration_opens_at),
             registration_closes_at: toLocalInput(ev.registration_closes_at),
+            draw_released: drawReleased,
             prize_money_total: ev.prize_money_total != null ? String(ev.prize_money_total) : '',
             prize_money_breakdown: prizeBreakdown,
             sponsor_logos: Array.isArray(ev.sponsor_logos) ? ev.sponsor_logos : [],
@@ -607,25 +716,16 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             partner_requirement: ev.partner_requirement || 'Required',
             back_draw_options: ev.back_draw_options || 'Plate Included',
             event_co_admins: Array.isArray(ev.event_co_admins) ? ev.event_co_admins.join(', ') : (ev.event_co_admins || ''),
+            indoor_outdoor: courtType,
+            courts: courtType,
+            courts_count: ev.courts_count != null && ev.courts_count !== '' ? String(ev.courts_count) : '',
+            allow_temporary_license: ev.allow_temporary_license !== false,
+            license_required_default: !!ev.license_required_default,
+            entry_fee_notes: ev.entry_fee_notes || '',
             organisation_id: ev.organisation_id || null,
         });
         if (draftDivisions && draftDivisions.length > 0) {
-            // Resume divisions from a pending amendment draft
-            setDivisions(
-                draftDivisions.map((d, i) => ({
-                    _key: d.id || `draft_${i}`,
-                    id: d.id || null,
-                    name: d.name || '',
-                    entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
-                    format: d.format || 'Knockout',
-                    entries_close_at: toLocalInput(d.entries_close_at),
-                    license_required: !!d.license_required,
-                    age_category: d.age_category || '',
-                    gender: d.gender || '',
-                    details: d.details || '',
-                    is_active: d.is_active !== false,
-                }))
-            );
+            setDivisions(draftDivisions.map((d, i) => mapDivisionRow(d, d.id || `draft_${i}`)));
             return;
         }
         const { data, error } = await supabase
@@ -634,23 +734,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             .eq('event_id', ev.id)
             .order('sort_order', { ascending: true });
         if (!error && data && data.length > 0) {
-            setDivisions(
-                data.map((d) => ({
-                    _key: d.id,
-                    id: d.id,
-                    name: d.name || '',
-                    entry_fee: d.entry_fee != null ? String(d.entry_fee) : '',
-                    format: d.format || 'Knockout',
-                    entries_close_at: toLocalInput(d.entries_close_at),
-                    license_required: !!d.license_required,
-                    age_category: d.age_category || '',
-                    gender: d.gender || '',
-                    details: d.details || '',
-                    is_active: d.is_active !== false,
-                }))
-            );
+            setDivisions(data.map((d) => mapDivisionRow(d, d.id)));
         } else {
-            setDivisions([emptyDivision()]);
+            setDivisions([emptyDivision(!!ev.license_required_default)]);
         }
     };
 
@@ -660,6 +746,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
         if (name === 'registration_closes_at') regCloseTouchedRef.current = true;
+        if (name === 'registration_opens_at') regOpenTouchedRef.current = true;
+        if (name === 'points') pointsTouchedRef.current = true;
         setForm((prev) => {
             const next = { ...prev, [name]: val };
             if (name === 'event_name' && !editingEvent) next.slug = slugify(value);
@@ -668,32 +756,116 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             if (name === 'start_date' && val && (!prev.end_date || prev.end_date < val)) {
                 next.end_date = val;
             }
-            // Auto-set the registration deadline to the Monday of event week at 17:00
-            // for new events, until the user sets/clears it themselves.
-            if (name === 'start_date' && val && !editingEvent && !regCloseTouchedRef.current) {
-                next.registration_closes_at = mondayCloseFor(val);
+            // Auto-set registration opens/closes for new events until user edits them.
+            if (name === 'start_date' && val && !editingEvent) {
+                if (!regCloseTouchedRef.current) next.registration_closes_at = mondayCloseFor(val);
+                if (!regOpenTouchedRef.current) next.registration_opens_at = opensOneMonthBefore(val);
             }
             return next;
         });
     };
 
+    const handleSapaStatusChange = (v) => {
+        setForm((prev) => {
+            const next = { ...prev, sapa_status: v };
+            if (!editingEvent || !prev.points) {
+                if (!pointsTouchedRef.current) {
+                    next.points = SAPA_WINNER_POINTS[v] ?? '';
+                }
+            }
+            // Always pre-populate the public badge text from the selected SAPA tier.
+            next.organizer_badge_text = sapaBadgeText(v);
+            return next;
+        });
+    };
+
+    const handleCourtTypeChange = (v) => {
+        setForm((prev) => ({ ...prev, indoor_outdoor: v, courts: v }));
+    };
+
     const updateDivision = (key, patch) =>
         setDivisions((prev) => prev.map((d) => (d._key === key ? { ...d, ...patch } : d)));
 
-    const addDivision = () => setDivisions((prev) => [...prev, emptyDivision()]);
+    const addDivision = () => {
+        const d = emptyDivision(form.license_required_default);
+        if (standardPrice !== '') d.entry_fee = standardPrice;
+        setDivisions((prev) => [...prev, d]);
+        setExpandedDivisionKey(d._key);
+    };
+
+    const duplicateDivision = (key) => {
+        setDivisions((prev) => {
+            const src = prev.find((d) => d._key === key);
+            if (!src) return prev;
+            const copy = {
+                ...src,
+                _key: Math.random().toString(36).slice(2),
+                id: null,
+                name: src.name ? `${src.name} (copy)` : '',
+            };
+            setExpandedDivisionKey(copy._key);
+            const idx = prev.findIndex((d) => d._key === key);
+            const next = [...prev];
+            next.splice(idx + 1, 0, copy);
+            return next;
+        });
+    };
 
     const removeDivision = (key) =>
         setDivisions((prev) => {
             const target = prev.find((d) => d._key === key);
             if (target?.id) setRemovedDivisionIds((ids) => [...ids, target.id]);
             const next = prev.filter((d) => d._key !== key);
-            return next.length ? next : [emptyDivision()];
+            if (expandedDivisionKey === key) setExpandedDivisionKey(null);
+            return next.length ? next : [emptyDivision(form.license_required_default)];
         });
 
     const applyStandardPrice = () => {
         if (standardPrice === '') return;
         setDivisions((prev) => prev.map((d) => ({ ...d, entry_fee: standardPrice })));
         toast.success('Standard price applied to all divisions');
+    };
+
+    const applyLicenseToAll = () => {
+        setDivisions((prev) => prev.map((d) => ({ ...d, license_required: !!form.license_required_default })));
+        toast.success('License rule applied to all divisions');
+    };
+
+    const applyCloseDateToAll = () => {
+        const close = bulkCloseDate || form.registration_closes_at;
+        if (!close) {
+            toast.error('Set a registration close date first');
+            return;
+        }
+        setDivisions((prev) => prev.map((d) => ({ ...d, entries_close_at: close })));
+        toast.success('Close date applied to all divisions');
+    };
+
+    const createStandardSapaDivisions = () => {
+        const status = form.sapa_status || 'None';
+        const forceLicense = ['Major', 'Super Gold', 'Gold'].includes(status);
+        const license = forceLicense ? true : !!form.license_required_default;
+        const fee = standardPrice;
+        let names;
+        if (status === 'None') {
+            names = ["Men's Open", "Ladies Open"];
+        } else {
+            names = [
+                "Men's Open", "Men's Advanced", "Men's Intermediate",
+                "Ladies Open", "Ladies Advanced", "Ladies Intermediate",
+            ];
+        }
+        const rows = names.map((name) => ({
+            ...emptyDivision(license),
+            name,
+            entry_fee: fee,
+            gender: genderFromDivisionName(name),
+            age_category: ageFromDivisionName(name) || 'Open',
+            format: 'Knockout',
+        }));
+        setDivisions(rows);
+        setExpandedDivisionKey(rows[0]?._key || null);
+        toast.success(`Created ${rows.length} standard SAPA divisions`);
     };
 
     // Prize money breakdown rows
@@ -704,7 +876,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
     const removePrizeRow = (idx) =>
         setField('prize_money_breakdown', form.prize_money_breakdown.filter((_, i) => i !== idx));
 
-    // Pull the divisions selected in step 2 into the prize-money breakdown, keeping a row
+    // Pull the divisions selected into the prize-money breakdown, keeping a row
     // per division (with any amount already entered) and preserving extra custom lines.
     const syncPrizeBreakdownToDivisions = () => {
         const divNames = divisions.map((d) => d.name.trim()).filter(Boolean);
@@ -749,24 +921,43 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
 
     const removeOrgLogo = () => setField('organizer_logo_url', '');
 
-    const handleSponsorUpload = async (e) => {
+    const handleSponsorUpload = async (e, { asMain = false } = {}) => {
         const files = Array.from(e.target.files || []);
         if (!files.length) return;
         try {
             setUploadingSponsor(true);
             const urls = [];
             for (const file of files) urls.push(await uploadToGallery(file, 'sponsors'));
-            setField('sponsor_logos', [...(form.sponsor_logos || []), ...urls]);
+            setForm((prev) => {
+                const current = [...(prev.sponsor_logos || [])];
+                if (asMain) {
+                    // Replace or insert main sponsor at index 0
+                    if (current.length === 0) return { ...prev, sponsor_logos: urls };
+                    return { ...prev, sponsor_logos: [urls[0], ...current.slice(1), ...urls.slice(1)] };
+                }
+                return { ...prev, sponsor_logos: [...current, ...urls] };
+            });
             toast.success(`${urls.length} sponsor logo(s) uploaded`);
         } catch (err) {
             toast.error('Failed to upload sponsor logo');
         } finally {
             setUploadingSponsor(false);
+            e.target.value = '';
         }
     };
 
     const removeSponsor = (idx) =>
         setField('sponsor_logos', form.sponsor_logos.filter((_, i) => i !== idx));
+
+    const moveSponsor = (idx, direction) => {
+        setForm((prev) => {
+            const list = [...(prev.sponsor_logos || [])];
+            const next = idx + direction;
+            if (next < 0 || next >= list.length) return prev;
+            [list[idx], list[next]] = [list[next], list[idx]];
+            return { ...prev, sponsor_logos: list };
+        });
+    };
 
     const validateBasics = () => {
         if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
@@ -774,21 +965,112 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         return true;
     };
 
-    const validateDivisions = () => {
+    const validateDivisionsNamed = () => {
         const valid = divisions.filter((d) => d.name.trim());
         if (valid.length === 0) { toast.error('Add at least one division'); return false; }
         return true;
     };
 
+    const confirmLowFees = () => {
+        const named = divisions.filter((d) => d.name.trim());
+        const low = named.filter((d) => {
+            if (d.entry_fee === '' || d.entry_fee == null) return false;
+            const fee = Number(d.entry_fee);
+            return fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD);
+        });
+        if (low.length === 0) return true;
+        return window.confirm(
+            `Warning: ${low.length} division(s) have a low entry fee (under R${ENTRY_FEE_WARN_THRESHOLD} or R1). Continue anyway?`
+        );
+    };
+
+    const validateDraft = () => {
+        if (!form.event_name.trim()) { toast.error('Event name is required'); return false; }
+        if (!form.start_date) { toast.error('Start date is required'); return false; }
+        if (!form.end_date) { toast.error('End date is required'); return false; }
+        if (!form.venue.trim()) { toast.error('Venue is required'); return false; }
+        if (!form.city.trim()) { toast.error('City is required'); return false; }
+        if (!validateDivisionsNamed()) return false;
+        return true;
+    };
+
+    const validatePublish = () => {
+        if (!validateDraft()) return false;
+        if (!form.registration_opens_at) { toast.error('Registration opens date is required'); return false; }
+        if (!form.registration_closes_at) { toast.error('Registration closes date is required'); return false; }
+        if (!form.partner_requirement) { toast.error('Partner requirement is required'); return false; }
+        if (typeof form.allow_payments !== 'boolean') { toast.error('Allow payments must be set'); return false; }
+        if (!form.organizer_phone?.trim() && !form.organizer_email?.trim()) {
+            toast.error('Contact phone or email is required');
+            return false;
+        }
+        const named = divisions.filter((d) => d.name.trim());
+        for (const d of named) {
+            if (d.entry_fee === '' || d.entry_fee == null) {
+                toast.error(`Entry fee required for division: ${d.name}`);
+                return false;
+            }
+            if (!d.gender) {
+                toast.error(`Gender required for division: ${d.name}`);
+                return false;
+            }
+            if (!d.format) {
+                toast.error(`Format required for division: ${d.name}`);
+                return false;
+            }
+        }
+        return true;
+    };
+
+    /** Non-toast review checklist for Step 6 — blocking errors + soft warnings. */
+    const getReviewIssues = () => {
+        const errors = [];
+        const warnings = [];
+        if (!form.event_name?.trim()) errors.push('Event name is required');
+        if (!form.start_date) errors.push('Start date is required');
+        if (!form.end_date) errors.push('End date is required');
+        if (!form.venue?.trim()) errors.push('Venue is required');
+        if (!form.city?.trim()) errors.push('City is required');
+        if (!form.registration_opens_at) errors.push('Registration opens date is required');
+        if (!form.registration_closes_at) errors.push('Registration closes date is required');
+        if (!form.partner_requirement) errors.push('Partner requirement is required');
+        if (!form.organizer_phone?.trim() && !form.organizer_email?.trim()) {
+            errors.push('Contact phone or email is required');
+        }
+        const named = divisions.filter((d) => d.name.trim());
+        if (named.length === 0) errors.push('Add at least one division');
+        named.forEach((d) => {
+            if (d.entry_fee === '' || d.entry_fee == null) errors.push(`Entry fee missing: ${d.name}`);
+            if (!d.gender) errors.push(`Gender missing: ${d.name}`);
+            if (!d.format) errors.push(`Format missing: ${d.name}`);
+            const fee = Number(d.entry_fee);
+            if (d.entry_fee !== '' && d.entry_fee != null && (fee === 1 || (fee > 0 && fee < ENTRY_FEE_WARN_THRESHOLD))) {
+                warnings.push(`Low entry fee on ${d.name} (R${d.entry_fee})`);
+            }
+        });
+        if (!form.custom_image_url) warnings.push('No event poster uploaded');
+        if (!form.organizer_badge_text?.trim() && form.sapa_status && form.sapa_status !== 'None') {
+            warnings.push('No event subtitle / badge text set');
+        }
+        if (!(form.sponsor_logos || []).length) warnings.push('No sponsor logos added');
+        if (!organization && !form.is_visible) warnings.push('Event is not visible on the website');
+        if (form.registration_opens_at && form.registration_closes_at && form.registration_opens_at >= form.registration_closes_at) {
+            warnings.push('Registration opens at or after the close date');
+        }
+        return { errors, warnings };
+    };
+
+    const formatDateTimeLabel = (val) => (val ? String(val).replace('T', ' ') : '—');
+
     const next = () => {
         if (step === 1 && !validateBasics()) return;
-        if (step === 2 && !validateDivisions()) return;
-        if (step === 2 && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
-        setStep((s) => Math.min(5, s + 1));
+        if (step === 3 && !validateDivisionsNamed()) return;
+        if (step === 3 && showPrizeBreakdown) syncPrizeBreakdownToDivisions();
+        setStep((s) => Math.min(6, s + 1));
     };
     const back = () => setStep((s) => Math.max(1, s - 1));
 
-    const buildPayload = () => {
+    const buildPayload = (mode = 'publish') => {
         const payload = {
             ...form,
             is_manual: true,
@@ -807,10 +1089,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             end_time: form.end_time || null,
             max_teams_capacity: form.max_teams_capacity === '' || form.max_teams_capacity == null
                 ? null : Number(form.max_teams_capacity),
+            courts_count: form.courts_count === '' || form.courts_count == null
+                ? null : Number(form.courts_count),
+            indoor_outdoor: form.indoor_outdoor || form.courts || null,
+            courts: form.indoor_outdoor || form.courts || null,
             event_co_admins: String(form.event_co_admins || '')
                 .split(',')
                 .map((s) => s.trim())
                 .filter(Boolean),
+            allow_temporary_license: !!form.allow_temporary_license,
+            license_required_default: !!form.license_required_default,
+            entry_fee_notes: form.entry_fee_notes || null,
         };
         if (organization) {
             // Org-created events: tie to the org and stay hidden until a 4M
@@ -824,9 +1113,30 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         } else {
             // Admin calendar: link to selected organisation (or clear)
             payload.organisation_id = form.organisation_id || null;
+            if (!editingEvent) {
+                // Admin create: draft stays hidden; publish is visible.
+                payload.is_visible = mode === 'publish';
+            } else if (mode === 'publish') {
+                payload.is_visible = true;
+            }
         }
         return payload;
     };
+
+    const divisionRecord = (d, i) => ({
+        name: d.name.trim(),
+        entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
+        format: d.format || null,
+        entries_close_at: safeISOString(d.entries_close_at),
+        license_required: !!d.license_required,
+        age_category: d.age_category || null,
+        gender: d.gender || null,
+        suggested_level: d.suggested_level || null,
+        entry_limit: d.entry_limit === '' || d.entry_limit == null ? null : Number(d.entry_limit),
+        details: d.details?.trim() || null,
+        sort_order: i,
+        is_active: d.is_active !== false,
+    });
 
     const persistDivisions = async (eventId) => {
         if (removedDivisionIds.length) {
@@ -835,20 +1145,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         const rows = divisions.filter((d) => d.name.trim());
         for (let i = 0; i < rows.length; i++) {
             const d = rows[i];
-            const detailsHtml = d.details?.trim() || '';
-            const record = {
-                event_id: eventId,
-                name: d.name.trim(),
-                entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
-                format: d.format || null,
-                entries_close_at: safeISOString(d.entries_close_at),
-                license_required: !!d.license_required,
-                age_category: d.age_category || null,
-                gender: d.gender || null,
-                details: detailsHtml || null,
-                sort_order: i,
-                is_active: d.is_active !== false,
-            };
+            const record = { event_id: eventId, ...divisionRecord(d, i) };
             if (d.id) {
                 const { error } = await supabase.from('tournament_divisions').update(record).eq('id', d.id);
                 if (error) throw error;
@@ -859,11 +1156,17 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         }
     };
 
-    const handleSave = async () => {
-        if (!validateBasics() || !validateDivisions()) return;
+    const handleSave = async (mode = 'publish') => {
+        if (mode === 'draft') {
+            if (!validateDraft()) return;
+        } else {
+            if (!validatePublish()) return;
+        }
+        if (!confirmLowFees()) return;
+
         setSaving(true);
         try {
-            const payload = buildPayload();
+            const payload = buildPayload(mode);
             let eventId = editingEvent?.id;
 
             if (isAmendment) {
@@ -873,16 +1176,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                     .filter((d) => d.name.trim())
                     .map((d, i) => ({
                         id: d.id || null,
-                        name: d.name.trim(),
-                        entry_fee: d.entry_fee === '' ? 0 : Number(d.entry_fee),
-                        format: d.format || null,
-                        entries_close_at: safeISOString(d.entries_close_at),
-                        license_required: !!d.license_required,
-                        age_category: d.age_category || null,
-                        gender: d.gender || null,
-                        details: d.details?.trim() || null,
-                        sort_order: i,
-                        is_active: d.is_active !== false,
+                        ...divisionRecord(d, i),
                     }));
 
                 const { error } = await supabase
@@ -918,9 +1212,11 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             toast.success(
                 organization
                     ? (editingEvent ? 'Event updated — pending 4M Padel sanctioning' : 'Event submitted for 4M Padel sanctioning')
-                    : (editingEvent ? 'Manual event updated' : 'Manual event created')
+                    : (mode === 'draft'
+                        ? (editingEvent ? 'Draft saved' : 'Draft created')
+                        : (editingEvent ? 'Manual event updated' : 'Manual event created'))
             );
-            onSaved?.({ eventId, isNew: !editingEvent, eventName: payload.event_name });
+            onSaved?.({ eventId, isNew: !editingEvent, eventName: payload.event_name, mode });
             onClose?.();
         } catch (err) {
             console.error('Error saving manual event:', err);
@@ -930,7 +1226,21 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         }
     };
 
+    const PanelHeader = ({ id, title }) => (
+        <button
+            type="button"
+            onClick={() => togglePanel(id)}
+            className="w-full flex items-center justify-between px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-left"
+        >
+            <span className="text-sm font-bold text-white">{title}</span>
+            <ChevronDown size={16} className={`text-gray-400 transition-transform ${openPanels[id] ? 'rotate-180' : ''}`} />
+        </button>
+    );
+
     if (!isOpen) return null;
+
+    const namedDivisions = divisions.filter((d) => d.name.trim());
+    const reviewIssues = step === 6 ? getReviewIssues() : { errors: [], warnings: [] };
 
     return (
         <AnimatePresence>
@@ -954,7 +1264,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                             <h2 className="text-xl font-bold text-white">
                                 {editingEvent ? 'Edit Manual Event' : 'Create Manual Event'}
                             </h2>
-                            <p className="text-xs text-gray-400">Step {step} of 5 — {STEPS[step - 1].label}</p>
+                            <p className="text-xs text-gray-400">Step {step} of 6 — {STEPS[step - 1].label}</p>
                         </div>
                         <button onClick={onClose} className="p-2 text-gray-400 hover:text-white rounded-lg hover:bg-white/5">
                             <X size={20} />
@@ -988,260 +1298,329 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                     {/* Body */}
                     <div className="flex-1 overflow-y-auto px-6 py-6 custom-scrollbar">
                         {step === 1 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Event Name *</label>
-                                    <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Slug (auto)</label>
-                                    <input name="slug" value={form.slug} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div className="relative" ref={orgSearchRef}>
-                                    <label className={labelClass}>Organiser</label>
-                                    <input
-                                        name="organizer_name"
-                                        value={form.organizer_name}
-                                        onChange={(e) => {
-                                            if (organization) {
-                                                setForm((prev) => ({ ...prev, organizer_name: e.target.value }));
-                                            } else {
-                                                handleOrganiserNameChange(e.target.value);
-                                            }
-                                        }}
-                                        onFocus={() => {
-                                            if (!organization && orgSuggestions.length > 0) setOrgSearchOpen(true);
-                                        }}
-                                        placeholder={organization ? undefined : 'Type to search organisations…'}
-                                        autoComplete="off"
-                                        className={inputClass}
-                                        readOnly={!!organization}
-                                    />
-                                    {!organization && form.organisation_id && (
-                                        <div className="mt-1.5 flex items-center justify-between gap-2">
-                                            <p className="text-[11px] text-padel-green font-bold">
-                                                Linked to organisation page
-                                            </p>
-                                            <button
-                                                type="button"
-                                                onClick={clearOrganisationLink}
-                                                className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
-                                            >
-                                                Unlink
-                                            </button>
-                                        </div>
-                                    )}
-                                    {!organization && !form.organisation_id && (
-                                        <p className="text-[11px] text-gray-500 mt-1">
-                                            Select an organisation to show this event on their public page.
-                                        </p>
-                                    )}
-                                    {!organization && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
-                                        <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
-                                            {searchingOrgs && orgSuggestions.length === 0 ? (
-                                                <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
-                                            ) : (
-                                                orgSuggestions.map((org) => (
-                                                    <button
-                                                        key={org.id}
-                                                        type="button"
-                                                        onClick={() => selectOrganisation(org)}
-                                                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
-                                                    >
-                                                        {org.logo_url ? (
-                                                            <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
-                                                        ) : (
-                                                            <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0">
-                                                                <Shield size={14} />
-                                                            </div>
-                                                        )}
-                                                        <div className="min-w-0">
-                                                            <p className="text-sm font-bold text-white truncate">{org.name}</p>
-                                                            {org.slug && (
-                                                                <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>
-                                                            )}
-                                                        </div>
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Organisation Logo</label>
-                                    <p className="text-[11px] text-gray-500 mb-2">Shown above the event title on the public event page.</p>
-                                    <div className="flex items-center gap-4">
-                                        {form.organizer_logo_url && (
-                                            <div className="relative group">
-                                                <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
-                                                <button
-                                                    type="button"
-                                                    onClick={removeOrgLogo}
-                                                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <X size={12} />
-                                                </button>
+                            <div className="space-y-4">
+                                {/* Event Identity */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="identity" title="Event Identity" />
+                                    {openPanels.identity && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Event Name *</label>
+                                                <input name="event_name" value={form.event_name} onChange={handleInput} className={inputClass} required />
                                             </div>
-                                        )}
-                                        <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-4 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                            {uploadingOrgLogo ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
-                                            <span className="text-xs font-bold">{uploadingOrgLogo ? 'Uploading...' : 'Upload Logo'}</span>
-                                            <input type="file" accept="image/*" className="hidden" onChange={handleOrgLogoUpload} disabled={uploadingOrgLogo} />
-                                        </label>
-                                    </div>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Organisation Label</label>
-                                    <input
-                                        name="organizer_badge_text"
-                                        value={form.organizer_badge_text}
-                                        onChange={handleInput}
-                                        placeholder="e.g. SAPA GOLD 1000"
-                                        className={inputClass}
-                                    />
-                                    <p className="text-[11px] text-gray-500 mt-1">Displayed next to the logo above the event title.</p>
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Address</label>
-                                    <input
-                                        ref={addressInputRef}
-                                        name="address"
-                                        value={form.address}
-                                        onChange={handleInput}
-                                        placeholder="Start typing to search Google..."
-                                        autoComplete="off"
-                                        className={inputClass}
-                                    />
-                                    <p className="text-[11px] text-gray-500 mt-1">Powered by Google — selecting a result auto-fills city &amp; venue.</p>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>City</label>
-                                    <input name="city" value={form.city} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div className="relative">
-                                    <label className={labelClass}>Venue / Club</label>
-                                    <input
-                                        name="venue"
-                                        value={form.venue}
-                                        onChange={(e) => { setField('venue', e.target.value); setVenueOpen(true); }}
-                                        onFocus={() => setVenueOpen(true)}
-                                        onBlur={() => setTimeout(() => setVenueOpen(false), 150)}
-                                        placeholder="Select a club or type a venue"
-                                        autoComplete="off"
-                                        className={inputClass}
-                                    />
-                                    {venueOpen && filteredClubs.length > 0 && (
-                                        <div className="absolute z-20 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar">
-                                            {filteredClubs.map((c) => (
-                                                <button
-                                                    key={c.id}
-                                                    type="button"
-                                                    onMouseDown={(e) => e.preventDefault()}
-                                                    onClick={() => { setField('venue', c.name); setVenueOpen(false); }}
-                                                    className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors"
-                                                >
-                                                    {c.name}
-                                                </button>
-                                            ))}
+                                            <div>
+                                                <label className={labelClass}>SAPA Status</label>
+                                                <SelectMenu value={form.sapa_status} onChange={handleSapaStatusChange} options={SAPA_STATUSES} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Event Series / Tag</label>
+                                                <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Event subtitle / badge text</label>
+                                                <input
+                                                    name="organizer_badge_text"
+                                                    value={form.organizer_badge_text}
+                                                    onChange={handleInput}
+                                                    placeholder="e.g. SAPA GOLD 1000"
+                                                    className={inputClass}
+                                                />
+                                                <p className="text-[11px] text-gray-500 mt-1">Auto-filled from SAPA status — editable if needed.</p>
+                                            </div>
+                                            <div className="relative md:col-span-2" ref={orgSearchRef}>
+                                                <label className={labelClass}>Organiser</label>
+                                                <input
+                                                    name="organizer_name"
+                                                    value={form.organizer_name}
+                                                    onChange={(e) => {
+                                                        if (organization) {
+                                                            setForm((prev) => ({ ...prev, organizer_name: e.target.value }));
+                                                        } else {
+                                                            handleOrganiserNameChange(e.target.value);
+                                                        }
+                                                    }}
+                                                    onFocus={() => {
+                                                        if (!organization && orgSuggestions.length > 0) setOrgSearchOpen(true);
+                                                    }}
+                                                    placeholder={organization ? undefined : 'Select an organisation or type a custom name…'}
+                                                    autoComplete="off"
+                                                    className={inputClass}
+                                                    readOnly={!!organization}
+                                                />
+                                                {!organization && form.organisation_id && (
+                                                    <div className="mt-1.5 flex items-center justify-between gap-2">
+                                                        <p className="text-[11px] text-padel-green font-bold">
+                                                            Linked to organisation page
+                                                        </p>
+                                                        <button
+                                                            type="button"
+                                                            onClick={clearOrganisationLink}
+                                                            className="text-[10px] font-black uppercase tracking-wider text-gray-500 hover:text-red-400 transition-colors"
+                                                        >
+                                                            Unlink
+                                                        </button>
+                                                    </div>
+                                                )}
+                                                {!organization && !form.organisation_id && (
+                                                    <p className="text-[11px] text-gray-500 mt-1">
+                                                        Pick from the list to link their page, or type a custom organiser name.
+                                                    </p>
+                                                )}
+                                                {!organization && orgSearchOpen && (orgSuggestions.length > 0 || searchingOrgs) && (
+                                                    <div className="absolute z-30 left-0 right-0 mt-1 bg-[#0F172A] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-56 overflow-y-auto">
+                                                        {searchingOrgs && orgSuggestions.length === 0 ? (
+                                                            <p className="px-4 py-3 text-xs text-gray-500">Searching…</p>
+                                                        ) : (
+                                                            orgSuggestions.map((org) => (
+                                                                <button
+                                                                    key={org.id}
+                                                                    type="button"
+                                                                    onClick={() => selectOrganisation(org)}
+                                                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/5 text-left transition-colors"
+                                                                >
+                                                                    {org.logo_url ? (
+                                                                        <img src={org.logo_url} alt="" className="w-8 h-8 rounded-lg object-cover bg-white/5 shrink-0" />
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center text-padel-green shrink-0">
+                                                                            <Shield size={14} />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="min-w-0">
+                                                                        <p className="text-sm font-bold text-white truncate">{org.name}</p>
+                                                                        {org.slug && (
+                                                                            <p className="text-[10px] text-gray-500 truncate">/{org.slug}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Organisation Logo</label>
+                                                {(organization || form.organisation_id) ? (
+                                                    <>
+                                                        <p className="text-[11px] text-gray-500 mb-2">Using the linked organisation logo.</p>
+                                                        {form.organizer_logo_url ? (
+                                                            <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
+                                                        ) : (
+                                                            <p className="text-xs text-gray-500 italic">This organisation has no logo yet — add one on their profile.</p>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <p className="text-[11px] text-gray-500 mb-2">Shown above the event title on the public event page.</p>
+                                                        <div className="flex items-center gap-4">
+                                                            {form.organizer_logo_url && (
+                                                                <div className="relative group">
+                                                                    <img src={form.organizer_logo_url} alt="Organisation logo" className="w-14 h-14 rounded-full object-cover border border-white/10" />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={removeOrgLogo}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                            <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-4 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                                {uploadingOrgLogo ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                                                <span className="text-xs font-bold">{uploadingOrgLogo ? 'Uploading...' : 'Upload Logo'}</span>
+                                                                <input type="file" accept="image/*" className="hidden" onChange={handleOrgLogoUpload} disabled={uploadingOrgLogo} />
+                                                            </label>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                 </div>
-                                <div>
-                                    <label className={labelClass}>Start Date *</label>
-                                    <input type="date" name="start_date" value={form.start_date} onChange={handleInput} className={inputClass} />
+
+                                {/* Date & Venue */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="venue" title="Date & Venue" />
+                                    {openPanels.venue && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Start Date *</label>
+                                                <input type="date" name="start_date" value={form.start_date} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>End Date *</label>
+                                                <input type="date" name="end_date" value={form.end_date} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Start Time</label>
+                                                <input type="time" name="start_time" value={form.start_time} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>End Time</label>
+                                                <input type="time" name="end_time" value={form.end_time} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div className="relative md:col-span-2">
+                                                <label className={labelClass}>Venue / Club</label>
+                                                <input
+                                                    name="venue"
+                                                    value={form.venue}
+                                                    onChange={(e) => { setField('venue', e.target.value); setVenueOpen(true); }}
+                                                    onFocus={() => setVenueOpen(true)}
+                                                    onBlur={() => setTimeout(() => setVenueOpen(false), 150)}
+                                                    placeholder="Select a club or type a venue"
+                                                    autoComplete="off"
+                                                    className={inputClass}
+                                                />
+                                                {venueOpen && filteredClubs.length > 0 && (
+                                                    <div className="absolute z-20 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar">
+                                                        {filteredClubs.map((c) => (
+                                                            <button
+                                                                key={c.id}
+                                                                type="button"
+                                                                onMouseDown={(e) => e.preventDefault()}
+                                                                onClick={() => { setField('venue', c.name); setVenueOpen(false); }}
+                                                                className="w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors"
+                                                            >
+                                                                {c.name}
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Address</label>
+                                                <input
+                                                    ref={addressInputRef}
+                                                    name="address"
+                                                    value={form.address}
+                                                    onChange={handleInput}
+                                                    placeholder="Start typing to search Google..."
+                                                    autoComplete="off"
+                                                    className={inputClass}
+                                                />
+                                                <p className="text-[11px] text-gray-500 mt-1">Powered by Google — selecting a result auto-fills city &amp; venue.</p>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>City</label>
+                                                <input name="city" value={form.city} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                                <div>
-                                    <label className={labelClass}>End Date</label>
-                                    <input type="date" name="end_date" value={form.end_date} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Start Time</label>
-                                    <input type="time" name="start_time" value={form.start_time} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>End Time</label>
-                                    <input type="time" name="end_time" value={form.end_time} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>SAPA Status</label>
-                                    <SelectMenu value={form.sapa_status} onChange={(v) => setField('sapa_status', v)} options={SAPA_STATUSES} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Tournament Tag</label>
-                                    <SelectMenu value={form.tournament_tag} onChange={(v) => setField('tournament_tag', v)} options={TOURNAMENT_TAGS} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Short Description / About</label>
-                                    <RichTextEditor value={form.description} onChange={(html) => setField('description', html)} placeholder="Describe the event..." />
+
+                                {/* Public Display */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="display" title="Public Display" />
+                                    {openPanels.display && (
+                                        <div className="grid grid-cols-1 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Event Poster</label>
+                                                <div className="flex items-center gap-4">
+                                                    {form.custom_image_url && (
+                                                        <img src={form.custom_image_url} alt="Poster" className="w-24 h-32 object-cover rounded-lg border border-white/10" />
+                                                    )}
+                                                    <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-6 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                        {uploadingPoster ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                                        <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
+                                                        <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Event Description / About</label>
+                                                <RichTextEditor value={form.description} onChange={(html) => setField('description', html)} placeholder="Describe the event..." />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {step === 2 && (
                             <div className="space-y-4">
-                                <div className="flex flex-wrap items-end gap-3 bg-white/5 border border-white/10 rounded-xl p-4">
-                                    <div className="flex-1 min-w-[160px]">
-                                        <label className={labelClass}>Standard Price (apply to all)</label>
-                                        <input
-                                            type="number"
-                                            value={standardPrice}
-                                            onChange={(e) => setStandardPrice(e.target.value)}
-                                            placeholder="e.g. 500"
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                    <button onClick={applyStandardPrice} className="bg-white/10 text-white px-4 py-3 rounded-lg font-bold hover:bg-white/20 transition-colors">
-                                        Apply to all
-                                    </button>
-                                </div>
+                                <p className="text-xs text-gray-400">
+                                    Core setup rules for registration — set these before configuring divisions.
+                                </p>
 
-                                {divisions.map((d) => (
-                                    <div key={d._key} className="bg-[#1E293B] border border-white/10 rounded-xl p-4 space-y-3">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-xs font-bold text-gray-400 uppercase">Division</span>
-                                            <button onClick={() => removeDivision(d._key)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg">
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                            <div className="md:col-span-1">
-                                                <label className={labelClass}>Division</label>
-                                                <ComboBox value={d.name} onChange={(v) => updateDivision(d._key, { name: v })} options={STANDARD_DIVISIONS} placeholder="Select or type" />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Entry Fee (R)</label>
-                                                <input type="number" value={d.entry_fee} onChange={(e) => updateDivision(d._key, { entry_fee: e.target.value })} className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Format</label>
-                                                <SelectMenu value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
-                                            </div>
+                                {/* Registration Window */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="regWindow" title="Registration Window" />
+                                    {openPanels.regWindow && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
                                             <div>
                                                 <div className="flex items-center justify-between mb-2">
-                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Entries Close</label>
+                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Registration Opens At</label>
                                                     <button
                                                         type="button"
-                                                        onClick={() => updateDivision(d._key, {
-                                                            entries_close_at: d.entries_close_at ? '' : (() => {
-                                                                const now = new Date();
-                                                                const offsetMs = now.getTimezoneOffset() * 60000;
-                                                                return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
-                                                            })()
-                                                        })}
+                                                        onClick={() => {
+                                                            regOpenTouchedRef.current = true;
+                                                            setField('registration_opens_at',
+                                                                form.registration_opens_at ? '' : (
+                                                                    opensOneMonthBefore(form.start_date) || (() => {
+                                                                        const now = new Date();
+                                                                        const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                                    })()
+                                                                )
+                                                            );
+                                                        }}
                                                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                                                            d.entries_close_at ? 'bg-padel-green' : 'bg-white/20'
+                                                            form.registration_opens_at ? 'bg-padel-green' : 'bg-white/20'
                                                         }`}
                                                     >
                                                         <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                                                            d.entries_close_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                            form.registration_opens_at ? 'translate-x-4.5' : 'translate-x-0.5'
                                                         }`} />
                                                     </button>
                                                 </div>
-                                                {d.entries_close_at ? (
+                                                {form.registration_opens_at ? (
                                                     <input
                                                         type="datetime-local"
-                                                        value={d.entries_close_at}
-                                                        onChange={(e) => updateDivision(d._key, { entries_close_at: e.target.value })}
+                                                        name="registration_opens_at"
+                                                        value={form.registration_opens_at}
+                                                        onChange={handleInput}
+                                                        className={inputClass}
+                                                    />
+                                                ) : (
+                                                    <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                        Open immediately
+                                                    </div>
+                                                )}
+                                                <p className="text-[11px] text-gray-500 mt-1">
+                                                    Default: 1 month before the event at 09:00.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <label className={labelClass} style={{ marginBottom: 0 }}>Registration Closes At</label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            regCloseTouchedRef.current = true;
+                                                            setField('registration_closes_at',
+                                                                form.registration_closes_at ? '' : (
+                                                                    mondayCloseFor(form.start_date) || (() => {
+                                                                        const now = new Date();
+                                                                        const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                                    })()
+                                                                )
+                                                            );
+                                                        }}
+                                                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                            form.registration_closes_at ? 'bg-padel-green' : 'bg-white/20'
+                                                        }`}
+                                                    >
+                                                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                            form.registration_closes_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                        }`} />
+                                                    </button>
+                                                </div>
+                                                {form.registration_closes_at ? (
+                                                    <input
+                                                        type="datetime-local"
+                                                        name="registration_closes_at"
+                                                        value={form.registration_closes_at}
+                                                        onChange={handleInput}
                                                         className={inputClass}
                                                     />
                                                 ) : (
@@ -1249,380 +1628,805 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                         No deadline set
                                                     </div>
                                                 )}
+                                                <p className="text-[11px] text-gray-500 mt-1">
+                                                    Default: Monday of the event week at 17:00 (global fallback).
+                                                </p>
+                                            </div>
+                                            <p className="md:col-span-2 text-[11px] text-gray-500">
+                                                Division-specific close dates override the global close date. Toggle off to clear, or edit the date/time when on.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Entry & Payment Settings */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="entryPayment" title="Entry & Payment Settings" />
+                                    {openPanels.entryPayment && (
+                                        <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <span className="text-sm font-medium text-gray-200">Allow payments</span>
+                                                    <input type="checkbox" name="allow_payments" checked={!!form.allow_payments} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                </label>
+                                                {!organization && (
+                                                    <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                        <span className="text-sm font-medium text-gray-200">Payment / finance manager</span>
+                                                        <input type="checkbox" name="finance_managed" checked={!!form.finance_managed} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                    </label>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-wrap items-end gap-3">
+                                                <div className="flex-1 min-w-[160px]">
+                                                    <label className={labelClass}>Standard entry fee (R)</label>
+                                                    <input
+                                                        type="number"
+                                                        value={standardPrice}
+                                                        onChange={(e) => setStandardPrice(e.target.value)}
+                                                        placeholder="e.g. 500"
+                                                        className={inputClass}
+                                                    />
+                                                    <p className="text-[11px] text-gray-500 mt-1">Can be applied to all divisions.</p>
+                                                </div>
+                                                <button type="button" onClick={applyStandardPrice} className="bg-white/10 text-white px-4 py-3 rounded-lg font-bold hover:bg-white/20 transition-colors">
+                                                    Apply to all
+                                                </button>
                                             </div>
                                             <div>
-                                                <label className={labelClass}>Age Category</label>
-                                                <input value={d.age_category} onChange={(e) => updateDivision(d._key, { age_category: e.target.value })} placeholder="e.g. Open, 40+, U16" className={inputClass} />
-                                            </div>
-                                            <div>
-                                                <label className={labelClass}>Gender</label>
-                                                <SelectMenu value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
-                                            </div>
-                                            <div className="md:col-span-3">
-                                                <label className={labelClass}>Division Details</label>
-                                                <RichTextEditor
-                                                    value={d.details ?? ''}
-                                                    onChange={(html) => updateDivision(d._key, { details: html })}
-                                                    placeholder="Optional notes about this division (format, eligibility, schedule, etc.)"
-                                                    minHeight={100}
+                                                <label className={labelClass}>Entry fee notes</label>
+                                                <textarea
+                                                    name="entry_fee_notes"
+                                                    value={form.entry_fee_notes}
+                                                    onChange={handleInput}
+                                                    rows={3}
+                                                    placeholder="Optional notes about entry fees..."
+                                                    className={inputClass}
                                                 />
                                             </div>
                                         </div>
-                                        <label className="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-                                            <input type="checkbox" checked={d.license_required} onChange={(e) => updateDivision(d._key, { license_required: e.target.checked })} className="accent-padel-green w-4 h-4" />
-                                            License required for this division
-                                        </label>
-                                    </div>
-                                ))}
-                                <button onClick={addDivision} className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors">
-                                    <Plus size={16} /> Add Division
-                                </button>
+                                    )}
+                                </div>
+
+                                {/* Partner & Capacity Rules */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="partnerCapacity" title="Partner & Capacity Rules" />
+                                    {openPanels.partnerCapacity && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Partner Requirement</label>
+                                                <select
+                                                    name="partner_requirement"
+                                                    value={form.partner_requirement}
+                                                    onChange={handleInput}
+                                                    className={inputClass}
+                                                >
+                                                    <option value="Required">Required</option>
+                                                    <option value="Optional">Optional</option>
+                                                    <option value="Not required">Not required</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Maximum Teams / Entries</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    name="max_teams_capacity"
+                                                    value={form.max_teams_capacity}
+                                                    onChange={handleInput}
+                                                    placeholder="Leave empty for unlimited"
+                                                    className={inputClass}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Plate / Back Draw</label>
+                                                <select
+                                                    name="back_draw_options"
+                                                    value={form.back_draw_options}
+                                                    onChange={handleInput}
+                                                    className={inputClass}
+                                                >
+                                                    <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
+                                                    <option value="No Plate">No Plate (Direct Elimination Only)</option>
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-3">
+                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <span className="text-sm font-medium text-gray-200">Golden point</span>
+                                                    <input type="checkbox" name="golden_point" checked={!!form.golden_point} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                </label>
+                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <span className="text-sm font-medium text-gray-200">League format</span>
+                                                    <input type="checkbox" name="is_league" checked={!!form.is_league} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* License Defaults */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="licenseDefaults" title="License Defaults" />
+                                    {openPanels.licenseDefaults && (
+                                        <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <span className="text-sm font-medium text-gray-200">License required for event</span>
+                                                    <input type="checkbox" name="license_required_default" checked={!!form.license_required_default} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                </label>
+                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                    <span className="text-sm font-medium text-gray-200">Allow temporary license</span>
+                                                    <input type="checkbox" name="allow_temporary_license" checked={!!form.allow_temporary_license} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                </label>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={applyLicenseToAll}
+                                                className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors"
+                                            >
+                                                <Shield size={16} /> Apply license requirement to all divisions
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
                         {step === 3 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className={labelClass}>Prize Money Total (R)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">R</span>
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            name="prize_money_total"
-                                            value={form.prize_money_total ? Number(form.prize_money_total).toLocaleString('en-ZA') : ''}
-                                            onChange={(e) => setField('prize_money_total', e.target.value.replace(/[^\d]/g, ''))}
-                                            placeholder="0"
-                                            className={`${inputClass} pl-8`}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Balls</label>
-                                    <input name="balls" value={form.balls} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Prize Money Breakdown</label>
-                                    {!showPrizeBreakdown ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => { setShowPrizeBreakdown(true); syncPrizeBreakdownToDivisions(); }}
-                                            className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors"
-                                        >
-                                            <Plus size={16} /> Add Prize Money Breakdown
-                                        </button>
-                                    ) : (
-                                    <>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <p className="text-[11px] text-gray-500">Pulled from the divisions you selected. Set a prize amount per division, or add extra custom lines.</p>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setShowPrizeBreakdown(false); setField('prize_money_breakdown', []); }}
-                                            className="text-[11px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1 shrink-0"
-                                        >
-                                            <Trash2 size={12} /> Remove
-                                        </button>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {(form.prize_money_breakdown || []).map((row, idx) => (
-                                            <div key={idx} className="flex gap-2">
-                                                {row._division ? (
-                                                    <div className={`${inputClass} flex items-center font-semibold text-white/90`}>{row.label}</div>
-                                                ) : (
-                                                    <input value={row.label} onChange={(e) => updatePrizeRow(idx, { label: e.target.value })} placeholder="e.g. Men's Open Winner" className={inputClass} />
-                                                )}
-                                                <div className="relative max-w-[160px]">
-                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">R</span>
+                            <div className="space-y-4">
+                                <p className="text-xs text-gray-400">
+                                    Compact cards by default — expand a division only when you need to edit it.
+                                </p>
+
+                                {/* Quick tools */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="divTools" title="Quick Tools" />
+                                    {openPanels.divTools && (
+                                        <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div className="flex flex-wrap items-end gap-3">
+                                                <div className="flex-1 min-w-[140px]">
+                                                    <label className={labelClass}>Standard Price (R)</label>
                                                     <input
-                                                        inputMode="numeric"
-                                                        value={row.amount ? Number(String(row.amount).replace(/[^\d]/g, '')).toLocaleString('en-ZA') : ''}
-                                                        onChange={(e) => updatePrizeRow(idx, { amount: e.target.value.replace(/[^\d]/g, '') })}
-                                                        placeholder="Amount"
-                                                        className={`${inputClass} pl-8`}
+                                                        type="number"
+                                                        value={standardPrice}
+                                                        onChange={(e) => setStandardPrice(e.target.value)}
+                                                        placeholder="e.g. 500"
+                                                        className={inputClass}
                                                     />
                                                 </div>
-                                                {row._division ? (
-                                                    <span className="px-3 w-[40px]" />
-                                                ) : (
-                                                    <button onClick={() => removePrizeRow(idx)} className="px-3 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} /></button>
-                                                )}
+                                                <button type="button" onClick={applyStandardPrice} className="bg-white/10 text-white px-3 py-3 rounded-lg text-xs font-bold hover:bg-white/20">Apply price</button>
+                                                <button type="button" onClick={applyLicenseToAll} className="bg-white/10 text-white px-3 py-3 rounded-lg text-xs font-bold hover:bg-white/20">Apply license</button>
+                                                <div className="flex-1 min-w-[160px]">
+                                                    <label className={labelClass}>Close date (bulk)</label>
+                                                    <input
+                                                        type="datetime-local"
+                                                        value={bulkCloseDate || form.registration_closes_at || ''}
+                                                        onChange={(e) => setBulkCloseDate(e.target.value)}
+                                                        className={inputClass}
+                                                    />
+                                                </div>
+                                                <button type="button" onClick={applyCloseDateToAll} className="bg-white/10 text-white px-3 py-3 rounded-lg text-xs font-bold hover:bg-white/20">Apply close</button>
                                             </div>
-                                        ))}
-                                        <button onClick={addPrizeRow} className="text-xs font-bold text-padel-green flex items-center gap-1"><Plus size={14} /> Add custom prize line</button>
-                                    </div>
-                                    </>
+                                            <button
+                                                type="button"
+                                                onClick={() => { createStandardSapaDivisions(); setExpandedDivisionKey(null); }}
+                                                className="w-full border border-dashed border-padel-green/40 text-padel-green rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:bg-padel-green/10 transition-colors"
+                                            >
+                                                <Layers size={16} /> Create standard SAPA divisions
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
-                                <div>
-                                    <label className={labelClass}>Courts</label>
-                                    <SelectMenu value={form.courts} onChange={(v) => setField('courts', v)} options={['Indoor', 'Outdoor', 'Covered', 'Indoor & Outdoor']} placeholder="Select court type" />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Draw Released</label>
-                                    <input type="date" name="draw_released" value={form.draw_released} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Tournament Director</label>
-                                    <input name="tournament_director" value={form.tournament_director} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Referees</label>
-                                    <input name="referees" value={form.referees} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Points (winner / tier)</label>
-                                    <input type="number" name="points" value={form.points} onChange={handleInput} placeholder="e.g. 1000" className={inputClass} />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Points Breakdown</label>
-                                    <RichTextEditor value={form.points_breakdown} onChange={(html) => setField('points_breakdown', html)} placeholder="e.g. Winner: 1000 pts, Finalist: 750 pts..." />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Sanctioning Details</label>
-                                    <RichTextEditor value={form.sanctioning_details} onChange={(html) => setField('sanctioning_details', html)} placeholder="Sanctioning information..." />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Specific Rules & Regulations</label>
-                                    <RichTextEditor value={form.rules_regs} onChange={(html) => setField('rules_regs', html)} placeholder="List the rules and regulations..." />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Withdrawal & Substitution Policy</label>
-                                    <RichTextEditor value={form.withdrawal_substitution} onChange={(html) => setField('withdrawal_substitution', html)} placeholder="Withdrawal and substitution policy..." />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className={labelClass}>Registration Closes</label>
-                                    <RichTextEditor value={form.cut_off_times} onChange={(html) => setField('cut_off_times', html)} minHeight={90} placeholder='e.g. Registration closes strictly on 28 June at 17:00. No late entries will be accepted.' />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Contact Details</label>
-                                    <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Organiser Phone</label>
-                                    <input name="organizer_phone" value={form.organizer_phone} onChange={handleInput} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Organiser Email</label>
-                                    <input name="organizer_email" value={form.organizer_email} onChange={handleInput} className={inputClass} />
+
+                                {/* Divisions list */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="divisions" title={`Divisions (${divisions.length})`} />
+                                    {openPanels.divisions && (
+                                        <div className="space-y-3">
+                                            {divisions.map((d) => {
+                                                const expanded = expandedDivisionKey === d._key;
+                                                const closeLabel = d.entries_close_at
+                                                    ? d.entries_close_at.replace('T', ' ')
+                                                    : (form.registration_closes_at ? `Global · ${form.registration_closes_at.replace('T', ' ')}` : '—');
+                                                return (
+                                                    <div key={d._key} className={['border rounded-xl overflow-hidden transition-colors bg-[#1E293B]', expanded ? 'border-padel-green/40' : 'border-white/10'].join(' ')}>
+                                                        {/* Compact card summary */}
+                                                        <div className="flex items-center gap-2 px-4 py-3">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setExpandedDivisionKey(expanded ? null : d._key)}
+                                                                className="flex-1 text-left min-w-0"
+                                                            >
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <ChevronDown size={14} className={`shrink-0 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                                                                    <p className="text-sm text-white font-semibold truncate">
+                                                                        {d.name || 'Untitled division'}
+                                                                    </p>
+                                                                </div>
+                                                                {!expanded && (
+                                                                    <p className="text-[11px] text-gray-400 mt-1 pl-5 truncate">
+                                                                        {[
+                                                                            d.gender || null,
+                                                                            d.age_category || null,
+                                                                            d.format || null,
+                                                                            `R${d.entry_fee || '0'}`,
+                                                                            d.license_required ? 'License' : 'No license',
+                                                                            d.entry_limit ? `Cap ${d.entry_limit}` : null,
+                                                                            `Closes ${closeLabel}`,
+                                                                        ].filter(Boolean).join(' · ')}
+                                                                    </p>
+                                                                )}
+                                                            </button>
+                                                            <button type="button" onClick={() => setExpandedDivisionKey(expanded ? null : d._key)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/5" title={expanded ? 'Collapse' : 'Edit'}>
+                                                                <Pencil size={14} />
+                                                            </button>
+                                                            <button type="button" onClick={() => duplicateDivision(d._key)} className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/5" title="Duplicate">
+                                                                <Copy size={14} />
+                                                            </button>
+                                                            <button type="button" onClick={() => removeDivision(d._key)} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg" title="Delete">
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        </div>
+
+                                                        {/* Expanded edit fields */}
+                                                        {expanded && (
+                                                            <div className="px-4 pb-4 space-y-3 border-t border-white/5 pt-3">
+                                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                                                    <div className="md:col-span-1">
+                                                                        <label className={labelClass}>Division name</label>
+                                                                        <ComboBox value={d.name} onChange={(v) => updateDivision(d._key, {
+                                                                            name: v,
+                                                                            gender: d.gender || genderFromDivisionName(v),
+                                                                            age_category: d.age_category || ageFromDivisionName(v),
+                                                                        })} options={STANDARD_DIVISIONS} placeholder="e.g. Men's Open" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Gender</label>
+                                                                        <SelectMenu value={d.gender} onChange={(v) => updateDivision(d._key, { gender: v })} options={GENDERS.map((g) => ({ value: g, label: g || '—' }))} placeholder="—" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Age category</label>
+                                                                        <SelectMenu value={d.age_category} onChange={(v) => updateDivision(d._key, { age_category: v })} options={AGE_CATEGORIES.map((a) => ({ value: a, label: a || '—' }))} placeholder="—" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Format</label>
+                                                                        <SelectMenu value={d.format} onChange={(v) => updateDivision(d._key, { format: v })} options={FORMATS} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Entry fee (R)</label>
+                                                                        <input type="number" value={d.entry_fee} onChange={(e) => updateDivision(d._key, { entry_fee: e.target.value })} placeholder={standardPrice || 'From registration step'} className={inputClass} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Suggested level</label>
+                                                                        <input value={d.suggested_level} onChange={(e) => updateDivision(d._key, { suggested_level: e.target.value })} placeholder="e.g. Playtomic 3.5–5" className={inputClass} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Entry limit / capacity</label>
+                                                                        <input type="number" value={d.entry_limit} onChange={(e) => updateDivision(d._key, { entry_limit: e.target.value })} placeholder="Optional override" className={inputClass} />
+                                                                    </div>
+                                                                    <div>
+                                                                        <div className="flex items-center justify-between mb-2">
+                                                                            <label className={labelClass} style={{ marginBottom: 0 }}>Entries close override</label>
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => updateDivision(d._key, {
+                                                                                    entries_close_at: d.entries_close_at ? '' : (form.registration_closes_at || (() => {
+                                                                                        const now = new Date();
+                                                                                        const offsetMs = now.getTimezoneOffset() * 60000;
+                                                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
+                                                                                    })())
+                                                                                })}
+                                                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                                                                                    d.entries_close_at ? 'bg-padel-green' : 'bg-white/20'
+                                                                                }`}
+                                                                            >
+                                                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                                                                                    d.entries_close_at ? 'translate-x-4.5' : 'translate-x-0.5'
+                                                                                }`} />
+                                                                            </button>
+                                                                        </div>
+                                                                        {d.entries_close_at ? (
+                                                                            <input
+                                                                                type="datetime-local"
+                                                                                value={d.entries_close_at}
+                                                                                onChange={(e) => updateDivision(d._key, { entries_close_at: e.target.value })}
+                                                                                className={inputClass}
+                                                                            />
+                                                                        ) : (
+                                                                            <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
+                                                                                Uses global close date
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex items-end">
+                                                                        <label className="flex items-center justify-between w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                                            <span className="text-sm font-medium text-gray-200">License required</span>
+                                                                            <input type="checkbox" checked={d.license_required} onChange={(e) => updateDivision(d._key, { license_required: e.target.checked })} className="accent-padel-green w-4 h-4" />
+                                                                        </label>
+                                                                    </div>
+                                                                    <div className="md:col-span-3">
+                                                                        <label className={labelClass}>Division notes</label>
+                                                                        <RichTextEditor
+                                                                            value={d.details ?? ''}
+                                                                            onChange={(html) => updateDivision(d._key, { details: html })}
+                                                                            placeholder="Optional notes about this division (format, eligibility, schedule, etc.)"
+                                                                            minHeight={100}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setExpandedDivisionKey(null)}
+                                                                    className="w-full bg-white/5 text-gray-300 rounded-lg py-2.5 text-xs font-bold hover:bg-white/10 transition-colors"
+                                                                >
+                                                                    Done editing
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                            <button type="button" onClick={addDivision} className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                <Plus size={16} /> Add Division
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {step === 4 && (
-                            <div className="space-y-6">
-                                <div>
-                                    <label className={labelClass}>Event Poster</label>
-                                    <div className="flex items-center gap-4">
-                                        {form.custom_image_url && (
-                                            <img src={form.custom_image_url} alt="Poster" className="w-24 h-32 object-cover rounded-lg border border-white/10" />
-                                        )}
-                                        <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-6 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                            {uploadingPoster ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
-                                            <span className="text-xs font-bold">{uploadingPoster ? 'Uploading...' : 'Upload Poster'}</span>
-                                            <input type="file" accept="image/*" className="hidden" onChange={handlePosterUpload} disabled={uploadingPoster} />
-                                        </label>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>Sponsor Logos</label>
-                                    <div className="flex flex-wrap items-center gap-3">
-                                        {(form.sponsor_logos || []).map((url, idx) => (
-                                            <div key={idx} className="relative group">
-                                                <img src={url} alt="Sponsor" className="w-20 h-20 object-contain rounded-lg border border-white/10 bg-white/5 p-1" />
-                                                <button onClick={() => removeSponsor(idx)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <X size={12} />
-                                                </button>
+                            <div className="space-y-4">
+                                <p className="text-xs text-gray-400">
+                                    Grouped tournament details — open a section to edit, leave the rest collapsed.
+                                </p>
+
+                                {/* Tournament Operations */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="operations" title="Tournament Operations" />
+                                    {openPanels.operations && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Match balls</label>
+                                                <input name="balls" value={form.balls} onChange={handleInput} className={inputClass} />
                                             </div>
-                                        ))}
-                                        <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl w-20 h-20 flex flex-col items-center justify-center gap-1 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
-                                            {uploadingSponsor ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
-                                            <span className="text-[9px] font-bold">Add</span>
-                                            <input type="file" accept="image/*" multiple className="hidden" onChange={handleSponsorUpload} disabled={uploadingSponsor} />
-                                        </label>
-                                    </div>
+                                            <div>
+                                                <label className={labelClass}>Court type</label>
+                                                <SelectMenu
+                                                    value={form.indoor_outdoor || form.courts}
+                                                    onChange={handleCourtTypeChange}
+                                                    options={['Indoor', 'Outdoor', 'Mixed']}
+                                                    placeholder="Indoor / Outdoor / Mixed"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Number of courts</label>
+                                                <input type="number" name="courts_count" value={form.courts_count} onChange={handleInput} min="0" className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Draw release date/time</label>
+                                                <input type="datetime-local" name="draw_released" value={form.draw_released} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Tournament director</label>
+                                                <input name="tournament_director" value={form.tournament_director} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Referees</label>
+                                                <input name="referees" value={form.referees} onChange={handleInput} placeholder="Optional" className={inputClass} />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Points & Prize Money */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="points" title="Points & Prize Money" />
+                                    {openPanels.points && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Winner points</label>
+                                                <input type="number" name="points" value={form.points} onChange={handleInput} placeholder="e.g. 1000" className={inputClass} />
+                                                <p className="text-[11px] text-gray-500 mt-1">
+                                                    Auto-filled from SAPA status — admin can override.
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Prize money total (R)</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">R</span>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        name="prize_money_total"
+                                                        value={form.prize_money_total ? Number(form.prize_money_total).toLocaleString('en-ZA') : ''}
+                                                        onChange={(e) => setField('prize_money_total', e.target.value.replace(/[^\d]/g, ''))}
+                                                        placeholder="0"
+                                                        className={`${inputClass} pl-8`}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Points breakdown</label>
+                                                <RichTextEditor value={form.points_breakdown} onChange={(html) => setField('points_breakdown', html)} placeholder="Optional — e.g. Winner: 1000 pts, Finalist: 750 pts..." />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Prize money breakdown</label>
+                                                {!showPrizeBreakdown ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setShowPrizeBreakdown(true); syncPrizeBreakdownToDivisions(); }}
+                                                        className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors"
+                                                    >
+                                                        <Plus size={16} /> Add Prize Money Breakdown
+                                                    </button>
+                                                ) : (
+                                                <>
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-[11px] text-gray-500">Pulled from the divisions you selected. Set a prize amount per division, or add extra custom lines.</p>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setShowPrizeBreakdown(false); setField('prize_money_breakdown', []); }}
+                                                        className="text-[11px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1 shrink-0"
+                                                    >
+                                                        <Trash2 size={12} /> Remove
+                                                    </button>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {(form.prize_money_breakdown || []).map((row, idx) => (
+                                                        <div key={idx} className="flex gap-2">
+                                                            {row._division ? (
+                                                                <div className={`${inputClass} flex items-center font-semibold text-white/90`}>{row.label}</div>
+                                                            ) : (
+                                                                <input value={row.label} onChange={(e) => updatePrizeRow(idx, { label: e.target.value })} placeholder="e.g. Men's Open Winner" className={inputClass} />
+                                                            )}
+                                                            <div className="relative max-w-[160px]">
+                                                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">R</span>
+                                                                <input
+                                                                    inputMode="numeric"
+                                                                    value={row.amount ? Number(String(row.amount).replace(/[^\d]/g, '')).toLocaleString('en-ZA') : ''}
+                                                                    onChange={(e) => updatePrizeRow(idx, { amount: e.target.value.replace(/[^\d]/g, '') })}
+                                                                    placeholder="Amount"
+                                                                    className={`${inputClass} pl-8`}
+                                                                />
+                                                            </div>
+                                                            {row._division ? (
+                                                                <span className="px-3 w-[40px]" />
+                                                            ) : (
+                                                                <button onClick={() => removePrizeRow(idx)} className="px-3 text-red-400 hover:bg-red-500/10 rounded-lg"><Trash2 size={14} /></button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    <button onClick={addPrizeRow} className="text-xs font-bold text-padel-green flex items-center gap-1"><Plus size={14} /> Add custom prize line</button>
+                                                </div>
+                                                </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Rules & Policies */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="rules" title="Rules & Policies" />
+                                    {openPanels.rules && (
+                                        <div className="space-y-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Sanctioning details</label>
+                                                <RichTextEditor value={form.sanctioning_details} onChange={(html) => setField('sanctioning_details', html)} placeholder="Sanctioning information..." />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Specific rules and regulations</label>
+                                                <RichTextEditor value={form.rules_regs} onChange={(html) => setField('rules_regs', html)} placeholder="List the rules and regulations..." />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>Withdrawal and substitution policy</label>
+                                                <RichTextEditor value={form.withdrawal_substitution} onChange={(html) => setField('withdrawal_substitution', html)} placeholder="Withdrawal and substitution policy..." />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Contact */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="contact" title="Contact" />
+                                    {openPanels.contact && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Contact person</label>
+                                                <input name="contact_details" value={form.contact_details} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div>
+                                                <label className={labelClass}>WhatsApp / phone</label>
+                                                <input name="organizer_phone" value={form.organizer_phone} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Contact email</label>
+                                                <input name="organizer_email" value={form.organizer_email} onChange={handleInput} className={inputClass} />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className={labelClass}>Event Co-Admins (emails, comma-separated)</label>
+                                                <input
+                                                    type="text"
+                                                    name="event_co_admins"
+                                                    value={form.event_co_admins}
+                                                    onChange={handleInput}
+                                                    placeholder="name@club.co.za, other@club.co.za"
+                                                    className={inputClass}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
 
                         {step === 5 && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <label className={labelClass} style={{ marginBottom: 0 }}>Registration Opens At</label>
-                                            <button
-                                                type="button"
-                                                onClick={() => setField('registration_opens_at',
-                                                    form.registration_opens_at ? '' : (() => {
-                                                        const now = new Date();
-                                                        const offsetMs = now.getTimezoneOffset() * 60000;
-                                                        return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
-                                                    })()
-                                                )}
-                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                                                    form.registration_opens_at ? 'bg-padel-green' : 'bg-white/20'
-                                                }`}
-                                            >
-                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                                                    form.registration_opens_at ? 'translate-x-4.5' : 'translate-x-0.5'
-                                                }`} />
-                                            </button>
+                            <div className="space-y-4">
+                                <p className="text-xs text-gray-400">
+                                    Marketing and presentation only — registration settings live in earlier steps.
+                                </p>
+
+                                {/* Sponsors */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="sponsors" title="Sponsors" />
+                                    {openPanels.sponsors && (
+                                        <div className="space-y-5 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            <div>
+                                                <label className={labelClass}>Main sponsor logo</label>
+                                                <p className="text-[11px] text-gray-500 mb-2">Shown first in the sponsor strip on the event page.</p>
+                                                <div className="flex items-center gap-4">
+                                                    {(form.sponsor_logos || [])[0] ? (
+                                                        <div className="relative group">
+                                                            <img src={form.sponsor_logos[0]} alt="Main sponsor" className="w-24 h-24 object-contain rounded-xl border border-padel-green/30 bg-white/5 p-2" />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeSponsor(0)}
+                                                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        </div>
+                                                    ) : null}
+                                                    <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl px-5 py-4 flex flex-col items-center gap-2 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                        {uploadingSponsor ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                                        <span className="text-xs font-bold">{uploadingSponsor ? 'Uploading...' : ((form.sponsor_logos || [])[0] ? 'Replace main' : 'Upload main')}</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            className="hidden"
+                                                            onChange={(e) => handleSponsorUpload(e, { asMain: true })}
+                                                            disabled={uploadingSponsor}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <div>
+                                                <label className={labelClass}>Additional sponsor logos</label>
+                                                <p className="text-[11px] text-gray-500 mb-2">Use the arrows to set display order (left → right after the main sponsor).</p>
+                                                <div className="flex flex-wrap items-start gap-3">
+                                                    {(form.sponsor_logos || []).slice(1).map((url, i) => {
+                                                        const idx = i + 1;
+                                                        return (
+                                                            <div key={`${url}-${idx}`} className="relative group flex flex-col items-center gap-1">
+                                                                <div className="relative">
+                                                                    <img src={url} alt={`Sponsor ${idx}`} className="w-20 h-20 object-contain rounded-lg border border-white/10 bg-white/5 p-1" />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => removeSponsor(idx)}
+                                                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        <X size={12} />
+                                                                    </button>
+                                                                </div>
+                                                                <div className="flex items-center gap-0.5">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => moveSponsor(idx, -1)}
+                                                                        disabled={idx <= 0}
+                                                                        className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-white/5"
+                                                                        title="Move earlier"
+                                                                    >
+                                                                        <ChevronUp size={14} />
+                                                                    </button>
+                                                                    <span className="text-[10px] text-gray-500 font-bold w-4 text-center">{idx + 1}</span>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => moveSponsor(idx, 1)}
+                                                                        disabled={idx >= (form.sponsor_logos || []).length - 1}
+                                                                        className="p-1 text-gray-400 hover:text-white disabled:opacity-30 rounded hover:bg-white/5"
+                                                                        title="Move later"
+                                                                    >
+                                                                        <ChevronDown size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    <label className="cursor-pointer bg-white/5 border border-dashed border-white/20 rounded-xl w-20 h-20 flex flex-col items-center justify-center gap-1 text-gray-300 hover:border-padel-green hover:text-padel-green transition-colors">
+                                                        {uploadingSponsor ? <Loader2 className="animate-spin" size={18} /> : <Plus size={18} />}
+                                                        <span className="text-[9px] font-bold">Add</span>
+                                                        <input
+                                                            type="file"
+                                                            accept="image/*"
+                                                            multiple
+                                                            className="hidden"
+                                                            onChange={(e) => handleSponsorUpload(e, { asMain: false })}
+                                                            disabled={uploadingSponsor}
+                                                        />
+                                                    </label>
+                                                </div>
+                                            </div>
                                         </div>
-                                        {form.registration_opens_at ? (
-                                            <input
-                                                type="datetime-local"
-                                                name="registration_opens_at"
-                                                value={form.registration_opens_at}
-                                                onChange={handleInput}
-                                                className={inputClass}
-                                            />
-                                        ) : (
-                                            <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
-                                                Open immediately
+                                    )}
+                                </div>
+
+                                {/* Website Display */}
+                                <div className="space-y-2">
+                                    <PanelHeader id="websiteDisplay" title="Website Display" />
+                                    {openPanels.websiteDisplay && (
+                                        <div className="space-y-3 p-4 rounded-xl border border-white/10 bg-black/20">
+                                            {organization ? (
+                                                <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
+                                                    {isAmendment
+                                                        ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
+                                                        : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {[
+                                                        ['featured_event', 'Featured event'],
+                                                        ['show_in_recent_results', 'Show in recent results'],
+                                                        ['is_visible', 'Visible on website'],
+                                                    ].map(([key, label]) => (
+                                                        <label key={key} className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
+                                                            <span className="text-sm font-medium text-gray-200">{label}</span>
+                                                            <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {step === 6 && (
+                            <div className="space-y-4">
+                                <p className="text-xs text-gray-400">
+                                    Review everything below before publishing — fix any blocking issues first.
+                                </p>
+
+                                {/* Validation */}
+                                {(reviewIssues.errors.length > 0 || reviewIssues.warnings.length > 0) ? (
+                                    <div className="space-y-2">
+                                        {reviewIssues.errors.length > 0 && (
+                                            <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 space-y-1.5">
+                                                <p className="text-xs font-bold uppercase tracking-wide text-red-300 flex items-center gap-2">
+                                                    <AlertTriangle size={14} /> Blocking issues ({reviewIssues.errors.length})
+                                                </p>
+                                                <ul className="space-y-1">
+                                                    {reviewIssues.errors.map((msg) => (
+                                                        <li key={msg} className="text-sm text-red-200">• {msg}</li>
+                                                    ))}
+                                                </ul>
                                             </div>
                                         )}
-                                        <p className="text-[11px] text-gray-500 mt-1">Registrations are locked until this date &amp; time.</p>
+                                        {reviewIssues.warnings.length > 0 && (
+                                            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 space-y-1.5">
+                                                <p className="text-xs font-bold uppercase tracking-wide text-amber-300 flex items-center gap-2">
+                                                    <AlertTriangle size={14} /> Warnings ({reviewIssues.warnings.length})
+                                                </p>
+                                                <ul className="space-y-1">
+                                                    {reviewIssues.warnings.map((msg) => (
+                                                        <li key={msg} className="text-sm text-amber-100/90">• {msg}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div>
-                                        <div className="flex items-center justify-between mb-2">
-                                            <label className={labelClass} style={{ marginBottom: 0 }}>Registration Closes At</label>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    regCloseTouchedRef.current = true;
-                                                    setField('registration_closes_at',
-                                                        form.registration_closes_at ? '' : (
-                                                            mondayCloseFor(form.start_date) || (() => {
-                                                                const now = new Date();
-                                                                const offsetMs = now.getTimezoneOffset() * 60000;
-                                                                return new Date(now.getTime() - offsetMs).toISOString().substring(0, 16);
-                                                            })()
-                                                        )
-                                                    );
-                                                }}
-                                                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                                                    form.registration_closes_at ? 'bg-padel-green' : 'bg-white/20'
-                                                }`}
-                                            >
-                                                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                                                    form.registration_closes_at ? 'translate-x-4.5' : 'translate-x-0.5'
-                                                }`} />
-                                            </button>
-                                        </div>
-                                        {form.registration_closes_at ? (
-                                            <input
-                                                type="datetime-local"
-                                                name="registration_closes_at"
-                                                value={form.registration_closes_at}
-                                                onChange={handleInput}
-                                                className={inputClass}
-                                            />
+                                ) : (
+                                    <div className="rounded-xl border border-padel-green/30 bg-padel-green/10 px-4 py-3 text-sm text-padel-green font-semibold flex items-center gap-2">
+                                        <Check size={16} /> Ready to publish — no blocking issues found.
+                                    </div>
+                                )}
+
+                                {/* Event Summary */}
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Event Summary</p>
+                                    <div className="flex gap-4">
+                                        {form.custom_image_url ? (
+                                            <img src={form.custom_image_url} alt="Poster" className="w-24 h-32 object-cover rounded-lg border border-white/10 shrink-0" />
                                         ) : (
-                                            <div className="w-full bg-black/20 border border-white/5 rounded-lg px-4 py-3 text-gray-600 text-sm italic">
-                                                No deadline set
+                                            <div className="w-24 h-32 rounded-lg border border-dashed border-white/15 bg-white/5 flex items-center justify-center text-[10px] text-gray-500 text-center px-2 shrink-0">
+                                                No poster
                                             </div>
                                         )}
-                                        <p className="text-[11px] text-gray-500 mt-1">Event-wide fallback. Per-division close dates take priority.</p>
+                                        <div className="min-w-0 flex-1 space-y-2 text-sm">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <p className="text-white font-bold text-lg leading-tight">{form.event_name || 'Untitled event'}</p>
+                                                {form.sapa_status && form.sapa_status !== 'None' && (
+                                                    <span className={`text-[10px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 ${sapaBadgeClass(form.sapa_status)}`}>{form.sapa_status}</span>
+                                                )}
+                                                {form.tournament_tag && form.tournament_tag !== 'None' && (
+                                                    <span className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-white/10 text-gray-300 border border-white/10">{form.tournament_tag}</span>
+                                                )}
+                                            </div>
+                                            {form.organizer_badge_text && (
+                                                <p className="text-xs text-padel-green font-semibold">{form.organizer_badge_text}</p>
+                                            )}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-gray-300">
+                                                <p><span className="text-gray-500">Dates:</span> {formatEventDates(form.start_date, form.end_date) || '—'}</p>
+                                                <p><span className="text-gray-500">Venue:</span> {[form.venue, form.city].filter(Boolean).join(', ') || '—'}</p>
+                                                <p><span className="text-gray-500">Reg opens:</span> {formatDateTimeLabel(form.registration_opens_at)}</p>
+                                                <p><span className="text-gray-500">Reg closes:</span> {formatDateTimeLabel(form.registration_closes_at)}</p>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {/* Event format & capacity */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className={labelClass}>Partner Requirement</label>
-                                        <select
-                                            name="partner_requirement"
-                                            value={form.partner_requirement}
-                                            onChange={handleInput}
-                                            className={inputClass}
-                                        >
-                                            <option value="Required">Required (Doubles)</option>
-                                            <option value="Optional">Optional (Free Agent)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className={labelClass}>Back Draw</label>
-                                        <select
-                                            name="back_draw_options"
-                                            value={form.back_draw_options}
-                                            onChange={handleInput}
-                                            className={inputClass}
-                                        >
-                                            <option value="Plate Included">Plate Included (Guaranteed 2 Matches)</option>
-                                            <option value="No Plate">No Plate (Direct Elimination Only)</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className={labelClass}>Max Team Capacity</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            name="max_teams_capacity"
-                                            value={form.max_teams_capacity}
-                                            onChange={handleInput}
-                                            placeholder="Leave empty for unlimited"
-                                            className={inputClass}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className={labelClass}>Event Co-Admins (emails, comma-separated)</label>
-                                        <input
-                                            type="text"
-                                            name="event_co_admins"
-                                            value={form.event_co_admins}
-                                            onChange={handleInput}
-                                            placeholder="name@club.co.za, other@club.co.za"
-                                            className={inputClass}
-                                        />
+                                {/* Division Summary */}
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-4 overflow-x-auto">
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wide mb-3">Division Summary</p>
+                                    <table className="w-full text-sm text-left min-w-[640px]">
+                                        <thead>
+                                            <tr className="text-xs text-gray-500 border-b border-white/10">
+                                                <th className="py-2 pr-3 font-bold">Division</th>
+                                                <th className="py-2 pr-3 font-bold">Fee</th>
+                                                <th className="py-2 pr-3 font-bold">Format</th>
+                                                <th className="py-2 pr-3 font-bold">Entries close</th>
+                                                <th className="py-2 pr-3 font-bold">License</th>
+                                                <th className="py-2 font-bold">Capacity</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {namedDivisions.map((d) => {
+                                                const closeLabel = d.entries_close_at
+                                                    ? formatDateTimeLabel(d.entries_close_at)
+                                                    : (form.registration_closes_at
+                                                        ? `Global · ${formatDateTimeLabel(form.registration_closes_at)}`
+                                                        : '—');
+                                                return (
+                                                    <tr key={d._key} className="border-t border-white/5 text-gray-300">
+                                                        <td className="py-2.5 pr-3 text-white font-medium">{d.name}</td>
+                                                        <td className="py-2.5 pr-3">R{d.entry_fee || 0}</td>
+                                                        <td className="py-2.5 pr-3">{d.format || '—'}</td>
+                                                        <td className="py-2.5 pr-3 whitespace-nowrap">{closeLabel}</td>
+                                                        <td className="py-2.5 pr-3">{d.license_required ? 'Required' : 'No'}</td>
+                                                        <td className="py-2.5">{d.entry_limit || '—'}</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                            {namedDivisions.length === 0 && (
+                                                <tr><td colSpan={6} className="py-3 text-gray-500 italic">No divisions yet</td></tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Settings Summary */}
+                                <div className="rounded-xl border border-white/10 bg-black/20 p-4 space-y-3">
+                                    <p className="text-gray-400 text-xs font-bold uppercase tracking-wide">Settings Summary</p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                                        <p className="text-gray-300"><span className="text-gray-500">Payments enabled:</span> {form.allow_payments ? 'Yes' : 'No'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.partner_requirement || '—'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Golden point:</span> {form.golden_point ? 'Yes' : 'No'}</p>
+                                        {!organization && (
+                                            <p className="text-gray-300"><span className="text-gray-500">Visible on website:</span> {form.is_visible ? 'Yes' : 'No'}</p>
+                                        )}
                                     </div>
                                 </div>
+
                                 {organization && (
                                     <div className="bg-padel-green/5 border border-padel-green/20 rounded-xl px-4 py-3 text-xs text-padel-green font-semibold">
                                         {isAmendment
-                                            ? 'This event is already sanctioned. Your changes will be submitted as an amendment for 4M Padel approval — the event stays live with its current details until approved.'
-                                            : 'This event will be submitted to 4M Padel for sanctioning. It goes live on the calendar once approved.'}
+                                            ? 'Save Draft and Publish both submit an amendment for 4M Padel approval. Publish runs full validation.'
+                                            : 'Save Draft and Publish both submit this event for 4M Padel sanctioning. Publish runs full validation.'}
                                     </div>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {(organization ? [
-                                        ['allow_payments', 'Allow payments'],
-                                        ['golden_point', 'Golden point'],
-                                        ['is_league', 'League format'],
-                                    ] : [
-                                        ['allow_payments', 'Allow payments'],
-                                        ['golden_point', 'Golden point'],
-                                        ['is_league', 'League format'],
-                                        ['is_visible', 'Visible on website'],
-                                        ['featured_event', 'Featured event'],
-                                        ['finance_managed', 'Finance manager'],
-                                        ['show_in_recent_results', 'Show in recent results'],
-                                    ]).map(([key, label]) => (
-                                        <label key={key} className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                            <span className="text-sm font-medium text-gray-200">{label}</span>
-                                            <input type="checkbox" name={key} checked={!!form[key]} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                        </label>
-                                    ))}
-                                </div>
-
-                                {/* Review summary */}
-                                <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-2 text-sm">
-                                    <p className="text-gray-400 text-xs font-bold uppercase mb-2">Review</p>
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                        <p className="text-white font-bold">{form.event_name || 'Untitled event'}</p>
-                                        {form.sapa_status && form.sapa_status !== 'None' && (
-                                            <span className={`text-[10px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 ${sapaBadgeClass(form.sapa_status)}`}>{form.sapa_status}</span>
-                                        )}
-                                    </div>
-                                    <p className="text-gray-400">{formatEventDates(form.start_date, form.end_date) || 'No dates set'} · {[form.venue, form.city].filter(Boolean).join(', ')}</p>
-                                    <div className="pt-2 space-y-1">
-                                        {divisions.filter((d) => d.name.trim()).map((d) => (
-                                            <div key={d._key} className="flex items-center justify-between text-xs text-gray-300 border-t border-white/5 pt-1">
-                                                <span>{d.name} · {d.format}</span>
-                                                <span>R{d.entry_fee || 0}{d.license_required ? ' · license' : ''}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
                             </div>
                         )}
                     </div>
@@ -1636,31 +2440,93 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                         >
                             <ChevronLeft size={16} /> Back
                         </button>
-                        <div className="flex items-center gap-2">
-                            {step < 5 && (
-                                <button
-                                    type="button"
-                                    onClick={handleSave}
-                                    disabled={saving}
-                                    className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
-                                >
-                                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                    {saving ? 'Saving...' : 'Save'}
-                                </button>
+                        <div className="flex items-center gap-2 flex-wrap justify-end">
+                            {step < 6 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSave('draft')}
+                                        disabled={saving}
+                                        className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                        {saving ? 'Saving...' : 'Save Draft'}
+                                    </button>
+                                    <button type="button" onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
+                                        Next <ChevronRight size={16} />
+                                    </button>
+                                </>
                             )}
-                            {step < 5 ? (
-                                <button type="button" onClick={next} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors">
-                                    Next <ChevronRight size={16} />
-                                </button>
-                            ) : (
-                                <button type="button" onClick={handleSave} disabled={saving} className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50">
-                                    {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                                    {saving ? 'Saving...' : editingEvent ? 'Update Event' : 'Create Event'}
-                                </button>
+                            {step === 6 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSave('draft')}
+                                        disabled={saving}
+                                        className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                        {saving ? 'Saving...' : 'Save Draft'}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPreview(true)}
+                                        className="px-4 py-2 rounded-xl font-bold text-gray-200 border border-white/15 hover:bg-white/5 flex items-center gap-2 transition-colors"
+                                    >
+                                        <Eye size={16} /> Preview Event Card
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSave('publish')}
+                                        disabled={saving || reviewIssues.errors.length > 0}
+                                        title={reviewIssues.errors.length > 0 ? 'Fix blocking issues before publishing' : undefined}
+                                        className="bg-padel-green text-black px-5 py-2 rounded-xl font-bold flex items-center gap-2 hover:bg-white transition-colors disabled:opacity-50"
+                                    >
+                                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                        {saving ? 'Saving...' : editingEvent ? 'Update Event' : 'Publish Event'}
+                                    </button>
+                                </>
                             )}
                         </div>
                     </div>
                 </motion.div>
+
+                {showPreview && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="fixed inset-0 z-[1200] bg-black/70 flex items-center justify-center p-4"
+                        onClick={() => setShowPreview(false)}
+                    >
+                        <div
+                            className="bg-[#0F172A] border border-white/10 rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            {form.custom_image_url ? (
+                                <img src={form.custom_image_url} alt="Poster" className="w-full h-48 object-cover" />
+                            ) : (
+                                <div className="w-full h-48 bg-white/5 flex items-center justify-center text-gray-500 text-sm">No poster</div>
+                            )}
+                            <div className="p-4 space-y-2">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <h3 className="text-white font-bold text-lg">{form.event_name || 'Untitled event'}</h3>
+                                    {form.sapa_status && form.sapa_status !== 'None' && (
+                                        <span className={`text-[10px] font-black uppercase tracking-wide rounded-full px-2 py-0.5 ${sapaBadgeClass(form.sapa_status)}`}>{form.sapa_status}</span>
+                                    )}
+                                </div>
+                                <p className="text-gray-400 text-sm">{formatEventDates(form.start_date, form.end_date) || 'Dates TBC'}</p>
+                                <p className="text-gray-400 text-sm">{[form.venue, form.city].filter(Boolean).join(', ') || 'Venue TBC'}</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPreview(false)}
+                                    className="mt-2 w-full bg-white/10 text-white py-2 rounded-xl font-bold hover:bg-white/20"
+                                >
+                                    Close Preview
+                                </button>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
             </motion.div>
         </AnimatePresence>
     );
