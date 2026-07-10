@@ -118,16 +118,17 @@ const CountUp = ({ end, duration = 1.5 }) => {
 const EventSponsorStrip = ({ logos, className = '' }) => {
     if (!logos?.length) return null;
     return (
-        <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3.5 ${className}`}>
-            <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
+        <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden ${className}`}>
+            <div className="flex items-center justify-center divide-x divide-white/10">
                 {logos.map((logo, i) => (
-                    <img
-                        key={`${logo}-${i}`}
-                        src={logo}
-                        alt=""
-                        className="h-8 sm:h-10 w-auto max-w-[120px] object-contain"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                    />
+                    <div key={`${logo}-${i}`} className="flex-1 flex items-center justify-center px-3 py-3.5 min-w-0">
+                        <img
+                            src={logo}
+                            alt=""
+                            className="h-8 sm:h-10 w-auto max-w-full object-contain"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                    </div>
                 ))}
             </div>
         </div>
@@ -303,10 +304,16 @@ const formatPrizeAmount = (amount) => {
     return `R ${raw}`;
 };
 
-const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false }) => {
+const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, dateLabel = null }) => {
     const logoUrl = event?.organizer_logo_url?.trim();
     const badgeText = event?.organizer_badge_text?.trim();
     const hasOrgBranding = logoUrl || badgeText;
+    const dateRow = dateLabel ? (
+        <div className="flex items-center gap-1.5 text-white/90 text-sm font-normal shrink-0">
+            <CalendarIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
+            <span className="whitespace-nowrap">{dateLabel}</span>
+        </div>
+    ) : null;
 
     if (variant === 'nav') {
         if (!hasOrgBranding) return null;
@@ -331,10 +338,10 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false })
         );
     }
 
-    // Under the event title: logo + badge (replaces the old top-of-card branding)
+    // Under the event title: logo + badge | date (single row)
     if (hasOrgBranding) {
         return (
-            <div className={`flex items-center gap-2.5 min-w-0 mt-1 ${centered ? 'justify-center' : ''}`}>
+            <div className={`flex items-center gap-2.5 min-w-0 mt-1 flex-wrap ${centered ? 'justify-center' : ''}`}>
                 {logoUrl && (
                     <img
                         src={logoUrl}
@@ -350,19 +357,37 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false })
                         {badgeText}
                     </span>
                 )}
+                {dateRow && (
+                    <>
+                        <span className="text-white/35 text-sm font-light select-none" aria-hidden>|</span>
+                        {dateRow}
+                    </>
+                )}
             </div>
         );
     }
 
     if (event?.sapa_status && event.sapa_status !== 'None') {
         return (
-            <span
-                className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full mb-2 shadow-md w-fit ${centered ? 'md:mx-auto' : ''} ${theme.badgeBg}`}
-                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-            >
-                {event.sapa_status}
-            </span>
+            <div className={`flex items-center gap-2.5 min-w-0 mt-1 flex-wrap ${centered ? 'justify-center' : ''}`}>
+                <span
+                    className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full shadow-md w-fit ${theme.badgeBg}`}
+                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+                >
+                    {event.sapa_status}
+                </span>
+                {dateRow && (
+                    <>
+                        <span className="text-white/35 text-sm font-light select-none" aria-hidden>|</span>
+                        {dateRow}
+                    </>
+                )}
+            </div>
         );
+    }
+
+    if (dateRow) {
+        return <div className={`mt-1 ${centered ? 'flex justify-center' : ''}`}>{dateRow}</div>;
     }
     return null;
 };
@@ -3257,17 +3282,13 @@ const EventDetails = () => {
                                     {event.event_name}
                                 </h1>
 
-                                <EventHeroBranding event={event} theme={theme} variant="hero" />
-
-                                <div className="flex items-center gap-2 text-white/90 text-sm font-normal pt-0.5">
-                                    <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
-                                    <span>{event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}</span>
+                                <EventHeroBranding
+                                    event={event}
+                                    theme={theme}
+                                    variant="hero"
+                                    dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
+                                />
                                 </div>
-                                </div>
-
-                                {eventSponsorLogos.length > 0 && (
-                                    <EventSponsorStrip logos={eventSponsorLogos} className="w-full mt-3" />
-                                )}
 
                                 {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
@@ -3400,6 +3421,10 @@ const EventDetails = () => {
                                         </div>
                                     ))}
                                 </div>
+
+                                {eventSponsorLogos.length > 0 && (
+                                    <EventSponsorStrip logos={eventSponsorLogos} className="w-full mt-3" />
+                                )}
 
                                 <RegistrationCountdown
                                     closesAt={registrationNotYetOpen ? event.registration_opens_at : event.registration_closes_at}
