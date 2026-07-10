@@ -115,19 +115,21 @@ const CountUp = ({ end, duration = 1.5 }) => {
     return <span>{count.toLocaleString()}</span>;
 };
 
-const EventSponsorStrip = ({ logos }) => {
+const EventSponsorStrip = ({ logos, className = '' }) => {
     if (!logos?.length) return null;
     return (
-        <div className="flex flex-wrap items-center justify-start gap-5 sm:gap-8 mb-2">
-            {logos.map((logo, i) => (
-                <img
-                    key={`${logo}-${i}`}
-                    src={logo}
-                    alt=""
-                    className="h-9 sm:h-11 w-auto max-w-[150px] object-contain"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-            ))}
+        <div className={`rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm px-4 py-3.5 ${className}`}>
+            <div className="flex flex-wrap items-center justify-center gap-5 sm:gap-8">
+                {logos.map((logo, i) => (
+                    <img
+                        key={`${logo}-${i}`}
+                        src={logo}
+                        alt=""
+                        className="h-8 sm:h-10 w-auto max-w-[120px] object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                    />
+                ))}
+            </div>
         </div>
     );
 };
@@ -329,7 +331,28 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false })
         );
     }
 
-    if (hasOrgBranding) return null;
+    // Under the event title: logo + badge (replaces the old top-of-card branding)
+    if (hasOrgBranding) {
+        return (
+            <div className={`flex items-center gap-2.5 min-w-0 mt-1 ${centered ? 'justify-center' : ''}`}>
+                {logoUrl && (
+                    <img
+                        src={logoUrl}
+                        alt=""
+                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full object-cover border border-white/30 bg-white shrink-0 shadow-md"
+                    />
+                )}
+                {badgeText && (
+                    <span
+                        className="text-sm sm:text-base font-bold uppercase tracking-wide truncate drop-shadow-md"
+                        style={{ color: theme.fill }}
+                    >
+                        {badgeText}
+                    </span>
+                )}
+            </div>
+        );
+    }
 
     if (event?.sapa_status && event.sapa_status !== 'None') {
         return (
@@ -3130,9 +3153,6 @@ const EventDetails = () => {
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </button>
-                            <div className="pointer-events-none min-w-0 md:ml-2">
-                                <EventHeroBranding event={event} theme={theme} variant="nav" />
-                            </div>
                         </div>
 
                         <div className="flex items-center gap-2 pointer-events-auto shrink-0">
@@ -3201,22 +3221,12 @@ const EventDetails = () => {
                     <div className="relative z-50 pb-10 pt-[38vw] sm:pt-[250px]">
                         <div className="max-w-5xl mx-auto px-5 w-full relative">
                             <div className="w-full flex flex-col mt-2">
-                                {/* Sponsor logos hidden for now — re-enable with:
-                                    <EventSponsorStrip logos={eventSponsorLogos} /> */}
-
                                 <div className="w-full flex flex-col gap-1">
                                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white leading-tight drop-shadow-lg">
                                     {event.event_name}
                                 </h1>
 
-                                {event.organizer_badge_text?.trim() && (
-                                    <p
-                                        className="text-2xl sm:text-3xl md:text-4xl font-bold uppercase tracking-wide drop-shadow-md leading-tight"
-                                        style={{ color: theme.fill }}
-                                    >
-                                        {event.organizer_badge_text.trim()}
-                                    </p>
-                                )}
+                                <EventHeroBranding event={event} theme={theme} variant="hero" />
 
                                 <div className="flex items-center gap-2 text-white/90 text-sm font-normal pt-0.5">
                                     <CalendarIcon className="w-4 h-4 text-white/70 shrink-0" />
@@ -3224,28 +3234,20 @@ const EventDetails = () => {
                                 </div>
                                 </div>
 
-                                <div className="flex flex-wrap items-center gap-2 w-full mt-3 mb-0">
-                                    {(() => {
+                                {eventSponsorLogos.length > 0 && (
+                                    <EventSponsorStrip logos={eventSponsorLogos} className="w-full mt-3" />
+                                )}
+
+                                {(() => {
                                         const rId = event.rankedin_id || extractRankedinId(event.rankedin_url);
+                                        let cta = null;
+
                                         if (event.is_manual) {
                                             if (!isEventPassed) {
                                                 if (manualRegStatus.allRegistrationsPaid && manualRegStatus.hasRegistrations) {
-                                                    return (
-                                                        <div
-                                                            className={`${REGISTERED_STATUS_CLASS} flex-1 min-w-[calc(50%-0.5rem)] cursor-default select-none`}
-                                                            style={registeredStatusStyle}
-                                                            aria-label="Registered for this event"
-                                                        >
-                                                            <span className={registeredStatusShineClass(theme)} aria-hidden />
-                                                            <span className="relative z-10 flex items-center justify-center gap-2 w-full">
-                                                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                                                <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                            </span>
-                                                        </div>
-                                                    );
-                                                }
-                                                if (manualRegStatus.hasPendingPayment) {
-                                                    return (
+                                                    cta = null;
+                                                } else if (manualRegStatus.hasPendingPayment) {
+                                                    cta = (
                                                         <button
                                                             type="button"
                                                             onClick={openManualPayFlow}
@@ -3256,9 +3258,8 @@ const EventDetails = () => {
                                                             Pay Entry
                                                         </button>
                                                     );
-                                                }
-                                                if (registrationNotYetOpen) {
-                                                    return (
+                                                } else if (registrationNotYetOpen) {
+                                                    cta = (
                                                         <button
                                                             type="button"
                                                             disabled
@@ -3268,76 +3269,62 @@ const EventDetails = () => {
                                                             Registration Opening Soon
                                                         </button>
                                                     );
-                                                }
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        onClick={openManualRegistration}
-                                                        className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
-                                                        style={registeredStatusStyle}
-                                                    >
-                                                        Register Now <ArrowRight className="w-4 h-4" />
-                                                    </button>
-                                                );
-                                            }
-                                            return null;
-                                        }
-                                        if (!isEventPassed) {
-                                            if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => { if (!isLive) { handleRankedinRedirect(); } }}
-                                                        className={`${REGISTERED_STATUS_CLASS} flex-1 min-w-[calc(50%-0.5rem)] ${!isLive ? 'hover:opacity-90 transition-opacity cursor-pointer' : 'opacity-90 cursor-default'}`}
-                                                        style={registeredStatusStyle}
-                                                    >
-                                                        <span className={registeredStatusShineClass(theme)} aria-hidden />
-                                                        <span className="relative z-10 flex items-center justify-center gap-2 w-full">
-                                                            <CheckCircle className="w-4 h-4 shrink-0" />
-                                                            <span className="text-xs font-semibold tracking-normal truncate">Registered</span>
-                                                        </span>
-                                                    </button>
-                                                );
-                                            }
-                                            return (
-                                                <>
-                                                    {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
-                                                        registrationNotYetOpen ? (
-                                                            <button
-                                                                type="button"
-                                                                disabled
-                                                                className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold bg-white/10 border border-white/15 text-white/60 cursor-not-allowed"
-                                                            >
-                                                                <Clock className="w-4 h-4" />
-                                                                Registration Opening Soon
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleRankedinRedirect}
-                                                                className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
-                                                                style={registeredStatusStyle}
-                                                            >
-                                                                Register Now <ArrowRight className="w-4 h-4" />
-                                                            </button>
-                                                        )
-                                                    )}
-                                                    {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                } else {
+                                                    cta = (
                                                         <button
                                                             type="button"
-                                                            onClick={openRegistrationModal}
-                                                            className="flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
+                                                            onClick={openManualRegistration}
+                                                            className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
                                                             style={registeredStatusStyle}
                                                         >
-                                                            <CreditCard className="w-4 h-4" />
-                                                            Pay Fee
+                                                            Register Now <ArrowRight className="w-4 h-4" />
                                                         </button>
-                                                    )}
-                                                </>
-                                            );
-                                        }
-                                        if ((hasResults || hasDraw) && (rId || event.slug)) {
-                                            return (
+                                                    );
+                                                }
+                                            }
+                                        } else if (!isEventPassed) {
+                                            if (isRegistered && isPaid && registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) {
+                                                cta = null;
+                                            } else {
+                                                cta = (
+                                                    <>
+                                                        {!isRegistered && !isLive && !isRankedinRegistrationClosed && (
+                                                            registrationNotYetOpen ? (
+                                                                <button
+                                                                    type="button"
+                                                                    disabled
+                                                                    className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold bg-white/10 border border-white/15 text-white/60 cursor-not-allowed"
+                                                                >
+                                                                    <Clock className="w-4 h-4" />
+                                                                    Registration Opening Soon
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={handleRankedinRedirect}
+                                                                    className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl font-bold transition-all hover:brightness-110"
+                                                                    style={registeredStatusStyle}
+                                                                >
+                                                                    Register Now <ArrowRight className="w-4 h-4" />
+                                                                </button>
+                                                            )
+                                                        )}
+                                                        {event?.allow_payments === true && (event.entry_fee > 0 || Object.keys(event.category_fees || {}).length > 0) && isRegistered && (!isPaid || !registeredDivisions.every((div) => paidDivisions.some((pd) => divisionsMatch(pd, div)))) && (
+                                                            <button
+                                                                type="button"
+                                                                onClick={openRegistrationModal}
+                                                                className="flex-1 min-w-[calc(50%-0.5rem)] flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
+                                                                style={registeredStatusStyle}
+                                                            >
+                                                                <CreditCard className="w-4 h-4" />
+                                                                Pay Fee
+                                                            </button>
+                                                        )}
+                                                    </>
+                                                );
+                                            }
+                                        } else if ((hasResults || hasDraw) && (rId || event.slug)) {
+                                            cta = (
                                                 <Link
                                                     to={`/draws/${event.slug || rId}`}
                                                     className="w-full flex items-center justify-center gap-2 text-xs font-semibold tracking-normal px-2 py-3.5 rounded-xl transition-all hover:brightness-110"
@@ -3348,9 +3335,14 @@ const EventDetails = () => {
                                                 </Link>
                                             );
                                         }
-                                        return null;
+
+                                        if (!cta) return null;
+                                        return (
+                                            <div className="flex flex-wrap items-center gap-2 w-full mt-3 mb-0">
+                                                {cta}
+                                            </div>
+                                        );
                                     })()}
-                                </div>
 
                                 {/* Quick Stats */}
                                 <div className="mt-2 rounded-2xl border border-white/10 bg-black/30 backdrop-blur-sm overflow-hidden flex divide-x divide-white/10">
