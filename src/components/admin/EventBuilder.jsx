@@ -261,6 +261,28 @@ const slugify = (value) =>
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)+/g, '');
 
+/**
+ * Returns a calendar.slug that is not already taken.
+ * Tries base, then base-YYYY (from startDate if provided), then base-2, base-3, …
+ */
+const ensureUniqueSlug = async (baseSlug, { excludeId = null, startDate = null } = {}) => {
+    const base = slugify(baseSlug) || `event-${Date.now()}`;
+    const year = startDate ? String(startDate).slice(0, 4) : null;
+    const candidates = [base];
+    if (year && /^\d{4}$/.test(year)) candidates.push(`${base}-${year}`);
+    for (let n = 2; n <= 30; n++) candidates.push(`${base}-${n}`);
+    candidates.push(`${base}-${Date.now()}`);
+
+    for (const candidate of candidates) {
+        let query = supabase.from('calendar').select('id').eq('slug', candidate).limit(1);
+        if (excludeId) query = query.neq('id', excludeId);
+        const { data, error } = await query.maybeSingle();
+        if (error) throw error;
+        if (!data) return candidate;
+    }
+    return `${base}-${Date.now()}`;
+};
+
 const formatEventDates = (start, end) => {
     if (!start) return '';
     const toLocal = (d) => {
@@ -1201,9 +1223,19 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             }
 
             if (editingEvent) {
+                // Keep existing slug on edit unless it's empty; if regenerating, stay unique
+                if (!payload.slug) {
+                    payload.slug = await ensureUniqueSlug(form.event_name, {
+                        excludeId: editingEvent.id,
+                        startDate: form.start_date,
+                    });
+                }
                 const { error } = await supabase.from('calendar').update(payload).eq('id', editingEvent.id);
                 if (error) throw error;
             } else {
+                payload.slug = await ensureUniqueSlug(payload.slug || form.event_name, {
+                    startDate: form.start_date,
+                });
                 const { data, error } = await supabase.from('calendar').insert([payload]).select('id').single();
                 if (error) throw error;
                 eventId = data.id;
