@@ -102,8 +102,10 @@ const RankingSlider = ({ title, playersData, onPlayerClick }) => {
   };
 
   const handleCardClick = (player) => {
+    // Pass the full rankings-list player (with nested playerRecord), not the DB
+    // record alone — RankingDetailsModal expects selectedPlayer.playerRecord.
     if (player.hasLocalProfile && player.playerRecord) {
-      onPlayerClick(player.playerRecord);
+      onPlayerClick(player);
     }
   };
 
@@ -834,9 +836,6 @@ const Rankings = () => {
     return data.map(item => {
       const playerRecord = profileMap[item.Name?.trim().toLowerCase()];
       const localImage = playerRecord?.image_url;
-      if (item.Name?.includes("Ashforth") || item.Name?.includes("Stillerman")) {
-        console.log(`[DEBUG] formatRankings: ${item.Name}, found: ${!!playerRecord}`);
-      }
 
       return {
         id: item.Participant?.Id || item.RankedinId,
@@ -1226,7 +1225,11 @@ const Rankings = () => {
         {selectedPlayer && (
           <RankingDetailsModal
             player={selectedPlayer}
-            playerRecord={selectedPlayer.playerRecord || { name: selectedPlayer.name, id: selectedPlayer.id }}
+            playerRecord={
+              selectedPlayer.playerRecord
+              || (Array.isArray(selectedPlayer.rankings) ? selectedPlayer : null)
+              || { name: selectedPlayer.name, id: selectedPlayer.id }
+            }
             selectedOrgId={selectedOrgId}
             categoryLabel={(ORG_CATEGORIES[selectedOrgId] || ORG_CATEGORIES[15809]).find(c => c.id === activeTab)?.label}
             onClose={() => setSelectedPlayer(null)}

@@ -22,11 +22,12 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
 
   if (!playerRecord) return null;
 
-  // ORG mapping
+  // ORG mapping (Rankings page historically used 11706 for Grand Tour; sync uses 16482)
   const orgLabels = {
     15809: 'SAPA',
     16317: 'Broll',
-    16482: 'SA Grand Tour'
+    11706: 'SA Grand',
+    16482: 'SA Grand',
   };
   const activeOrgLabel = orgLabels[selectedOrgId] || 'SAPA';
 
@@ -36,39 +37,50 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   // (e.g. "Men - Main") rather than blindly taking the first org match.
   let rankingData = null;
   if (playerRecord.rankings && Array.isArray(playerRecord.rankings)) {
-    const orgCandidates = playerRecord.rankings.filter(r => r.org?.toUpperCase().includes(activeOrgLabel.toUpperCase()));
+    const orgCandidates = playerRecord.rankings.filter((r) => {
+      const org = (r.org || '').toUpperCase();
+      if (!org) return false;
+      if (activeOrgLabel === 'SAPA') return org.includes('SAPA');
+      if (activeOrgLabel === 'Broll') return org.includes('BROLL');
+      if (activeOrgLabel === 'SA Grand') return org.includes('GRAND') || org.includes('SA GRAND');
+      return org.includes(activeOrgLabel.toUpperCase());
+    });
 
-    const genderKeywords = categoryLabel?.toUpperCase().includes('WOMEN') || categoryLabel?.toUpperCase().includes('LADIES')
-      ? ['WOMEN', 'LADIES', 'FEMALE']
-      : categoryLabel?.toUpperCase().includes('MEN')
-        ? ['MEN']
-        : null;
+    const label = (categoryLabel || '').toUpperCase();
+    const wantWomen = label.includes('WOMEN') || label.includes('LADIES');
+    const wantMen = !wantWomen && (label.includes('MEN') || label === '' || label.includes('MAIN') || label.includes('OVER'));
 
-    if (genderKeywords) {
-      // Best match: correct gender AND a "main"/open age group (not an age-restricted category)
-      rankingData = orgCandidates.find(r => {
-        const matchType = (r.match_type || '').toUpperCase();
-        const ageGroup = (r.age_group || '').toUpperCase();
-        const genderMatch = genderKeywords.some(k => matchType.includes(k));
-        const isMainAgeGroup = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
-        return genderMatch && isMainAgeGroup;
-      });
+    const blobOf = (r) => `${r.age_group || ''} ${r.match_type || ''} ${r.org || ''}`.toUpperCase();
+    const isWomenRow = (r) => /WOMEN|LADIES|FEMALE/.test(blobOf(r));
+    const isMenRow = (r) => !isWomenRow(r) && !/MIXED/.test(blobOf(r));
+    const isMainAgeGroup = (r) => {
+      const age = (r.age_group || '').toUpperCase();
+      return !age || age.includes('OPEN') || age.includes('MAIN');
+    };
+    const matchesCategoryAge = (r) => {
+      const age = (r.age_group || '').toUpperCase();
+      if (label.includes('OVER 35') || label.includes('MO35')) return age.includes('35');
+      if (label.includes('OVER 40') || label.includes('MO40')) return age.includes('40');
+      if (label.includes('OVER 45') || label.includes('MO45')) return age.includes('45');
+      if (label.includes('OVER 50') || label.includes('MO50')) return age.includes('50');
+      if (label.includes('OVER 55') || label.includes('MO55')) return age.includes('55');
+      // Default Main / Open tabs
+      return isMainAgeGroup(r);
+    };
 
-      // Relax: just the correct gender, any age group
-      if (!rankingData) {
-        rankingData = orgCandidates.find(r => genderKeywords.some(k => (r.match_type || '').toUpperCase().includes(k)));
-      }
-    }
+    const gendered = orgCandidates.filter((r) => (wantWomen ? isWomenRow(r) : isMenRow(r)));
+    const pool = gendered.length > 0 ? gendered : orgCandidates;
 
-    // Fallback: the org entry with the most tournaments counted (the main individual
-    // ranking almost always has the deepest results history vs a niche category)
-    if (!rankingData && orgCandidates.length > 0) {
-      rankingData = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
-    }
+    rankingData =
+      pool.find((r) => matchesCategoryAge(r) && isMainAgeGroup(r)) ||
+      pool.find((r) => matchesCategoryAge(r)) ||
+      pool.find((r) => isMainAgeGroup(r)) ||
+      [...pool].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0] ||
+      null;
   }
 
-  // Fallback to player object if rankingData is missing some fields
-  const displayRank = rankingData?.rank || player.rawRank;
+  // Fallback to live Rankings-list values when local rankings JSON is missing/corrupt
+  const displayRank = rankingData?.rank || player.rawRank || player.rank?.replace?.(/[^\d]/g, '');
   const displayPoints = rankingData?.points || player.points;
   const details = rankingData?.details || [];
 
@@ -136,10 +148,6 @@ const RankingDetailsModal = ({ player, playerRecord, onClose, selectedOrgId, cat
   // Sort details by points descending and slice for Best 8 if needed
   const sortedDetails = [...details].sort((a, b) => Number(b.points) - Number(a.points));
   const displayDetails = showBest8 ? sortedDetails.slice(0, 8) : sortedDetails;
-
-  console.log(`[DEBUG] RankingDetailsModal: player=${player.name}, selectedOrgId=${selectedOrgId}, activeOrgLabel=${activeOrgLabel}`);
-  console.log(`[DEBUG] orgCandidates count = ${playerRecord.rankings ? (playerRecord.rankings.filter(r => r.org?.toUpperCase().includes(activeOrgLabel.toUpperCase()))).length : 'NO RANKINGS'}`);
-  console.log(`[DEBUG] rankingData found = ${!!rankingData}, rank = ${rankingData?.rank}, details.length = ${details.length}`);
 
   const handleShare = async () => {
     try {

@@ -27,6 +27,78 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
     },
 });
 
+/** Rankedin age-group IDs for the official SAPA Main (Open) lists. */
+const SAPA_MEN_MAIN = 82;
+const SAPA_WOMEN_MAIN = 83;
+const SAPA_MAIN_AGE_GROUPS = new Set([SAPA_MEN_MAIN, SAPA_WOMEN_MAIN]);
+
+/**
+ * Only Main (or an explicitly preferred category) may write players.points /
+ * rank_label. Other age groups still sync rankedin_id + cache, but must not
+ * stomp the profile points shown on Players / EventDetails seeding.
+ *
+ * Women → Women-Main (83). Men → Men-Main (82).
+ */
+const shouldWriteFlatPoints = (rankingId, ageGroup, preferredRanking, rankingType) => {
+    const preferred = (preferredRanking || '').toLowerCase();
+
+    if (!preferred) {
+        // Default profile points = gendered SAPA Main only
+        if (rankingId !== 15809) return false;
+        if (rankingType === 4) return ageGroup === SAPA_WOMEN_MAIN; // Women
+        if (rankingType === 3) return ageGroup === SAPA_MEN_MAIN;   // Men
+        return SAPA_MAIN_AGE_GROUPS.has(ageGroup);
+    }
+
+    if (rankingId === 15809 && preferred.includes('sapa')) {
+        // Explicit Women-Main preference
+        if (preferred.includes('women-main') || preferred.includes('ladies') || preferred.includes('women')) {
+            if (preferred.includes('over')) {
+                // age-band preference handled below
+            } else {
+                return ageGroup === SAPA_WOMEN_MAIN;
+            }
+        }
+        // Explicit Men-Main preference
+        if (preferred.includes('men-main') || (preferred.includes('men') && !preferred.includes('women'))) {
+            if (!preferred.includes('over') && (preferred.includes('main') || preferred.includes('open') || !/over\s*\d/.test(preferred))) {
+                // If it's clearly men main/open or generic men sapa without age band
+                if (preferred.includes('men-main') || preferred.includes('main') || preferred.includes('open') || !/over\s*\d/.test(preferred)) {
+                    if (!/over\s*\d/.test(preferred)) return ageGroup === SAPA_MEN_MAIN;
+                }
+            }
+        }
+
+        const mentionsAgeBand = /over\s*\d|junior|u1|u2|mixed-main/.test(preferred);
+        if (!mentionsAgeBand) {
+            if (preferred.includes('women') || preferred.includes('ladies')) return ageGroup === SAPA_WOMEN_MAIN;
+            if (preferred.includes('men')) return ageGroup === SAPA_MEN_MAIN;
+            // rankingType from the sync loop is the safest gendered default
+            if (rankingType === 4) return ageGroup === SAPA_WOMEN_MAIN;
+            if (rankingType === 3) return ageGroup === SAPA_MEN_MAIN;
+            return SAPA_MAIN_AGE_GROUPS.has(ageGroup);
+        }
+
+        if (preferred.includes('mixed-main') || preferred.includes('mixed')) {
+            return ageGroup === 84;
+        }
+        if (preferred.includes('over 35') || preferred.includes('over35')) return ageGroup === 2;
+        if (preferred.includes('over 40') || preferred.includes('over40')) return ageGroup === 3 || ageGroup === 4;
+        if (preferred.includes('over 45') || preferred.includes('over45')) return ageGroup === 4 || ageGroup === 5;
+        if (preferred.includes('over 50') || preferred.includes('over50')) return ageGroup === 5;
+        if (preferred.includes('over 55') || preferred.includes('over55')) return ageGroup === 6;
+
+        if (rankingType === 4) return ageGroup === SAPA_WOMEN_MAIN;
+        if (rankingType === 3) return ageGroup === SAPA_MEN_MAIN;
+        return SAPA_MAIN_AGE_GROUPS.has(ageGroup);
+    }
+
+    if (rankingId === 16317 && preferred.includes('broll')) return true;
+    if (rankingId === 16482 && (preferred.includes('grand tour') || preferred.includes('sa grand'))) return true;
+
+    return false;
+};
+
 
 async function getValidAgeGroups(rankingId, type) {
     const validGroups = [];
@@ -129,27 +201,18 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
             }
 
             if (playerToUpdate) {
-                // Determine if we should update this player's main label and points
-                let shouldUpdateLabelAndPoints = false;
-                
-                if (!playerToUpdate.preferred_ranking) {
-                    // If no preferred ranking is set, we only update using the main SAPA Ranking (15809)
-                    shouldUpdateLabelAndPoints = (rankingId === 15809);
-                } else {
-                    const preferred = playerToUpdate.preferred_ranking.toLowerCase();
-                    if (rankingId === 15809 && preferred.includes('sapa')) {
-                        shouldUpdateLabelAndPoints = true;
-                    } else if (rankingId === 16317 && preferred.includes('broll')) {
-                        shouldUpdateLabelAndPoints = true;
-                    } else if (rankingId === 16482 && (preferred.includes('grand tour') || preferred.includes('sa grand'))) {
-                        shouldUpdateLabelAndPoints = true;
-                    }
-                }
+                const writeFlatPoints = shouldWriteFlatPoints(
+                    rankingId,
+                    ageGroup,
+                    playerToUpdate.preferred_ranking,
+                    type
+                );
 
-                if (!shouldUpdateLabelAndPoints) {
-                    // Update rankedin_id if missing, but skip rank/points since it isn't preferred
+                if (!writeFlatPoints) {
+                    // Keep Rankedin ID linked, but never overwrite Main profile points
+                    // with an age-group / secondary list.
                     if (!playerToUpdate.rankedin_id && rankedinId) {
-                         await supabase.from('players').update({ rankedin_id: rankedinId.toString() }).eq('id', playerToUpdate.id);
+                        await supabase.from('players').update({ rankedin_id: rankedinId.toString() }).eq('id', playerToUpdate.id);
                     }
                     skipCount++;
                     continue;
@@ -186,7 +249,17 @@ async function syncCategory(rankingId, type, ageGroup, categoryName) {
 
 
 async function run() {
-    console.log("Starting Rankedin Sync for all featured rankings and all categories...");
+    const mainOnly = process.argv.includes('--main-only');
+    console.log(mainOnly
+        ? 'Starting Rankedin Sync: SAPA Men-Main + Women-Main only…'
+        : 'Starting Rankedin Sync for all featured rankings and all categories…');
+
+    if (mainOnly) {
+        await syncCategory(15809, 3, 82, "SAPA Men's Main");
+        await syncCategory(15809, 4, 83, "SAPA Women's Main");
+        console.log('\nMain-only sync finished.');
+        return;
+    }
     
     const rankingsToSync = [
         { id: 15809, name: 'SAPA' },

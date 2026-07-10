@@ -549,7 +549,38 @@ const EventDetails = () => {
     // gender, relax to just the right gender, then fall back to whichever SAPA
     // entry has the deepest tournament history).
     const getMainCategoryPoints = useCallback((playerData, genderLabel) => {
-        return playerData?.points || 0;
+        if (!playerData) return 0;
+        const rankingsArr = playerData.rankings;
+        let matchPoints = 0;
+
+        if (Array.isArray(rankingsArr) && rankingsArr.length > 0) {
+            const orgCandidates = rankingsArr.filter((r) => r.org?.toUpperCase().includes('SAPA'));
+            if (orgCandidates.length > 0) {
+                const genderKeywords = genderLabel === 'women' ? ['WOMEN', 'LADIES', 'FEMALE'] : ['MEN'];
+
+                let match = orgCandidates.find((r) => {
+                    const matchType = (r.match_type || '').toUpperCase();
+                    const ageGroup = (r.age_group || '').toUpperCase();
+                    const genderMatch = genderKeywords.some((k) => matchType.includes(k));
+                    const isMain = !ageGroup || ageGroup.includes('OPEN') || ageGroup.includes('MAIN');
+                    return genderMatch && isMain;
+                });
+
+                if (!match) {
+                    match = orgCandidates.find((r) =>
+                        genderKeywords.some((k) => (r.match_type || '').toUpperCase().includes(k))
+                    );
+                }
+                if (!match) {
+                    match = [...orgCandidates].sort((a, b) => (b.details?.length || 0) - (a.details?.length || 0))[0];
+                }
+
+                if (match?.points) matchPoints = Number(match.points);
+            }
+        }
+
+        // Only fall back to the flat players.points column when no SAPA ranking entry exists.
+        return matchPoints > 0 ? matchPoints : (playerData.points || 0);
     }, []);
 
     // Seeds each manual-event team by combined SAPA Men/Women "Main" ranking points

@@ -225,8 +225,17 @@ async function scrapePlayer(browser, player) {
                 try {
                     const data = await response.json();
                     if (data && data.PlayerRankings && data.PlayerRankings.Payload) {
-                        rankingsApiResponse = data.PlayerRankings.Payload;
-                        console.log(`Intercepted ${rankingsApiResponse.length} rankings from API!`);
+                        // Unauthenticated Rankedin returns fake placeholder rows
+                        // (null RankingName, 100/200/300 pts). Never persist those.
+                        const payload = data.PlayerRankings.Payload.filter(
+                            (r) => r.RankingName && r.RankingId > 0
+                        );
+                        if (payload.length > 0) {
+                            rankingsApiResponse = payload;
+                            console.log(`Intercepted ${rankingsApiResponse.length} rankings from API!`);
+                        } else {
+                            console.warn('Ignoring placeholder PlayerRankingsAsync payload (not logged in or empty).');
+                        }
                     }
                 } catch (e) {
                     // Ignore preflight or non-json errors
@@ -337,15 +346,62 @@ async function scrapePlayer(browser, player) {
                 selectedRanking = rankings.find(r => `${r.org}|${r.age_group}|${r.match_type}` === player.preferred_ranking);
             }
 
-            // If no preferred ranking found (or not set), pick the best SAPA ranking
+            // Default: SAPA Men-Main / Women-Main from the Rankedin profile.
+            // Women always use Women-Main; men use Men-Main — never Mixed or age bands.
             if (!selectedRanking && sapaRankings.length > 0) {
-                // Sort by rank ascending (best rank first)
-                sapaRankings.sort((a, b) => {
-                    const rA = parseInt(a.rank) || 9999;
-                    const rB = parseInt(b.rank) || 9999;
-                    return rA - rB;
-                });
-                selectedRanking = sapaRankings[0];
+                const isMainAgeGroup = (r) => {
+                    const age = (r.age_group || '').toUpperCase();
+                    return !age || age.includes('OPEN') || age.includes('MAIN');
+                };
+                const isMixedRanking = (r) => {
+                    const age = (r.age_group || '').toUpperCase();
+                    const match = (r.match_type || '').toUpperCase();
+                    return age.includes('MIXED') || match.includes('MIXED');
+                };
+                const isWomenRanking = (r) => {
+                    const blob = `${r.age_group || ''} ${r.match_type || ''}`.toUpperCase();
+                    return blob.includes('WOMEN') || blob.includes('LADIES') || blob.includes('FEMALE');
+                };
+                const isMenRanking = (r) => {
+                    const blob = `${r.age_group || ''} ${r.match_type || ''}`.toUpperCase();
+                    return (blob.includes('MEN') || blob.includes('MALE')) && !isWomenRanking(r) && !isMixedRanking(r);
+                };
+
+                const genderBlob = [
+                    player.category,
+                    player.age_group,
+                    player.preferred_ranking,
+                    player.active_ranking_label,
+                ].filter(Boolean).join(' ').toUpperCase();
+                const isWoman =
+                    genderBlob.includes('WOMEN') ||
+                    genderBlob.includes('LADIES') ||
+                    genderBlob.includes('FEMALE') ||
+                    (sapaRankings.some(isWomenRanking) && !sapaRankings.some(isMenRanking));
+
+                const mainNonMixed = sapaRankings.filter((r) => isMainAgeGroup(r) && !isMixedRanking(r));
+                if (isWoman) {
+                    selectedRanking =
+                        mainNonMixed.find(isWomenRanking) ||
+                        sapaRankings.find((r) => isWomenRanking(r) && isMainAgeGroup(r)) ||
+                        sapaRankings.find(isWomenRanking) ||
+                        null;
+                } else {
+                    selectedRanking =
+                        mainNonMixed.find(isMenRanking) ||
+                        sapaRankings.find((r) => isMenRanking(r) && isMainAgeGroup(r)) ||
+                        sapaRankings.find(isMenRanking) ||
+                        null;
+                }
+
+                // Last resort: deepest tournament history, then best standing
+                if (!selectedRanking) {
+                    selectedRanking = [...sapaRankings].sort((a, b) => {
+                        const hist = (b.details?.length || 0) - (a.details?.length || 0);
+                        if (hist !== 0) return hist;
+                        return (parseInt(a.rank) || 9999) - (parseInt(b.rank) || 9999);
+                    })[0];
+                }
             }
 
             // If still no SAPA ranking, pick the first available one
@@ -379,17 +435,22 @@ async function scrapePlayer(browser, player) {
         const extractedRid = profileUrl.match(/(R\d+)/)?.[1] || player.rankedin_id || profileUrl.split('/').pop();
 
         const updateData = {
-            skill_rating: basics.skill ? parseFloat(basics.skill) : (player.name === "Clorinda Wessels" ? 19.85 : null),
             age: basics.age || null,
             match_form: basics.form || null,
-            rankings: rankings,
             rankedin_id: basics.rid || extractedRid,
             rankedin_profile_url: profileUrl,
-            // Add these
             rank_label: finalRank,
             points: finalPoints,
             active_ranking_label: finalLabel
         };
+        // Only overwrite skill when we actually scraped a value — never wipe a good rating.
+        if (basics.skill) {
+            updateData.skill_rating = parseFloat(basics.skill);
+        }
+        // Only overwrite rankings when we have real org-named rows (not placeholders).
+        if (rankings.length > 0 && rankings.some((r) => r.org && r.org.trim())) {
+            updateData.rankings = rankings;
+        }
 
         if (player.id) {
             const { error: updateError } = await supabase.from('players').update(updateData).eq('id', player.id);

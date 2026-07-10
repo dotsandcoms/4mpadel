@@ -1762,7 +1762,13 @@ const PlayerProfile = () => {
                                     {player.rankings && player.rankings.length > 0 && (
                                         <div className="flex gap-1.5 overflow-x-auto no-scrollbar scrollbar-none pb-1 -mx-2 px-2">
                                             {player.rankings.map((r, i) => {
-                                                const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
+                                                const isSelected = selectedRankingForBreakdown === r
+                                                    || (selectedRankingForBreakdown
+                                                        && selectedRankingForBreakdown.org === r.org
+                                                        && selectedRankingForBreakdown.age_group === r.age_group
+                                                        && selectedRankingForBreakdown.match_type === r.match_type
+                                                        && selectedRankingForBreakdown.rank === r.rank
+                                                        && selectedRankingForBreakdown.points === r.points);
                                                 return (
                                                     <button
                                                         key={i}
@@ -1772,7 +1778,7 @@ const PlayerProfile = () => {
                                                             : 'bg-white/[0.02] border-white/10 text-white/70 hover:text-white'
                                                             }`}
                                                     >
-                                                        {r.org} ({r.age_group || 'Open'})
+                                                        {r.org || 'SAPA'} ({r.age_group || 'Open'})
                                                     </button>
                                                 );
                                             })}
@@ -2322,7 +2328,16 @@ const PlayerProfile = () => {
                                                 <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Organizational Rankings</p>
                                                 <div className="space-y-2">
                                                     {player.rankings.map((r, i) => {
-                                                        const isPreferred = player.preferred_ranking === `${r.org}|${r.age_group}|${r.match_type}` || (i === 0 && !player.preferred_ranking);
+                                                        const rankingKey = `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}|${r.rank || ''}|${r.points || ''}`;
+                                                        const preferredKey = player.preferred_ranking || '';
+                                                        const preferredMatches = preferredKey && preferredKey === `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}`;
+                                                        // Only one card can be preferred — if keys collide (bad/empty org data), first match wins
+                                                        const firstPreferredIdx = (player.rankings || []).findIndex(
+                                                            (x) => preferredKey && preferredKey === `${x.org || ''}|${x.age_group || ''}|${x.match_type || ''}`
+                                                        );
+                                                        const isPreferred = preferredMatches
+                                                            ? i === firstPreferredIdx
+                                                            : (i === 0 && !player.preferred_ranking);
                                                         const isBroll = r.org?.toLowerCase().includes('broll');
 
                                                         return (
@@ -2780,7 +2795,16 @@ const PlayerProfile = () => {
                                                         <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Organizational Rankings</p>
                                                         <div className="space-y-2">
                                                             {player.rankings.map((r, i) => {
-                                                                const isPreferred = player.preferred_ranking === `${r.org}|${r.age_group}|${r.match_type}` || (i === 0 && !player.preferred_ranking);
+                                                                const rankingKey = `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}|${r.rank || ''}|${r.points || ''}`;
+                                                        const preferredKey = player.preferred_ranking || '';
+                                                        const preferredMatches = preferredKey && preferredKey === `${r.org || ''}|${r.age_group || ''}|${r.match_type || ''}`;
+                                                        // Only one card can be preferred — if keys collide (bad/empty org data), first match wins
+                                                        const firstPreferredIdx = (player.rankings || []).findIndex(
+                                                            (x) => preferredKey && preferredKey === `${x.org || ''}|${x.age_group || ''}|${x.match_type || ''}`
+                                                        );
+                                                        const isPreferred = preferredMatches
+                                                            ? i === firstPreferredIdx
+                                                            : (i === 0 && !player.preferred_ranking);
                                                                 const isBroll = r.org?.toLowerCase().includes('broll');
 
                                                                 return (
@@ -3605,7 +3629,13 @@ const PlayerProfile = () => {
                                                     {player.rankings && player.rankings.length > 0 && (
                                                         <div className="relative z-10 flex flex-wrap gap-1.5 bg-white/[0.03] backdrop-blur-md p-1 rounded-xl w-fit border border-white/10">
                                                             {player.rankings.map((r, i) => {
-                                                                const isSelected = selectedRankingForBreakdown?.org === r.org && selectedRankingForBreakdown?.age_group === r.age_group && selectedRankingForBreakdown?.match_type === r.match_type;
+                                                                const isSelected = selectedRankingForBreakdown === r
+                                                                    || (selectedRankingForBreakdown
+                                                                        && selectedRankingForBreakdown.org === r.org
+                                                                        && selectedRankingForBreakdown.age_group === r.age_group
+                                                                        && selectedRankingForBreakdown.match_type === r.match_type
+                                                                        && selectedRankingForBreakdown.rank === r.rank
+                                                                        && selectedRankingForBreakdown.points === r.points);
                                                                 return (
                                                                     <button
                                                                         key={i}

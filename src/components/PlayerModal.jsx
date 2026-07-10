@@ -243,9 +243,9 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/30 to-black/30" />
 
                                 {/* Skill Rating Badge Overlay */}
-                                <motion.div layoutId={`level-${player.id}`} className="absolute top-6 left-6 bg-padel-green text-black font-black w-14 h-14 rounded-2xl flex flex-col items-center justify-center border-4 border-[#0a0f1d] shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
+                                <motion.div layoutId={`level-${player.id}`} className="absolute top-6 left-6 bg-padel-green text-black font-black min-w-14 h-14 px-1.5 rounded-2xl flex flex-col items-center justify-center border-4 border-[#0a0f1d] shadow-2xl z-20 hover:scale-105 transition-transform duration-300">
                                     <span className="text-[9px] uppercase font-black opacity-60">SKILL</span>
-                                    <span className="text-xl leading-none">{player.skill_rating ? Number(player.skill_rating).toFixed(1) : player.skill_rating || '-'}</span>
+                                    <span className="text-lg leading-none tabular-nums">{player.skill_rating != null && player.skill_rating !== '' ? Number(player.skill_rating).toFixed(2) : '-'}</span>
                                 </motion.div>
 
                                 {/* Rankedin ID Overlay */}
@@ -652,9 +652,9 @@ const PlayerModal = ({ player, onClose, userEmail, hideSapaRankings = false }) =
                         <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A] via-transparent to-black/30" />
 
                         {/* Badges */}
-                        <div className="absolute top-10 left-10 bg-padel-green text-black font-black w-24 h-24 rounded-3xl flex flex-col items-center justify-center border-[6px] border-black shadow-2xl">
+                        <div className="absolute top-10 left-10 bg-padel-green text-black font-black min-w-24 h-24 px-2 rounded-3xl flex flex-col items-center justify-center border-[6px] border-black shadow-2xl">
                             <span className="text-sm uppercase font-extrabold opacity-60">SKILL</span>
-                            <span className="text-4xl leading-none">{player.skill_rating ? Number(player.skill_rating).toFixed(1) : player.skill_rating || '-'}</span>
+                            <span className="text-3xl leading-none tabular-nums">{player.skill_rating != null && player.skill_rating !== '' ? Number(player.skill_rating).toFixed(2) : '-'}</span>
                         </div>
 
                         <div className="absolute top-10 right-10 bg-white/10 backdrop-blur-xl border border-white/20 text-white font-bold px-8 h-20 rounded-3xl flex flex-col items-center justify-center shadow-2xl">
