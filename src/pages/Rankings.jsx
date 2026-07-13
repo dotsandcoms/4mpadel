@@ -6,7 +6,7 @@ import { supabase } from '../supabaseClient';
 import RankingDetailsModal from '../components/RankingDetailsModal';
 import sapaLogo from '../assets/sapa-logo.svg';
 import brollLogo from '../assets/BrollLogo.png';
-import heroBg from '../assets/herobg.jpeg';
+import rankingsHero from '../assets/rankings-hero.png';
 
 const ORG_LABELS = {
   15809: 'SAPA',
@@ -964,48 +964,55 @@ const Rankings = () => {
   }, [filteredData, currentPage]);
 
   return (
-    <div className="relative bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black">
+    <div className="relative bg-[#0F172A] min-h-screen text-white font-sans selection:bg-padel-green selection:text-black pt-[53px] md:pt-0">
       {/* Background elements */}
       <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-padel-green/10 blur-[150px] rounded-full" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-500/10 blur-[150px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-padel-green/5 blur-[150px] rounded-full" />
         <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
       </div>
 
-      {/* Photo panel — full-bleed edge-to-edge, same treatment as the Home hero (sits behind the fixed navbar at the very top-right of the viewport) */}
-      <div className="absolute top-0 right-0 z-[1] w-[34%] sm:w-[36%] lg:w-[38%] xl:w-[40%] h-[380px] sm:h-[440px] md:h-[500px] lg:h-[560px] overflow-hidden pointer-events-none">
-        <img
-          src={heroBg}
-          alt=""
-          className="w-full h-full object-cover saturate-[0.45] contrast-[1.08]"
-        />
-        <div className="absolute inset-0 bg-[#0B1730]/35 mix-blend-multiply" />
-        <div className="absolute inset-0 bg-[#0F172A]/10" />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0F172A] from-0% via-[#0F172A]/40 via-25% to-transparent to-65%" />
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#0F172A]" />
-      </div>
-
       <main className="relative z-10 pb-2 md:pb-6 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
-        {/* Unified Header */}
-        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12">
-          <div className="relative z-10 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
-            <Trophy className="w-3 h-3" />
-            <span>Player Rankings</span>
+        {/* Hero — full-bleed B&W photo with title overlaid */}
+        <section className="relative z-20 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">
+            <div className="absolute inset-0">
+              <img
+                src={rankingsHero}
+                alt=""
+                className="w-full h-full object-cover object-[72%_top] md:object-[70%_top] md:origin-top grayscale contrast-[1.35] brightness-[1.1] animate-hero-zoom md:animate-hero-zoom-out"
+              />
+            </div>
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%)' }} />
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black via-black/55 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-[#0F172A]" />
           </div>
 
-          <div className="relative z-10 overflow-hidden mb-1">
-            <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
-              PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">RANKINGS</span>
-            </h1>
-          </div>
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-3 max-w-fit">
+              <Trophy className="w-3 h-3" />
+              <span>Player Rankings</span>
+            </div>
 
-          <p className="relative z-10 text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-            <strong className="text-white font-medium">Official rankings list. Compete. Climb. Be the best.</strong>
-          </p>
+            <div className="overflow-hidden">
+              <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white leading-[1.05] md:leading-[0.95] tracking-tighter font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)]">
+                PLAYER
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">RANKINGS</span>
+              </h1>
+            </div>
+
+            <p className="text-gray-200 text-sm md:text-base lg:text-lg max-w-md leading-snug font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)] mt-1.5">
+              <strong className="text-white font-medium">
+                Official rankings list. <br className="sm:hidden" />
+                Compete. Climb. Be the best.
+              </strong>
+            </p>
+          </div>
         </section>
 
         {/* Search & Command Deck */}
-        <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-4 md:mb-2">
+        <section className="w-full pt-0 md:pt-0 mt-0 relative z-20 mb-4 md:mb-2">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
