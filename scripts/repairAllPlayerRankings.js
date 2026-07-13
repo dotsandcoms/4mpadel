@@ -10,6 +10,7 @@
  *   node scripts/repairAllPlayerRankings.js --limit 50
  */
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import * as dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -17,9 +18,12 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
+// Node 20 has no native WebSocket global that @supabase/realtime-js accepts,
+// so it must be handed the `ws` package explicitly or client init throws.
 const supabase = createClient(
     process.env.VITE_SUPABASE_URL,
-    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
+    process.env.VITE_SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY,
+    { realtime: { transport: WebSocket } }
 );
 
 const LISTS = [

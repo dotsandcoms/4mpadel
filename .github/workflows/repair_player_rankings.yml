@@ -23,7 +23,7 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: npm install @supabase/supabase-js dotenv --no-save
+        run: npm install @supabase/supabase-js dotenv ws --no-save
 
       - name: Run rankings + points repair for all approved players
         env:
