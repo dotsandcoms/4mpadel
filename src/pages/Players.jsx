@@ -179,6 +179,8 @@ const Players = () => {
               />
             </div>
             <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
+            {/* Left-side black wash so hero copy stays readable over the player photo */}
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black via-black/70 to-transparent" />
             <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#060a14]/40 to-[#060a14]" />
           </div>
 
