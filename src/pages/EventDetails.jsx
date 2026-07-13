@@ -3288,6 +3288,20 @@ const EventDetails = () => {
                                     variant="hero"
                                     dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
                                 />
+
+                                {(event.venue || event.city || event.address) && (
+                                    <div className="flex items-start gap-1.5 text-white/90 text-sm font-normal mt-1 min-w-0">
+                                        <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0 mt-0.5" />
+                                        <span className="leading-snug">
+                                            {[
+                                                event.venue,
+                                                event.city && !(event.venue || '').toLowerCase().includes((event.city || '').toLowerCase())
+                                                    ? event.city
+                                                    : null,
+                                            ].filter(Boolean).join(', ') || event.address}
+                                        </span>
+                                    </div>
+                                )}
                                 </div>
 
                                 {(() => {
@@ -3562,7 +3576,6 @@ const EventDetails = () => {
                                                                 icon: Trophy,
                                                                 valueColor: theme.accentText,
                                                             }] : []),
-                                                            ...(event.partner_requirement ? [{ label: 'Partner', value: event.partner_requirement === 'Optional' ? 'Optional (Free Agent)' : 'Required (Doubles)', icon: User }] : []),
                                                             ...(event.back_draw_options ? [{ label: 'Back Draw', value: event.back_draw_options, icon: Award }] : []),
                                                             ...(event.max_teams_capacity ? [{ label: 'Team Capacity', value: `${event.max_teams_capacity} teams`, icon: User }] : []),
                                                             ...( (() => {
@@ -3792,6 +3805,43 @@ const EventDetails = () => {
                                         )}
                                     </div>
                                     <div className="w-full space-y-6">
+                                        {/* Tournament Details — full width under Event Information / Top Seeds */}
+                                        {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
+                                            <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
+                                                <div className="divide-y divide-gray-100">
+                                                    {[
+                                                        ['Courts', event.courts],
+                                                        ['Balls', event.balls],
+                                                        ['Draw Released', event.draw_released],
+                                                        ['Cut-off Times', event.cut_off_times],
+                                                        ['Tournament Director', event.tournament_director],
+                                                        ['Referees', event.referees],
+                                                    ].filter(([, v]) => v).map(([label, value]) => {
+                                                        const text = String(value);
+                                                        const isHtml = /<[a-z][\s\S]*>/i.test(text);
+                                                        return (
+                                                            <div
+                                                                key={label}
+                                                                className={isHtml
+                                                                    ? 'flex flex-col gap-2 py-3 text-sm'
+                                                                    : 'flex items-start justify-between gap-4 py-2 text-sm'}
+                                                            >
+                                                                <span className="text-slate-500 font-medium">{label}</span>
+                                                                {isHtml ? (
+                                                                    <div
+                                                                        className="rich-text text-slate-700 leading-snug text-xs font-normal"
+                                                                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(text) }}
+                                                                    />
+                                                                ) : (
+                                                                    <span className="text-[#0F172A] font-semibold text-right">{text}</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </InfoSection>
+                                        )}
+
                                         {/* Event Info */}
                                         <div className="space-y-5">
 
@@ -3835,12 +3885,26 @@ const EventDetails = () => {
                                             {(event.contact_details || event.organizer_phone || event.organizer_email) && (
                                                 <InfoSection title="Contact" icon={Phone} accent={theme.fill}>
                                                     <div className="space-y-2 text-sm">
-                                                        {event.contact_details && <p className="text-slate-600 whitespace-pre-wrap">{event.contact_details}</p>}
+                                                        {event.contact_details && <p className="text-slate-700 whitespace-pre-wrap">{event.contact_details}</p>}
                                                         {event.organizer_phone && (
-                                                            <a href={`tel:${event.organizer_phone}`} className="flex items-center gap-2 text-[#0F172A] font-semibold"><Phone className="w-4 h-4" /> {event.organizer_phone}</a>
+                                                            <a
+                                                                href={`tel:${event.organizer_phone}`}
+                                                                className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
+                                                                style={{ color: '#1e293b' }}
+                                                            >
+                                                                <Phone className="w-4 h-4 shrink-0 text-slate-500" />
+                                                                {event.organizer_phone}
+                                                            </a>
                                                         )}
                                                         {event.organizer_email && (
-                                                            <a href={`mailto:${event.organizer_email}`} className="flex items-center gap-2 text-[#0F172A] font-semibold"><Mail className="w-4 h-4" /> {event.organizer_email}</a>
+                                                            <a
+                                                                href={`mailto:${event.organizer_email}`}
+                                                                className="flex items-center gap-2 font-semibold !text-slate-800 hover:!text-black"
+                                                                style={{ color: '#1e293b' }}
+                                                            >
+                                                                <Mail className="w-4 h-4 shrink-0 text-slate-500" />
+                                                                {event.organizer_email}
+                                                            </a>
                                                         )}
                                                     </div>
                                                 </InfoSection>
@@ -3985,27 +4049,6 @@ const EventDetails = () => {
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
-                                            )}
-
-                                            {/* Tournament Details */}
-                                            {(event.courts || event.balls || event.draw_released || event.cut_off_times || event.tournament_director || event.referees) && (
-                                                <InfoSection title="Tournament Details" icon={Layout} accent={theme.fill}>
-                                                    <div className="divide-y divide-gray-100">
-                                                        {[
-                                                            ['Courts', event.courts],
-                                                            ['Balls', event.balls],
-                                                            ['Draw Released', event.draw_released],
-                                                            ['Cut-off Times', event.cut_off_times],
-                                                            ['Tournament Director', event.tournament_director],
-                                                            ['Referees', event.referees],
-                                                        ].filter(([, v]) => v).map(([label, value]) => (
-                                                            <div key={label} className="flex items-start justify-between gap-4 py-2 text-sm">
-                                                                <span className="text-slate-500 font-medium">{label}</span>
-                                                                <span className="text-[#0F172A] font-semibold text-right">{value}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </InfoSection>
                                             )}
 
                                             {/* Weather Forecast */}
