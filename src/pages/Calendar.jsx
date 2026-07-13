@@ -9,6 +9,7 @@ import { useRankedin } from '../hooks/useRankedin';
 
 import { GitBranch, Map } from 'lucide-react';
 import featuredBg from '../assets/featuredbg.jpeg';
+import calBg from '../assets/calbg-hero.png';
 
 const extractRankedinId = (url) => {
     if (!url) return null;
@@ -846,32 +847,51 @@ const Calendar = () => {
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03]" />
             </div>
 
-            <main className="relative z-10 pb-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
-                {/* Unified Header */}
-                <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-8">
-                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-4 max-w-fit">
-                        <CalendarIcon className="w-3 h-3" />
-                        <span>Events Schedule</span>
+            {/* This page now manages its own nav clearance (poster hero bleeds under the
+                fixed navbar), so it's opted out of the global site-wide mobile pt-20 in
+                App.jsx. This local value is that same amount, reduced by a third. */}
+            <main className="relative z-10 pb-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-[53px] md:pt-0">
+                {/* Unified Header — same pattern as the EventDetails hero: an absolutely
+                    positioned photo (sized in vw, capped by max/min-height) sits behind this
+                    whole block, and the title/paragraph/search render in normal flow on top of
+                    it (relative z-10). The photo only covers the top portion of the block; the
+                    filter tabs and event list below continue on the plain page background. */}
+                <section className="relative w-full -mx-4 xl:-mx-8 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+                    {/* Full-bleed photo — breaks out of main's max-width/padding to span the viewport.
+                        Desktop is taller / less aggressive crop so more of the photo stays visible. */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">
+                        {/* Wrapper: mobile nudge left for hand/light; desktop no extra scale so
+                            the photo reads more zoomed-out. animate-hero-zoom owns img transform. */}
+                        <div className="absolute inset-0 translate-x-[-4%] md:translate-x-0">
+                            <img
+                                src={calBg}
+                                alt=""
+                                className="w-full h-full object-cover object-[55%_top] md:object-[50%_top] md:origin-top grayscale contrast-[1.35] brightness-[1.12] animate-hero-zoom md:animate-hero-zoom-out"
+                            />
+                        </div>
+                        {/* Soft vignette pulling focus to the centre */}
+                        <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
+                        {/* Gradient overlay for text readability, fading into page colour */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#080C17]/40 to-[#080C17]" />
                     </div>
 
-                    <div className="overflow-hidden mb-1">
-                        <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
-                            CALENDAR
-                        </h1>
+                    <div className="relative z-10 px-5 sm:px-0">
+                        <div className="overflow-hidden">
+                            <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white leading-[1.1] md:leading-[0.95] tracking-tighter font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)]">
+                                CALENDAR
+                            </h1>
+                        </div>
+                        <p className="text-gray-200 text-sm md:text-base lg:text-lg max-w-md leading-snug font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)] mt-0.5">
+                            <strong className="text-white font-medium">Find and explore padel <br className="sm:hidden" /> events across South Africa.</strong>
+                        </p>
                     </div>
 
-                    <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-                        <strong className="text-white font-medium">Find and explore padel events across South Africa.</strong>
-                    </p>
-                </section>
-
-                {/* Search & Command Deck */}
-                <section className="w-full pt-0 md:pt-0 mt-0 md:-mt-8 relative z-20 mb-6 md:mb-8">
+                    {/* Search & Command Deck */}
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.4 }}
-                        className="flex gap-3 items-center max-w-4xl mx-auto px-4 sm:px-0"
+                        className="relative z-10 flex gap-1.5 md:gap-0 items-center max-w-4xl mx-auto px-5 sm:px-0 mt-5 md:mt-6"
                     >
                         {/* Search Input Container */}
                         <div className="relative flex-1 bg-[#121620] border border-white/5 rounded-full shadow-lg">
@@ -1064,6 +1084,10 @@ const Calendar = () => {
                             ...(userProfile?.rankedin_id ? [{ id: 'my-calendar', label: 'My Calendar', icon: User }] : [])
                         ].map((tab) => {
                             const Icon = tab.icon;
+                            // Trophy tabs (Major/Super Gold/Gold/Silver/Bronze) pick up their
+                            // own SAPA status colour instead of a flat gray, so the filter row
+                            // visually matches the tier colours used on the event cards.
+                            const tierIconColor = tab.icon === Trophy ? getStatusColors(tab.id).text : 'text-gray-400';
                             return (
                                 <button
                                     key={tab.id}
@@ -1076,7 +1100,7 @@ const Calendar = () => {
                                         : 'bg-transparent text-gray-300 border-white/10 hover:border-white/20 hover:text-white'
                                         }`}
                                 >
-                                    <Icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-black' : 'text-gray-400'}`} />
+                                    <Icon className={`w-3.5 h-3.5 ${activeTab === tab.id ? 'text-black' : tierIconColor}`} />
                                     <span className="relative z-10">{tab.label}</span>
                                 </button>
                             );
