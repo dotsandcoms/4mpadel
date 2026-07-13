@@ -19,10 +19,15 @@ const UpcomingEventsWidget = ({ session }) => {
             return;
         }
         const fetchPlayer = async () => {
+            const email = session.user.email;
+            if (!email) {
+                setPlayer(null);
+                return;
+            }
             const { data } = await supabase
                 .from('players')
                 .select('id, name, rankedin_id, email')
-                .eq('auth_user_id', session.user.id)
+                .ilike('email', email)
                 .maybeSingle();
             setPlayer(data || null);
         };
