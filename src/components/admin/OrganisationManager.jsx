@@ -801,7 +801,7 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
         'referees', 'sanctioning_details', 'rules_regs', 'withdrawal_substitution',
         'cut_off_times', 'draw_released', 'contact_details', 'organizer_phone',
         'organizer_email', 'organizer_website', 'custom_image_url', 'sponsor_logos',
-        'registration_closes_at', 'registration_opens_at', 'event_dates', 'golden_point', 'is_league',
+        'registration_closes_at', 'registration_opens_at', 'event_dates', 'golden_point', 'scoring_point', 'is_league',
         'max_teams_capacity', 'partner_requirement', 'back_draw_options', 'event_co_admins',
         'allow_payments', 'allow_temporary_license', 'license_required_default', 'entry_fee_notes',
         'indoor_outdoor', 'courts_count'
@@ -2025,9 +2025,15 @@ const OrganisationManager = ({ permissions, initialView = 'platform', onViewChan
                                                 <span className="text-white font-bold">{selectedEventDetails.max_teams_capacity || 16} Teams</span>
                                             </div>
                                             <div className="flex justify-between text-xs">
-                                                <span className="text-gray-500">Sudden Death Golden Point:</span>
-                                                <span className={`font-bold ${selectedEventDetails.golden_point ? 'text-padel-green' : 'text-gray-400'}`}>
-                                                    {selectedEventDetails.golden_point ? 'Enabled ✓' : 'Disabled'}
+                                                <span className="text-gray-500">Deciding Point:</span>
+                                                <span className="font-bold text-padel-green">
+                                                    {{
+                                                        golden: 'Golden Point',
+                                                        silver: 'Silver Point',
+                                                        star: 'Star Point',
+                                                        advantage: 'Advantage',
+                                                    }[selectedEventDetails.scoring_point]
+                                                        || (selectedEventDetails.golden_point === false ? 'Advantage' : 'Golden Point')}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between text-xs border-t border-white/5 pt-2 mt-1">

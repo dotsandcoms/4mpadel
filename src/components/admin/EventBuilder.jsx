@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 import {
     X, Save, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Plus, Trash2, UploadCloud, Loader2,
     Info, Layers, FileText, ImageIcon, Check, Eye, Copy, Pencil, ClipboardList, Shield, AlertTriangle,
-    Bold, Italic, Underline, List, ListOrdered, Heading
+    Bold, Italic, Underline, List, ListOrdered, Heading, UserPlus
 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useClubs } from '../../hooks/useClubs';
@@ -20,6 +20,21 @@ const STANDARD_DIVISIONS = [
 const FORMATS = ['TBC','Knockout', 'Groups', 'Groups + Knockout', 'Round Robin', 'Americano', 'Mexicano'];
 const SAPA_STATUSES = ['None', 'Bronze', 'Silver', 'Gold', 'Super Gold', 'Major'];
 const SAPA_WINNER_POINTS = { None: '', Bronze: '300', Silver: '500', Gold: '1000', 'Super Gold': '1500', Major: '2600' };
+const SCORING_POINTS = [
+    { value: 'golden', label: 'Golden Point' },
+    { value: 'silver', label: 'Silver Point' },
+    { value: 'star', label: 'Star Point' },
+    { value: 'advantage', label: 'Advantage (no deciding point)' },
+];
+const scoringPointLabel = (value) =>
+    SCORING_POINTS.find((o) => o.value === value)?.label || 'Golden Point';
+const resolveScoringPoint = (source) => {
+    if (source?.scoring_point && SCORING_POINTS.some((o) => o.value === source.scoring_point)) {
+        return source.scoring_point;
+    }
+    if (source?.golden_point === false) return 'advantage';
+    return 'golden';
+};
 const sapaBadgeText = (status) => {
     const points = SAPA_WINNER_POINTS[status];
     if (!status || status === 'None' || !points) return '';
@@ -111,6 +126,213 @@ const inputClass = "w-full bg-black/40 border border-white/10 rounded-lg px-4 py
 const labelClass = "block text-xs font-bold text-gray-400 mb-1 uppercase tracking-wide";
 const menuClass = "absolute z-30 left-0 right-0 mt-1 bg-[#1E293B] border border-white/10 rounded-lg max-h-52 overflow-y-auto shadow-xl custom-scrollbar";
 const menuItemClass = "w-full text-left px-4 py-2.5 text-sm text-white hover:bg-padel-green hover:text-black transition-colors";
+
+const parseCoAdminEmails = (value) =>
+    String(value || '')
+        .split(/[,;\n]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
+
+const looksLikeEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+/** Chip + player type-ahead for event_co_admins (stored as comma-separated emails). */
+const CoAdminsPicker = ({ value, onChange }) => {
+    const emails = useMemo(() => parseCoAdminEmails(value), [value]);
+    const [query, setQuery] = useState('');
+    const [results, setResults] = useState([]);
+    const [open, setOpen] = useState(false);
+    const [searching, setSearching] = useState(false);
+    const wrapRef = useRef(null);
+    const selectedRef = useRef(false);
+
+    const setEmails = (next) => {
+        const unique = [];
+        const seen = new Set();
+        for (const email of next) {
+            const key = normalizeEmail(email);
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            unique.push(email.trim());
+        }
+        onChange(unique.join(', '));
+    };
+
+    const addEmail = (email) => {
+        const cleaned = String(email || '').trim();
+        if (!cleaned) return;
+        if (emails.some((e) => normalizeEmail(e) === normalizeEmail(cleaned))) {
+            toast.message('Already added as co-admin');
+            return;
+        }
+        setEmails([...emails, cleaned]);
+        setQuery('');
+        setResults([]);
+        setOpen(false);
+    };
+
+    const removeEmail = (email) => {
+        setEmails(emails.filter((e) => normalizeEmail(e) !== normalizeEmail(email)));
+    };
+
+    useEffect(() => {
+        if (selectedRef.current) {
+            selectedRef.current = false;
+            return undefined;
+        }
+        const q = query.trim();
+        if (q.length < 2) {
+            setResults([]);
+            setSearching(false);
+            return undefined;
+        }
+        const timer = setTimeout(async () => {
+            setSearching(true);
+            try {
+                const safe = q.replace(/[%_,]/g, ' ').trim();
+                const { data, error } = await supabase
+                    .from('players')
+                    .select('id, name, email, image_url, home_club')
+                    .or(`name.ilike.%${safe}%,email.ilike.%${safe}%`)
+                    .not('email', 'is', null)
+                    .neq('email', '')
+                    .eq('approved', true)
+                    .order('name')
+                    .limit(8);
+                if (error) throw error;
+                const existing = new Set(emails.map(normalizeEmail));
+                setResults((data || []).filter((p) => p.email && !existing.has(normalizeEmail(p.email))));
+                setOpen(true);
+            } catch (err) {
+                console.warn('Co-admin player search failed:', err);
+                setResults([]);
+            } finally {
+                setSearching(false);
+            }
+        }, 280);
+        return () => clearTimeout(timer);
+    }, [query, emails]);
+
+    useEffect(() => {
+        const onDown = (e) => {
+            if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false);
+        };
+        document.addEventListener('mousedown', onDown);
+        return () => document.removeEventListener('mousedown', onDown);
+    }, []);
+
+    const commitTyped = () => {
+        const q = query.trim();
+        if (!q) return;
+        if (looksLikeEmail(q)) {
+            addEmail(q);
+            return;
+        }
+        if (results.length === 1 && results[0].email) {
+            selectedRef.current = true;
+            addEmail(results[0].email);
+        }
+    };
+
+    return (
+        <div className="space-y-2">
+            {emails.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {emails.map((email) => (
+                        <span
+                            key={normalizeEmail(email)}
+                            className="inline-flex items-center gap-1.5 bg-padel-green/15 border border-padel-green/30 text-padel-green text-xs font-semibold pl-2.5 pr-1.5 py-1 rounded-full"
+                        >
+                            {email}
+                            <button
+                                type="button"
+                                onClick={() => removeEmail(email)}
+                                className="p-0.5 rounded-full hover:bg-padel-green/20 text-padel-green"
+                                aria-label={`Remove ${email}`}
+                            >
+                                <X size={12} />
+                            </button>
+                        </span>
+                    ))}
+                </div>
+            )}
+            <div className="relative" ref={wrapRef}>
+                <div className="relative">
+                    <UserPlus size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+                    <input
+                        type="text"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        onFocus={() => { if (results.length) setOpen(true); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ',') {
+                                e.preventDefault();
+                                commitTyped();
+                            } else if (e.key === 'Backspace' && !query && emails.length) {
+                                removeEmail(emails[emails.length - 1]);
+                            }
+                        }}
+                        placeholder="Search players by name or email…"
+                        className={`${inputClass} pl-10`}
+                        autoComplete="off"
+                    />
+                    {searching && (
+                        <Loader2 size={16} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+                    )}
+                </div>
+                {open && (results.length > 0 || (query.trim().length >= 2 && !searching)) && (
+                    <div className={menuClass}>
+                        {results.length === 0 ? (
+                            <div className="px-4 py-3 text-sm text-gray-400">
+                                {looksLikeEmail(query)
+                                    ? (
+                                        <button
+                                            type="button"
+                                            className={menuItemClass}
+                                            onClick={() => addEmail(query.trim())}
+                                        >
+                                            Add email “{query.trim()}”
+                                        </button>
+                                    )
+                                    : 'No matching players — type a full email and press Enter'}
+                            </div>
+                        ) : (
+                            results.map((p) => (
+                                <button
+                                    key={p.id}
+                                    type="button"
+                                    className={`${menuItemClass} flex items-center gap-3`}
+                                    onClick={() => {
+                                        selectedRef.current = true;
+                                        addEmail(p.email);
+                                    }}
+                                >
+                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-white/10 shrink-0 flex items-center justify-center">
+                                        {p.image_url ? (
+                                            <img src={p.image_url} alt="" className="w-full h-full object-cover" />
+                                        ) : (
+                                            <span className="text-[10px] font-bold text-gray-400">
+                                                {(p.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="min-w-0 text-left">
+                                        <p className="font-semibold truncate">{p.name}</p>
+                                        <p className="text-[11px] opacity-70 truncate">{p.email}{p.home_club ? ` · ${p.home_club}` : ''}</p>
+                                    </div>
+                                </button>
+                            ))
+                        )}
+                    </div>
+                )}
+            </div>
+            <p className="text-[11px] text-gray-500">
+                Pick players from the database, or type any email and press Enter.
+            </p>
+        </div>
+    );
+};
 
 // Styled dropdown (matches the Venue / Club dropdown) for fixed option lists.
 const SelectMenu = ({ value, onChange, options, placeholder = 'Select...' }) => {
@@ -239,7 +461,7 @@ const RichTextEditor = ({ value, onChange, placeholder = 'Type here...', minHeig
     );
 };
 
-const emptyDivision = (licenseRequired = false) => ({
+const emptyDivision = (licenseRequired = false, scoringPoint = 'golden') => ({
     _key: Math.random().toString(36).slice(2),
     id: null,
     name: '',
@@ -247,6 +469,7 @@ const emptyDivision = (licenseRequired = false) => ({
     format: 'Knockout',
     entries_close_at: '',
     license_required: !!licenseRequired,
+    scoring_point: scoringPoint || 'golden',
     age_category: '',
     gender: '',
     suggested_level: '',
@@ -404,6 +627,7 @@ const blankForm = {
     entry_fee_notes: '',
     // format & capacity
     golden_point: true,
+    scoring_point: 'golden',
     is_league: false,
     max_teams_capacity: '',
     partner_requirement: 'Required',
@@ -694,6 +918,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         format: d.format || 'Knockout',
         entries_close_at: toLocalInput(d.entries_close_at),
         license_required: !!d.license_required,
+        scoring_point: resolveScoringPoint(d),
         age_category: d.age_category || '',
         gender: d.gender || '',
         suggested_level: d.suggested_level || '',
@@ -732,7 +957,8 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             is_visible: ev.is_visible !== false,
             allow_payments: ev.allow_payments ?? true,
             finance_managed: ev.finance_managed ?? true,
-            golden_point: ev.golden_point !== false,
+            golden_point: resolveScoringPoint(ev) === 'golden',
+            scoring_point: resolveScoringPoint(ev),
             is_league: !!ev.is_league,
             max_teams_capacity: ev.max_teams_capacity != null ? String(ev.max_teams_capacity) : '',
             partner_requirement: ev.partner_requirement || 'Required',
@@ -758,7 +984,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         if (!error && data && data.length > 0) {
             setDivisions(data.map((d) => mapDivisionRow(d, d.id)));
         } else {
-            setDivisions([emptyDivision(!!ev.license_required_default)]);
+            setDivisions([emptyDivision(!!ev.license_required_default, resolveScoringPoint(ev))]);
         }
     };
 
@@ -809,7 +1035,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         setDivisions((prev) => prev.map((d) => (d._key === key ? { ...d, ...patch } : d)));
 
     const addDivision = () => {
-        const d = emptyDivision(form.license_required_default);
+        const d = emptyDivision(form.license_required_default, form.scoring_point || 'golden');
         if (standardPrice !== '') d.entry_fee = standardPrice;
         setDivisions((prev) => [...prev, d]);
         setExpandedDivisionKey(d._key);
@@ -853,6 +1079,12 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         toast.success('License rule applied to all divisions');
     };
 
+    const applyScoringToAll = () => {
+        const scoring = form.scoring_point || 'golden';
+        setDivisions((prev) => prev.map((d) => ({ ...d, scoring_point: scoring })));
+        toast.success(`${scoringPointLabel(scoring)} applied to all divisions`);
+    };
+
     const applyCloseDateToAll = () => {
         const close = bulkCloseDate || form.registration_closes_at;
         if (!close) {
@@ -878,7 +1110,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             ];
         }
         const rows = names.map((name) => ({
-            ...emptyDivision(license),
+            ...emptyDivision(license, form.scoring_point || 'golden'),
             name,
             entry_fee: fee,
             gender: genderFromDivisionName(name),
@@ -1122,6 +1354,9 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
             allow_temporary_license: !!form.allow_temporary_license,
             license_required_default: !!form.license_required_default,
             entry_fee_notes: form.entry_fee_notes || null,
+            scoring_point: form.scoring_point || 'golden',
+            // Keep legacy boolean in sync for older UI / EventDetails fallback
+            golden_point: (form.scoring_point || 'golden') === 'golden',
         };
         if (organization) {
             // Org-created events: tie to the org and stay hidden until a 4M
@@ -1151,6 +1386,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
         format: d.format || null,
         entries_close_at: safeISOString(d.entries_close_at),
         license_required: !!d.license_required,
+        scoring_point: d.scoring_point || form.scoring_point || 'golden',
         age_category: d.age_category || null,
         gender: d.gender || null,
         suggested_level: d.suggested_level || null,
@@ -1762,10 +1998,24 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 </select>
                                             </div>
                                             <div className="grid grid-cols-1 gap-3">
-                                                <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
-                                                    <span className="text-sm font-medium text-gray-200">Golden point</span>
-                                                    <input type="checkbox" name="golden_point" checked={!!form.golden_point} onChange={handleInput} className="accent-padel-green w-5 h-5" />
-                                                </label>
+                                                <div>
+                                                    <label className={labelClass}>Deciding point (event default)</label>
+                                                    <SelectMenu
+                                                        value={form.scoring_point || 'golden'}
+                                                        onChange={(v) => setField('scoring_point', v)}
+                                                        options={SCORING_POINTS}
+                                                    />
+                                                    <p className="text-[11px] text-gray-500 mt-1">
+                                                        Default for new divisions. Use Apply to push to existing ones.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={applyScoringToAll}
+                                                    className="w-full border border-dashed border-white/20 text-gray-300 rounded-xl py-3 font-bold flex items-center justify-center gap-2 hover:border-padel-green hover:text-padel-green transition-colors"
+                                                >
+                                                    Apply scoring to all divisions
+                                                </button>
                                                 <label className="flex items-center justify-between bg-[#1E293B] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
                                                     <span className="text-sm font-medium text-gray-200">League format</span>
                                                     <input type="checkbox" name="is_league" checked={!!form.is_league} onChange={handleInput} className="accent-padel-green w-5 h-5" />
@@ -1882,6 +2132,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                                             d.format || null,
                                                                             `R${d.entry_fee || '0'}`,
                                                                             d.license_required ? 'License' : 'No license',
+                                                                            scoringPointLabel(d.scoring_point || form.scoring_point),
                                                                             d.entry_limit ? `Cap ${d.entry_limit}` : null,
                                                                             `Closes ${closeLabel}`,
                                                                         ].filter(Boolean).join(' · ')}
@@ -1968,6 +2219,14 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                                                 Uses global close date
                                                                             </div>
                                                                         )}
+                                                                    </div>
+                                                                    <div>
+                                                                        <label className={labelClass}>Deciding point</label>
+                                                                        <SelectMenu
+                                                                            value={d.scoring_point || form.scoring_point || 'golden'}
+                                                                            onChange={(v) => updateDivision(d._key, { scoring_point: v })}
+                                                                            options={SCORING_POINTS}
+                                                                        />
                                                                     </div>
                                                                     <div className="flex items-end">
                                                                         <label className="flex items-center justify-between w-full bg-[#0F172A] border border-white/10 rounded-xl px-4 py-3 cursor-pointer">
@@ -2176,14 +2435,10 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                                 <input name="organizer_email" value={form.organizer_email} onChange={handleInput} className={inputClass} />
                                             </div>
                                             <div className="md:col-span-2">
-                                                <label className={labelClass}>Event Co-Admins (emails, comma-separated)</label>
-                                                <input
-                                                    type="text"
-                                                    name="event_co_admins"
+                                                <label className={labelClass}>Event Co-Admins</label>
+                                                <CoAdminsPicker
                                                     value={form.event_co_admins}
-                                                    onChange={handleInput}
-                                                    placeholder="name@club.co.za, other@club.co.za"
-                                                    className={inputClass}
+                                                    onChange={(v) => setField('event_co_admins', v)}
                                                 />
                                             </div>
                                         </div>
@@ -2445,7 +2700,7 @@ const EventBuilder = ({ isOpen, onClose, onSaved, editingEvent = null, organizat
                                         <p className="text-gray-300"><span className="text-gray-500">Partner requirement:</span> {form.partner_requirement || '—'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Maximum teams / entries:</span> {form.max_teams_capacity || 'Unlimited'}</p>
                                         <p className="text-gray-300"><span className="text-gray-500">Plate / back draw:</span> {form.back_draw_options || '—'}</p>
-                                        <p className="text-gray-300"><span className="text-gray-500">Golden point:</span> {form.golden_point ? 'Yes' : 'No'}</p>
+                                        <p className="text-gray-300"><span className="text-gray-500">Deciding point:</span> {scoringPointLabel(form.scoring_point)}</p>
                                         {!organization && (
                                             <p className="text-gray-300"><span className="text-gray-500">Visible on website:</span> {form.is_visible ? 'Yes' : 'No'}</p>
                                         )}
