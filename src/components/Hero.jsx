@@ -985,7 +985,7 @@ const Hero = () => {
                                     <p className="text-white font-black text-base leading-none">
                                         {player.rank_label && player.rank_label !== 'Unranked' ? `#${player.rank_label}` : '—'}
                                     </p>
-                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">{player.region || 'National Ranking'}</p>
+                                    <p className="text-white/40 text-[8px] font-medium leading-none truncate">National Ranking</p>
                                 </div>
                                 <div className="flex flex-col items-center text-center gap-1 px-3 py-3">
                                     <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mb-0.5 shadow-[0_0_10px_rgba(255,255,255,0.15)]">
