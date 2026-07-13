@@ -304,7 +304,7 @@ const formatPrizeAmount = (amount) => {
     return `R ${raw}`;
 };
 
-const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, dateLabel = null }) => {
+const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, dateLabel = null, locationLabel = null }) => {
     const logoUrl = event?.organizer_logo_url?.trim();
     const badgeText = event?.organizer_badge_text?.trim();
     const hasOrgBranding = logoUrl || badgeText;
@@ -314,6 +314,20 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
             <span className="whitespace-nowrap">{dateLabel}</span>
         </div>
     ) : null;
+    const locationDesktop = locationLabel ? (
+        <div className="hidden md:flex items-center gap-1.5 text-white/90 text-sm font-normal min-w-0">
+            <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0" />
+            <span className="truncate">{locationLabel}</span>
+        </div>
+    ) : null;
+    const locationMobile = locationLabel ? (
+        <div className={`flex md:hidden items-center gap-1.5 text-white/90 text-sm font-normal mt-1 min-w-0 ${centered ? 'justify-center' : ''}`}>
+            <MapPin className="w-3.5 h-3.5 text-white/70 shrink-0" />
+            <span className="leading-snug">{locationLabel}</span>
+        </div>
+    ) : null;
+    const sep = <span className="text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
+    const sepDesktop = <span className="hidden md:inline text-white/35 text-sm font-light select-none shrink-0" aria-hidden>|</span>;
 
     if (variant === 'nav') {
         if (!hasOrgBranding) return null;
@@ -338,10 +352,31 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
         );
     }
 
-    // Under the event title: logo + badge | date (single row)
+    const metaRow = (leading) => (
+        <div className="mt-1">
+            <div className={`flex items-center gap-2.5 min-w-0 flex-wrap ${centered ? 'justify-center' : ''}`}>
+                {leading}
+                {dateRow && (
+                    <>
+                        {(logoUrl || badgeText || (event?.sapa_status && event.sapa_status !== 'None')) ? sep : null}
+                        {dateRow}
+                    </>
+                )}
+                {locationDesktop && (
+                    <>
+                        {sepDesktop}
+                        {locationDesktop}
+                    </>
+                )}
+            </div>
+            {locationMobile}
+        </div>
+    );
+
+    // Under the event title: logo + badge | date (| location on desktop)
     if (hasOrgBranding) {
-        return (
-            <div className={`flex items-center gap-2.5 min-w-0 mt-1 flex-wrap ${centered ? 'justify-center' : ''}`}>
+        return metaRow(
+            <>
                 {logoUrl && (
                     <img
                         src={logoUrl}
@@ -357,37 +392,23 @@ const EventHeroBranding = ({ event, theme, variant = 'hero', centered = false, d
                         {badgeText}
                     </span>
                 )}
-                {dateRow && (
-                    <>
-                        <span className="text-white/35 text-sm font-light select-none" aria-hidden>|</span>
-                        {dateRow}
-                    </>
-                )}
-            </div>
+            </>
         );
     }
 
     if (event?.sapa_status && event.sapa_status !== 'None') {
-        return (
-            <div className={`flex items-center gap-2.5 min-w-0 mt-1 flex-wrap ${centered ? 'justify-center' : ''}`}>
-                <span
-                    className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full shadow-md w-fit ${theme.badgeBg}`}
-                    style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
-                >
-                    {event.sapa_status}
-                </span>
-                {dateRow && (
-                    <>
-                        <span className="text-white/35 text-sm font-light select-none" aria-hidden>|</span>
-                        {dateRow}
-                    </>
-                )}
-            </div>
+        return metaRow(
+            <span
+                className={`inline-block text-[10px] font-semibold uppercase tracking-wide px-3 py-1 rounded-full shadow-md w-fit ${theme.badgeBg}`}
+                style={{ color: theme.primaryText.includes('text-white') ? '#ffffff' : '#0f172a' }}
+            >
+                {event.sapa_status}
+            </span>
         );
     }
 
-    if (dateRow) {
-        return <div className={`mt-1 ${centered ? 'flex justify-center' : ''}`}>{dateRow}</div>;
+    if (dateRow || locationLabel) {
+        return metaRow(null);
     }
     return null;
 };
@@ -3287,21 +3308,14 @@ const EventDetails = () => {
                                     theme={theme}
                                     variant="hero"
                                     dateLabel={event.event_dates || (event.start_date ? new Date(event.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'TBC')}
+                                    locationLabel={
+                                        [event.venue, event.city && !(event.venue || '').toLowerCase().includes((event.city || '').toLowerCase()) ? event.city : null]
+                                            .filter(Boolean)
+                                            .join(', ')
+                                        || event.address
+                                        || null
+                                    }
                                 />
-
-                                {(event.venue || event.city || event.address) && (
-                                    <div className="flex items-start gap-1.5 text-white/90 text-sm font-normal mt-1 min-w-0">
-                                        <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 shrink-0 mt-0.5" />
-                                        <span className="leading-snug">
-                                            {[
-                                                event.venue,
-                                                event.city && !(event.venue || '').toLowerCase().includes((event.city || '').toLowerCase())
-                                                    ? event.city
-                                                    : null,
-                                            ].filter(Boolean).join(', ') || event.address}
-                                        </span>
-                                    </div>
-                                )}
                                 </div>
 
                                 {(() => {
