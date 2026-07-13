@@ -876,6 +876,10 @@ const Calendar = () => {
                     </div>
 
                     <div className="relative z-10 px-5 sm:px-0">
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-3 max-w-fit">
+                            <CalendarIcon className="w-3 h-3" />
+                            <span>Events Schedule</span>
+                        </div>
                         <div className="overflow-hidden">
                             <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white leading-[1.1] md:leading-[0.95] tracking-tighter font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)]">
                                 CALENDAR
