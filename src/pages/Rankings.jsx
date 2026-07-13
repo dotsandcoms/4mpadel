@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight, X, MapPin, Download, Share2, Instagram } from 'lucide-react';
+import { Trophy, Target, TrendingUp, Star, ChevronDown, CheckCircle2, Users, Search, ChevronLeft, ChevronRight, X, MapPin, Download, Share2, Instagram, User } from 'lucide-react';
 import { useRankedin } from '../hooks/useRankedin';
 import { supabase } from '../supabaseClient';
 import RankingDetailsModal from '../components/RankingDetailsModal';
@@ -355,7 +355,7 @@ const FullRankingsTable = ({
               <button
                 key={cat.id}
                 onClick={() => setActiveTab(cat.id)}
-                className="relative flex-1 py-2 px-6 md:px-8 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 z-10"
+                className="relative flex-1 py-2 px-6 md:px-8 rounded-lg font-black text-[10px] sm:text-xs uppercase tracking-widest transition-all duration-300 z-10 inline-flex items-center justify-center gap-1.5"
                 style={{ color: isSelected ? '#000000' : '#9CA3AF' }}
               >
                 {isSelected && (
@@ -366,6 +366,7 @@ const FullRankingsTable = ({
                     style={{ zIndex: -1 }}
                   />
                 )}
+                <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" strokeWidth={2.5} />
                 {cat.label}
               </button>
             );
