@@ -199,14 +199,10 @@ const Players = () => {
             </div>
             <p className="text-gray-200 text-sm md:text-base lg:text-lg max-w-md leading-snug font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)] mt-1.5">
               <strong className="text-white font-medium">
-                Meet the talent driving<br />
-                the sport forward.
+                Meet the talent driving the sport forward.
               </strong>
             </p>
-            <p className="text-gray-500 text-[10px] md:text-xs max-w-md leading-snug font-medium tracking-wide mt-1.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
-              All registered 4M Padel<br />
-              players are listed.
-            </p>
+           
           </div>
 
           <motion.div
@@ -364,9 +360,6 @@ const Players = () => {
             <h2 className="text-gray-300 text-[11px] sm:text-sm font-black uppercase tracking-widest">
               Top Ranked Players
             </h2>
-            <span className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
-              {loading ? 'Loading…' : `${filteredPlayers.length} players`}
-            </span>
           </div>
 
           <div className="flex flex-col gap-2.5 sm:gap-3 w-full">
