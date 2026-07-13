@@ -2,11 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import Navbar from '../components/Navbar';
-import { Search, Filter, Trophy, ArrowUpRight, Zap, X } from 'lucide-react';
+import { Search, Filter, Trophy, ChevronRight, Zap, X } from 'lucide-react';
 import { supabase } from '../supabaseClient';
-import heroBg from '../assets/hero_bg.png';
+import playersHero from '../assets/players-hero.png';
 import PlayerModal from '../components/PlayerModal';
+
+const formatPoints = (pts) => {
+  const n = Number(pts);
+  if (!Number.isFinite(n)) return '0';
+  return Math.round(n).toLocaleString('en-ZA').replace(/,/g, ' ');
+};
 
 const Players = () => {
   const [players, setPlayers] = useState([]);
@@ -137,6 +142,13 @@ const Players = () => {
     }
   };
 
+  const rankDisplay = (player, index) => {
+    if (player.rank_label && player.rank_label !== 'Unranked') {
+      return `#${player.rank_label}`;
+    }
+    return `#${index + 1}`;
+  };
+
   return (
     <>
       <Helmet>
@@ -150,73 +162,90 @@ const Players = () => {
           </>
         )}
       </Helmet>
-      <main className="bg-[#060a14] min-h-screen pb-24 text-white relative overflow-hidden">
+      <main className="bg-[#060a14] min-h-screen pb-24 text-white relative overflow-hidden pt-[53px] md:pt-0">
 
         {/* Ambient Neon Glow Bubbles */}
         <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-padel-green/5 rounded-full blur-[150px] pointer-events-none" />
         <div className="absolute top-[40vh] right-1/4 w-[500px] h-[500px] bg-purple-500/5 rounded-full blur-[150px] pointer-events-none" />
 
-        {/* Unified Header */}
-        <section className="relative z-20 flex flex-col justify-start pt-6 md:pt-28 lg:pt-32 pb-4 md:pb-12 w-full max-w-[1440px] mx-auto px-4 xl:px-8">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-6 max-w-fit">
-            <Trophy className="w-3 h-3" />
-            <span>COMPETE. RANK. WIN.</span>
+        {/* Hero — full-bleed photo with title/search overlaid (same pattern as Calendar) */}
+        <section className="relative z-20 w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-24 md:pt-28 lg:pt-32 pb-4 md:pb-6 mb-3 md:mb-4">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 z-0 w-screen h-[62vw] max-h-[420px] md:h-[38vw] md:max-h-[560px] lg:max-h-[600px] min-h-[260px] overflow-hidden">
+            <div className="absolute inset-0">
+              <img
+                src={playersHero}
+                alt=""
+                className="w-full h-full object-cover object-[70%_top] md:object-[65%_top] md:origin-top grayscale contrast-[1.3] brightness-[1.08] animate-hero-zoom md:animate-hero-zoom-out"
+              />
+            </div>
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 48%, rgba(0,0,0,0.5) 100%)' }} />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-[#060a14]/40 to-[#060a14]" />
           </div>
 
-          <div className="overflow-hidden mb-6">
-            <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] xl:text-[130px] font-bold text-white leading-[1.1] md:leading-[0.9] tracking-tighter max-w-[100vw] font-display whitespace-nowrap lg:whitespace-normal">
-              PLAYER <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">DIRECTORY</span>
-            </h1>
+          <div className="relative z-10">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-padel-green/20 text-padel-green bg-padel-green/5 text-[10px] md:text-[11px] font-bold uppercase tracking-widest mb-3 max-w-fit">
+              <Trophy className="w-3 h-3" />
+              <span>COMPETE. RANK. WIN.</span>
+            </div>
+
+            <div className="overflow-hidden">
+              <h1 className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white leading-[1.05] md:leading-[0.95] tracking-tighter font-display drop-shadow-[0_4px_16px_rgba(0,0,0,0.55)]">
+                PLAYERS
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-padel-green to-[#beff00]">DIRECTORY</span>
+              </h1>
+            </div>
+            <p className="text-gray-200 text-sm md:text-base lg:text-lg max-w-md leading-snug font-light drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)] mt-1.5">
+              <strong className="text-white font-medium">
+                Meet the talent driving<br />
+                the sport forward.
+              </strong>
+            </p>
+            <p className="text-gray-500 text-[10px] md:text-xs max-w-md leading-snug font-medium tracking-wide mt-1.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]">
+              All registered 4M Padel<br />
+              players are listed.
+            </p>
           </div>
-
-          <p className="text-gray-200 text-sm md:text-lg lg:text-xl max-w-4xl mb-2 leading-relaxed font-light whitespace-normal tracking-tight sm:tracking-normal">
-            <strong className="text-white font-medium">Meet the talent driving the sport forward.</strong> <span className="text-gray-500/70 text-[10px] md:text-xs max-w-2xl mt-1 mb-2 md:mb-8 font-medium tracking-wide block sm:inline">- All registered 4M Padel players are listed</span>
-          </p>
-        </section>
-
-        {/* Search & Command Deck */}
-        <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 pt-0 md:pt-0 mt-0 md:-mt-12 relative z-20 mb-12">
 
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="bg-[#0a0f1d]/80 border border-white/10 backdrop-blur-2xl p-3 md:p-4 rounded-2xl md:rounded-3xl flex gap-3 items-center shadow-2xl max-w-4xl mx-auto"
+            className="relative z-10 flex gap-1.5 md:gap-0 items-center w-full mt-5 md:mt-6"
           >
-            {/* Search Input Container */}
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 md:w-5 md:h-5" />
+            <div className="relative flex-1 bg-[#121620] border border-white/5 rounded-full shadow-lg">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4 md:w-5 md:h-5" />
               <input
                 type="text"
-                placeholder="Search Players..."
+                placeholder="Search players..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl md:rounded-2xl py-3 md:py-3.5 pl-10 md:pl-12 pr-4 text-[16px] md:text-base text-white focus:outline-none focus:border-padel-green focus:ring-1 focus:ring-padel-green transition-all"
+                className="w-full bg-transparent py-3 md:py-4 pl-12 md:pl-14 pr-4 text-[14px] md:text-base text-white focus:outline-none placeholder-gray-500 rounded-full"
               />
             </div>
 
-            {/* Filters Button */}
             <button
               onClick={() => setShowFilters(true)}
-              className="relative flex items-center justify-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl md:rounded-2xl px-4 md:px-6 py-3 md:py-3.5 text-white transition-all font-semibold text-sm md:text-base shrink-0 group"
+              className="relative flex items-center justify-center gap-2 bg-[#121620] border border-white/5 hover:bg-white/10 rounded-full px-5 md:px-6 py-3 md:py-4 text-gray-300 hover:text-white transition-all font-semibold text-sm md:text-base shrink-0 group shadow-lg"
             >
               <Filter className="w-4 h-4 md:w-5 md:h-5 text-gray-400 group-hover:text-white transition-colors" />
               <span className="hidden sm:block">Filters</span>
-              {/* Active filters badge */}
               {(selectedCategory !== 'All' || selectedClub !== 'All') && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 md:w-5 md:h-5 bg-padel-green text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg">
+                <span className="w-5 h-5 bg-[#CCFF00] text-black font-black text-[10px] md:text-xs rounded-full flex items-center justify-center shadow-lg ml-1">
                   {(selectedCategory !== 'All' ? 1 : 0) + (selectedClub !== 'All' ? 1 : 0)}
                 </span>
               )}
             </button>
           </motion.div>
+        </section>
 
-          {/* Quick Category Filters */}
+        {/* Quick Category Filters */}
+        <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 relative z-20 mb-6">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="flex overflow-x-auto gap-2 pb-2 mt-4 hide-scrollbar max-w-4xl mx-auto"
+            className="flex overflow-x-auto gap-2 pb-2 hide-scrollbar w-full"
           >
             {categories.map((cat) => (
               <button
@@ -227,7 +256,7 @@ const Players = () => {
                   : 'bg-white/5 text-gray-400 border-white/10 hover:border-white/20 hover:text-white'
                   }`}
               >
-                {cat}
+                {cat === 'All' ? 'All Players' : cat}
               </button>
             ))}
           </motion.div>
@@ -237,7 +266,6 @@ const Players = () => {
         <AnimatePresence>
           {showFilters && (
             <>
-              {/* Backdrop */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -246,7 +274,6 @@ const Players = () => {
                 className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm"
               />
 
-              {/* Drawer */}
               <motion.div
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
@@ -262,7 +289,6 @@ const Players = () => {
                 </div>
 
                 <div className="space-y-4">
-                  {/* Category */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-300">Category</label>
                     <div className="relative">
@@ -285,7 +311,6 @@ const Players = () => {
                     </div>
                   </div>
 
-                  {/* Club */}
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-gray-300">Club</label>
                     <div className="relative">
@@ -331,102 +356,101 @@ const Players = () => {
           )}
         </AnimatePresence>
 
-        {/* Players Grid Container */}
+        {/* Players List */}
         <section className="w-full max-w-[1440px] mx-auto px-4 xl:px-8 relative z-20">
-          <div className="mb-4 text-gray-400 text-xs sm:text-sm font-black uppercase tracking-widest">
-            {filteredPlayers.length} PLAYERS FOUND
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-gray-300 text-[11px] sm:text-sm font-black uppercase tracking-widest">
+              Top Ranked Players
+            </h2>
+            <span className="text-gray-500 text-[10px] sm:text-xs font-bold uppercase tracking-widest">
+              {loading ? 'Loading…' : `${filteredPlayers.length} players`}
+            </span>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-4 md:gap-6">
+
+          <div className="flex flex-col gap-2.5 sm:gap-3 w-full">
             {filteredPlayers.length > 0 ? (
               filteredPlayers.slice(0, visibleCount).map((player, index) => (
-                <motion.div
-                  layoutId={`card-${player.id}`}
+                <motion.button
+                  type="button"
                   key={player.id}
-                  initial={{ opacity: 0, y: 20 }}
+                  initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min((index % 24) * 0.03, 0.2) }}
+                  transition={{ delay: Math.min((index % 24) * 0.02, 0.15) }}
                   onClick={() => handleSetSelectedPlayer(player)}
-                  className={`group relative bg-[#0a0f1d]/60 border border-white/10 md:hover:border-padel-green rounded-[1.5rem] sm:rounded-[2rem] overflow-hidden md:hover:shadow-[0_0_35px_rgba(190,255,0,0.15)] transition-all duration-500 cursor-pointer flex flex-col justify-between`}
+                  className="w-full group flex items-center gap-3 sm:gap-4 bg-[#0d121f] border border-white/8 hover:border-padel-green/40 rounded-2xl px-3 py-3 sm:px-4 sm:py-3.5 text-left transition-all cursor-pointer shadow-sm"
                 >
-                  {/* Invisible Click Catch-all for Mobile */}
-                  <div className="absolute inset-0 z-[5]" />
-                  {/* Photo Section */}
-                  <div className="aspect-square bg-gradient-to-br from-gray-900 to-[#0a0f1d] relative overflow-hidden shrink-0">
+                  {/* Rank */}
+                  <div className="shrink-0 w-11 sm:w-12 flex flex-col items-center justify-center rounded-xl bg-black/40 border border-white/5 py-1.5">
+                    <span className="text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-padel-green leading-none">Rank</span>
+                    <span className="text-sm sm:text-base font-black text-white tabular-nums leading-tight mt-0.5">
+                      {rankDisplay(player, index)}
+                    </span>
+                  </div>
+
+                  {/* Avatar */}
+                  <div className="shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden bg-gradient-to-br from-gray-800 to-[#0a0f1d] border border-white/10">
                     {player.image_url ? (
-                      <motion.img
-                        layoutId={`image-${player.id}`}
+                      <img
                         src={player.image_url}
                         alt={player.name}
                         loading="lazy"
                         decoding="async"
-                        className="w-full h-full object-cover transition-transform duration-700 md:group-hover:scale-105"
+                        className="w-full h-full object-cover"
                       />
                     ) : (
-                      <motion.div
-                        layoutId={`image-${player.id}`}
-                        className="w-full h-full flex items-center justify-center text-white/5"
-                      >
-                        <svg className="w-12 h-12 sm:w-20 sm:h-20" fill="currentColor" viewBox="0 0 24 24">
+                      <div className="w-full h-full flex items-center justify-center text-white/15">
+                        <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M24 20.993V24H0v-2.996A14.977 14.977 0 0112.004 15c4.904 0 9.26 2.354 11.996 5.993zM16.002 8.999a4 4 0 11-8 0 4 4 0 018 0z" />
                         </svg>
-                      </motion.div>
+                      </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0f1d] via-[#0a0f1d]/20 to-black/25" />
+                  </div>
 
-                    {/* Category Overlay Capsule */}
+                  {/* Name */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`text-sm sm:text-base font-bold uppercase tracking-tight truncate group-hover:text-padel-green transition-colors ${player.isTop10 ? 'text-[#FFD700]' : 'text-white'}`}>
+                      {player.name}
+                    </h3>
                     {player.category && (
-                      <motion.div layoutId={`category-${player.id}`} className="absolute top-2 right-1 sm:top-3 sm:right-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-padel-green font-bold sm:font-black px-1 py-0.5 sm:px-1.5 sm:py-0.5 rounded sm:rounded-md text-[4px] sm:text-[7px] uppercase tracking-widest z-10 shadow-lg max-w-[50%] text-center truncate">
+                      <p className="text-[10px] sm:text-xs text-gray-500 font-medium truncate mt-0.5">
                         {player.category}
-                      </motion.div>
+                      </p>
                     )}
+                  </div>
 
-                    {/* Rank Overlay Capsule */}
-                    <motion.div layoutId={`level-${player.id}`} className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-[#0a0f1d]/75 backdrop-blur-md border border-white/10 text-white font-bold w-7 h-7 sm:w-10 sm:h-10 rounded-md sm:rounded-lg flex flex-col items-center justify-center text-[7px] sm:text-[10px] z-10 shadow-lg">
-                      <span className="text-[5px] sm:text-[7px] uppercase font-black text-padel-green opacity-80 leading-none mb-0.5">Rank</span>
-                      <span className="text-[7px] sm:text-[10px] font-black">
-                        {(!player.rank_label || player.rank_label === 'Unranked') ? '-' : `#${player.rank_label}`}
-                      </span>
-                    </motion.div>
-
-                    {/* Pro Overlay Button */}
-                    <div className="absolute inset-0 bg-black/45 opacity-0 md:group-hover:opacity-100 transition-all duration-300 flex items-center justify-center pointer-events-none">
-                      <span className="bg-padel-green text-black px-2 py-1 sm:px-4 sm:py-2 rounded-md sm:rounded-xl font-black text-[6px] sm:text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-1 transform translate-y-4 md:group-hover:translate-y-0 transition-transform duration-300">
-                        Pro Card
-                        <ArrowUpRight size={10} />
-                      </span>
+                  {/* Points */}
+                  <div className="shrink-0 text-right">
+                    <div className="text-base sm:text-lg font-black text-white tabular-nums leading-none">
+                      {formatPoints(player.points)}
+                    </div>
+                    <div className="text-[9px] sm:text-[10px] font-bold uppercase tracking-widest text-gray-500 mt-0.5">
+                      Points
                     </div>
                   </div>
 
-                  {/* Player Content Details Section */}
-                  <div className="p-2 sm:p-4 relative flex-1 flex flex-col justify-between bg-[#0a0f1d]/85">
-                    <div className="absolute -top-10 left-0 right-0 h-10 bg-gradient-to-t from-[#0a0f1d] to-transparent pointer-events-none" />
-
-                    <div>
-                      <motion.h3 layoutId={`name-${player.id}`} className={`text-[8px] sm:text-base font-bold sm:font-black leading-none uppercase tracking-tighter mb-1.5 sm:mb-2 md:group-hover:text-padel-green transition-colors line-clamp-1 relative z-10 ${player.isTop10 ? 'text-[#FFD700]' : 'text-white'}`}>
-                        {player.name}
-                      </motion.h3>
-
-                    </div>
-                  </div>
-                </motion.div>
+                  <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-padel-green shrink-0" />
+                </motion.button>
               ))
             ) : (
-              <div className="col-span-full text-center py-24 text-gray-500">
+              <div className="text-center py-24 text-gray-500">
                 <Zap size={44} className="mx-auto text-gray-600 mb-4 animate-pulse" />
-                <p className="text-lg font-bold">No players found matching your criteria.</p>
-                <button
-                  onClick={() => { setSearchTerm(''); setSelectedCategory('All'); setSelectedClub('All'); }}
-                  className="mt-4 text-padel-green hover:underline uppercase text-xs tracking-widest font-black"
-                >
-                  Clear filters
-                </button>
+                <p className="text-lg font-bold">
+                  {loading ? 'Loading players…' : 'No players found matching your criteria.'}
+                </p>
+                {!loading && (
+                  <button
+                    onClick={() => { setSearchTerm(''); setSelectedCategory('All'); setSelectedClub('All'); }}
+                    className="mt-4 text-padel-green hover:underline uppercase text-xs tracking-widest font-black"
+                  >
+                    Clear filters
+                  </button>
+                )}
               </div>
             )}
           </div>
 
-          {/* Load More Button */}
           {visibleCount < filteredPlayers.length && (
-            <div className="mt-8 flex justify-center pb-8">
+            <div className="mt-8 flex justify-center pb-8 w-full">
               <button
                 onClick={() => setVisibleCount(prev => prev + 24)}
                 className="bg-white/5 border border-white/10 hover:bg-white/10 hover:border-padel-green text-white font-bold py-3 px-8 rounded-xl transition-all uppercase tracking-widest text-xs shadow-lg group flex items-center gap-2"
@@ -440,7 +464,6 @@ const Players = () => {
           )}
         </section>
 
-        {/* Player Modal Overlay container */}
         <AnimatePresence>
           {selectedPlayer && (
             <PlayerModal

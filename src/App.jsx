@@ -91,7 +91,7 @@ function AppContent() {
     };
   }, [navigate]);
 
-  const isHeroRoute = location.pathname === '/' || location.pathname === '/calendar' || location.pathname.startsWith('/calendar/');
+  const isHeroRoute = location.pathname === '/' || location.pathname === '/calendar' || location.pathname.startsWith('/calendar/') || location.pathname === '/players';
   const isAdminRoute = location.pathname.startsWith('/admin') || location.pathname.startsWith('/reports');
   const routeRequiresAuth = requiresAuth(location.pathname);
   const showMembersOnly =
