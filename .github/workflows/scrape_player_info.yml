@@ -9,8 +9,40 @@ permissions:
   contents: read
 
 jobs:
-  scrape:
+  rankings-sync:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Node dependencies
+        run: npm install @supabase/supabase-js dotenv --no-save
+
+      - name: Run Rankings Sync (Phase 1)
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/syncRankedinRankings.js
+
+  scrape:
+    needs: rankings-sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      # All approved players (not just paid ones) are scraped, so the workload
+      # is split across 3 shards to keep each run well inside the 6-hour
+      # GitHub Actions job limit. max-parallel: 1 runs them one at a time
+      # (staggered) instead of concurrently, so we never have multiple
+      # sessions hitting Rankedin from different IPs at the same instant.
+      matrix:
+        shard: [0, 1, 2]
+      max-parallel: 1
+      fail-fast: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -43,21 +75,15 @@ jobs:
             libgtk-3-0
 
       - name: Install Node dependencies
-        run: npm install puppeteer @supabase/supabase-js dotenv --no-save
+        run: npm install puppeteer @supabase/supabase-js dotenv ws --no-save
 
       - name: Install Puppeteer browser
         run: npx puppeteer browsers install chrome
 
-      - name: Run Rankings Sync (Phase 1)
-        env:
-          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/syncRankedinRankings.js
-
-      - name: Run Profile Detail Scraper (Phase 2)
+      - name: Run Profile Detail Scraper (Phase 2, shard ${{ matrix.shard }})
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
           RANKEDIN_EMAIL: ${{ secrets.RANKEDIN_EMAIL }}
           RANKEDIN_PASSWORD: ${{ secrets.RANKEDIN_PASSWORD }}
-        run: node scripts/scrapePlayerInfo.js
+        run: node scripts/scrapePlayerInfo.js --shard-index ${{ matrix.shard }} --shard-count 3

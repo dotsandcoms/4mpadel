@@ -1,0 +1,32 @@
+name: Daily Player Rankings Repair
+
+on:
+  schedule:
+    # Runs daily at 4:30 AM UTC — after the rankings sync, independent of the
+    # long-running Puppeteer scrape. Pure REST + DB writes, no browser needed.
+    - cron: '30 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install @supabase/supabase-js dotenv --no-save
+
+      - name: Run rankings + points repair for all approved players
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.VITE_SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/repairAllPlayerRankings.js

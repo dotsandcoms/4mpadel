@@ -476,17 +476,32 @@ async function run() {
 
     const filterPlayer = process.argv.includes('--player') ? process.argv[process.argv.indexOf('--player') + 1] : null;
 
-    let query = supabase.from('players').select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking, active_ranking_label').eq('approved', true).eq('paid_registration', true);
+    // --shard-index / --shard-count let the daily workflow split all approved
+    // players across parallel runners so a full-population scrape (not just
+    // paid_registration) still finishes comfortably inside a single job's time limit.
+    const shardIndexArg = process.argv.indexOf('--shard-index');
+    const shardCountArg = process.argv.indexOf('--shard-count');
+    const shardIndex = shardIndexArg >= 0 ? Number(process.argv[shardIndexArg + 1]) : null;
+    const shardCount = shardCountArg >= 0 ? Number(process.argv[shardCountArg + 1]) : null;
+
+    let query = supabase
+        .from('players')
+        .select('id, name, rankedin_profile_url, rankedin_id, preferred_ranking, active_ranking_label')
+        .eq('approved', true);
     if (filterPlayer) {
         query = query.ilike('name', `%${filterPlayer}%`);
     } else {
-        // Process all approved players who have paid
         // Skip user 'brad elin' to avoid issues
         query = query.not('name', 'ilike', '%brad elin%');
     }
 
-    const { data: players } = await query;
-    if (players) {
+    const { data: allPlayers } = await query;
+    let players = allPlayers || [];
+    if (shardIndex != null && shardCount) {
+        players = players.filter((_, i) => i % shardCount === shardIndex);
+    }
+
+    if (players.length) {
         console.log(`Starting sync for ${players.length} players...`);
         let current = 0;
         for (const p of players) {

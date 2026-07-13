@@ -39,6 +39,13 @@ const isBadRankings = (rankings) => {
     return rankings.every((r) => !r.org || !String(r.org).trim());
 };
 
+// Orgs we actively refresh from live Rankedin lists — anything else (VybeSports,
+// VAPC, H&MPADEL, PadelTravel, etc.) already stored on the player must be kept as-is
+// or we silently wipe it out on every repair run.
+const COVERED_ORGS = new Set(LISTS.map((l) => l.orgName));
+const keepUncoveredRows = (rankings) =>
+    (Array.isArray(rankings) ? rankings : []).filter((r) => !COVERED_ORGS.has(r.org));
+
 async function fetchList({ orgId, type, age }) {
     const url = `https://api.rankedin.com/v1/Ranking/GetRankingsAsync?rankingId=${orgId}&rankingType=${type}&ageGroup=${age}&weekFromNow=0&language=en&skip=0&take=1000`;
     const res = await fetch(url);
@@ -152,7 +159,7 @@ async function run() {
                 continue;
             }
 
-            const rankings = [];
+            const rankings = keepUncoveredRows(player.rankings);
             for (const m of unique) {
                 // Fetch tournament breakdown for Main lists (what Rankings modal shows);
                 // skip for secondary age bands to keep the repair fast.
@@ -177,8 +184,10 @@ async function run() {
 
             const patch = {
                 rankings,
-                points: main ? Number(main.points) : Number(rankings[0]?.points) || 0,
-                rank_label: main?.rank || rankings[0]?.rank || null,
+                // Fall back to the freshest matched list row, never a preserved
+                // uncovered-org row, so points/rank_label reflect the covered orgs.
+                points: main ? Number(main.points) : Number(unique[0]?.points) || 0,
+                rank_label: main?.rank || unique[0]?.rank || null,
             };
             if (main) {
                 patch.preferred_ranking = `SAPA ranking|${main.age_group}|Doubles`;
