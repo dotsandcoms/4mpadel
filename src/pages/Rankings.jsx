@@ -981,12 +981,12 @@ const Rankings = () => {
               <img
                 src={rankingsHero}
                 alt=""
-                className="w-full h-full object-cover object-[72%_top] md:object-[70%_top] md:origin-top grayscale contrast-[1.35] brightness-[1.1] animate-hero-zoom md:animate-hero-zoom-out"
+                className="w-full h-full object-cover object-[72%_top] md:object-[70%_top] md:origin-top grayscale contrast-[1.45] brightness-[1.35] animate-hero-zoom md:animate-hero-zoom-out"
               />
             </div>
-            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 100%)' }} />
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black via-black/55 to-transparent" />
-            <div className="absolute inset-0 bg-gradient-to-b from-black/15 via-transparent to-[#0F172A]" />
+            <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.28) 100%)' }} />
+            <div className="absolute inset-0 pointer-events-none bg-gradient-to-r from-black/90 via-black/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-[#0F172A]" />
           </div>
 
           <div className="relative z-10">
