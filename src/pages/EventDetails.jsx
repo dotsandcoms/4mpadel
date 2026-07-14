@@ -3335,7 +3335,7 @@ const EventDetails = () => {
                                 <div className="w-full flex flex-col gap-1">
                                 {event.sapa_status && event.sapa_status !== 'None' && (
                                     <span
-                                        className="inline-flex self-start items-center px-3 py-1 mb-1 rounded-full border text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.14em] bg-black/50 backdrop-blur-sm shadow-md"
+                                        className="inline-flex self-start items-center px-2 py-0.5 mb-0.5 rounded-full border text-[8px] sm:text-[9px] font-bold uppercase tracking-[0.12em] bg-black/50 backdrop-blur-sm shadow-md"
                                         style={{ color: theme.fill, borderColor: theme.fill }}
                                     >
                                         {event.sapa_status === 'Major' ? 'Major Event' : event.sapa_status}
