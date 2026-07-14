@@ -903,7 +903,8 @@ const Hero = () => {
         <div className="relative w-full bg-black">
             <div
                 // Hug content height — especially when My Schedule is collapsed.
-                className={`relative w-full overflow-hidden border-y border-white/10 flex flex-col justify-start ${session ? 'pb-4 lg:pb-6' : 'pb-0'}`}
+                // No bottom padding when logged in so accordion spacing matches Featured / Results / Quick Links below.
+                className={`relative w-full overflow-hidden border-t border-white/10 flex flex-col justify-start pb-0`}
                 onMouseMove={handleMouseMove}
             >
                 {/* Solid base background — text sits on this, never on the photo */}
@@ -1113,7 +1114,7 @@ const Hero = () => {
                     )}
                 </motion.div>
 
-                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? ((scheduleOpen || pendingActionsOpen) ? 'gap-2 pb-0' : 'pb-2') : 'pb-0'}`}>
+                <div className={`relative z-30 px-4 w-full lg:px-8 flex flex-col container mx-auto ${session ? 'pb-0' : 'pb-0'}`}>
 
                     <AnimatePresence>
                         {session && (hasScheduleContent || hasPendingActions) && (
@@ -1125,14 +1126,14 @@ const Hero = () => {
                                 className="w-full"
                             >
                                 {hasPendingActions && (
-                                <div className={hasScheduleContent ? (pendingActionsOpen ? 'mb-5' : 'mb-4') : ''}>
+                                <div className="border-t border-white/5 py-3">
                                 <button
                                     type="button"
                                     onClick={() => setPendingActionsOpen((open) => !open)}
                                     aria-expanded={pendingActionsOpen}
                                     className={`flex w-full items-center justify-between px-1 text-left group ${pendingActionsOpen ? 'mb-3' : 'mb-0'}`}
                                 >
-                                    <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em]">Pending Actions</h2>
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">Pending Actions</h2>
                                     <ChevronDown
                                         size={16}
                                         className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${pendingActionsOpen ? '' : '-rotate-90'}`}
@@ -1176,14 +1177,14 @@ const Hero = () => {
                                 </div>
                                 )}
                                 {hasScheduleContent && (
-                                <>
+                                <div className="border-t border-white/5 py-3">
                                 <button
                                     type="button"
                                     onClick={() => setScheduleOpen((open) => !open)}
                                     aria-expanded={scheduleOpen}
                                     className={`flex w-full items-center justify-between px-1 text-left group ${scheduleOpen ? 'mb-3' : 'mb-0'}`}
                                 >
-                                    <h2 className="text-white/80 font-bold text-xs uppercase tracking-[0.2em]">My Schedule</h2>
+                                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">My Schedule</h2>
                                     <ChevronDown
                                         size={16}
                                         className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${scheduleOpen ? '' : '-rotate-90'}`}
@@ -1345,7 +1346,7 @@ const Hero = () => {
                                 </motion.div>
                                 )}
                                 </AnimatePresence>
-                                </>
+                                </div>
                                 )}
                             </motion.div>
                         )}

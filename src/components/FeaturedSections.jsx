@@ -543,6 +543,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(true);
     const [recentResultsPage, setRecentResultsPage] = useState(0);
+    const [recentResultsOpen, setRecentResultsOpen] = useState(true);
 
     // Image/Card content for the right/bottom side of the hero section
     const items = data.id === 'recent-results' ? liveTournaments : (data.id === 'featured-live' ? liveFeaturedTournaments : featuredTournaments);
@@ -618,12 +619,27 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const statusColors = getStatusColors(displayStatus);
 
     // Text content for the left/top side of the hero section
-    const textContent = isGridSection ? (
-        <div className="relative z-10 flex items-center justify-between mb-3 md:mb-4">
-            <h2 className={`text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate ${isFeatured ? 'text-black' : 'text-white/80'}`}>
+    const textContent = data.id === 'recent-results' ? (
+        <button
+            type="button"
+            onClick={() => setRecentResultsOpen((open) => !open)}
+            aria-expanded={recentResultsOpen}
+            className={`relative z-10 flex w-full items-center justify-between px-1 text-left group ${recentResultsOpen ? 'mb-3' : 'mb-0'}`}
+        >
+            <h2 className="text-xs font-bold uppercase tracking-[0.2em] truncate text-white/80">
                 {data.title}
             </h2>
-            {data.linkPath && data.id !== 'recent-results' && data.id !== 'upcoming-events' && (
+            <ChevronDown
+                size={16}
+                className={`text-white/50 shrink-0 transition-transform duration-300 group-hover:text-white/70 ${recentResultsOpen ? '' : '-rotate-90'}`}
+            />
+        </button>
+    ) : isGridSection ? (
+        <div className="relative z-10 flex items-center justify-between mb-3 md:mb-4">
+            <h2 className={`text-xs font-bold uppercase tracking-[0.2em] truncate ${isFeatured ? 'text-black' : 'text-white/80'}`}>
+                {data.title}
+            </h2>
+            {data.linkPath && data.id !== 'upcoming-events' && (
                 <button
                     onClick={() => navigate(data.linkPath)}
                     className={`flex items-center gap-1 text-[10px] md:text-xs font-medium uppercase tracking-widest transition-colors shrink-0 ${isFeatured ? 'text-black/70 hover:text-black' : 'text-[#CCFF00] hover:text-white'}`}
@@ -703,7 +719,7 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
     const maxResultsPage = Math.max(0, (items?.length || 0) - 1);
 
     const imageContent = data.id === 'recent-results' ? (
-        <div className="relative z-10 w-full mt-4 lg:mt-0">
+        <div className="relative z-10 w-full">
             <div className="group relative flex flex-col gap-4 w-full bg-[#0a0a0a] rounded-3xl p-4 sm:p-6 shadow-2xl border border-white/5">
                 {items?.slice(recentResultsPage, recentResultsPage + 1).map((t, i) => (
                     <RecentResultCard
@@ -945,10 +961,32 @@ const FeaturedSectionBlock = ({ data, index, liveTournaments, featuredTournament
         </motion.div>
     );
 
+    const isRecentResults = data.id === 'recent-results';
+    const sectionPadding = isRecentResults
+        ? 'py-3'
+        : (isGridSection ? 'py-3' : 'py-6 lg:py-8');
+
     return (
-        <section className={`relative ${isGridSection ? 'py-3 lg:py-4' : 'py-6 lg:py-8'} border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
+        <section className={`relative ${sectionPadding} border-t border-white/5 overflow-hidden ${bgColor}`} id={data.id}>
             <div className={`w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10`}>
-                {isGridSection ? (
+                {isRecentResults ? (
+                    <>
+                        {textContent}
+                        <AnimatePresence initial={false}>
+                            {recentResultsOpen && (
+                                <motion.div
+                                    initial={{ height: 0, opacity: 0 }}
+                                    animate={{ height: 'auto', opacity: 1 }}
+                                    exit={{ height: 0, opacity: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden"
+                                >
+                                    {imageContent}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </>
+                ) : isGridSection ? (
                     <>
                         {textContent}
                         {imageContent}
@@ -980,7 +1018,7 @@ const HomeQuickLinks = () => {
     const [open, setOpen] = useState(true);
 
     return (
-        <section className={`relative border-t border-white/5 bg-[#000000] ${open ? 'pt-3 pb-3 lg:pt-4 lg:pb-4' : 'py-2 lg:py-3'}`}>
+        <section className="relative border-t border-white/5 bg-[#000000] py-3">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8">
                 <button
                     type="button"
@@ -988,7 +1026,7 @@ const HomeQuickLinks = () => {
                     aria-expanded={open}
                     className={`flex w-full items-center justify-between px-1 text-left group ${open ? 'mb-3' : 'mb-0'}`}
                 >
-                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest text-white/80">
+                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-white/80">
                         Quick Links
                     </h2>
                     <ChevronDown
@@ -1352,7 +1390,7 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
     };
 
     return (
-        <section className={`relative pt-4 lg:pt-5 border-t border-white/5 bg-[#000000] ${featuredOpen ? 'pb-3 lg:pb-4' : 'pb-2 lg:pb-3'}`}>
+        <section className="relative py-3 border-t border-white/5 bg-[#000000]">
             <div className="w-full max-w-[1500px] mx-auto px-4 md:px-8 relative z-10">
                 <button
                     type="button"
@@ -1360,7 +1398,7 @@ const FeaturedTournamentHero = ({ events = [], session = null }) => {
                     aria-expanded={featuredOpen}
                     className={`flex w-full items-center justify-between px-1 text-left group ${featuredOpen ? 'mb-3' : 'mb-0'}`}
                 >
-                    <h2 className="text-[11px] sm:text-sm md:text-base font-bold uppercase tracking-wide sm:tracking-widest truncate text-white/80">
+                    <h2 className="text-xs font-bold uppercase tracking-[0.2em] truncate text-white/80">
                         Featured Events
                     </h2>
                     <ChevronDown
